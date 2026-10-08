@@ -1,0 +1,583 @@
+{
+  "_readme": [
+    "Canonical product master, built from Ratios & Molds notebook + STUMA_DOM_CATALOG + Aug 31 stock-take, per decisions made 2026-09-25.",
+    "display_format 'colored' = UI/table shows Product Name in column 1, then one quantity column per color (matches the Aug-31 stock-take layout for tiles/paving).",
+    "display_format 'plain' = Product Name in column 1, then a single QTY column (matches stock-take layout for curbstones/culverts/trench covers/matofali/posts).",
+    "stock_unit: SQM for tiles & paving (pcs_per_sqm carried from notebook/catalog so SQM<->PCS conversion is always derivable); PCS for everything else.",
+    "This file is the SOURCE OF TRUTH product list MOIS should seed - it exists specifically to stop the 'same product, different name every time someone types it' problem seen in the Aug-31 stock-take."
+  ],
+  "global_color_palette": [
+    {
+      "name": "White/OffWhite",
+      "catalog_featured": true
+    },
+    {
+      "name": "Red",
+      "catalog_featured": true
+    },
+    {
+      "name": "Grey",
+      "catalog_featured": true
+    },
+    {
+      "name": "Black",
+      "catalog_featured": false,
+      "notes": "Active, real color. Not in the printed catalog's common-color list. Confirmed by SwahziTech 2026-09-25: products can have more colors than the catalog shows."
+    },
+    {
+      "name": "Maroon",
+      "catalog_featured": false,
+      "notes": "Appears in the Aug-31 stock-take as a note attached to some Black entries (e.g. '40 Plain' black stock, wall tile 'Sq.Gamba'/'Banzi'). Not in the ratios notebook or the catalog at all. Applying the same rule as Black (more colors exist than the catalog shows) - but unlike Black, it's unclear if Maroon is a DISTINCT color or a shade/batch note describing that specific Black stock. Needs a floor-level confirmation, flagged as open."
+    }
+  ],
+  "naming_resolutions": [
+    {
+      "canonical_name": "Tofali Tundu 6\" / 8\" (Hollow Block)",
+      "resolved_as_same_product": [
+        "Tofali Tundu 6\" (notebook, Press Machine section)",
+        "Tofali Tundu 8\" (notebook, Press Machine section)",
+        "6'' Hollow (Aug-31 stock-take, Matofali)",
+        "8'' Hollow (Aug-31 stock-take, Matofali)"
+      ],
+      "reasoning": "'Tundu' is Swahili for 'hole' - directly translates to 'Hollow' in English. Same size family (39x20x15/19cm), same ratio family (Mch40:Chip14), appears once in each source under a different language label, never both. Resolved per instruction to cross-check ratios notebook + catalog.",
+      "note": "Catalog itself has no dedicated 'Matofali/bricks' section, so it neither confirms nor contradicts - resolution rests on notebook + stock-take naming logic only. Flag if wrong."
+    },
+    {
+      "canonical_name": "40 Mayai / 40 Dot (standard thickness)",
+      "resolved_as_same_product": [
+        "40 Mayai (notebook + catalog)",
+        "40 Mayai 2'' (Aug-31 stock-take)",
+        "40 Dot (notebook + catalog)",
+        "40 Dot 2'' (Aug-31 stock-take)"
+      ],
+      "reasoning": "Catalog states ALL floor tiles are 2cm thick as standard, with no thicker variant offered anywhere in the catalog. The stock-take's '2\"' notation is read as someone restating the standard thickness, not a separate product line.",
+      "note": "If a 2-inch variant actually is a distinct, intentionally thicker SKU, this merge is wrong - confirm on the floor."
+    },
+    {
+      "canonical_name": "40 Halfmoon",
+      "resolved_as": "New confirmed product - NOT an error.",
+      "reasoning": "Catalog page 3 explicitly lists '40 HALFMOON TILES, 40x40cm > 6 Pcs/SQM, Thickness 2cm, OffWhite/Red/Grey' as an official product. It is simply missing from the Ratios & Molds notebook's 21-mold list.",
+      "action_needed": "RESOLVED 2026-09-25: uses the same shared floor_tiles ratio as every other floor tile mold (confirmed: 'all tiles use the same ratio'). Added to ratios_and_molds.json as mold #22. No longer a blocking gap."
+    }
+  ],
+  "categories": [
+    {
+      "category_id": "floor_tiles",
+      "display_format": "colored",
+      "stock_unit": "SQM",
+      "color_columns": [
+        "White/OffWhite",
+        "Red",
+        "Grey",
+        "Black"
+      ],
+      "products": [
+        {
+          "product_id": "floor_tiles_01",
+          "canonical_name": "Slab",
+          "size_cm": "110x50",
+          "pcs_per_sqm": 1.8,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_02",
+          "canonical_name": "Combo",
+          "size_cm": "80x40",
+          "pcs_per_sqm": 3,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_03",
+          "canonical_name": "Mraba (square)",
+          "size_cm": "60x30",
+          "pcs_per_sqm": null,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_04",
+          "canonical_name": "40 Plain",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_05",
+          "canonical_name": "40 Buibui",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_06",
+          "canonical_name": "40 Mayai",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_07",
+          "canonical_name": "40 Spider",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_08",
+          "canonical_name": "40 V",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_09",
+          "canonical_name": "40 Combo",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_10",
+          "canonical_name": "40 Dot",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_11",
+          "canonical_name": "40 Mawingu",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_12",
+          "canonical_name": "40 Mpira",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_13",
+          "canonical_name": "35 World Cup",
+          "size_cm": "35x35",
+          "pcs_per_sqm": 8,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_14",
+          "canonical_name": "Mawingu",
+          "size_cm": "40x20",
+          "pcs_per_sqm": 12,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_15",
+          "canonical_name": "30 Draft",
+          "size_cm": "30x30",
+          "pcs_per_sqm": 11,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_16",
+          "canonical_name": "30 8gon",
+          "size_cm": "30x30",
+          "pcs_per_sqm": 11,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_17",
+          "canonical_name": "Draft 9",
+          "size_cm": "30x30",
+          "pcs_per_sqm": 11,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_18",
+          "canonical_name": "25 Buibui",
+          "size_cm": "25x25",
+          "pcs_per_sqm": 16,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_19",
+          "canonical_name": "25 Chuchu",
+          "size_cm": "25x25",
+          "pcs_per_sqm": 16,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_20",
+          "canonical_name": "Culture",
+          "size_cm": "30x30",
+          "pcs_per_sqm": 11,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_21",
+          "canonical_name": "Mbao",
+          "size_cm": null,
+          "pcs_per_sqm": null,
+          "alt_names": []
+        },
+        {
+          "product_id": "floor_tiles_halfmoon",
+          "canonical_name": "40 Halfmoon",
+          "size_cm": "40x40",
+          "pcs_per_sqm": 6,
+          "alt_names": [],
+          "note": "Confirmed via catalog. Uses the shared floor_tiles ratio (same as all other floor tile molds) - resolved 2026-09-25, no longer missing data."
+        }
+      ]
+    },
+    {
+      "category_id": "wall_tiles",
+      "display_format": "colored",
+      "stock_unit": "SQM",
+      "color_columns": [
+        "White/OffWhite",
+        "Red",
+        "Grey",
+        "Black"
+      ],
+      "products": [
+        {
+          "product_id": "wall_tiles_01",
+          "canonical_name": "Mahogany",
+          "size_cm": "40x20",
+          "pcs_per_sqm": 12,
+          "alt_names": []
+        },
+        {
+          "product_id": "wall_tiles_02",
+          "canonical_name": "Cloud",
+          "size_cm": "40x20",
+          "pcs_per_sqm": 12,
+          "alt_names": []
+        },
+        {
+          "product_id": "wall_tiles_03",
+          "canonical_name": "Gamba Sq",
+          "size_cm": "30x15",
+          "pcs_per_sqm": 22,
+          "alt_names": []
+        },
+        {
+          "product_id": "wall_tiles_04",
+          "canonical_name": "Banzi",
+          "size_cm": "30x15",
+          "pcs_per_sqm": 22,
+          "alt_names": []
+        },
+        {
+          "product_id": "wall_tiles_05",
+          "canonical_name": "Mawingu",
+          "size_cm": "40x20",
+          "pcs_per_sqm": 12,
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "paving_blocks_vibro",
+      "display_format": "colored",
+      "stock_unit": "SQM",
+      "color_columns": [
+        "White/OffWhite",
+        "Red",
+        "Grey",
+        "Black"
+      ],
+      "products": [
+        {
+          "product_id": "paving_01",
+          "canonical_name": "U-Dot Kubwa",
+          "size_cm": null,
+          "pcs_per_sqm": 20,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_02",
+          "canonical_name": "Culture",
+          "size_cm": null,
+          "pcs_per_sqm": 28,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_03",
+          "canonical_name": "Trio",
+          "size_cm": null,
+          "pcs_per_sqm": 27,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_04",
+          "canonical_name": "Z Plain",
+          "size_cm": null,
+          "pcs_per_sqm": 30,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_05",
+          "canonical_name": "Kisu Paver",
+          "size_cm": null,
+          "pcs_per_sqm": 40,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_06",
+          "canonical_name": "V-Paver",
+          "size_cm": null,
+          "pcs_per_sqm": 52,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_07",
+          "canonical_name": "U-Dot Ndogo",
+          "size_cm": null,
+          "pcs_per_sqm": 20,
+          "alt_names": []
+        },
+        {
+          "product_id": "paving_08",
+          "canonical_name": "Mtungi",
+          "size_cm": null,
+          "pcs_per_sqm": 18,
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "curbstones",
+      "display_format": "plain",
+      "stock_unit": "PCS",
+      "products": [
+        {
+          "product_id": "curbstones_01",
+          "canonical_name": "100 Sq",
+          "size_cm": "100x25x10",
+          "alt_names": []
+        },
+        {
+          "product_id": "curbstones_02",
+          "canonical_name": "60 Sq",
+          "size_cm": "60x25x10",
+          "alt_names": []
+        },
+        {
+          "product_id": "curbstones_03",
+          "canonical_name": "60 Round",
+          "size_cm": "60x25x10",
+          "alt_names": []
+        },
+        {
+          "product_id": "curbstones_04",
+          "canonical_name": "50 Bevo",
+          "size_cm": "50x25x10",
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "trench_covers",
+      "display_format": "plain",
+      "stock_unit": "PCS",
+      "products": [
+        {
+          "product_id": "trench_covers_01",
+          "canonical_name": "50 Mdogo Tundu 5",
+          "size_cm": "50x30x5",
+          "alt_names": []
+        },
+        {
+          "product_id": "trench_covers_02",
+          "canonical_name": "50 Matundu 6",
+          "size_cm": "50x35x5",
+          "alt_names": []
+        },
+        {
+          "product_id": "trench_covers_03",
+          "canonical_name": "60 Matundu 6",
+          "size_cm": "60x40x7",
+          "alt_names": []
+        },
+        {
+          "product_id": "trench_covers_04",
+          "canonical_name": "60 Bevo",
+          "size_cm": "60x40x7",
+          "alt_names": []
+        },
+        {
+          "product_id": "trench_covers_05",
+          "canonical_name": "Mkubwa Nondo",
+          "size_cm": "80x50x12",
+          "alt_names": []
+        },
+        {
+          "product_id": "trench_covers_06",
+          "canonical_name": "Hollow",
+          "size_cm": "70x50x12",
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "press_machine_bricks_and_kerbstones",
+      "display_format": "plain",
+      "stock_unit": "PCS",
+      "products": [
+        {
+          "product_id": "press_01",
+          "canonical_name": "Tofali 5\"",
+          "size_cm": "46x21x13",
+          "alt_names": []
+        },
+        {
+          "product_id": "press_02",
+          "canonical_name": "Tofali 4\"",
+          "size_cm": "46x21x10",
+          "alt_names": []
+        },
+        {
+          "product_id": "press_03",
+          "canonical_name": "Tofali 6\"",
+          "size_cm": "46x21x15",
+          "alt_names": []
+        },
+        {
+          "product_id": "press_04",
+          "canonical_name": "Tofali 6\" Chipping",
+          "size_cm": "46x21x15",
+          "alt_names": []
+        },
+        {
+          "product_id": "press_05",
+          "canonical_name": "Tofali Tundu 6\"",
+          "size_cm": "39x20x15",
+          "alt_names": [
+            "6'' Hollow"
+          ]
+        },
+        {
+          "product_id": "press_06",
+          "canonical_name": "Tofali Tundu 8\"",
+          "size_cm": "39x20x19",
+          "alt_names": [
+            "8'' Hollow"
+          ]
+        },
+        {
+          "product_id": "press_07",
+          "canonical_name": "Kerbstone 50x350x15",
+          "size_cm": "50x35x15",
+          "alt_names": []
+        },
+        {
+          "product_id": "press_08",
+          "canonical_name": "Kerbstone 80x350x15",
+          "size_cm": "80x39x15",
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "press_machine_paving",
+      "display_format": "colored",
+      "stock_unit": "SQM",
+      "color_columns": [
+        "White/OffWhite",
+        "Red",
+        "Grey",
+        "Black"
+      ],
+      "note": "Made on the press machine but sold/counted as paving - grouped with paving for stock/UI purposes, not with bricks.",
+      "products": [
+        {
+          "product_id": "press_09a",
+          "canonical_name": "Paving 6cm 30MPa",
+          "size_cm": "20x10x6",
+          "wastani_per_bag": 220,
+          "pcs_per_sqm": 48.9
+        },
+        {
+          "product_id": "press_09b",
+          "canonical_name": "Paving 8cm 30MPa",
+          "size_cm": "20x10x8",
+          "wastani_per_bag": 150,
+          "pcs_per_sqm": 50.0
+        },
+        {
+          "product_id": "press_10",
+          "canonical_name": "Paving 8cm 40MPa",
+          "size_cm": "20x10x8",
+          "wastani_per_bag": 130,
+          "pcs_per_sqm": 52.0
+        },
+        {
+          "product_id": "press_11",
+          "canonical_name": "Paving Z-Plain",
+          "size_cm": null,
+          "wastani_per_bag": 165,
+          "pcs_per_sqm": null
+        },
+        {
+          "product_id": "press_12",
+          "canonical_name": "Paving 2IG-2AG 40MPa",
+          "size_cm": null,
+          "wastani_per_bag": 105,
+          "pcs_per_sqm": null
+        },
+        {
+          "product_id": "press_13",
+          "canonical_name": "Paving W/Cup",
+          "size_cm": null,
+          "wastani_per_bag": 110,
+          "pcs_per_sqm": null
+        }
+      ]
+    },
+    {
+      "category_id": "culverts",
+      "display_format": "plain",
+      "stock_unit": "PCS",
+      "products": [
+        {
+          "product_id": "culverts_400",
+          "canonical_name": "Size 400",
+          "size_cm": 400,
+          "alt_names": []
+        },
+        {
+          "product_id": "culverts_600",
+          "canonical_name": "Size 600",
+          "size_cm": 600,
+          "alt_names": []
+        },
+        {
+          "product_id": "culverts_900",
+          "canonical_name": "Size 900",
+          "size_cm": 900,
+          "alt_names": []
+        }
+      ]
+    },
+    {
+      "category_id": "posts_and_bicons",
+      "display_format": "plain",
+      "stock_unit": "PCS",
+      "products": [
+        {
+          "product_id": "posts_01",
+          "canonical_name": "Nguzo",
+          "size_cm": "380x10x12",
+          "alt_names": []
+        },
+        {
+          "product_id": "posts_02",
+          "canonical_name": "Bicon",
+          "size_cm": "60x12x12",
+          "alt_names": []
+        }
+      ]
+    }
+  ]
+}

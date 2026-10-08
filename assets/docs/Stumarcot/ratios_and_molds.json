@@ -1,0 +1,1774 @@
+{
+  "$schema_version": "1.0",
+  "_readme": [
+    "Structured version of the handwritten Ratios & Molds notebook (transcribed Aug 12 2026).",
+    "Design goals: (1) every numeric field that was a dash '-' or marked unclear in the source is set to null, meaning 'value to be fed later' - fill these in once confirmed on the floor.",
+    "(2) 'components' arrays inside each ratio, and 'extra_parameters' objects inside each mold, exist so you can ADD new ingredients or ADD new custom fields (e.g. cycle_time_seconds, labor_hours, machine_id) at any time without restructuring the schema.",
+    "(3) Adding a new color/ratio variant or a new mold = just append a new object to the relevant array with a new *_id. Nothing else needs to change.",
+    "(4) 'wastani' = average/estimated output per 50kg bag of cement, used for planning yield. 'pcs_per_m2' = pieces needed to cover one square meter.",
+    "PRODUCTION CAPACITY MODEL (added 2026-09-25, confirmed by SwahziTech): VIBRO method (floor tiles, wall tiles, paving, curbstones) = many small molds, one casting cycle per mold per day (curing overnight) - so qty_of_molds for a product IS its maximum daily output in pieces, a hard ceiling. PRESS method (press-machine products) = the opposite: only ONE large mold per product, but it cycles repeatedly - 10-20 pcs per batch, many batches per day, totaling roughly 1000-8000 pcs and 50-200 bags of cement consumed per day depending on the product's ratio and working hours. Capacity here is a function of cycle speed x hours worked, NOT mold count. STEEL_RING_CAST (culverts) and STEEL_ROLLER_CAST (posts/bicons) capacity model not yet defined - flagged as open, do not assume the vibro rule applies to them."
+  ],
+  "categories": [
+    {
+      "category_id": "floor_tiles",
+      "name": "Floor Tiles",
+      "machine_type": "vibro",
+      "unit_note": "1 ndoo/bucket = 10L = 20kg of mchanga, chip, kokoto or dust",
+      "ratios": [
+        {
+          "ratio_id": "floor_tiles_white",
+          "label": "White",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "bucket",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": null
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "floor_tiles_red",
+          "label": "Red",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "bucket",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 4
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "floor_tiles_grey",
+          "label": "Grey",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "bucket",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 1
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "floor_tiles_black",
+          "label": "Black",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "bucket",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 2
+            }
+          ],
+          "notes": "Valid, active product color. Not among the 3 colors shown in the printed catalog (OffWhite/Red/Grey), which lists common colors only - confirmed by SwahziTech 2026-09-25.",
+          "catalog_featured": false
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "floor_tiles_01",
+          "mold_no": 1,
+          "name": "Slab",
+          "size_cm": "110x50",
+          "qty_of_molds": 18,
+          "coverage_m2": 10,
+          "pieces_per_m2": 1.8,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 18
+        },
+        {
+          "mold_id": "floor_tiles_02",
+          "mold_no": 2,
+          "name": "Combo",
+          "size_cm": "80x40",
+          "qty_of_molds": 75,
+          "coverage_m2": 25,
+          "pieces_per_m2": 3,
+          "wastani_per_bag": 15,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 75
+        },
+        {
+          "mold_id": "floor_tiles_03",
+          "mold_no": 3,
+          "name": "Mraba (square)",
+          "size_cm": "60x30",
+          "qty_of_molds": 60,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 60
+        },
+        {
+          "mold_id": "floor_tiles_04",
+          "mold_no": 4,
+          "name": "40 Plain",
+          "size_cm": "40x40",
+          "qty_of_molds": 100,
+          "coverage_m2": 16.6,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 100
+        },
+        {
+          "mold_id": "floor_tiles_05",
+          "mold_no": 5,
+          "name": "40 Buibui",
+          "size_cm": "40x40",
+          "qty_of_molds": 65,
+          "coverage_m2": 10,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 65
+        },
+        {
+          "mold_id": "floor_tiles_06",
+          "mold_no": 6,
+          "name": "40 Mayai",
+          "size_cm": "40x40",
+          "qty_of_molds": 220,
+          "coverage_m2": 36.6,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 220
+        },
+        {
+          "mold_id": "floor_tiles_07",
+          "mold_no": 7,
+          "name": "40 Spider",
+          "size_cm": "40x40",
+          "qty_of_molds": 100,
+          "coverage_m2": 16.6,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 100
+        },
+        {
+          "mold_id": "floor_tiles_08",
+          "mold_no": 8,
+          "name": "40 V",
+          "size_cm": "40x40",
+          "qty_of_molds": 95,
+          "coverage_m2": 15,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 95
+        },
+        {
+          "mold_id": "floor_tiles_09",
+          "mold_no": 9,
+          "name": "40 Combo",
+          "size_cm": "40x40",
+          "qty_of_molds": 99,
+          "coverage_m2": 16.5,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 99
+        },
+        {
+          "mold_id": "floor_tiles_10",
+          "mold_no": 10,
+          "name": "40 Dot",
+          "size_cm": "40x40",
+          "qty_of_molds": 446,
+          "coverage_m2": 74.3,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 446
+        },
+        {
+          "mold_id": "floor_tiles_11",
+          "mold_no": 11,
+          "name": "40 Mawingu",
+          "size_cm": "40x40",
+          "qty_of_molds": 6,
+          "coverage_m2": 1,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 6
+        },
+        {
+          "mold_id": "floor_tiles_12",
+          "mold_no": 12,
+          "name": "40 Mpira",
+          "size_cm": "40x40",
+          "qty_of_molds": 6,
+          "coverage_m2": 1,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": 37,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 6
+        },
+        {
+          "mold_id": "floor_tiles_13",
+          "mold_no": 13,
+          "name": "35 World Cup",
+          "size_cm": "35x35",
+          "qty_of_molds": 8,
+          "coverage_m2": 1,
+          "pieces_per_m2": 8,
+          "wastani_per_bag": 70,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 8
+        },
+        {
+          "mold_id": "floor_tiles_14",
+          "mold_no": 14,
+          "name": "Mawingu",
+          "size_cm": "40x20",
+          "qty_of_molds": 120,
+          "coverage_m2": 10,
+          "pieces_per_m2": 12,
+          "wastani_per_bag": 105,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 120
+        },
+        {
+          "mold_id": "floor_tiles_15",
+          "mold_no": 15,
+          "name": "30 Draft",
+          "size_cm": "30x30",
+          "qty_of_molds": 107,
+          "coverage_m2": 9,
+          "pieces_per_m2": 11,
+          "wastani_per_bag": 75,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 107
+        },
+        {
+          "mold_id": "floor_tiles_16",
+          "mold_no": 16,
+          "name": "30 8gon",
+          "size_cm": "30x30",
+          "qty_of_molds": 220,
+          "coverage_m2": 20,
+          "pieces_per_m2": 11,
+          "wastani_per_bag": 75,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 220
+        },
+        {
+          "mold_id": "floor_tiles_17",
+          "mold_no": 17,
+          "name": "Draft 9",
+          "size_cm": "30x30",
+          "qty_of_molds": 123,
+          "coverage_m2": 11,
+          "pieces_per_m2": 11,
+          "wastani_per_bag": 75,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 123
+        },
+        {
+          "mold_id": "floor_tiles_18",
+          "mold_no": 18,
+          "name": "25 Buibui",
+          "size_cm": "25x25",
+          "qty_of_molds": 399,
+          "coverage_m2": 24.9,
+          "pieces_per_m2": 16,
+          "wastani_per_bag": 95,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 399
+        },
+        {
+          "mold_id": "floor_tiles_19",
+          "mold_no": 19,
+          "name": "25 Chuchu",
+          "size_cm": "25x25",
+          "qty_of_molds": 16,
+          "coverage_m2": 1,
+          "pieces_per_m2": 16,
+          "wastani_per_bag": 95,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 16
+        },
+        {
+          "mold_id": "floor_tiles_20",
+          "mold_no": 20,
+          "name": "Culture",
+          "size_cm": "30x30",
+          "qty_of_molds": 430,
+          "coverage_m2": null,
+          "pieces_per_m2": 11,
+          "wastani_per_bag": 75,
+          "wastani_note": "M² value blank in source - to be fed",
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 430
+        },
+        {
+          "mold_id": "floor_tiles_21",
+          "mold_no": 21,
+          "name": "Mbao",
+          "size_cm": null,
+          "qty_of_molds": 60,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "wastani_note": "Size and all yield values blank in source - to be fed",
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 60
+        },
+        {
+          "mold_id": "floor_tiles_22",
+          "mold_no": 22,
+          "name": "40 Halfmoon",
+          "size_cm": "40x40",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": 6,
+          "wastani_per_bag": null,
+          "wastani_note": "Confirmed real product via catalog (page 3), was missing from the original handwritten mold list. Uses the SAME floor_tiles ratios as every other mold on this list (confirmed by SwahziTech 2026-09-25: 'all tiles use the same ratio') - no separate ratio needed. qty_of_molds and wastani_per_bag not yet recorded.",
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": null
+        }
+      ],
+      "production_method": "vibro",
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+    },
+    {
+      "category_id": "wall_tiles",
+      "name": "Wall Tiles",
+      "machine_type": "vibro",
+      "unit_note": null,
+      "ratios": [
+        {
+          "ratio_id": "wall_tiles_white",
+          "label": "White",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "ndoo",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": null
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "wall_tiles_red",
+          "label": "Red",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "ndoo",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 1
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 4
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "wall_tiles_grey",
+          "label": "Grey",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "ndoo",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 2
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 1
+            }
+          ],
+          "notes": "Featured in printed catalog as a common color.",
+          "catalog_featured": true
+        },
+        {
+          "ratio_id": "wall_tiles_black",
+          "label": "Black",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "bucket",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "ndoo",
+              "quantity": 6
+            },
+            {
+              "material": "dawa",
+              "unit": "litre",
+              "quantity": 2
+            },
+            {
+              "material": "rangi",
+              "unit": "kg",
+              "quantity": 2
+            }
+          ],
+          "notes": "Valid, active product color. Not among the 3 colors shown in the printed catalog (OffWhite/Red/Grey), which lists common colors only - confirmed by SwahziTech 2026-09-25.",
+          "catalog_featured": false
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "wall_tiles_01",
+          "mold_no": 1,
+          "name": "Mahogany",
+          "size_cm": "40x20",
+          "qty_of_molds": 12,
+          "coverage_m2": 1,
+          "pieces_per_m2": 12,
+          "wastani_per_bag": 105,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 12
+        },
+        {
+          "mold_id": "wall_tiles_02",
+          "mold_no": 2,
+          "name": "Cloud",
+          "size_cm": "40x20",
+          "qty_of_molds": 12,
+          "coverage_m2": 1,
+          "pieces_per_m2": 12,
+          "wastani_per_bag": 105,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 12
+        },
+        {
+          "mold_id": "wall_tiles_03",
+          "mold_no": 3,
+          "name": "Gamba Sq",
+          "size_cm": "30x15",
+          "qty_of_molds": 22,
+          "coverage_m2": 1,
+          "pieces_per_m2": 22,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 22
+        },
+        {
+          "mold_id": "wall_tiles_04",
+          "mold_no": 4,
+          "name": "Banzi",
+          "size_cm": "30x15",
+          "qty_of_molds": 52,
+          "coverage_m2": 2.3,
+          "pieces_per_m2": 22,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 52
+        },
+        {
+          "mold_id": "wall_tiles_05",
+          "mold_no": 5,
+          "name": "Mawingu",
+          "size_cm": "40x20",
+          "qty_of_molds": 12,
+          "coverage_m2": 1,
+          "pieces_per_m2": 12,
+          "wastani_per_bag": 105,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 12
+        }
+      ],
+      "production_method": "vibro",
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+    },
+    {
+      "category_id": "paving_blocks_vibro",
+      "name": "Paving Blocks",
+      "machine_type": "vibro",
+      "unit_note": null,
+      "ratios": [
+        {
+          "ratio_id": "paving_white",
+          "label": "White (base)",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 7
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 11
+            }
+          ],
+          "notes": "Color additions on top of white base, per bag of cement"
+        },
+        {
+          "ratio_id": "paving_red",
+          "label": "Red (add-on)",
+          "components": [
+            {
+              "material": "rangi_red",
+              "unit": "kg",
+              "quantity": 4
+            }
+          ],
+          "notes": null
+        },
+        {
+          "ratio_id": "paving_grey",
+          "label": "Grey (add-on)",
+          "components": [
+            {
+              "material": "rangi_grey",
+              "unit": "kg",
+              "quantity": 1
+            }
+          ],
+          "notes": null
+        },
+        {
+          "ratio_id": "paving_black",
+          "label": "Black (add-on)",
+          "components": [
+            {
+              "material": "rangi_black",
+              "unit": "kg",
+              "quantity": 2
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "paving_01",
+          "mold_no": 1,
+          "name": "U-Dot Kubwa",
+          "size_cm": null,
+          "qty_of_molds": 20,
+          "coverage_m2": 1,
+          "pieces_per_m2": 20,
+          "wastani_per_bag": 83,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": 4,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 20
+        },
+        {
+          "mold_id": "paving_02",
+          "mold_no": 2,
+          "name": "Culture",
+          "size_cm": null,
+          "qty_of_molds": 990,
+          "coverage_m2": 35,
+          "pieces_per_m2": 28,
+          "wastani_per_bag": 95,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": null,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 990
+        },
+        {
+          "mold_id": "paving_03",
+          "mold_no": 3,
+          "name": "Trio",
+          "size_cm": null,
+          "qty_of_molds": 27,
+          "coverage_m2": 1,
+          "pieces_per_m2": 27,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": null,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 27
+        },
+        {
+          "mold_id": "paving_04",
+          "mold_no": 4,
+          "name": "Z Plain",
+          "size_cm": null,
+          "qty_of_molds": 30,
+          "coverage_m2": 1,
+          "pieces_per_m2": 30,
+          "wastani_per_bag": 125,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": 4,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 30
+        },
+        {
+          "mold_id": "paving_05",
+          "mold_no": 5,
+          "name": "Kisu Paver",
+          "size_cm": null,
+          "qty_of_molds": 40,
+          "coverage_m2": 1,
+          "pieces_per_m2": 40,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": null,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 40
+        },
+        {
+          "mold_id": "paving_06",
+          "mold_no": 6,
+          "name": "V-Paver",
+          "size_cm": null,
+          "qty_of_molds": 52,
+          "coverage_m2": 1,
+          "pieces_per_m2": 52,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": null,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 52
+        },
+        {
+          "mold_id": "paving_07",
+          "mold_no": 7,
+          "name": "U-Dot Ndogo",
+          "size_cm": null,
+          "qty_of_molds": 2449,
+          "coverage_m2": 122,
+          "pieces_per_m2": 20,
+          "wastani_per_bag": null,
+          "wastani_note": null,
+          "extra_parameters": {
+            "m2_per_bag": null,
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 2449
+        },
+        {
+          "mold_id": "paving_08",
+          "mold_no": null,
+          "name": "Mtungi",
+          "size_cm": null,
+          "qty_of_molds": 675,
+          "coverage_m2": 37,
+          "pieces_per_m2": 18,
+          "wastani_per_bag": 75,
+          "wastani_note": "Pcs/m2 confirmed unknown (blank in notebook AND in printed catalog) - left null intentionally, not a transcription gap. Confirmed by SwahziTech 2026-09-25.",
+          "extra_parameters": {
+            "m2_per_bag": 4,
+            "note": "No. column was blank/dash in source",
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 675
+        }
+      ],
+      "production_method": "vibro",
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+    },
+    {
+      "category_id": "curbstones",
+      "name": "Curbstones",
+      "machine_type": "vibro",
+      "unit_note": null,
+      "ratios": [
+        {
+          "ratio_id": "curbstones_standard",
+          "label": "Standard",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 6
+            },
+            {
+              "material": "kokoto",
+              "unit": "unit",
+              "quantity": 7
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 2
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "curbstones_01",
+          "mold_no": 1,
+          "name": "100 Sq",
+          "size_cm": "100x25x10",
+          "qty_of_molds": 10,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 5,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 10
+        },
+        {
+          "mold_id": "curbstones_02",
+          "mold_no": 2,
+          "name": "60 Sq",
+          "size_cm": "60x25x10",
+          "qty_of_molds": 11,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 13,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 11
+        },
+        {
+          "mold_id": "curbstones_03",
+          "mold_no": 3,
+          "name": "60 Round",
+          "size_cm": "60x25x10",
+          "qty_of_molds": 10,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 13,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 10
+        },
+        {
+          "mold_id": "curbstones_04",
+          "mold_no": 4,
+          "name": "50 Bevo",
+          "size_cm": "50x25x10",
+          "qty_of_molds": 5,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 15,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 5
+        }
+      ],
+      "production_method": "vibro",
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+    },
+    {
+      "category_id": "trench_covers",
+      "name": "Mifuniko / Trench Covers",
+      "machine_type": "vibro",
+      "unit_note": null,
+      "ratios": [
+        {
+          "ratio_id": "trench_covers_standard",
+          "label": "Standard",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 5
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 6
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "trench_covers_01",
+          "mold_no": 1,
+          "name": "50 Mdogo Tundu 5",
+          "size_cm": "50x30x5",
+          "qty_of_molds": 10,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 11,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 10
+        },
+        {
+          "mold_id": "trench_covers_02",
+          "mold_no": 2,
+          "name": "50 Matundu 6",
+          "size_cm": "50x35x5",
+          "qty_of_molds": 8,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 11,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 8
+        },
+        {
+          "mold_id": "trench_covers_03",
+          "mold_no": 3,
+          "name": "60 Matundu 6",
+          "size_cm": "60x40x7",
+          "qty_of_molds": 15,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 9,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 15
+        },
+        {
+          "mold_id": "trench_covers_04",
+          "mold_no": 4,
+          "name": "60 Bevo",
+          "size_cm": "60x40x7",
+          "qty_of_molds": 15,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 9,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 15
+        },
+        {
+          "mold_id": "trench_covers_05",
+          "mold_no": 5,
+          "name": "Mkubwa Nondo",
+          "size_cm": "80x50x12",
+          "qty_of_molds": 10,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 25,
+          "wastani_note": null,
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 10
+        },
+        {
+          "mold_id": "trench_covers_06",
+          "mold_no": 6,
+          "name": "Hollow",
+          "size_cm": "70x50x12",
+          "qty_of_molds": 20,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "wastani_note": "Marked '-' in source - to be fed",
+          "extra_parameters": {
+            "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
+          },
+          "max_daily_output_pcs": 20
+        }
+      ],
+      "production_method": "vibro",
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+    },
+    {
+      "category_id": "press_machine_products",
+      "name": "Press Machine Products",
+      "machine_type": "press",
+      "unit_note": "Single-mold press products, typical capacity 50-100 bags of cement per day per machine.",
+      "items": [
+        {
+          "item_id": "press_01",
+          "item_no": 1,
+          "name": "Tofali 5\"",
+          "size_cm": "46x21x13",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 54
+            }
+          ],
+          "wastani_per_bag": 50,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 2500,
+            "max": 10000
+          }
+        },
+        {
+          "item_id": "press_02",
+          "item_no": 2,
+          "name": "Tofali 4\"",
+          "size_cm": "46x21x10",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 54
+            }
+          ],
+          "wastani_per_bag": 60,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 3000,
+            "max": 12000
+          }
+        },
+        {
+          "item_id": "press_03",
+          "item_no": 3,
+          "name": "Tofali 6\"",
+          "size_cm": "46x21x15",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 54
+            }
+          ],
+          "wastani_per_bag": 40,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 2000,
+            "max": 8000
+          }
+        },
+        {
+          "item_id": "press_04",
+          "item_no": 4,
+          "name": "Tofali 6\" Chipping",
+          "size_cm": "46x21x15",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 40
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 14
+            }
+          ],
+          "wastani_per_bag": 40,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 2000,
+            "max": 8000
+          }
+        },
+        {
+          "item_id": "press_05",
+          "item_no": 5,
+          "name": "Tofali Tundu 6\"",
+          "size_cm": "39x20x15",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 40
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 14
+            }
+          ],
+          "wastani_per_bag": 70,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 3500,
+            "max": 14000
+          }
+        },
+        {
+          "item_id": "press_06",
+          "item_no": 6,
+          "name": "Tofali Tundu 8\"",
+          "size_cm": "39x20x19",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 40
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 14
+            }
+          ],
+          "wastani_per_bag": 60,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 3000,
+            "max": 12000
+          }
+        },
+        {
+          "item_id": "press_07",
+          "item_no": 7,
+          "name": "Kerbstone 50x350x15",
+          "size_cm": "50x35x15",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 14
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 10
+            }
+          ],
+          "wastani_per_bag": 9,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 450,
+            "max": 1800
+          }
+        },
+        {
+          "item_id": "press_08",
+          "item_no": 8,
+          "name": "Kerbstone 80x350x15",
+          "size_cm": "80x39x15",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 14
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 10
+            }
+          ],
+          "wastani_per_bag": 5,
+          "yield_note": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 250,
+            "max": 1000
+          }
+        },
+        {
+          "item_id": "press_09a",
+          "item_no": 9,
+          "name": "Paving 6cm 30MPa",
+          "size_cm": "20x10x6",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
+          "wastani_per_bag": 220,
+          "yield_note": "Derived: 220 pcs/bag (yield) and 48.9 pcs/sqm (coverage density), from source figure '220 pcs -> 4.5 m2 per bag'.",
+          "m2_covered_per_bag": 4.5,
+          "pcs_per_sqm": 48.9,
+          "estimated_daily_output_pcs_range": {
+            "min": 11000,
+            "max": 44000
+          }
+        },
+        {
+          "item_id": "press_09b",
+          "item_no": 9,
+          "name": "Paving 8cm 30MPa",
+          "size_cm": "20x10x8",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
+          "wastani_per_bag": 150,
+          "yield_note": "Derived: 150 pcs/bag (yield) and 50.0 pcs/sqm (coverage density), from source figure '150 pcs -> 3.0 m2 per bag'.",
+          "note": "Source repeats item number 9 for two rows - kept as separate items 9a/9b",
+          "m2_covered_per_bag": 3.0,
+          "pcs_per_sqm": 50.0,
+          "estimated_daily_output_pcs_range": {
+            "min": 7500,
+            "max": 30000
+          }
+        },
+        {
+          "item_id": "press_10",
+          "item_no": 10,
+          "name": "Paving 8cm 40MPa",
+          "size_cm": "20x10x8",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 8
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 2
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 6
+            }
+          ],
+          "wastani_per_bag": 130,
+          "yield_note": "Derived: 130 pcs/bag (yield) and 52.0 pcs/sqm (coverage density), from source figure '130 pcs -> 2.5 m2 per bag'.",
+          "m2_covered_per_bag": 2.5,
+          "pcs_per_sqm": 52.0,
+          "estimated_daily_output_pcs_range": {
+            "min": 6500,
+            "max": 26000
+          }
+        },
+        {
+          "item_id": "press_11",
+          "item_no": 11,
+          "name": "Paving Z-Plain",
+          "size_cm": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
+          "wastani_per_bag": 165,
+          "yield_note": "Only yield known: 165 pcs/bag. Coverage (pcs/sqm) not given in source - to be fed later.",
+          "note": "Size marked 'will be filled later' in source",
+          "m2_covered_per_bag": null,
+          "pcs_per_sqm": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 8250,
+            "max": 33000
+          }
+        },
+        {
+          "item_id": "press_12",
+          "item_no": 12,
+          "name": "Paving 2IG-2AG 40MPa",
+          "size_cm": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 8
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 2
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 6
+            }
+          ],
+          "wastani_per_bag": 105,
+          "yield_note": "Only yield known: 105 pcs/bag. Coverage (pcs/sqm) not given in source - to be fed later.",
+          "note": "Size marked 'will be filled later' in source",
+          "m2_covered_per_bag": null,
+          "pcs_per_sqm": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 5250,
+            "max": 21000
+          }
+        },
+        {
+          "item_id": "press_13",
+          "item_no": 13,
+          "name": "Paving W/Cup",
+          "size_cm": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
+          "wastani_per_bag": 110,
+          "yield_note": "Only yield known: 110 pcs/bag. Coverage (pcs/sqm) not given in source - to be fed later.",
+          "note": "Size marked 'will be filled later' in source",
+          "m2_covered_per_bag": null,
+          "pcs_per_sqm": null,
+          "estimated_daily_output_pcs_range": {
+            "min": 5500,
+            "max": 22000
+          }
+        }
+      ],
+      "production_method": "press",
+      "capacity_model": {
+        "description": "One large mold per product. Output is cycle-speed x hours worked, not mold count.",
+        "batch_size_pcs_range": {
+          "min": 10,
+          "max": 20
+        },
+        "daily_bags_consumed_range": {
+          "min": 50,
+          "max": 200
+        },
+        "observed_daily_output_pcs_range": {
+          "min": 1000,
+          "max": 8000
+        },
+        "note": "1000-8000 pcs/day is NOT a fixed plant-wide ceiling - confirmed by SwahziTech 2026-09-25 that it varies by which product is running and hours worked that day. The per-item 'estimated_daily_output_pcs_range' below (wastani_per_bag x bags/day) is the operative figure per product; the 1000-8000 range is just a general illustrative observation across the product mix, not a validation ceiling to flag items against."
+      }
+    },
+    {
+      "category_id": "culverts",
+      "name": "Culverts",
+      "machine_type": "steel_ring_cast",
+      "unit_note": "Each size/type comes in two steel variants: N-10mm and R-6mm.",
+      "ratios": [
+        {
+          "ratio_id": "culverts_standard",
+          "label": "Standard",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 6
+            },
+            {
+              "material": "kokoto",
+              "unit": "unit",
+              "quantity": 7
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 2
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "culverts_400",
+          "mold_no": 1,
+          "name": "Size 400",
+          "internal_diameter_mm": 400,
+          "steel_length_note": "172cm x4 (ring for round), 98cm x6 (hori for length)",
+          "steel_variants": [
+            "N-10mm",
+            "R-6mm"
+          ],
+          "qty_of_molds": 2,
+          "wastani_note": "3 bags -> 4 pcs",
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "culverts_600",
+          "mold_no": 2,
+          "name": "Size 600",
+          "internal_diameter_mm": 600,
+          "steel_length_note": "240cm x4 (ring for round), 98cm x6 (hori for length)",
+          "steel_variants": [
+            "N-10mm",
+            "R-6mm"
+          ],
+          "qty_of_molds": 3,
+          "wastani_note": "1 bag -> 1 pc",
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "culverts_900",
+          "mold_no": 3,
+          "name": "Size 900",
+          "internal_diameter_mm": 900,
+          "steel_length_note": "330cm x4 (ring for round), 98cm x6 (hori for length)",
+          "steel_variants": [
+            "N-10mm",
+            "R-6mm"
+          ],
+          "qty_of_molds": 2,
+          "wastani_note": "3 bags -> 2 pcs",
+          "extra_parameters": {}
+        }
+      ],
+      "production_method": "steel_ring_cast",
+      "capacity_model": null,
+      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press."
+    },
+    {
+      "category_id": "posts_and_bicons",
+      "name": "Nguzo / Posts & Bicons",
+      "machine_type": "steel_roller_cast",
+      "unit_note": "1 R6 steel roller produces 25 pcs of Nguzo/posts.",
+      "ratios": [
+        {
+          "ratio_id": "posts_bicons_standard",
+          "label": "Standard",
+          "components": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 6
+            },
+            {
+              "material": "kokoto",
+              "unit": "unit",
+              "quantity": 7
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 2
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "molds": [
+        {
+          "mold_id": "posts_01",
+          "mold_no": 1,
+          "name": "Nguzo",
+          "size_cm": "380x10x12",
+          "qty_of_molds": 5,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 5,
+          "wastani_note": null,
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "posts_02",
+          "mold_no": 2,
+          "name": "Bicon",
+          "size_cm": "60x12x12",
+          "qty_of_molds": 5,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": 15,
+          "wastani_note": null,
+          "extra_parameters": {}
+        }
+      ],
+      "production_method": "steel_roller_cast",
+      "capacity_model": null,
+      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press."
+    }
+  ],
+  "_decisions_log": [
+    {
+      "date": "2026-09-25",
+      "topic": "Color availability vs printed catalog",
+      "decision": "Products can have many colors beyond what's printed. The catalog lists only the most common colors (OffWhite/Red/Grey); Black remains a valid, active ratio/product for floor and wall tiles.",
+      "action_taken": "Added catalog_featured flag per color ratio; no colors removed."
+    },
+    {
+      "date": "2026-09-25",
+      "topic": "Rolling Shutter Doors & Sliding Gates",
+      "decision": "Out of scope for MOIS. These are steel-fabrication products, not concrete/cement products, and have no ratio/BOM/pricing data.",
+      "action_taken": "Not modeled anywhere in this file or in MOIS Phase 1 scope. No placeholder created."
+    },
+    {
+      "date": "2026-09-25",
+      "topic": "Mtungi paving pcs/m2",
+      "decision": "Genuinely unknown figure, not urgent to resolve now.",
+      "action_taken": "Left null with an explicit note distinguishing it from a transcription gap."
+    },
+    {
+      "date": "2026-09-25",
+      "topic": "Ratio scope confirmed: shared per category, not per mold",
+      "decision": "All tile molds within a category (Floor Tiles, Wall Tiles, Paving) share the same cement:sand:chip:dawa:rangi ratio per color, regardless of mold/shape. Only the mold's yield (pcs_per_sqm, coverage) differs.",
+      "action_taken": "Confirms the ratio structure already used in this file. Resolved the '40 Halfmoon missing ratio' flag - it uses the standard floor_tiles ratios, added as mold #22."
+    },
+    {
+      "date": "2026-09-25",
+      "topic": "pcs/sqm vs pcs/bag are distinct metrics - terminology fixed",
+      "decision": "pcs_per_sqm (or pieces_per_m2) = how many pieces are needed to cover one square meter (a coverage/density constant of the mold's physical size). wastani_per_bag = how many pieces are produced, on average, from one 50kg bag of cement (a production yield figure that also depends on the mix ratio). These were incorrectly merged into one free-text field for the press-machine paving items - split into two separate numeric fields, with pcs_per_sqm derived by division where both source numbers existed.",
+      "action_taken": "Fixed press_09a, press_09b, press_10 (both fields now populated). press_11/12/13 only had yield given in source, so pcs_per_sqm stays null for those - genuinely not derivable without a coverage figure."
+    },
+    {
+      "date": "2026-09-25",
+      "topic": "Trench covers confirmed vibro; press daily-output range is per-product, not a fixed ceiling",
+      "decision": "Trench Covers uses the same vibro capacity model as Floor Tiles/Wall Tiles/Paving/Curbstones (qty_of_molds = max daily output pcs). The 1000-8000 pcs/day figure for press-machine products is not a uniform plant ceiling - it depends on which product is running and hours worked, so individual products (e.g. fast-cycling Tofali 4\") can legitimately exceed 8000 pcs/day.",
+      "action_taken": "trench_covers moved from 'vibro_unconfirmed' to 'vibro' with full capacity fields added. press_machine_products capacity_model note updated to stop treating 1000-8000 as a validation ceiling."
+    }
+  ]
+}

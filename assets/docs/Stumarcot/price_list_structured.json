@@ -1,0 +1,2670 @@
+{
+  "_readme": [
+    "Consolidated price list built from price_list_2026.xlsx (3 branch sheets: Mwanza, Dar es Salaam/Kiluvya, Dodoma), 2026-09-25.",
+    "This is a NATIONAL price sheet with per-branch AVAILABILITY differences, not per-branch pricing - most products share one price across all 3 branches. Where 'price_consistent_across_branches' is false, or 'available_in_all_branches' is false, that's a real difference to confirm, not a parsing artifact.",
+    "canonical_match links each price-list row to product_master.json where the name could be confidently matched. null means no confident match was found - do not force one; confirm manually before seeding.",
+    "color_pricing describes how much colors OTHER than OffWhite/base cost, per category. pricing_type is either 'delta_per_sqmt_over_offwhite' (add this to the OffWhite price) or 'absolute_price_per_sqmt' (this IS the price for that color, regardless of the specific mold's OffWhite base price - flagged as an assumption where the category has molds with varying OffWhite base prices, e.g. Floor Tiles Slab/Combo).",
+    "Categories with no color_pricing entry (Trench Covers, Cubstones, Blocks, Culverts, Nguzo) are sold in one color only (grey/offwhite concrete) - matches product_master.json's 'plain' display_format for those categories."
+  ],
+  "categories": [
+    {
+      "category_raw": "PAVING BLOCKS (PRESS)",
+      "color_pricing_by_branch": {
+        "Mwanza": {
+          "base_color": "OffWhite",
+          "pricing_type": "delta_per_sqmt_over_offwhite",
+          "other_colors": {
+            "Red": 3000,
+            "Grey": 3000
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "N.B: ALL ABOVE PAVING BLOCKS ARE AVAILABLE IN RED AND GREY COLOR WITH AN INCREASE OF TSH 3000 PER SQMT."
+          ]
+        },
+        "Dar es Salaam": {
+          "base_color": "OffWhite",
+          "pricing_type": "delta_per_sqmt_over_offwhite",
+          "other_colors": {
+            "Red": 3000,
+            "Grey": 3000
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-ALL ABOVE PAVING BLOCKS ARE AVAILABLE IN RED AND GREY COLOR WITH AN INCREASE OF TSH 3000 PER SQMT."
+          ]
+        },
+        "Dodoma": {
+          "base_color": "OffWhite",
+          "pricing_type": "delta_per_sqmt_over_offwhite",
+          "other_colors": {
+            "Red": 3000,
+            "Grey": 3000
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-ALL ABOVE PAVING BLOCKS ARE AVAILABLE IN RED AND GREY COLOR WITH AN INCREASE OF TSH 3000 PER SQMT."
+          ]
+        }
+      },
+      "color_pricing_consistent_across_branches": false,
+      "products": [
+        {
+          "description_raw": "RECTANGULAR (30-35MPa)",
+          "size_mm": "200*100*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 533.8983050847457,
+              "vat": 96.10169491525423,
+              "price_inclusive": 630,
+              "price_per_sqmt": 31500
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 533.8983050847457,
+              "vat": 96.10169491525423,
+              "price_inclusive": 630,
+              "price_per_sqmt": 31500
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 533.8983050847457,
+              "vat": 96.10169491525423,
+              "price_inclusive": 630,
+              "price_per_sqmt": 31500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "RECTANGULAR (40-45 Mpa)",
+          "size_mm": "200*100*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 593.2203389830509,
+              "vat": 106.77966101694915,
+              "price_inclusive": 700,
+              "price_per_sqmt": 35000
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 593.2203389830509,
+              "vat": 106.77966101694915,
+              "price_inclusive": 700,
+              "price_per_sqmt": 35000
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 593.2203389830509,
+              "vat": 106.77966101694915,
+              "price_inclusive": 700,
+              "price_per_sqmt": 35000
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "RECTANGULAR  (30MPa)",
+          "size_mm": "200*100*60mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 437.79661016949154,
+              "vat": 78.80338983050848,
+              "price_inclusive": 516.6,
+              "price_per_sqmt": 25830
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 437.79661016949154,
+              "vat": 78.80338983050848,
+              "price_inclusive": 516.6,
+              "price_per_sqmt": 25830
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 50,
+              "price_exclusive": 437.79661016949154,
+              "vat": 78.80338983050848,
+              "price_inclusive": 516.6,
+              "price_per_sqmt": 25830
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "ZIGZAG (30-35MPa)",
+          "size_mm": "210*100*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 556.1440677966101,
+              "vat": 100.10593220338981,
+              "price_inclusive": 656.25,
+              "price_per_sqmt": 31500
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 556.1440677966101,
+              "vat": 100.10593220338981,
+              "price_inclusive": 656.25,
+              "price_per_sqmt": 31500
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 556.1440677966101,
+              "vat": 100.10593220338981,
+              "price_inclusive": 656.25,
+              "price_per_sqmt": 31500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "ZIGZAG (40-45MPa)",
+          "size_mm": "210*100*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 617.9378531073446,
+              "vat": 111.22881355932202,
+              "price_inclusive": 729.1666666666666,
+              "price_per_sqmt": 35000
+            },
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 617.9378531073446,
+              "vat": 111.22881355932202,
+              "price_inclusive": 729.1666666666666,
+              "price_per_sqmt": 35000
+            },
+            "Dodoma": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 617.9378531073446,
+              "vat": 111.22881355932202,
+              "price_inclusive": 729.1666666666666,
+              "price_per_sqmt": 35000
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "ZIGZAG (30 Mpa)",
+          "size_mm": "210*100*60mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 456.0381355932203,
+              "vat": 82.08686440677965,
+              "price_inclusive": 538.125,
+              "price_per_sqmt": 25830
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 456.0381355932203,
+              "vat": 82.08686440677965,
+              "price_inclusive": 538.125,
+              "price_per_sqmt": 25830
+            },
+            "Dodoma": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 48,
+              "price_exclusive": 456.0381355932203,
+              "vat": 82.08686440677965,
+              "price_inclusive": 538.125,
+              "price_per_sqmt": 25830
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "H PAVER (30-35MPa)",
+          "size_mm": "200*13.3*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 721.4841960604672,
+              "vat": 129.86715529088409,
+              "price_inclusive": 851.3513513513514,
+              "price_per_sqmt": 31500
+            },
+            "Dar es Salaam": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 721.4841960604672,
+              "vat": 129.86715529088409,
+              "price_inclusive": 851.3513513513514,
+              "price_per_sqmt": 31500
+            },
+            "Dodoma": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 721.4841960604672,
+              "vat": 129.86715529088409,
+              "price_inclusive": 851.3513513513514,
+              "price_per_sqmt": 31500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "H PAVER (40-45MPa)",
+          "size_mm": "200*13.3*80mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 801.6491067338525,
+              "vat": 144.29683921209343,
+              "price_inclusive": 945.9459459459459,
+              "price_per_sqmt": 35000
+            },
+            "Dar es Salaam": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 801.6491067338525,
+              "vat": 144.29683921209343,
+              "price_inclusive": 945.9459459459459,
+              "price_per_sqmt": 35000
+            },
+            "Dodoma": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 801.6491067338525,
+              "vat": 144.29683921209343,
+              "price_inclusive": 945.9459459459459,
+              "price_per_sqmt": 35000
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "H PAVER (30 Mpa)",
+          "size_mm": "200*13.3*60mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 591.6170407695831,
+              "vat": 106.49106733852496,
+              "price_inclusive": 698.1081081081081,
+              "price_per_sqmt": 25830
+            },
+            "Dar es Salaam": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 591.6170407695831,
+              "vat": 106.49106733852496,
+              "price_inclusive": 698.1081081081081,
+              "price_per_sqmt": 25830
+            },
+            "Dodoma": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 37,
+              "price_exclusive": 591.6170407695831,
+              "vat": 106.49106733852496,
+              "price_inclusive": 698.1081081081081,
+              "price_per_sqmt": 25830
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "WORLDCUP (30MPa)",
+          "size_mm": "250*13.5*60mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 33,
+              "price_exclusive": 663.3281972265023,
+              "vat": 119.39907550077041,
+              "price_inclusive": 782.7272727272727,
+              "price_per_sqmt": 25830
+            },
+            "Dar es Salaam": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 33,
+              "price_exclusive": 663.3281972265023,
+              "vat": 119.39907550077041,
+              "price_inclusive": 782.7272727272727,
+              "price_per_sqmt": 25830
+            },
+            "Dodoma": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 33,
+              "price_exclusive": 663.3281972265023,
+              "vat": 119.39907550077041,
+              "price_inclusive": 782.7272727272727,
+              "price_per_sqmt": 25830
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "PAVING BLOCKS (VIBRATION)",
+      "color_pricing_by_branch": {
+        "Mwanza": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 31500,
+            "Grey": 31500,
+            "Black": 34500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "PRICES FOR OTHER AVAILABLE COLORS  ARE: RED 31,500 GREY 31,500 AND BLACK 34,500 PER SQMT"
+          ]
+        },
+        "Dar es Salaam": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 31500,
+            "Grey": 31500,
+            "Black": 34500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "PRICES FOR OTHER AVAILABLE COLORS  ARE: RED 31,500 GREY 31,500 AND BLACK 34,500 PER SQMT"
+          ]
+        },
+        "Dodoma": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 31500,
+            "Grey": 31500,
+            "Black": 34500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "PRICES FOR OTHER AVAILABLE COLORS  ARE: RED 31,500 GREY 31,500 AND BLACK 34,500 PER SQMT"
+          ]
+        }
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "U DOT PAVER",
+          "size_mm": null,
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 20,
+              "price_exclusive": 1250,
+              "vat": 225,
+              "price_inclusive": 1475,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 20,
+              "price_exclusive": 1250,
+              "vat": 225,
+              "price_inclusive": 1475,
+              "price_per_sqmt": 29500
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 20,
+              "price_exclusive": 1250,
+              "vat": 225,
+              "price_inclusive": 1475,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "Z PLAIN PAVER",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_04",
+            "canonical_name": "Z Plain"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 30,
+              "price_exclusive": 833.3333333333334,
+              "vat": 150,
+              "price_inclusive": 983.3333333333334,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 30,
+              "price_exclusive": 833.3333333333334,
+              "vat": 150,
+              "price_inclusive": 983.3333333333334,
+              "price_per_sqmt": 29500
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 30,
+              "price_exclusive": 833.3333333333334,
+              "vat": 150,
+              "price_inclusive": 983.3333333333334,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "TRIO",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_03",
+            "canonical_name": "Trio"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 27,
+              "price_exclusive": 925.9259259259259,
+              "vat": 166.66666666666666,
+              "price_inclusive": 1092.5925925925926,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 27,
+              "price_exclusive": 925.9259259259259,
+              "vat": 166.66666666666666,
+              "price_inclusive": 1092.5925925925926,
+              "price_per_sqmt": 29500
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 27,
+              "price_exclusive": 925.9259259259259,
+              "vat": 166.66666666666666,
+              "price_inclusive": 1092.5925925925926,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "CULTURE",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_02",
+            "canonical_name": "Culture"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 28,
+              "price_exclusive": 892.8571428571429,
+              "vat": 160.71428571428572,
+              "price_inclusive": 1053.5714285714287,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 28,
+              "price_exclusive": 892.8571428571429,
+              "vat": 160.71428571428572,
+              "price_inclusive": 1053.5714285714287,
+              "price_per_sqmt": 29500
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 28,
+              "price_exclusive": 892.8571428571429,
+              "vat": 160.71428571428572,
+              "price_inclusive": 1053.5714285714287,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "V PAVER",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_06",
+            "canonical_name": "V-Paver"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 52,
+              "price_exclusive": 480.7692307692307,
+              "vat": 86.53846153846152,
+              "price_inclusive": 567.3076923076923,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 52,
+              "price_exclusive": 480.7692307692307,
+              "vat": 86.53846153846152,
+              "price_inclusive": 567.3076923076923,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "KISU",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_05",
+            "canonical_name": "Kisu Paver"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 40,
+              "price_exclusive": 625,
+              "vat": 112.5,
+              "price_inclusive": 737.5,
+              "price_per_sqmt": 29500
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 40,
+              "price_exclusive": 625,
+              "vat": 112.5,
+              "price_inclusive": 737.5,
+              "price_per_sqmt": 29500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "Z DOT",
+          "size_mm": null,
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": null,
+              "price_exclusive": null,
+              "vat": null,
+              "price_inclusive": null,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dar es Salaam",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "FLOOR TILES",
+      "color_pricing_by_branch": {
+        "Mwanza": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        },
+        "Dar es Salaam": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        },
+        "Dodoma": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        }
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "SLAB",
+          "size_mm": "1100*500*30mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_01",
+            "canonical_name": "Slab"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": 16500
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": 16500
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": 16500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "COMBO",
+          "size_mm": "800*400*30mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_02",
+            "canonical_name": "Combo"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 3,
+              "price_exclusive": 9180.790960451977,
+              "vat": 1652.542372881356,
+              "price_inclusive": 10833.333333333334,
+              "price_per_sqmt": 32500
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 3,
+              "price_exclusive": 9180.790960451977,
+              "vat": 1652.542372881356,
+              "price_inclusive": 10833.333333333334,
+              "price_per_sqmt": 32500
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 3,
+              "price_exclusive": 9180.790960451977,
+              "vat": 1652.542372881356,
+              "price_inclusive": 10833.333333333334,
+              "price_per_sqmt": 32500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "MBAO",
+          "size_mm": "600*300*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_21",
+            "canonical_name": "Mbao"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "50PLAIN",
+          "size_mm": "500*500*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "50 DRAFT",
+          "size_mm": "490*450*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dar es Salaam",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "MAYAI",
+          "size_mm": "490*460*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_06",
+            "canonical_name": "40 Mayai"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40DOT",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_10",
+            "canonical_name": "40 Dot"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40PLAIN",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_04",
+            "canonical_name": "40 Plain"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 MAWINGU",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_11",
+            "canonical_name": "40 Mawingu"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dar es Salaam",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 8GON",
+          "size_mm": "400*400*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dar es Salaam",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "WORLDCUP",
+          "size_mm": "350*350*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_13",
+            "canonical_name": "35 World Cup"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 11,
+              "pcs_per_sqmt_or_unit": 8,
+              "price_exclusive": 2701.271186440678,
+              "vat": 486.228813559322,
+              "price_inclusive": 3187.5,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 11,
+              "pcs_per_sqmt_or_unit": 8,
+              "price_exclusive": 2701.271186440678,
+              "vat": 486.228813559322,
+              "price_inclusive": 3187.5,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 11,
+              "pcs_per_sqmt_or_unit": 8,
+              "price_exclusive": 2701.271186440678,
+              "vat": 486.228813559322,
+              "price_inclusive": 3187.5,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "30 8GON",
+          "size_mm": "300*300*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_16",
+            "canonical_name": "30 8gon"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 12,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dar es Salaam",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "DRAFT",
+          "size_mm": "300*300*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 13,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 13,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 13,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "DRAFT 9",
+          "size_mm": "300*300*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_17",
+            "canonical_name": "Draft 9"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 14,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 14,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 14,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "CHUCHU",
+          "size_mm": "250*250*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_19",
+            "canonical_name": "25 Chuchu"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 15,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 15,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 15,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "BUIBUI",
+          "size_mm": "250*250*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 16,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 16,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 16,
+              "pcs_per_sqmt_or_unit": 16,
+              "price_exclusive": 1350.635593220339,
+              "vat": 243.114406779661,
+              "price_inclusive": 1593.75,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "DRAFT",
+          "size_mm": "490*450*20mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 4,
+              "price_exclusive": 5402.542372881356,
+              "vat": 972.457627118644,
+              "price_inclusive": 6375,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "HALFMOON",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_halfmoon",
+            "canonical_name": "40 Halfmoon"
+          },
+          "available_in_branches": {
+            "Dar es Salaam": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40MPIRA",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_12",
+            "canonical_name": "40 Mpira"
+          },
+          "available_in_branches": {
+            "Dar es Salaam": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 10,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "8GON",
+          "size_mm": "300*300*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_16",
+            "canonical_name": "30 8gon"
+          },
+          "available_in_branches": {
+            "Dar es Salaam": {
+              "item_no": 12,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 12,
+              "pcs_per_sqmt_or_unit": 11,
+              "price_exclusive": 1964.5608628659475,
+              "vat": 353.6209553158705,
+              "price_inclusive": 2318.181818181818,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 COMBO",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_09",
+            "canonical_name": "40 Combo"
+          },
+          "available_in_branches": {
+            "Dodoma": {
+              "item_no": 11,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dar es Salaam"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 BUIBUI",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_05",
+            "canonical_name": "40 Buibui"
+          },
+          "available_in_branches": {
+            "Dodoma": {
+              "item_no": 12,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dar es Salaam"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40-V",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_08",
+            "canonical_name": "40 V"
+          },
+          "available_in_branches": {
+            "Dodoma": {
+              "item_no": 13,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dar es Salaam"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 MAYAI",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_06",
+            "canonical_name": "40 Mayai"
+          },
+          "available_in_branches": {
+            "Dodoma": {
+              "item_no": 14,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dar es Salaam"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "40 SPIDER",
+          "size_mm": "400*400*20mm",
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_07",
+            "canonical_name": "40 Spider"
+          },
+          "available_in_branches": {
+            "Dodoma": {
+              "item_no": 15,
+              "pcs_per_sqmt_or_unit": 6,
+              "price_exclusive": 3601.694915254237,
+              "vat": 648.3050847457627,
+              "price_inclusive": 4250,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Mwanza",
+            "Dar es Salaam"
+          ],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "WALL TILES",
+      "color_pricing_by_branch": {
+        "Mwanza": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        },
+        "Dar es Salaam": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        },
+        "Dodoma": {
+          "base_color": "OffWhite",
+          "pricing_type": "absolute_price_per_sqmt",
+          "other_colors": {
+            "Red": 27500,
+            "Grey": 27500,
+            "Black": 31500
+          },
+          "raw_notes": [
+            "N.B:  -ALL ABOVE PRICES ARE FOR OFFWHITE COLOR ONLY",
+            "-PRICES FOR OTHER COLORS ARE : RED 27,500 GREY 27,500 AND BLACK 31,500"
+          ]
+        }
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "CLOUD",
+          "size_mm": "400*200*10mm",
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_02",
+            "canonical_name": "Cloud"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "BANZI",
+          "size_mm": "200*100*10mm",
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_04",
+            "canonical_name": "Banzi"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "MAHOGANY",
+          "size_mm": "400*200*10mm",
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_01",
+            "canonical_name": "Mahogany"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "GAMBA SQ",
+          "size_mm": "200*100*10mm",
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_03",
+            "canonical_name": "Gamba Sq"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 22,
+              "price_exclusive": 982.2804314329737,
+              "vat": 176.81047765793525,
+              "price_inclusive": 1159.090909090909,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "MAWINGU",
+          "size_mm": "400*200*10mm",
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_05",
+            "canonical_name": "Mawingu"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 12,
+              "price_exclusive": 1800.8474576271185,
+              "vat": 324.1525423728813,
+              "price_inclusive": 2125,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "WALL GAMBA",
+          "size_mm": null,
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "WALL NGAZI",
+          "size_mm": null,
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            },
+            "Dar es Salaam": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            },
+            "Dodoma": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 21,
+              "price_exclusive": 1029.0556900726392,
+              "vat": 185.23002421307504,
+              "price_inclusive": 1214.2857142857142,
+              "price_per_sqmt": 25500
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "TRENCH COVERS",
+      "color_pricing_by_branch": {
+        "Mwanza": null,
+        "Dar es Salaam": null,
+        "Dodoma": null
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "MFUNIKO MDOGO",
+          "size_mm": "500*300*50mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "MFUNIKO MKUBWA",
+          "size_mm": "600*400*70mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "BEVO",
+          "size_mm": "600*400*70mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 13983.050847457627,
+              "vat": 2516.9491525423728,
+              "price_inclusive": 16500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        }
+      ]
+    },
+    {
+      "category_raw": "CUBSTONES",
+      "color_pricing_by_branch": {
+        "Mwanza": null,
+        "Dar es Salaam": null,
+        "Dodoma": null
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "50 BEVO",
+          "size_mm": "500*250*100mm",
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_04",
+            "canonical_name": "50 Bevo"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "60 SQUARE",
+          "size_mm": "600*250*100mm",
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_02",
+            "canonical_name": "60 Sq"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "60 OVAL",
+          "size_mm": "600*250*100mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "100 BEVO",
+          "size_mm": "1000*250*100mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "100 SQUARE",
+          "size_mm": "1000*250*100mm",
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_01",
+            "canonical_name": "100 Sq"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "100 LOCK",
+          "size_mm": "1000*250*100mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "PANASONIC",
+          "size_mm": "1000*300*100mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 15677.966101694914,
+              "vat": 2822.033898305084,
+              "price_inclusive": 18500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 7,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 15677.966101694914,
+              "vat": 2822.033898305084,
+              "price_inclusive": 18500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": false,
+          "missing_in_branches": [
+            "Dodoma"
+          ],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "50 PRESS",
+          "size_mm": "500*350*150mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 8,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 11440.677966101694,
+              "vat": 2059.3220338983047,
+              "price_inclusive": 13500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "80 PRESS",
+          "size_mm": "800*350*150mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 9,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 14830.50847457627,
+              "vat": 2669.4915254237285,
+              "price_inclusive": 17500,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "BLOCKS",
+      "color_pricing_by_branch": {
+        "Mwanza": null,
+        "Dar es Salaam": null,
+        "Dodoma": null
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "SAND BLOCK",
+          "size_mm": "450*230*",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1300,
+              "vat": 234,
+              "price_inclusive": 1534,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1300,
+              "vat": 234,
+              "price_inclusive": 1534,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1300,
+              "vat": 234,
+              "price_inclusive": 1534,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "SAND BLOCK",
+          "size_mm": "450*230*150mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1500,
+              "vat": 270,
+              "price_inclusive": 1770,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1500,
+              "vat": 270,
+              "price_inclusive": 1770,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1500,
+              "vat": 270,
+              "price_inclusive": 1770,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "CHIPPING BLOCK",
+          "size_mm": "450*230*150mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1900,
+              "vat": 342,
+              "price_inclusive": 2242,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1900,
+              "vat": 342,
+              "price_inclusive": 2242,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1900,
+              "vat": 342,
+              "price_inclusive": 2242,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "HOLLOW BLOCK",
+          "size_mm": "450*230*150mm",
+          "canonical_match": {
+            "category_id": "trench_covers",
+            "product_id": "trench_covers_06",
+            "canonical_name": "Hollow"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1600,
+              "vat": 288,
+              "price_inclusive": 1888,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1600,
+              "vat": 288,
+              "price_inclusive": 1888,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 1600,
+              "vat": 288,
+              "price_inclusive": 1888,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        }
+      ]
+    },
+    {
+      "category_raw": "CULVERTS",
+      "color_pricing_by_branch": {
+        "Mwanza": null,
+        "Dar es Salaam": null,
+        "Dodoma": null
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "400R",
+          "size_mm": "1000*400mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 67796.61016949153,
+              "vat": 12203.389830508475,
+              "price_inclusive": 80000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 63559,
+              "vat": 11441,
+              "price_inclusive": 76000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 63559,
+              "vat": 11441,
+              "price_inclusive": 76000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "400N",
+          "size_mm": "1000*400mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 84745.7627118644,
+              "vat": 15254.237288135591,
+              "price_inclusive": 100000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 80508,
+              "vat": 14492,
+              "price_inclusive": 96000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 80508,
+              "vat": 14492,
+              "price_inclusive": 96000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "600R",
+          "size_mm": "1000*600mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 84745.7627118644,
+              "vat": 15254.237288135591,
+              "price_inclusive": 100000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 80508,
+              "vat": 14492,
+              "price_inclusive": 96000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 3,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 80508,
+              "vat": 14492,
+              "price_inclusive": 96000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "600N",
+          "size_mm": "1000*600mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 101694.91525423729,
+              "vat": 18305.084745762713,
+              "price_inclusive": 120000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 97458,
+              "vat": 17542,
+              "price_inclusive": 116000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 4,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 97458,
+              "vat": 17542,
+              "price_inclusive": 116000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "900R",
+          "size_mm": "1000*900mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 101694.91525423729,
+              "vat": 18305.084745762713,
+              "price_inclusive": 120000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 97458,
+              "vat": 17542,
+              "price_inclusive": 116000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 5,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 97458,
+              "vat": 17542,
+              "price_inclusive": 116000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        },
+        {
+          "description_raw": "900N",
+          "size_mm": "1000*900mm",
+          "canonical_match": null,
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 127118.6440677966,
+              "vat": 22881.355932203387,
+              "price_inclusive": 150000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 122881,
+              "vat": 22119,
+              "price_inclusive": 146000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 6,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 122881,
+              "vat": 22119,
+              "price_inclusive": 146000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": false
+        }
+      ]
+    },
+    {
+      "category_raw": "NGUZO",
+      "color_pricing_by_branch": {
+        "Mwanza": null,
+        "Dar es Salaam": null,
+        "Dodoma": null
+      },
+      "color_pricing_consistent_across_branches": true,
+      "products": [
+        {
+          "description_raw": "BICON",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "posts_and_bicons",
+            "product_id": "posts_02",
+            "canonical_name": "Bicon"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 22033.898305084746,
+              "vat": 3966.101694915254,
+              "price_inclusive": 26000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 22033.898305084746,
+              "vat": 3966.101694915254,
+              "price_inclusive": 26000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 1,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 22033.898305084746,
+              "vat": 3966.101694915254,
+              "price_inclusive": 26000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        },
+        {
+          "description_raw": "NGUZO KUBWA",
+          "size_mm": null,
+          "canonical_match": {
+            "category_id": "posts_and_bicons",
+            "product_id": "posts_01",
+            "canonical_name": "Nguzo"
+          },
+          "available_in_branches": {
+            "Mwanza": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 6779.661016949152,
+              "vat": 1220.3389830508474,
+              "price_inclusive": 8000,
+              "price_per_sqmt": null
+            },
+            "Dar es Salaam": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 6779.661016949152,
+              "vat": 1220.3389830508474,
+              "price_inclusive": 8000,
+              "price_per_sqmt": null
+            },
+            "Dodoma": {
+              "item_no": 2,
+              "pcs_per_sqmt_or_unit": 1,
+              "price_exclusive": 6779.661016949152,
+              "vat": 1220.3389830508474,
+              "price_inclusive": 8000,
+              "price_per_sqmt": null
+            }
+          },
+          "available_in_all_branches": true,
+          "missing_in_branches": [],
+          "price_consistent_across_branches": true
+        }
+      ]
+    }
+  ]
+}
