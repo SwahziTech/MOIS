@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import AuthShell from '../../components/AuthShell';
+import GoogleButton from '../../components/GoogleButton';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -39,6 +40,8 @@ export default function Login() {
           {error}
         </div>
       )}
+
+      <GoogleButton onError={setError} />
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="form-group">

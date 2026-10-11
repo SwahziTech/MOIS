@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import AuthShell from '../../components/AuthShell';
+import GoogleButton from '../../components/GoogleButton';
 import { Eye, EyeOff, UserPlus, MailCheck } from 'lucide-react';
 
 export default function Signup() {
@@ -63,7 +64,9 @@ export default function Signup() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <GoogleButton onError={setError} />
+
+      <form onSubmit={handleSubmit} className="auth-form">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label" htmlFor="signup-firstname">First name</label>

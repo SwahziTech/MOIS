@@ -18,7 +18,7 @@ function FullscreenLoader() {
  * Signed in, but not attached to an active organization. Every tenant table
  * is scoped by profiles.organization_id, so there is nothing to show yet.
  */
-function NoOrganization({ inactive }) {
+function NoOrganization({ inactive, deactivated }) {
   const { session, signOut } = useAuth();
   return (
     <div className="auth-page">
@@ -27,10 +27,12 @@ function NoOrganization({ inactive }) {
         <div className="empty-state" style={{ padding: '8px 0 0' }}>
           <div className="empty-state-icon"><Building2 size={22} strokeWidth={1.5} /></div>
           <h1 className="auth-title">
-            {inactive ? 'Organization unavailable' : 'No organization yet'}
+            {deactivated ? 'Account deactivated' : inactive ? 'Organization unavailable' : 'No organization yet'}
           </h1>
           <p className="empty-state-desc">
-            {inactive
+            {deactivated
+              ? 'Your account has been deactivated. Contact your company administrator if this is a mistake.'
+              : inactive
               ? 'Your organization is not active. Contact your MOIS administrator.'
               : <>You are signed in as <strong>{session?.user?.email}</strong>, but your account
                   has not been added to an organization. Ask your company administrator to add you.</>}
@@ -52,6 +54,7 @@ export function ProtectedLayout() {
   if (loading) return <FullscreenLoader />;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (recovering) return <Navigate to="/reset-password" replace />;
+  if (profile && profile.status !== 'active') return <NoOrganization deactivated />;
   if (!profile?.organization_id || !organization) return <NoOrganization />;
   if (organization.status !== 'active') return <NoOrganization inactive />;
 

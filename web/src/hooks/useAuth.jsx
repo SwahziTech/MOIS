@@ -108,6 +108,15 @@ export function AuthProvider({ children }) {
     });
   }
 
+  async function signInWithGoogle() {
+    // Requires the Google provider enabled in Supabase (Auth → Providers)
+    // and this origin in the allowed redirect URLs.
+    return supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+  }
+
   async function signOut() {
     return supabase.auth.signOut();
   }
@@ -142,6 +151,7 @@ export function AuthProvider({ children }) {
     can,
     hasRole,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     resetPassword,
