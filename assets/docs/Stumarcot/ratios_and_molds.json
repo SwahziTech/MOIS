@@ -1381,7 +1381,11 @@
           "estimated_daily_output_pcs_range": {
             "min": 11000,
             "max": 44000
-          }
+          },
+          "alt_names": [
+            "Rectangular (30MPa, 6cm)"
+          ],
+          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (30MPa, 6cm))."
         },
         {
           "item_id": "press_09b",
@@ -1412,13 +1416,16 @@
           ],
           "wastani_per_bag": 150,
           "yield_note": "Derived: 150 pcs/bag (yield) and 50.0 pcs/sqm (coverage density), from source figure '150 pcs -> 3.0 m2 per bag'.",
-          "note": "Source repeats item number 9 for two rows - kept as separate items 9a/9b",
+          "note": "Source repeats item number 9 for two rows - kept as separate items 9a/9b Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (30-35MPa, 8cm)).",
           "m2_covered_per_bag": 3.0,
           "pcs_per_sqm": 50.0,
           "estimated_daily_output_pcs_range": {
             "min": 7500,
             "max": 30000
-          }
+          },
+          "alt_names": [
+            "Rectangular (30-35MPa, 8cm)"
+          ]
         },
         {
           "item_id": "press_10",
@@ -1454,7 +1461,11 @@
           "estimated_daily_output_pcs_range": {
             "min": 6500,
             "max": 26000
-          }
+          },
+          "alt_names": [
+            "Rectangular (40-45MPa, 8cm)"
+          ],
+          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (40-45MPa, 8cm))."
         },
         {
           "item_id": "press_11",
@@ -1559,13 +1570,88 @@
           ],
           "wastani_per_bag": 110,
           "yield_note": "Only yield known: 110 pcs/bag. Coverage (pcs/sqm) not given in source - to be fed later.",
-          "note": "Size marked 'will be filled later' in source",
+          "note": "Confirmed by SwahziTech 2026-10-12: same product as price-list's 'Worldcup'.",
           "m2_covered_per_bag": null,
           "pcs_per_sqm": null,
           "estimated_daily_output_pcs_range": {
             "min": 5500,
             "max": 22000
-          }
+          },
+          "alt_names": [
+            "Worldcup"
+          ]
+        },
+        {
+          "item_id": "press_14a",
+          "item_no": null,
+          "name": "Paving Zigzag 30MPa (6cm)",
+          "size_cm": "210x100x60mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+        },
+        {
+          "item_id": "press_14b",
+          "item_no": null,
+          "name": "Paving Zigzag 30-35MPa (8cm)",
+          "size_cm": "210x100x80mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+        },
+        {
+          "item_id": "press_14c",
+          "item_no": null,
+          "name": "Paving Zigzag 40-45MPa (8cm)",
+          "size_cm": "210x100x80mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+        },
+        {
+          "item_id": "press_15a",
+          "item_no": null,
+          "name": "H-Paver 30MPa (6cm)",
+          "size_cm": "200x13.3x60mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
+        },
+        {
+          "item_id": "press_15b",
+          "item_no": null,
+          "name": "H-Paver 30-35MPa (8cm)",
+          "size_cm": "200x13.3x80mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
+        },
+        {
+          "item_id": "press_15c",
+          "item_no": null,
+          "name": "H-Paver 40-45MPa (8cm)",
+          "size_cm": "200x13.3x80mm",
+          "ratio": null,
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
         }
       ],
       "production_method": "press",
@@ -1590,7 +1676,7 @@
       "category_id": "culverts",
       "name": "Culverts",
       "machine_type": "steel_ring_cast",
-      "unit_note": "Each size/type comes in two steel variants: N-10mm and R-6mm.",
+      "unit_note": "Confirmed by SwahziTech 2026-10-12: N (10mm steel) and R (6mm steel) are DIFFERENT PRODUCTS with different prices, not one product with a variant note. Each size now has two separate mold/product entries: e.g. 400N and 400R.",
       "ratios": [
         {
           "ratio_id": "culverts_standard",
@@ -1622,43 +1708,73 @@
       ],
       "molds": [
         {
-          "mold_id": "culverts_400",
+          "mold_id": "culverts_400_N",
           "mold_no": 1,
-          "name": "Size 400",
+          "name": "400N",
           "internal_diameter_mm": 400,
+          "steel_gauge": "10mm",
+          "steel_variant_code": "N",
           "steel_length_note": "172cm x4 (ring for round), 98cm x6 (hori for length)",
-          "steel_variants": [
-            "N-10mm",
-            "R-6mm"
-          ],
           "qty_of_molds": 2,
           "wastani_note": "3 bags -> 4 pcs",
           "extra_parameters": {}
         },
         {
-          "mold_id": "culverts_600",
+          "mold_id": "culverts_400_R",
+          "mold_no": 1,
+          "name": "400R",
+          "internal_diameter_mm": 400,
+          "steel_gauge": "6mm",
+          "steel_variant_code": "R",
+          "steel_length_note": "172cm x4 (ring for round), 98cm x6 (hori for length)",
+          "qty_of_molds": 2,
+          "wastani_note": "3 bags -> 4 pcs",
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "culverts_600_N",
           "mold_no": 2,
-          "name": "Size 600",
+          "name": "600N",
           "internal_diameter_mm": 600,
+          "steel_gauge": "10mm",
+          "steel_variant_code": "N",
           "steel_length_note": "240cm x4 (ring for round), 98cm x6 (hori for length)",
-          "steel_variants": [
-            "N-10mm",
-            "R-6mm"
-          ],
           "qty_of_molds": 3,
           "wastani_note": "1 bag -> 1 pc",
           "extra_parameters": {}
         },
         {
-          "mold_id": "culverts_900",
+          "mold_id": "culverts_600_R",
+          "mold_no": 2,
+          "name": "600R",
+          "internal_diameter_mm": 600,
+          "steel_gauge": "6mm",
+          "steel_variant_code": "R",
+          "steel_length_note": "240cm x4 (ring for round), 98cm x6 (hori for length)",
+          "qty_of_molds": 3,
+          "wastani_note": "1 bag -> 1 pc",
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "culverts_900_N",
           "mold_no": 3,
-          "name": "Size 900",
+          "name": "900N",
           "internal_diameter_mm": 900,
+          "steel_gauge": "10mm",
+          "steel_variant_code": "N",
           "steel_length_note": "330cm x4 (ring for round), 98cm x6 (hori for length)",
-          "steel_variants": [
-            "N-10mm",
-            "R-6mm"
-          ],
+          "qty_of_molds": 2,
+          "wastani_note": "3 bags -> 2 pcs",
+          "extra_parameters": {}
+        },
+        {
+          "mold_id": "culverts_900_R",
+          "mold_no": 3,
+          "name": "900R",
+          "internal_diameter_mm": 900,
+          "steel_gauge": "6mm",
+          "steel_variant_code": "R",
+          "steel_length_note": "330cm x4 (ring for round), 98cm x6 (hori for length)",
           "qty_of_molds": 2,
           "wastani_note": "3 bags -> 2 pcs",
           "extra_parameters": {}
@@ -1769,6 +1885,24 @@
       "topic": "Trench covers confirmed vibro; press daily-output range is per-product, not a fixed ceiling",
       "decision": "Trench Covers uses the same vibro capacity model as Floor Tiles/Wall Tiles/Paving/Curbstones (qty_of_molds = max daily output pcs). The 1000-8000 pcs/day figure for press-machine products is not a uniform plant ceiling - it depends on which product is running and hours worked, so individual products (e.g. fast-cycling Tofali 4\") can legitimately exceed 8000 pcs/day.",
       "action_taken": "trench_covers moved from 'vibro_unconfirmed' to 'vibro' with full capacity fields added. press_machine_products capacity_model note updated to stop treating 1000-8000 as a validation ceiling."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Culverts: N/R steel gauge confirmed as separate products, not a spec variant",
+      "decision": "400N and 400R (and 600N/600R, 900N/900R) are different, separately-priced products. N = 10mm steel, R = 6mm steel. Same concrete ratio and size, different steel.",
+      "action_taken": "Split each of the 3 culvert sizes into 2 separate mold/product entries (6 total, was 3) in ratios_and_molds.json, named to match price_list_structured.json exactly (400N, 400R, 600N, 600R, 900N, 900R). This resolves all 6 previously-unmatched culvert price-list rows."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Press-paving naming: Worldcup/W-Cup merged, Zigzag confirmed separate, Rectangular/H Paver still open",
+      "decision": "Worldcup = W/Cup (same product, merged via alias). Zigzag is NOT Z-Plain - confirmed distinct, added as new product press_14 with no ratio data (real gap). Rectangular and H Paver remain unanswered - not resolved, not guessed.",
+      "action_taken": "press_13 got 'Worldcup' alias. New item press_14 'Paving Zigzag' added with all recipe fields null and an explicit note explaining why. Rectangular/H Paver left untouched pending SwahziTech's answer."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Press-paving family fully resolved: Rectangular, Zigzag, H Paver, Worldcup",
+      "decision": "Rectangular IS the existing 3 products (Paving 6cm 30MPa / 8cm 30MPa / 8cm 40MPa) under a different name - sizes match exactly, aliased not duplicated. Zigzag and H Paver are each real, separate product FAMILIES with 3 size/grade variants apiece, confirmed by SwahziTech 2026-10-12, none of which have ratio data in the source notebook. The previous turn's single generic 'Paving Zigzag' (press_14) was WRONG and has been removed, replaced by 3 correctly-sized variants.",
+      "action_taken": "Added 'Rectangular (...)' aliases to press_09a/09b/10. Removed incorrect press_14 stub. Added press_14a/14b/14c (Zigzag) and press_15a/15b/15c (H-Paver), 6 new products total, all with null ratio/yield data and an explicit note."
     }
   ]
 }

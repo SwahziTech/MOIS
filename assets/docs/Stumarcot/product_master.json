@@ -58,6 +58,27 @@
       "resolved_as": "New confirmed product - NOT an error.",
       "reasoning": "Catalog page 3 explicitly lists '40 HALFMOON TILES, 40x40cm > 6 Pcs/SQM, Thickness 2cm, OffWhite/Red/Grey' as an official product. It is simply missing from the Ratios & Molds notebook's 21-mold list.",
       "action_needed": "RESOLVED 2026-09-25: uses the same shared floor_tiles ratio as every other floor tile mold (confirmed: 'all tiles use the same ratio'). Added to ratios_and_molds.json as mold #22. No longer a blocking gap."
+    },
+    {
+      "canonical_name": "Culvert N/R steel variants",
+      "resolved_as": "Confirmed separate products - N=10mm steel, R=6mm steel, different prices.",
+      "reasoning": "Direct confirmation from SwahziTech 2026-10-12, not inferred.",
+      "action_needed": "RESOLVED - product_master.json and ratios_and_molds.json both updated to 6 distinct culvert products (400N/400R/600N/600R/900N/900R) instead of 3."
+    },
+    {
+      "canonical_name": "Paving W/Cup = Worldcup",
+      "resolved_as": "Confirmed same product by SwahziTech 2026-10-12.",
+      "action_needed": "RESOLVED - alt_names updated on press_13 in both files."
+    },
+    {
+      "canonical_name": "Rectangular = existing 6cm/8cm-30/8cm-40 products",
+      "resolved_as": "RESOLVED 2026-10-12 - same products, aliased. Sizes matched exactly.",
+      "action_needed": "None - re-seed will now find prices for press_09a/09b/10."
+    },
+    {
+      "canonical_name": "Zigzag (3 variants) and H-Paver (3 variants)",
+      "resolved_as": "RESOLVED 2026-10-12 - both confirmed as real, separate product families, each with 3 size/grade variants.",
+      "action_needed": "Ratio/yield data still missing for all 6 - cannot be produced correctly until SwahziTech supplies mix ratios."
     }
   ],
   "categories": [
@@ -496,21 +517,30 @@
           "canonical_name": "Paving 6cm 30MPa",
           "size_cm": "20x10x6",
           "wastani_per_bag": 220,
-          "pcs_per_sqm": 48.9
+          "pcs_per_sqm": 48.9,
+          "alt_names": [
+            "Rectangular (30MPa, 6cm)"
+          ]
         },
         {
           "product_id": "press_09b",
           "canonical_name": "Paving 8cm 30MPa",
           "size_cm": "20x10x8",
           "wastani_per_bag": 150,
-          "pcs_per_sqm": 50.0
+          "pcs_per_sqm": 50.0,
+          "alt_names": [
+            "Rectangular (30-35MPa, 8cm)"
+          ]
         },
         {
           "product_id": "press_10",
           "canonical_name": "Paving 8cm 40MPa",
           "size_cm": "20x10x8",
           "wastani_per_bag": 130,
-          "pcs_per_sqm": 52.0
+          "pcs_per_sqm": 52.0,
+          "alt_names": [
+            "Rectangular (40-45MPa, 8cm)"
+          ]
         },
         {
           "product_id": "press_11",
@@ -531,7 +561,52 @@
           "canonical_name": "Paving W/Cup",
           "size_cm": null,
           "wastani_per_bag": 110,
-          "pcs_per_sqm": null
+          "pcs_per_sqm": null,
+          "alt_names": [
+            "Worldcup"
+          ]
+        },
+        {
+          "product_id": "press_14a",
+          "canonical_name": "Paving Zigzag 30MPa (6cm)",
+          "size_cm": "210x100x60mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+        },
+        {
+          "product_id": "press_14b",
+          "canonical_name": "Paving Zigzag 30-35MPa (8cm)",
+          "size_cm": "210x100x80mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+        },
+        {
+          "product_id": "press_14c",
+          "canonical_name": "Paving Zigzag 40-45MPa (8cm)",
+          "size_cm": "210x100x80mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+        },
+        {
+          "product_id": "press_15a",
+          "canonical_name": "H-Paver 30MPa (6cm)",
+          "size_cm": "200x13.3x60mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+        },
+        {
+          "product_id": "press_15b",
+          "canonical_name": "H-Paver 30-35MPa (8cm)",
+          "size_cm": "200x13.3x80mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+        },
+        {
+          "product_id": "press_15c",
+          "canonical_name": "H-Paver 40-45MPa (8cm)",
+          "size_cm": "200x13.3x80mm",
+          "alt_names": [],
+          "note": "No ratio data exists - see ratios_and_molds.json for full note."
         }
       ]
     },
@@ -541,21 +616,45 @@
       "stock_unit": "PCS",
       "products": [
         {
-          "product_id": "culverts_400",
-          "canonical_name": "Size 400",
+          "product_id": "culverts_400_N",
+          "canonical_name": "400N",
           "size_cm": 400,
+          "steel_variant_code": "N",
           "alt_names": []
         },
         {
-          "product_id": "culverts_600",
-          "canonical_name": "Size 600",
+          "product_id": "culverts_400_R",
+          "canonical_name": "400R",
+          "size_cm": 400,
+          "steel_variant_code": "R",
+          "alt_names": []
+        },
+        {
+          "product_id": "culverts_600_N",
+          "canonical_name": "600N",
           "size_cm": 600,
+          "steel_variant_code": "N",
           "alt_names": []
         },
         {
-          "product_id": "culverts_900",
-          "canonical_name": "Size 900",
+          "product_id": "culverts_600_R",
+          "canonical_name": "600R",
+          "size_cm": 600,
+          "steel_variant_code": "R",
+          "alt_names": []
+        },
+        {
+          "product_id": "culverts_900_N",
+          "canonical_name": "900N",
           "size_cm": 900,
+          "steel_variant_code": "N",
+          "alt_names": []
+        },
+        {
+          "product_id": "culverts_900_R",
+          "canonical_name": "900R",
+          "size_cm": 900,
+          "steel_variant_code": "R",
           "alt_names": []
         }
       ]
