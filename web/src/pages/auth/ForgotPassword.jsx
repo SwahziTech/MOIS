@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import AuthBrand from '../../components/AuthBrand';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 
 export default function ForgotPassword() {
@@ -23,13 +24,7 @@ export default function ForgotPassword() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-mark">SC</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-md)' }}>Stumarcot</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>MOIS</div>
-          </div>
-        </div>
+        <AuthBrand />
 
         {sent ? (
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
@@ -58,7 +53,7 @@ export default function ForgotPassword() {
                 </label>
                 <input id="reset-email" type="email" className="form-input" required
                   value={email} onChange={e => setEmail(e.target.value)}
-                  autoComplete="email" placeholder="you@stumarcot.co.tz" />
+                  autoComplete="email" placeholder="you@company.com" />
               </div>
               <button id="reset-submit" type="submit"
                 className={`btn btn-primary btn-lg w-full${loading ? ' btn-loading' : ''}`}

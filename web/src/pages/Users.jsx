@@ -7,8 +7,10 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Users, Search, ShieldCheck } from 'lucide-react';
 
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
+
 export default function UsersPage() {
-  const { can } = useAuth();
+  const { organization } = useAuth();
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -17,17 +19,25 @@ export default function UsersPage() {
   async function load() {
     setLoading(true);
     setError('');
-    const { data, error: err } = await supabase
-      .from('profiles')
-      .select(`
-        id, first_name, last_name, phone, status, created_at,
-        user_roles(
-          role:roles(name)
-        )
-      `)
-      .order('created_at');
-    if (err) { setError(err.message); setLoading(false); return; }
-    setUsers(data || []);
+    // Two queries instead of an embed: user_roles.user_id references
+    // auth.users, not profiles, so PostgREST cannot join them (PGRST200)
+    // until migration 013 adds the FK.
+    const [profRes, rolesRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, first_name, last_name, phone, status, created_at')
+        .eq('organization_id', organization.id)
+        .order('created_at'),
+      supabase
+        .from('user_roles')
+        .select('user_id, role:roles(name)')
+        .eq('organization_id', organization.id),
+    ]);
+    const err = profRes.error || rolesRes.error;
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
+    const rolesByUser = {};
+    for (const ur of rolesRes.data || []) (rolesByUser[ur.user_id] ||= []).push(ur);
+    setUsers((profRes.data || []).map(p => ({ ...p, user_roles: rolesByUser[p.id] || [] })));
     setLoading(false);
   }
 
@@ -55,21 +65,19 @@ export default function UsersPage() {
       title="Users"
       subtitle="Organisation"
       actions={
-        can('users.invite') && (
-          <div className="flex items-center gap-8">
-            <div className="search-wrapper">
-              <Search size={14} className="search-icon" />
-              <input
-                id="users-search"
-                type="search"
-                className="search-input"
-                placeholder="Search users…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
+        <div className="flex items-center gap-8">
+          <div className="search-wrapper">
+            <Search size={14} className="search-icon" />
+            <input
+              id="users-search"
+              type="search"
+              className="search-input"
+              placeholder="Search users…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-        )
+        </div>
       }
     >
       <div className="card">
@@ -99,7 +107,7 @@ export default function UsersPage() {
                         description={
                           search
                             ? `No users match "${search}".`
-                            : 'No users have been created yet. The seed admin user should appear here once logged in.'
+                            : 'No users belong to this organization yet.'
                         }
                       />
                     </td>

@@ -4,7 +4,9 @@ import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
-import { Building2, MapPin } from 'lucide-react';
+import { Building2, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
+
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
 export default function Branches() {
   const [branches,   setBranches]   = useState([]);
@@ -20,8 +22,8 @@ export default function Branches() {
       supabase.from('branches').select('id, name, location, status, contact_info').order('name'),
       supabase.from('warehouses').select('id, name, type, status, branch_id').order('name'),
     ]);
-    if (brRes.error) { setError(brRes.error.message); setLoading(false); return; }
-    if (whRes.error) { setError(whRes.error.message); setLoading(false); return; }
+    if (brRes.error) { console.error(brRes.error); setError(LOAD_ERROR); setLoading(false); return; }
+    if (whRes.error) { console.error(whRes.error); setError(LOAD_ERROR); setLoading(false); return; }
     setBranches(brRes.data || []);
     setWarehouses(whRes.data || []);
     setLoading(false);
@@ -70,12 +72,14 @@ export default function Branches() {
             const isExpanded = expanded[branch.id];
             return (
               <div key={branch.id} className="card">
-                <div className="card-header" style={{ cursor: 'pointer' }}
+                <button type="button" className="card-header card-header-button"
+                  aria-expanded={!!isExpanded}
+                  aria-controls={`branch-${branch.id}-warehouses`}
                   onClick={() => setExpanded(e => ({ ...e, [branch.id]: !e[branch.id] }))}>
                   <div className="flex items-center gap-12">
                     <div style={{
                       width: 40, height: 40,
-                      background: 'rgba(183,165,122,0.12)',
+                      background: 'var(--accent-soft)',
                       borderRadius: 'var(--radius-md)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
@@ -95,14 +99,14 @@ export default function Branches() {
                     <span className={`badge ${branch.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>
                       {branch.status}
                     </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      {isExpanded ? '▲' : '▼'}
-                    </span>
+                    {isExpanded
+                      ? <ChevronUp size={16} color="var(--text-muted)" />
+                      : <ChevronDown size={16} color="var(--text-muted)" />}
                   </div>
-                </div>
+                </button>
 
                 {isExpanded && (
-                  <div className="card-body" style={{ padding: '0' }}>
+                  <div id={`branch-${branch.id}-warehouses`} className="card-body" style={{ padding: '0' }}>
                     {whs.length === 0 ? (
                       <div style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                         No warehouses for this branch.

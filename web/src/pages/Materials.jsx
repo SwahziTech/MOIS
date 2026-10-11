@@ -6,6 +6,8 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Beaker, Search } from 'lucide-react';
 
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
+
 export default function Materials() {
   const [materials, setMaterials] = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -22,7 +24,7 @@ export default function Materials() {
         unit:units(symbol, name)
       `)
       .order('name');
-    if (err) { setError(err.message); setLoading(false); return; }
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setMaterials(data || []);
     setLoading(false);
   }

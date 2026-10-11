@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import AuthBrand from '../../components/AuthBrand';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 
 export default function Login() {
@@ -32,19 +33,13 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         {/* Logo */}
-        <div className="auth-logo">
-          <div className="auth-logo-mark">SC</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-md)' }}>Stumarcot</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>MOIS</div>
-          </div>
-        </div>
+        <AuthBrand />
 
         <h1 className="auth-title">Sign in</h1>
         <p className="auth-subtitle">Manufacturing Operating Intelligent System</p>
 
         {error && (
-          <div className="alert alert-error" style={{ marginBottom: 20 }}>
+          <div className="alert alert-error" role="alert" style={{ marginBottom: 20 }}>
             {error}
           </div>
         )}
@@ -58,7 +53,7 @@ export default function Login() {
               id="login-email"
               type="email"
               className="form-input"
-              placeholder="you@stumarcot.co.tz"
+              placeholder="you@company.com"
               autoComplete="email"
               required
               value={email}
@@ -92,15 +87,8 @@ export default function Login() {
               />
               <button
                 type="button"
+                className="password-toggle"
                 onClick={() => setShowPass(v => !v)}
-                style={{
-                  position: 'absolute', right: 10, top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center',
-                }}
-                tabIndex={-1}
                 aria-label={showPass ? 'Hide password' : 'Show password'}
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}

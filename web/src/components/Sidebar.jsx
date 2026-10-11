@@ -6,9 +6,10 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 /*
- * Navigation tabs. `perm` documents the permission each page relates to;
- * data access itself is enforced by Supabase RLS, so every tab is shown
- * (pages render an empty/error state if the user can't read the data).
+ * Navigation tabs. An item with `perm` is shown only to users holding that
+ * permission (AGENTS.md §7: users see only the modules they're authorized
+ * for). This is UX only — Supabase RLS remains the security boundary.
+ * Codes must exist in public.permissions (migration 006).
  */
 const NAV = [
   {
@@ -22,8 +23,8 @@ const NAV = [
     items: [
       { label: 'Products',      to: '/products',  icon: Package,    perm: 'products.view'  },
       { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
-      { label: 'Recipes / BOM', to: '/recipes',   icon: ScrollText, perm: 'recipes.view'   },
-      { label: 'Pricing',       to: '/pricing',   icon: DollarSign, perm: 'pricing.view'   },
+      { label: 'Recipes / BOM', to: '/recipes',   icon: ScrollText, perm: 'products.view'  },
+      { label: 'Pricing',       to: '/pricing',   icon: DollarSign, perm: 'products.view'  },
     ],
   },
   {
@@ -37,7 +38,7 @@ const NAV = [
 ];
 
 export default function Sidebar() {
-  const { profile, session, signOut } = useAuth();
+  const { profile, session, organization, userRoles, can, signOut } = useAuth();
   const navigate = useNavigate();
 
   const fullName =
@@ -52,6 +53,14 @@ export default function Sidebar() {
     .slice(0, 2)
     .toUpperCase();
 
+  const roleLabel = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))]
+    .map(r => r.replace(/_/g, ' '))
+    .join(', ');
+
+  const sections = NAV
+    .map(section => ({ ...section, items: section.items.filter(item => !item.perm || can(item.perm)) }))
+    .filter(section => section.items.length > 0);
+
   async function handleSignOut() {
     await signOut();
     navigate('/login');
@@ -65,14 +74,16 @@ export default function Sidebar() {
           <LayoutGrid size={15} strokeWidth={2.2} />
         </div>
         <div className="sidebar-logo-text">
-          <span className="sidebar-org-name">Stumarcot Co Ltd</span>
+          <span className="sidebar-org-name" title={organization?.legal_name || organization?.name}>
+            {organization?.name || 'Organization'}
+          </span>
           <span className="sidebar-system-label">MOIS Platform</span>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="sidebar-nav" aria-label="Main navigation">
-        {NAV.map(section => (
+        {sections.map(section => (
           <div key={section.section} className="sidebar-section">
             <div className="sidebar-section-label">{section.section}</div>
             {section.items.map(item => (
@@ -81,6 +92,7 @@ export default function Sidebar() {
                 id={`nav-${item.to === '/' ? 'dashboard' : item.to.slice(1)}`}
                 to={item.to}
                 end={item.to === '/'}
+                title={item.label}
                 className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
               >
                 <item.icon size={16} strokeWidth={1.8} />
@@ -97,6 +109,7 @@ export default function Sidebar() {
           <div className="sidebar-avatar">{initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name truncate">{fullName}</div>
+            {roleLabel && <div className="sidebar-user-role truncate">{roleLabel}</div>}
           </div>
         </div>
         <button id="sidebar-signout" type="button" className="sidebar-signout" onClick={handleSignOut}>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import AuthBrand from '../../components/AuthBrand';
+import { Eye, EyeOff, UserPlus, MailCheck } from 'lucide-react';
 
 export default function Signup() {
   const { signUp }   = useAuth();
@@ -14,7 +15,7 @@ export default function Signup() {
   const [showPass,  setShowPass]  = useState(false);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
-  const [success,   setSuccess]   = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -24,35 +25,42 @@ export default function Signup() {
       return;
     }
     setLoading(true);
-    const { error: err } = await signUp(email.trim(), password, {
+    const { data, error: err } = await signUp(email.trim(), password, {
       first_name: firstName.trim(),
       last_name:  lastName.trim(),
     });
     setLoading(false);
     if (err) {
       setError(err.message);
-    } else {
-      // Email verification is OFF in dev — redirect to dashboard
+    } else if (data.session) {
+      // Email confirmation disabled in Supabase — already signed in
       navigate('/', { replace: true });
+    } else {
+      // Email confirmation enabled — no session until the link is clicked
+      setPendingConfirm(true);
     }
   }
 
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-mark">SC</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-md)' }}>Stumarcot</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>MOIS</div>
-          </div>
-        </div>
+        <AuthBrand />
 
+        {pendingConfirm ? (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <MailCheck size={40} color="var(--color-success)" style={{ margin: '0 auto 16px' }} />
+            <h1 className="auth-title">Confirm your email</h1>
+            <p className="auth-subtitle">
+              We sent a confirmation link to <strong>{email}</strong>. Open it to activate your account, then sign in.
+            </p>
+            <Link to="/login" className="btn btn-primary btn-lg w-full" style={{ justifyContent: 'center' }}>Go to sign in</Link>
+          </div>
+        ) : (<>
         <h1 className="auth-title">Create account</h1>
         <p className="auth-subtitle">Join your organisation on MOIS</p>
 
         {error && (
-          <div className="alert alert-error" style={{ marginBottom: 20 }}>
+          <div className="alert alert-error" role="alert" style={{ marginBottom: 20 }}>
             {error}
           </div>
         )}
@@ -77,7 +85,7 @@ export default function Signup() {
             <label className="form-label form-label-required" htmlFor="signup-email">Email address</label>
             <input id="signup-email" type="email" className="form-input" required
               value={email} onChange={e => setEmail(e.target.value)}
-              autoComplete="email" placeholder="you@stumarcot.co.tz" />
+              autoComplete="email" placeholder="you@company.com" />
           </div>
 
           <div className="form-group">
@@ -88,15 +96,9 @@ export default function Signup() {
                 value={password} onChange={e => setPassword(e.target.value)}
                 autoComplete="new-password" placeholder="Min. 8 characters"
                 style={{ paddingRight: 40 }} />
-              <button type="button" tabIndex={-1}
+              <button type="button" className="password-toggle"
                 onClick={() => setShowPass(v => !v)}
-                aria-label={showPass ? 'Hide password' : 'Show password'}
-                style={{
-                  position: 'absolute', right: 10, top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)', background: 'none',
-                  border: 'none', cursor: 'pointer', display: 'flex',
-                }}>
+                aria-label={showPass ? 'Hide password' : 'Show password'}>
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -114,6 +116,7 @@ export default function Signup() {
         <div className="auth-footer">
           Already have an account? <Link to="/login">Sign in</Link>
         </div>
+        </>)}
       </div>
     </div>
   );

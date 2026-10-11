@@ -4,13 +4,30 @@ import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
-import { DollarSign, Search } from 'lucide-react';
+import { DollarSign, Search, Palette } from 'lucide-react';
+
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
 const tzs = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const money = v => (v == null ? '—' : `TZS ${tzs.format(v)}`);
 
+const RULE_TYPE = {
+  delta_per_sqmt_over_offwhite: 'Surcharge per SQM over base',
+  absolute_price_per_sqmt:      'Price per SQM',
+};
+
+/**
+ * Price-list rows carry no colour of their own: a NULL colour is the base
+ * price — the base colour for coloured categories, the only colour otherwise.
+ */
+function colourLabel(row) {
+  if (row.color) return row.color;
+  return row.product?.category?.display_format === 'colored' ? 'OffWhite (base)' : null;
+}
+
 export default function Pricing() {
   const [rows,     setRows]     = useState([]);
+  const [rules,    setRules]    = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
@@ -20,23 +37,36 @@ export default function Pricing() {
   async function load() {
     setLoading(true);
     setError('');
-    const [priceRes, branchRes] = await Promise.all([
+    const [priceRes, branchRes, ruleRes] = await Promise.all([
       supabase
         .from('product_branch_pricing')
         .select(`
           id, color, is_available, price_consistent_across_branches,
           price_per_unit_exclusive, price_per_unit_inclusive,
           price_per_sqm_inclusive, pcs_per_sqm_at_pricing, source_item_no,
-          product:products(canonical_name, product_id_ref),
+          product:products(canonical_name, product_id_ref,
+            category:product_categories(display_format)),
           branch:branches(id, name)
         `)
         .order('source_item_no', { nullsFirst: false }),
       supabase.from('branches').select('id, name').order('name'),
+      supabase
+        .from('category_color_pricing_rules')
+        .select(`
+          id, base_color, pricing_type, color_prices,
+          category:product_categories(name, sort_order),
+          branch:branches(id, name)
+        `),
     ]);
-    if (priceRes.error)  { setError(priceRes.error.message);  setLoading(false); return; }
-    if (branchRes.error) { setError(branchRes.error.message); setLoading(false); return; }
+    if (priceRes.error)  { console.error(priceRes.error); setError(LOAD_ERROR);  setLoading(false); return; }
+    if (branchRes.error) { console.error(branchRes.error); setError(LOAD_ERROR); setLoading(false); return; }
+    if (ruleRes.error)   { console.error(ruleRes.error); setError(LOAD_ERROR);   setLoading(false); return; }
     setRows(priceRes.data || []);
     setBranches(branchRes.data || []);
+    setRules((ruleRes.data || []).sort((a, b) =>
+      (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0) ||
+      (a.branch?.name || '').localeCompare(b.branch?.name || '')
+    ));
     setLoading(false);
   }
 
@@ -48,9 +78,11 @@ export default function Pricing() {
       (branchId === 'all' || r.branch?.id === branchId) &&
       (!q ||
         (r.product?.canonical_name || '').toLowerCase().includes(q) ||
-        (r.color || '').toLowerCase().includes(q))
+        (colourLabel(r) || '').toLowerCase().includes(q))
     );
   }, [rows, search, branchId]);
+
+  const visibleRules = rules.filter(r => branchId === 'all' || r.branch?.id === branchId);
 
   return (
     <PageShell
@@ -117,7 +149,7 @@ export default function Pricing() {
                   filtered.map(r => (
                     <tr key={r.id}>
                       <td style={{ fontWeight: 500 }}>{r.product?.canonical_name || '—'}</td>
-                      <td>{r.color ? <span className="badge badge-accent">{r.color}</span> : <span className="text-muted">Plain</span>}</td>
+                      <td>{colourLabel(r) ? <span className="badge badge-accent">{colourLabel(r)}</span> : <span className="text-muted">—</span>}</td>
                       <td>
                         {r.branch?.name || '—'}
                         {!r.price_consistent_across_branches && (
@@ -150,6 +182,49 @@ export default function Pricing() {
           </div>
         )}
       </div>
+
+      {!loading && !error && visibleRules.length > 0 && (
+        <section className="card mt-24" aria-labelledby="colour-pricing-title">
+          <div className="card-header">
+            <h2 id="colour-pricing-title" className="card-title flex items-center gap-8">
+              <Palette size={16} strokeWidth={1.8} /> Colour pricing
+            </h2>
+            <span className="text-muted text-sm">Prices above are for the base colour</span>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Branch</th>
+                  <th>Base</th>
+                  <th>Rule</th>
+                  <th>Other colours</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRules.map(rule => (
+                  <tr key={rule.id}>
+                    <td style={{ fontWeight: 500 }}>{rule.category?.name || '—'}</td>
+                    <td>{rule.branch?.name || '—'}</td>
+                    <td>{rule.base_color}</td>
+                    <td className="text-muted">{RULE_TYPE[rule.pricing_type] || rule.pricing_type}</td>
+                    <td>
+                      <div className="flex gap-4" style={{ flexWrap: 'wrap' }}>
+                        {Object.entries(rule.color_prices || {}).map(([colour, amount]) => (
+                          <span key={colour} className="badge badge-neutral">
+                            {colour}: {rule.pricing_type === 'delta_per_sqmt_over_offwhite' ? '+' : ''}{money(amount)}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </PageShell>
   );
 }
