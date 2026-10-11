@@ -566,6 +566,8 @@ async function seedWithOrg(org) {
   let colorRuleRows = 0;
   const unmatched = [];
   const nameMatched = [];
+  const excelMatched = [];
+  let removed = 0;
 
   const branchByName = Object.fromEntries(Object.entries(branches).map(([name, b]) => [name, b.id]));
 
@@ -611,12 +613,21 @@ async function seedWithOrg(org) {
     // Seed per-product pricing
     for (const product of priceCat.products) {
       // canonical_match is an object { category_id, product_id, canonical_name } or null.
-      // For sections SwahziTech confirmed by name/alias in product_master.json
-      // (2026-10-12), fall back to an exact name/grade/thickness match.
-      let productRef = product.canonical_match?.product_id;
-      if (!productRef) {
-        productRef = matchByConfirmedName(priceCat, product, productMaster);
-        if (productRef) nameMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
+      // Order: Excel-rejected match → Excel decision → canonical_match →
+      // confirmed name/alias (CULVERTS, PAVING BLOCKS (PRESS)).
+      const rejected = excelDecision(EXCEL_REJECTED, priceCat, product);
+      let productRef = rejected ? null : product.canonical_match?.product_id;
+      if (rejected) {
+        removed += await removeRejectedPrices(rejected, product, productMap, branchByName);
+      } else if (!productRef) {
+        const excel = excelDecision(EXCEL_MATCHES, priceCat, product);
+        if (excel) {
+          productRef = excel.product;
+          excelMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
+        } else {
+          productRef = matchByConfirmedName(priceCat, product, productMaster);
+          if (productRef) nameMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
+        }
       }
       if (!productRef) {
         unmatched.push(`${priceCat.category_raw}: ${product.description_raw}${product.size_mm ? ` (${product.size_mm})` : ''}`);
@@ -673,6 +684,11 @@ async function seedWithOrg(org) {
     }
   }
   console.log(`  ↳ ${pricingRows} pricing rows, ${colorRuleRows} color rules`);
+  if (excelMatched.length) {
+    console.log(`  ↳ ${excelMatched.length} price-list rows matched by Excel decision (EXCEL_MATCHES):`);
+    for (const m of excelMatched) console.log(`      - ${m}`);
+  }
+  if (removed) console.log(`  ↳ ${removed} wrongly-matched price rows removed (EXCEL_REJECTED)`);
   if (nameMatched.length) {
     console.log(`  ↳ ${nameMatched.length} price-list rows matched by confirmed name/alias:`);
     for (const m of nameMatched) console.log(`      - ${m}`);
@@ -948,6 +964,65 @@ function unitSymbolToId(unitStr, unitBySymbol) {
   return unitBySymbol[sym] || null;
 }
 
+// Product identity decided from the ORIGINAL Excel price list
+// (assets/docs/Stumarcot/price list 2026.xlsx — the real document), where
+// price_list_structured.json's canonical_match is missing or points at the
+// wrong product. Decided 2026-10-12 at the user's instruction; each entry
+// names its evidence. A row is identified by section + description + size.
+// Anything the Excel cannot settle stays unpriced, to be fed later.
+const EXCEL_MATCHES = [
+  { section: 'FLOOR TILES', description: 'DRAFT', size: '300*300*20mm', product: 'floor_tiles_15',
+    evidence: "30x30 'Draft'; same '30 <name>' convention as '30 8GON'/'8GON' → 30 8gon. Excel lists 'DRAFT 9' separately." },
+  { section: 'FLOOR TILES', description: 'BUIBUI', size: '250*250*20mm', product: 'floor_tiles_18',
+    evidence: "25x25 'Buibui', 16 pcs/sqm — same convention as 'CHUCHU 250*250' → 25 Chuchu." },
+  { section: 'TRENCH COVERS', description: 'BEVO', size: '600*400*70mm', product: 'trench_covers_04',
+    evidence: "Name and size match '60 Bevo' (60x40x7) exactly." },
+  { section: 'CUBSTONES', description: '50 PRESS', size: '500*350*150mm', product: 'press_07',
+    evidence: "Press kerbstone; size matches 'Kerbstone 50x350x15' (50x35x15) exactly." },
+  { section: 'CUBSTONES', description: '80 PRESS', size: '800*350*150mm', product: 'press_08',
+    evidence: "Matches the name 'Kerbstone 80x350x15' exactly. NOTE: product_master size_cm says 80x39x15 — conflicts with its own name; confirm." },
+];
+
+// canonical_match entries in price_list_structured.json that the Excel shows
+// are the wrong product. Their prices are not seeded and existing rows are
+// removed; the price-list row stays unmatched until confirmed.
+const EXCEL_REJECTED = [
+  { section: 'BLOCKS', description: 'HOLLOW BLOCK', size: '450*230*150mm', product: 'trench_covers_06',
+    evidence: "Excel BLOCKS section, 450x230x150mm building block at TZS 1,888 — not trench cover 'Hollow' (70x50x12cm)." },
+  { section: 'FLOOR TILES', description: 'MAYAI', size: '490*460*20mm', product: 'floor_tiles_06',
+    evidence: "490x460mm tile; '40 Mayai' is 400x400 and is listed separately in the Excel (Dodoma '40 MAYAI', TZS 4,250)." },
+];
+
+const normRowKey = (section, description, size) =>
+  [section, description, size].map(s => String(s ?? '').replace(/\s+/g, ' ').trim().toUpperCase()).join('|');
+
+function excelDecision(list, priceCat, row) {
+  const key = normRowKey(priceCat.category_raw, row.description_raw, row.size_mm);
+  return list.find(d => normRowKey(d.section, d.description, d.size) === key) || null;
+}
+
+/** Deletes base-price rows that came from a rejected canonical_match. Returns rows removed. */
+async function removeRejectedPrices(rejected, row, productMap, branchByName) {
+  const productId = productMap[rejected.product];
+  if (!productId) return 0;
+  let n = 0;
+  for (const [branchName, pricing] of Object.entries(row.available_in_branches || {})) {
+    const branchId = branchByName[branchName];
+    if (!branchId) continue;
+    const { data, error } = await supabase
+      .from('product_branch_pricing')
+      .delete()
+      .eq('product_id', productId)
+      .eq('branch_id', branchId)
+      .eq('source_item_no', pricing.item_no)
+      .is('color', null)
+      .select('id');
+    if (error) throw new Error(`Removing rejected price failed [${rejected.product}/${branchName}]: ${error.message}`);
+    n += data.length;
+  }
+  return n;
+}
+
 // Price-list sections whose rows SwahziTech confirmed on 2026-10-12 map to
 // product_master products by name/alias (the price list itself still has
 // canonical_match = null for them). Other sections are never name-matched.
@@ -1030,4 +1105,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildRecipePlan, buildYieldLookup, matchByConfirmedName };
+module.exports = { buildRecipePlan, buildYieldLookup, matchByConfirmedName, excelDecision, EXCEL_MATCHES, EXCEL_REJECTED };
