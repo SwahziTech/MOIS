@@ -49,9 +49,11 @@
   --bg-sidebar-hover:#EFECE6;
   --bg-sidebar-active:#F1EDE5;
 
-  --text-primary:    var(--color-charcoal);
-  --text-secondary:  var(--color-dark-grey);
-  --text-muted:      var(--color-mid-grey);
+  /* Light mode text is black / near-black for legibility (WCAG AA on white) */
+  --text-primary:    #111111;
+  --text-secondary:  #2E2B27;
+  --text-muted:      #5C5750;
+  --text-label:      var(--text-secondary); /* small labels; khaki in dark mode */
   --text-on-dark:    var(--color-white);
   --text-on-dark-muted: rgba(255,255,255,0.55);
 
@@ -121,6 +123,7 @@
 
   --accent-dark:      var(--color-khaki);
   --accent-text:      var(--color-khaki-light);
+  --text-label:       var(--color-khaki);
 
   --border:           #34312D;
   --border-strong:    #46423C;
@@ -287,7 +290,7 @@ ul, ol { list-style: none; }
 .sidebar-section-label {
   font-size: 10px;
   font-weight: 600;
-  color: var(--accent-dark);
+  color: var(--text-label);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 0 16px 6px;
@@ -350,7 +353,7 @@ ul, ol { list-style: none; }
   height: 28px;
   border-radius: 50%;
   background: var(--color-khaki);
-  color: var(--color-white);
+  color: var(--color-charcoal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1013,7 +1016,7 @@ a.stat-card:focus-visible {
 }
 
 .auth-footer a {
-  color: var(--color-khaki-dark);
+  color: var(--text-primary);
   font-weight: 500;
   cursor: pointer;
 }
@@ -1062,13 +1065,13 @@ a.stat-card:focus-visible {
 }
 
 .auth-split .auth-subtitle {
-  color: var(--accent-dark);
+  color: var(--text-label);
   font-size: var(--text-md);
   margin-bottom: 36px;
 }
 
 .auth-split .form-label {
-  color: var(--accent-dark);
+  color: var(--text-label);
   font-size: var(--text-md);
   font-weight: 400;
 }
@@ -1090,7 +1093,7 @@ a.stat-card:focus-visible {
 }
 
 .auth-link {
-  color: var(--accent-dark);
+  color: var(--text-label);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1122,7 +1125,7 @@ a.stat-card:focus-visible {
   padding-top: 22px;
   border-top: 1px solid var(--border-strong);
   font-size: var(--text-md);
-  color: var(--accent-dark);
+  color: var(--text-label);
 }
 
 .auth-split .auth-footer a {

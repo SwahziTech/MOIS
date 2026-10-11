@@ -64,7 +64,7 @@ export default function ForgotPassword() {
       )}
 
       <div className="auth-footer" style={{ marginTop: 24 }}>
-        <Link to="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-khaki-dark)', fontWeight: 500 }}>
+        <Link to="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 500 }}>
           <ArrowLeft size={14} /> Back to sign in
         </Link>
       </div>
