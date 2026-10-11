@@ -421,6 +421,19 @@ async function seedWithOrg(org) {
   const withYield = productRows.filter(r => r.wastani_per_bag != null).length;
   console.log(`  ↳ ${productData.length} products (${withYield} with wastani_per_bag)`);
 
+  // Products the master no longer lists (e.g. culverts_400 after the N/R
+  // split) are marked inactive — kept for history, never deleted.
+  const masterRefs = productRows.map(r => r.product_id_ref);
+  const { data: retired, error: retireErr } = await supabase
+    .from('products')
+    .update({ status: 'inactive' })
+    .eq('organization_id', orgId)
+    .eq('status', 'active')
+    .not('product_id_ref', 'in', `(${masterRefs.map(r => `"${r}"`).join(',')})`)
+    .select('product_id_ref');
+  if (retireErr) throw new Error(`Product retire failed: ${retireErr.message}`);
+  for (const r of retired) console.log(`  ↳ Marked inactive (no longer in product_master): ${r.product_id_ref}`);
+
   // =========================================================================
   // 9. RECIPE VERSIONS + ITEMS
   //    Shared per category + color (AGENTS.md §3) — see buildRecipePlan().
@@ -552,6 +565,7 @@ async function seedWithOrg(org) {
   let pricingRows = 0;
   let colorRuleRows = 0;
   const unmatched = [];
+  const nameMatched = [];
 
   const branchByName = Object.fromEntries(Object.entries(branches).map(([name, b]) => [name, b.id]));
 
@@ -596,15 +610,22 @@ async function seedWithOrg(org) {
 
     // Seed per-product pricing
     for (const product of priceCat.products) {
-      // canonical_match is an object { category_id, product_id, canonical_name } or null
-      if (!product.canonical_match || typeof product.canonical_match !== 'object') {
+      // canonical_match is an object { category_id, product_id, canonical_name } or null.
+      // For sections SwahziTech confirmed by name/alias in product_master.json
+      // (2026-10-12), fall back to an exact name/grade/thickness match.
+      let productRef = product.canonical_match?.product_id;
+      if (!productRef) {
+        productRef = matchByConfirmedName(priceCat, product, productMaster);
+        if (productRef) nameMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
+      }
+      if (!productRef) {
         unmatched.push(`${priceCat.category_raw}: ${product.description_raw}${product.size_mm ? ` (${product.size_mm})` : ''}`);
         continue; // not confirmed — per AGENTS.md: never fill a null by guessing
       }
 
-      const productDbId = productMap[product.canonical_match.product_id];
+      const productDbId = productMap[productRef];
       if (!productDbId) {
-        console.warn(`  ⚠ canonical_match.product_id '${product.canonical_match.product_id}' not found in products`);
+        console.warn(`  ⚠ product_id '${productRef}' not found in products`);
         unmatched.push(`${priceCat.category_raw}: ${product.description_raw}`);
         continue;
       }
@@ -644,7 +665,7 @@ async function seedWithOrg(org) {
             raw_notes:                        product.description_raw || null,
           });
         if (error) {
-          console.warn(`  ⚠ Pricing insert failed [${product.canonical_match.product_id}/${branchName}]: ${error.message}`);
+          console.warn(`  ⚠ Pricing insert failed [${productRef}/${branchName}]: ${error.message}`);
         } else {
           pricingRows++;
         }
@@ -652,6 +673,10 @@ async function seedWithOrg(org) {
     }
   }
   console.log(`  ↳ ${pricingRows} pricing rows, ${colorRuleRows} color rules`);
+  if (nameMatched.length) {
+    console.log(`  ↳ ${nameMatched.length} price-list rows matched by confirmed name/alias:`);
+    for (const m of nameMatched) console.log(`      - ${m}`);
+  }
   if (unmatched.length) {
     console.log(`  ↳ ${unmatched.length} price-list rows skipped — no confirmed canonical_match (confirm with SwahziTech):`);
     for (const u of unmatched) console.log(`      - ${u}`);
@@ -800,6 +825,10 @@ function buildRecipePlan(productMaster, ratiosMolds) {
           console.warn(`  ⚠ ${ratCat.category_id} item '${item.item_id}' is not in product_master — skipped`);
           continue;
         }
+        if (!Array.isArray(item.ratio) || item.ratio.length === 0) {
+          console.warn(`  ⚠ ${item.item_id} (${item.name}) has no ratio in ratios_and_molds.json — no recipe created`);
+          continue;
+        }
         const label = mixLabel(item.ratio);
         const key = `${categoryRef}|${label}`;
         if (!groups.has(key)) groups.set(key, { categoryRef, label, components: item.ratio, items: [] });
@@ -919,6 +948,58 @@ function unitSymbolToId(unitStr, unitBySymbol) {
   return unitBySymbol[sym] || null;
 }
 
+// Price-list sections whose rows SwahziTech confirmed on 2026-10-12 map to
+// product_master products by name/alias (the price list itself still has
+// canonical_match = null for them). Other sections are never name-matched.
+const NAME_MATCH_SECTIONS = {
+  'CULVERTS':              'culverts',
+  'PAVING BLOCKS (PRESS)': 'press_machine_paving',
+};
+
+/**
+ * Splits a name like 'Rectangular (30-35MPa, 8cm)', 'Paving Zigzag 30MPa (6cm)'
+ * or a price row 'ZIGZAG (30 Mpa)' + '210*100*60mm' into
+ * { family, grade, thickness }. grade/thickness are null when not stated.
+ */
+function nameSignature(text, sizeMm) {
+  const s = (text || '').toLowerCase();
+  const grade = s.match(/(\d+(?:\s*-\s*\d+)?)\s*mpa/)?.[1].replace(/\s/g, '') ?? null;
+  let thickness = s.match(/(\d+)\s*cm\b/)?.[1] ?? null;
+  if (!thickness && sizeMm) {
+    const mm = String(sizeMm).match(/(\d+(?:\.\d+)?)\s*mm\s*$/i)?.[1];
+    if (mm) thickness = String(Number(mm) / 10);
+  }
+  const family = s
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\d+(?:\s*-\s*\d+)?\s*mpa/g, ' ')
+    .replace(/\d+\s*cm\b/g, ' ')
+    .replace(/\bpaving\b/g, ' ')
+    .replace(/[^a-z0-9]/g, '');
+  return { family, grade, thickness };
+}
+
+/** product_id for a price row in a confirmed section, or null if not exactly one match. */
+function matchByConfirmedName(priceCat, row, productMaster) {
+  const categoryRef = NAME_MATCH_SECTIONS[(priceCat.category_raw || '').trim().toUpperCase()];
+  if (!categoryRef) return null;
+  const cat = productMaster.categories.find(c => c.category_id === categoryRef);
+  const target = nameSignature(row.description_raw, row.size_mm);
+  if (!cat || !target.family) return null;
+
+  const hits = new Set();
+  for (const p of cat.products) {
+    for (const name of [p.canonical_name, ...(p.alt_names || [])]) {
+      const sig = nameSignature(name);
+      if (!sig.family || sig.family !== target.family) continue;
+      if (sig.grade && sig.grade !== target.grade) continue;
+      if (sig.thickness && sig.thickness !== target.thickness) continue;
+      hits.add(p.product_id);
+    }
+  }
+  if (hits.size > 1) console.warn(`  ⚠ '${row.description_raw}' matches several products (${[...hits].join(', ')}) — skipped`);
+  return hits.size === 1 ? [...hits][0] : null;
+}
+
 function findCategoryForPriceCategory(priceCat, categoryMap) {
   // price_list_structured.json `category_raw` (exact strings in the file)
   // → product_master category_id. Only sections that carry color pricing
@@ -949,4 +1030,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildRecipePlan, buildYieldLookup };
+module.exports = { buildRecipePlan, buildYieldLookup, matchByConfirmedName };
