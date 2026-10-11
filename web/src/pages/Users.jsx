@@ -19,25 +19,19 @@ export default function UsersPage() {
   async function load() {
     setLoading(true);
     setError('');
-    // Two queries instead of an embed: user_roles.user_id references
-    // auth.users, not profiles, so PostgREST cannot join them (PGRST200)
-    // until migration 013 adds the FK.
-    const [profRes, rolesRes] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, first_name, last_name, phone, status, created_at')
-        .eq('organization_id', organization.id)
-        .order('created_at'),
-      supabase
-        .from('user_roles')
-        .select('user_id, role:roles(name)')
-        .eq('organization_id', organization.id),
-    ]);
-    const err = profRes.error || rolesRes.error;
+    // Embeds via the user_roles.user_id → profiles.id FK (migration 013).
+    const { data, error: err } = await supabase
+      .from('profiles')
+      .select(`
+        id, first_name, last_name, phone, status, created_at,
+        user_roles(
+          role:roles(name)
+        )
+      `)
+      .eq('organization_id', organization.id)
+      .order('created_at');
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
-    const rolesByUser = {};
-    for (const ur of rolesRes.data || []) (rolesByUser[ur.user_id] ||= []).push(ur);
-    setUsers((profRes.data || []).map(p => ({ ...p, user_roles: rolesByUser[p.id] || [] })));
+    setUsers(data || []);
     setLoading(false);
   }
 
