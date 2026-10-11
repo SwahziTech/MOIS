@@ -8,104 +8,103 @@
  *   - NEVER committed to git (.env is in .gitignore)
  *
  * Reads data files AS-IS — no reshaping, renaming, or reinterpreting:
- *   - assets/docs/product_master.json
- *   - assets/docs/ratios_and_molds.json
- *   - assets/docs/price_list_structured.json
+ *   - assets/docs/Stumarcot/product_master.json
+ *   - assets/docs/Stumarcot/ratios_and_molds.json
+ *   - assets/docs/Stumarcot/price_list_structured.json
  *
- * Creates:
- *   - Stumarcot organization
+ * Creates (idempotent — safe to re-run):
+ *   - Stumarcot organization (looked up by legal_name before inserting)
  *   - 3 branches: Mwanza, Dar es Salaam, Dodoma
  *   - 3 warehouses per branch (raw_materials, finished_goods, general)
  *   - System roles + permission assignments
  *   - Units
- *   - Product categories + products (from product_master.json)
+ *   - Product categories + products (from product_master.json;
+ *     wastani_per_bag filled from ratios_and_molds.json molds/items)
  *   - Materials (from ratios_and_molds.json ingredient names)
  *   - Recipe versions + items (shared per category+color, per AGENTS.md §3)
  *   - Product branch pricing (from price_list_structured.json)
- *   - One seed admin user: admin@stumarcot.co.tz
+ *   - One seed admin user (SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD from .env)
+ *
+ * Usage:
+ *   node seed.js            write to the database
+ *   node seed.js --plan     print the recipe plan only (no DB access)
  */
 
 const path = require('path');
 const fs   = require('fs');
 
-// --- Load env (service role key from .env only, never .env.local) ----------
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-
-const SUPABASE_URL            = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env');
-  process.exit(1);
-}
-
-const { createClient } = require('@supabase/supabase-js');
-
-// Service role client — bypasses RLS for seeding purposes
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
-
 // --- Load data files -------------------------------------------------------
-const DOCS = path.join(__dirname, '..', 'assets', 'docs');
+const DOCS = path.join(__dirname, '..', 'assets', 'docs', 'Stumarcot');
 const productMaster       = JSON.parse(fs.readFileSync(path.join(DOCS, 'product_master.json'), 'utf8'));
 const ratiosMolds         = JSON.parse(fs.readFileSync(path.join(DOCS, 'ratios_and_molds.json'), 'utf8'));
 const priceListStructured = JSON.parse(fs.readFileSync(path.join(DOCS, 'price_list_structured.json'), 'utf8'));
 
-// --- Helper ----------------------------------------------------------------
-async function insertOrGet(table, matchOn, data) {
-  const filter = Object.fromEntries(matchOn.map(k => [k, data[k]]));
-  const { data: existing } = await supabase.from(table).select('id').match(filter).single();
-  if (existing) return existing;
-  const { data: inserted, error } = await supabase.from(table).insert(data).select('id').single();
-  if (error) throw new Error(`${table} insert failed: ${error.message}\nData: ${JSON.stringify(data, null, 2)}`);
-  return inserted;
-}
-
-async function upsert(table, conflictCols, rows) {
-  if (!rows.length) return [];
-  const { data, error } = await supabase
-    .from(table)
-    .upsert(rows, { onConflict: conflictCols.join(','), ignoreDuplicates: false })
-    .select('id');
-  if (error) throw new Error(`${table} upsert failed: ${error.message}`);
-  return data;
-}
+let supabase; // created in main() — not needed for --plan
 
 // --------------------------------------------------------------------------
 async function main() {
+  // --- Load env (service role key from .env only, never .env.local) --------
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env');
+    process.exit(1);
+  }
+
+  const { createClient } = require('@supabase/supabase-js');
+
+  // Service role client — bypasses RLS for seeding purposes
+  supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+
   console.log('=== MOIS Phase 1a Seed — Stumarcot ===\n');
 
   // =========================================================================
   // 1. ORGANIZATION
+  //    organizations has no natural unique key, so look it up first —
+  //    inserting blindly is what created the duplicate org on the 2nd run.
   // =========================================================================
-  console.log('1. Creating Stumarcot organization...');
-  const { data: org, error: orgErr } = await supabase
+  console.log('1. Organization...');
+  const LEGAL_NAME = 'STUMARCOT CO LTD';
+  const { data: existingOrgs, error: findErr } = await supabase
     .from('organizations')
-    .insert({
-      name:       'Stumarcot',
-      legal_name: 'STUMARCOT CO LTD',
-      brand_config: {
-        primary_color: '#B7A57A',
-        accent_color:  '#4B3621',
-        font:          'Google Sans',
-      },
-      status: 'active'
-    })
     .select('id, name')
-    .single();
-  if (orgErr) {
-    // If already seeded, fetch it
-    const { data: existing } = await supabase
-      .from('organizations')
-      .select('id, name')
-      .eq('legal_name', 'STUMARCOT CO LTD')
-      .single();
-    if (!existing) throw new Error(`Organization insert failed: ${orgErr.message}`);
-    console.log(`  ↳ Already exists: ${existing.name} (${existing.id})`);
-    return await seedWithOrg(existing);
+    .eq('legal_name', LEGAL_NAME)
+    .order('created_at');
+  if (findErr) throw new Error(`Organization lookup failed: ${findErr.message}`);
+
+  if (existingOrgs.length > 1) {
+    throw new Error(
+      `${existingOrgs.length} organizations named '${LEGAL_NAME}' exist. ` +
+      'Resolve the duplicate (scripts/cleanup_duplicate_org.js) before re-seeding.'
+    );
   }
-  console.log(`  ↳ Created: ${org.name} (${org.id})`);
+
+  let org = existingOrgs[0];
+  if (org) {
+    console.log(`  ↳ Already exists: ${org.name} (${org.id})`);
+  } else {
+    const { data: inserted, error: orgErr } = await supabase
+      .from('organizations')
+      .insert({
+        name:       'Stumarcot',
+        legal_name: LEGAL_NAME,
+        brand_config: {
+          primary_color: '#B7A57A',
+          accent_color:  '#4B3621',
+          font:          'Google Sans',
+        },
+        status: 'active'
+      })
+      .select('id, name')
+      .single();
+    if (orgErr) throw new Error(`Organization insert failed: ${orgErr.message}`);
+    org = inserted;
+    console.log(`  ↳ Created: ${org.name} (${org.id})`);
+  }
+
   await seedWithOrg(org);
 }
 
@@ -129,7 +128,7 @@ async function seedWithOrg(org) {
       .select('id, name')
       .eq('organization_id', orgId)
       .eq('name', b.name)
-      .single();
+      .maybeSingle();
     if (existing) {
       branches[b.name] = existing;
       console.log(`  ↳ Already exists: ${b.name} (${existing.id})`);
@@ -156,7 +155,7 @@ async function seedWithOrg(org) {
   ];
 
   let warehouseCount = 0;
-  for (const [branchName, branch] of Object.entries(branches)) {
+  for (const branch of Object.values(branches)) {
     for (const wt of warehouseTypes) {
       const { data: existing } = await supabase
         .from('warehouses')
@@ -164,7 +163,7 @@ async function seedWithOrg(org) {
         .eq('organization_id', orgId)
         .eq('branch_id', branch.id)
         .eq('name', wt.name)
-        .single();
+        .maybeSingle();
       if (!existing) {
         const { error } = await supabase
           .from('warehouses')
@@ -224,17 +223,21 @@ async function seedWithOrg(org) {
   ];
 
   // Load all permissions into a code→id map
-  const { data: allPerms } = await supabase.from('permissions').select('id, code');
+  const { data: allPerms, error: permErr } = await supabase.from('permissions').select('id, code');
+  if (permErr) throw new Error(`Permissions load failed: ${permErr.message}`);
   const permByCode = Object.fromEntries(allPerms.map(p => [p.code, p.id]));
 
   for (const roleDef of systemRoles) {
+    const missing = roleDef.permissions.filter(code => !permByCode[code]);
+    if (missing.length) console.warn(`  ⚠ Role '${roleDef.name}': unknown permission codes ${missing.join(', ')}`);
+
     let roleRow;
     const { data: existingRole } = await supabase
       .from('roles')
       .select('id')
       .eq('organization_id', orgId)
       .eq('name', roleDef.name)
-      .single();
+      .maybeSingle();
 
     if (existingRole) {
       roleRow = existingRole;
@@ -280,7 +283,7 @@ async function seedWithOrg(org) {
       .select('id')
       .eq('organization_id', orgId)
       .eq('symbol', u.symbol)
-      .single();
+      .maybeSingle();
     if (!existing) {
       const { error } = await supabase
         .from('units')
@@ -315,7 +318,7 @@ async function seedWithOrg(org) {
       .select('id')
       .eq('organization_id', orgId)
       .eq('name', m.name)
-      .single();
+      .maybeSingle();
     if (!existing) {
       const { error } = await supabase
         .from('materials')
@@ -360,7 +363,7 @@ async function seedWithOrg(org) {
       .select('id')
       .eq('organization_id', orgId)
       .eq('category_id_ref', cat.category_id)
-      .single();
+      .maybeSingle();
     if (existing) {
       categoryMap[cat.category_id] = existing.id;
     } else {
@@ -377,157 +380,168 @@ async function seedWithOrg(org) {
 
   // =========================================================================
   // 8. PRODUCTS (from product_master.json — as-is, nulls preserved)
+  //    wastani_per_bag is recipe-yield data that lives in ratios_and_molds.json
+  //    (molds[].wastani_per_bag / items[].wastani_per_bag). product_master only
+  //    carries it for press paving, so fill the rest from ratios_and_molds.
+  //    Upsert so a re-run brings existing rows up to date.
   // =========================================================================
-  console.log('\n8. Creating products...');
-  const productMap = {}; // product_id_ref → DB uuid
-  let productCount = 0;
+  console.log('\n8. Upserting products...');
+  const yieldSource = buildYieldLookup(ratiosMolds);
+  const productRows = [];
 
   for (const cat of productMaster.categories) {
-    const catDbId = categoryMap[cat.category_id];
     for (const p of cat.products) {
-      const row = {
+      const mold = yieldSource.byId[p.product_id] ||
+                   yieldSource.byName[`${cat.category_id}|${p.canonical_name}`] || null;
+      const masterYield = p.wastani_per_bag ?? null;
+      const moldYield   = mold?.wastani_per_bag ?? null;
+      if (masterYield != null && moldYield != null && masterYield !== moldYield) {
+        console.warn(`  ⚠ wastani_per_bag conflict for ${p.product_id}: product_master=${masterYield}, ratios_and_molds=${moldYield} — using product_master`);
+      }
+      productRows.push({
         organization_id: orgId,
-        category_id:     catDbId,
+        category_id:     categoryMap[cat.category_id],
         product_id_ref:  p.product_id,
         canonical_name:  p.canonical_name,
-        size_cm:         p.size_cm ? String(p.size_cm) : null,
+        size_cm:         p.size_cm != null ? String(p.size_cm) : null,
         pcs_per_sqm:     p.pcs_per_sqm ?? null,
-        wastani_per_bag: p.wastani_per_bag ?? null,
+        wastani_per_bag: masterYield ?? moldYield,
         notes:           p.note || null,
         status:          'active',
-      };
-      const { data: existing } = await supabase
-        .from('products')
-        .select('id')
-        .eq('organization_id', orgId)
-        .eq('product_id_ref', p.product_id)
-        .single();
-      if (existing) {
-        productMap[p.product_id] = existing.id;
-      } else {
-        const { data: inserted, error } = await supabase
-          .from('products')
-          .insert(row)
-          .select('id')
-          .single();
-        if (error) throw new Error(`Product insert failed [${p.product_id}]: ${error.message}`);
-        productMap[p.product_id] = inserted.id;
-        productCount++;
-      }
+      });
     }
   }
-  console.log(`  ↳ ${productCount} products created`);
+
+  const { data: productData, error: productErr } = await supabase
+    .from('products')
+    .upsert(productRows, { onConflict: 'organization_id,product_id_ref' })
+    .select('id, product_id_ref');
+  if (productErr) throw new Error(`Product upsert failed: ${productErr.message}`);
+  const productMap = Object.fromEntries(productData.map(p => [p.product_id_ref, p.id]));
+  const withYield = productRows.filter(r => r.wastani_per_bag != null).length;
+  console.log(`  ↳ ${productData.length} products (${withYield} with wastani_per_bag)`);
 
   // =========================================================================
   // 9. RECIPE VERSIONS + ITEMS
-  //    Shared per category + color (AGENTS.md §3).
-  //    One recipe_version row per (category_id, color_label).
-  //    All products in that category+color link to the same recipe_version.
+  //    Shared per category + color (AGENTS.md §3) — see buildRecipePlan().
   // =========================================================================
   console.log('\n9. Creating recipe versions and items...');
+  const plan = buildRecipePlan(productMaster, ratiosMolds);
   let recipeVersionCount = 0;
   let recipeItemCount    = 0;
   let recipeProductLinks = 0;
+  let archivedCount      = 0;
 
-  for (const ratCat of ratiosMolds.categories) {
-    const catDbId = categoryMap[ratCat.category_id];
-    if (!catDbId) continue; // skip if not in product_master
+  for (const recipe of plan) {
+    const catDbId = categoryMap[recipe.categoryRef];
 
-    for (const ratio of ratCat.ratios) {
-      const colorLabel = ratio.label || 'Plain';
+    const { data: existingRV } = await supabase
+      .from('recipe_versions')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('category_id', catDbId)
+      .eq('color_label', recipe.colorLabel)
+      .eq('version_number', 1)
+      .maybeSingle();
 
-      // Check if recipe_version already exists
-      const { data: existingRV } = await supabase
+    let rvId;
+    if (existingRV) {
+      rvId = existingRV.id;
+    } else {
+      const { data: rv, error } = await supabase
         .from('recipe_versions')
+        .insert({
+          organization_id: orgId,
+          category_id:     catDbId,
+          color_label:     recipe.colorLabel,
+          version_number:  1,
+          effective_date:  '2026-09-27',
+          status:          'active',
+          notes:           recipe.notes,
+        })
         .select('id')
-        .eq('organization_id', orgId)
-        .eq('category_id', catDbId)
-        .eq('color_label', colorLabel)
-        .eq('version_number', 1)
         .single();
+      if (error) throw new Error(`RecipeVersion insert failed [${recipe.categoryRef}/${recipe.colorLabel}]: ${error.message}`);
+      rvId = rv.id;
+      recipeVersionCount++;
+    }
 
-      let rvId;
-      if (existingRV) {
-        rvId = existingRV.id;
-      } else {
-        const { data: rv, error } = await supabase
-          .from('recipe_versions')
-          .insert({
-            organization_id: orgId,
-            category_id:     catDbId,
-            color_label:     colorLabel,
-            version_number:  1,
-            effective_date:  '2026-09-27',
-            status:          'active',
-            notes:           ratio.notes || null,
-          })
-          .select('id')
-          .single();
-        if (error) throw new Error(`RecipeVersion insert failed [${ratCat.category_id}/${colorLabel}]: ${error.message}`);
-        rvId = rv.id;
-        recipeVersionCount++;
+    // Insert recipe items (ingredients)
+    for (const comp of recipe.components) {
+      const matId  = matByCode[materialCodeForName(comp.material)];
+      const unitId = unitSymbolToId(comp.unit, unitBySymbol);
+      if (!matId) {
+        console.warn(`  ⚠ Unknown material '${comp.material}' in ${recipe.categoryRef}/${recipe.colorLabel}`);
+        continue;
       }
 
-      // Insert recipe items (ingredients)
-      for (const comp of ratio.components) {
-        const matCode = materialCodeForName(comp.material);
-        const matId   = matByCode[matCode];
-        const unitId  = unitSymbolToId(comp.unit, unitBySymbol);
+      const { data: existingItem } = await supabase
+        .from('recipe_items')
+        .select('id')
+        .eq('recipe_version_id', rvId)
+        .eq('material_id', matId)
+        .maybeSingle();
 
-        if (!matId) {
-          console.warn(`  ⚠ Unknown material '${comp.material}' in ${ratCat.category_id}/${colorLabel}`);
-          continue;
-        }
-
-        const { data: existingItem } = await supabase
+      if (!existingItem) {
+        const { error } = await supabase
           .from('recipe_items')
-          .select('id')
-          .eq('recipe_version_id', rvId)
-          .eq('material_id', matId)
-          .single();
-
-        if (!existingItem) {
-          const { error } = await supabase
-            .from('recipe_items')
-            .insert({
-              recipe_version_id:   rvId,
-              material_id:         matId,
-              quantity:            comp.quantity ?? 0,
-              unit_id:             unitId,
-              quantity_confirmed:  comp.quantity !== null,
-              notes:               null,
-            });
-          if (error) throw new Error(`RecipeItem insert failed: ${error.message}`);
-          recipeItemCount++;
-        }
+          .insert({
+            recipe_version_id:   rvId,
+            material_id:         matId,
+            quantity:            comp.quantity ?? 0,
+            unit_id:             unitId,
+            quantity_confirmed:  comp.quantity !== null,
+            notes:               null,
+          });
+        if (error) throw new Error(`RecipeItem insert failed: ${error.message}`);
+        recipeItemCount++;
       }
+    }
 
-      // Link all products in this category to this recipe_version
-      const masterCat = productMaster.categories.find(c => c.category_id === ratCat.category_id);
-      if (masterCat) {
-        for (const p of masterCat.products) {
-          const productDbId = productMap[p.product_id];
-          if (!productDbId) continue;
+    // Link the products that use this recipe
+    for (const productRef of recipe.productRefs) {
+      const productDbId = productMap[productRef];
+      if (!productDbId) continue;
 
-          const { data: existingLink } = await supabase
-            .from('recipe_version_products')
-            .select('recipe_version_id')
-            .eq('recipe_version_id', rvId)
-            .eq('product_id', productDbId)
-            .single();
+      const { data: existingLink } = await supabase
+        .from('recipe_version_products')
+        .select('recipe_version_id')
+        .eq('recipe_version_id', rvId)
+        .eq('product_id', productDbId)
+        .maybeSingle();
 
-          if (!existingLink) {
-            const { error } = await supabase
-              .from('recipe_version_products')
-              .insert({ recipe_version_id: rvId, product_id: productDbId });
-            if (error) throw new Error(`RecipeVersionProduct insert failed: ${error.message}`);
-            recipeProductLinks++;
-          }
-        }
+      if (!existingLink) {
+        const { error } = await supabase
+          .from('recipe_version_products')
+          .insert({ recipe_version_id: rvId, product_id: productDbId });
+        if (error) throw new Error(`RecipeVersionProduct insert failed: ${error.message}`);
+        recipeProductLinks++;
       }
     }
   }
-  console.log(`  ↳ ${recipeVersionCount} recipe versions, ${recipeItemCount} items, ${recipeProductLinks} product links`);
+
+  // Archive v1 recipes this seed created earlier under labels the plan no
+  // longer produces (e.g. the old incomplete 'Red (add-on)' paving rows).
+  // Archiving keeps the history; nothing is deleted.
+  const expectedByCategory = {};
+  for (const r of plan) (expectedByCategory[r.categoryRef] ||= new Set()).add(r.colorLabel);
+  for (const [categoryRef, labels] of Object.entries(expectedByCategory)) {
+    const { data: activeRVs } = await supabase
+      .from('recipe_versions')
+      .select('id, color_label')
+      .eq('organization_id', orgId)
+      .eq('category_id', categoryMap[categoryRef])
+      .eq('version_number', 1)
+      .eq('status', 'active');
+    for (const rv of activeRVs || []) {
+      if (labels.has(rv.color_label)) continue;
+      const { error } = await supabase.from('recipe_versions').update({ status: 'archived' }).eq('id', rv.id);
+      if (error) throw new Error(`RecipeVersion archive failed [${categoryRef}/${rv.color_label}]: ${error.message}`);
+      console.log(`  ↳ Archived stale recipe ${categoryRef}/${rv.color_label}`);
+      archivedCount++;
+    }
+  }
+  console.log(`  ↳ ${recipeVersionCount} recipe versions, ${recipeItemCount} items, ${recipeProductLinks} product links, ${archivedCount} archived`);
 
   // =========================================================================
   // 10. PRODUCT BRANCH PRICING (from price_list_structured.json — as-is)
@@ -536,47 +550,46 @@ async function seedWithOrg(org) {
   // =========================================================================
   console.log('\n10. Seeding product branch pricing...');
   let pricingRows = 0;
-  let skippedNoMatch = 0;
   let colorRuleRows = 0;
+  const unmatched = [];
 
-  // Build branch name → id map
-  const branchByName = {};
-  for (const [name, b] of Object.entries(branches)) {
-    branchByName[name] = b.id;
-  }
+  const branchByName = Object.fromEntries(Object.entries(branches).map(([name, b]) => [name, b.id]));
 
   for (const priceCat of priceListStructured.categories) {
     // Seed category-level color pricing rules
     if (priceCat.color_pricing_by_branch) {
       const catDbId = findCategoryForPriceCategory(priceCat, categoryMap);
-      if (catDbId) {
-        for (const [branchName, colorRule] of Object.entries(priceCat.color_pricing_by_branch)) {
-          if (!colorRule) continue; // null safety
-          const branchId = branchByName[branchName];
-          if (!branchId) continue;
+      for (const [branchName, colorRule] of Object.entries(priceCat.color_pricing_by_branch)) {
+        if (!colorRule) continue; // category sold in one color only
+        if (!catDbId) {
+          console.warn(`  ⚠ No product category mapped for price section '${priceCat.category_raw}' — color rule skipped`);
+          break;
+        }
+        const branchId = branchByName[branchName];
+        if (!branchId) continue;
 
-          const { data: existingRule } = await supabase
+        const { data: existingRule } = await supabase
+          .from('category_color_pricing_rules')
+          .select('id')
+          .eq('organization_id', orgId)
+          .eq('category_id', catDbId)
+          .eq('branch_id', branchId)
+          .maybeSingle();
+
+        if (!existingRule) {
+          const { error } = await supabase
             .from('category_color_pricing_rules')
-            .select('id')
-            .eq('organization_id', orgId)
-            .eq('category_id', catDbId)
-            .eq('branch_id', branchId)
-            .single();
-
-          if (!existingRule) {
-            const { error } = await supabase
-              .from('category_color_pricing_rules')
-              .insert({
-                organization_id: orgId,
-                category_id:     catDbId,
-                branch_id:       branchId,
-                base_color:      colorRule.base_color || 'OffWhite',
-                pricing_type:    colorRule.pricing_type || 'delta_per_sqmt_over_offwhite',
-                color_prices:    colorRule.other_colors || {},
-                raw_notes:       colorRule.raw_notes || null,
-              });
-            if (!error) colorRuleRows++;
-          }
+            .insert({
+              organization_id: orgId,
+              category_id:     catDbId,
+              branch_id:       branchId,
+              base_color:      colorRule.base_color || 'OffWhite',
+              pricing_type:    colorRule.pricing_type,
+              color_prices:    colorRule.other_colors || {},
+              raw_notes:       colorRule.raw_notes || null,
+            });
+          if (error) console.warn(`  ⚠ Color rule insert failed [${priceCat.category_raw}/${branchName}]: ${error.message}`);
+          else colorRuleRows++;
         }
       }
     }
@@ -585,91 +598,93 @@ async function seedWithOrg(org) {
     for (const product of priceCat.products) {
       // canonical_match is an object { category_id, product_id, canonical_name } or null
       if (!product.canonical_match || typeof product.canonical_match !== 'object') {
-        skippedNoMatch++;
+        unmatched.push(`${priceCat.category_raw}: ${product.description_raw}${product.size_mm ? ` (${product.size_mm})` : ''}`);
         continue; // not confirmed — per AGENTS.md: never fill a null by guessing
       }
 
       const productDbId = productMap[product.canonical_match.product_id];
       if (!productDbId) {
         console.warn(`  ⚠ canonical_match.product_id '${product.canonical_match.product_id}' not found in products`);
-        skippedNoMatch++;
+        unmatched.push(`${priceCat.category_raw}: ${product.description_raw}`);
         continue;
       }
 
-      const branchPricing = product.available_in_branches || {};
-      for (const [branchName, pricing] of Object.entries(branchPricing)) {
+      for (const [branchName, pricing] of Object.entries(product.available_in_branches || {})) {
         const branchId = branchByName[branchName];
         if (!branchId) continue;
 
-        const row = {
-          organization_id:                 orgId,
-          product_id:                      productDbId,
-          branch_id:                       branchId,
-          color:                           product.color || null,
-          price_per_unit_exclusive:        pricing.price_exclusive ?? null,
-          vat_per_unit:                    pricing.vat ?? null,
-          price_per_unit_inclusive:        pricing.price_inclusive ?? null,
-          price_per_sqm_inclusive:         pricing.price_per_sqmt ?? null,
-          pcs_per_sqm_at_pricing:          pricing.pcs_per_sqmt_or_unit ?? null,
-          is_available:                    true,
-          price_consistent_across_branches: product.price_consistent_across_branches ?? true,
-          source_item_no:                  pricing.item_no ?? null,
-          raw_notes:                       product.raw_notes || null,
-        };
-
-        const { data: existingPricing } = await supabase
+        // The price list carries no per-row color: every row is the
+        // base (OffWhite) price, stored as color = NULL. Other colors come
+        // from category_color_pricing_rules.
+        const color = product.color || null;
+        let existingQuery = supabase
           .from('product_branch_pricing')
           .select('id')
           .eq('product_id', productDbId)
-          .eq('branch_id', branchId)
-          .eq('color', product.color || null)
-          .maybeSingle();
+          .eq('branch_id', branchId);
+        existingQuery = color === null ? existingQuery.is('color', null) : existingQuery.eq('color', color);
+        const { data: existingPricing } = await existingQuery.maybeSingle();
+        if (existingPricing) continue;
 
-        if (!existingPricing) {
-          const { error } = await supabase
-            .from('product_branch_pricing')
-            .insert(row);
-          if (error) {
-            console.warn(`  ⚠ Pricing insert failed [${product.canonical_match}/${branchName}]: ${error.message}`);
-          } else {
-            pricingRows++;
-          }
+        const { error } = await supabase
+          .from('product_branch_pricing')
+          .insert({
+            organization_id:                  orgId,
+            product_id:                       productDbId,
+            branch_id:                        branchId,
+            color,
+            price_per_unit_exclusive:         pricing.price_exclusive ?? null,
+            vat_per_unit:                     pricing.vat ?? null,
+            price_per_unit_inclusive:         pricing.price_inclusive ?? null,
+            price_per_sqm_inclusive:          pricing.price_per_sqmt ?? null,
+            pcs_per_sqm_at_pricing:           pricing.pcs_per_sqmt_or_unit ?? null,
+            is_available:                     true,
+            price_consistent_across_branches: product.price_consistent_across_branches ?? true,
+            source_item_no:                   pricing.item_no ?? null,
+            raw_notes:                        product.description_raw || null,
+          });
+        if (error) {
+          console.warn(`  ⚠ Pricing insert failed [${product.canonical_match.product_id}/${branchName}]: ${error.message}`);
+        } else {
+          pricingRows++;
         }
       }
     }
   }
-  console.log(`  ↳ ${pricingRows} pricing rows, ${colorRuleRows} color rules, ${skippedNoMatch} skipped (no canonical_match)`);
+  console.log(`  ↳ ${pricingRows} pricing rows, ${colorRuleRows} color rules`);
+  if (unmatched.length) {
+    console.log(`  ↳ ${unmatched.length} price-list rows skipped — no confirmed canonical_match (confirm with SwahziTech):`);
+    for (const u of unmatched) console.log(`      - ${u}`);
+  }
 
   // =========================================================================
   // 11. SEED ADMIN USER
+  //     Credentials come from .env — never hardcode them here.
   // =========================================================================
-  console.log('\n11. Creating seed admin user...');
-  const ADMIN_EMAIL = 'admin@stumarcot.co.tz';
-  const ADMIN_PASS  = 'MoisAdmin2026!'; // change on first login
-
-  // Try to create the user via admin API
-  const { data: adminUser, error: userErr } = await supabase.auth.admin.createUser({
-    email:          ADMIN_EMAIL,
-    password:       ADMIN_PASS,
-    email_confirm:  true, // mark as confirmed (dev mode — skip email verification)
-    user_metadata:  { first_name: 'MOIS', last_name: 'Admin' },
-  });
+  console.log('\n11. Seed admin user...');
+  const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL;
+  const ADMIN_PASS  = process.env.SEED_ADMIN_PASSWORD;
 
   let adminUserId;
-  if (userErr) {
-    if (userErr.message.includes('already been registered') || userErr.message.includes('already exists')) {
-      const { data: users } = await supabase.auth.admin.listUsers();
-      const existing = users?.users?.find(u => u.email === ADMIN_EMAIL);
-      if (existing) {
-        adminUserId = existing.id;
-        console.log(`  ↳ Admin user already exists: ${ADMIN_EMAIL} (${adminUserId})`);
-      }
-    } else {
-      throw new Error(`Admin user creation failed: ${userErr.message}`);
-    }
+  if (!ADMIN_EMAIL) {
+    console.warn('  ⚠ SEED_ADMIN_EMAIL not set in .env — skipping admin user');
   } else {
-    adminUserId = adminUser.user.id;
-    console.log(`  ↳ Created admin user: ${ADMIN_EMAIL} (${adminUserId})`);
+    adminUserId = await findUserIdByEmail(ADMIN_EMAIL);
+    if (adminUserId) {
+      console.log(`  ↳ Admin user already exists: ${ADMIN_EMAIL} (${adminUserId})`);
+    } else if (!ADMIN_PASS) {
+      console.warn('  ⚠ SEED_ADMIN_PASSWORD not set in .env — cannot create admin user');
+    } else {
+      const { data: adminUser, error: userErr } = await supabase.auth.admin.createUser({
+        email:          ADMIN_EMAIL,
+        password:       ADMIN_PASS,
+        email_confirm:  true, // mark as confirmed (dev mode — skip email verification)
+        user_metadata:  { first_name: 'MOIS', last_name: 'Admin' },
+      });
+      if (userErr) throw new Error(`Admin user creation failed: ${userErr.message}`);
+      adminUserId = adminUser.user.id;
+      console.log(`  ↳ Created admin user: ${ADMIN_EMAIL} (${adminUserId})`);
+    }
   }
 
   // Associate admin user with Stumarcot org
@@ -688,37 +703,176 @@ async function seedWithOrg(org) {
       .eq('name', 'owner')
       .single();
     if (ownerRole) {
-      const { error: urErr } = await supabase
+      const { data: existingGrant } = await supabase
         .from('user_roles')
-        .upsert({
-          user_id: adminUserId,
-          role_id: ownerRole.id,
-          organization_id: orgId,
-        }, { onConflict: 'user_id,role_id,organization_id,branch_id,warehouse_id', ignoreDuplicates: true });
-      if (urErr) console.warn(`  ⚠ user_roles upsert: ${urErr.message}`);
-      else console.log(`  ↳ Assigned 'owner' role to admin`);
+        .select('id')
+        .eq('user_id', adminUserId)
+        .eq('role_id', ownerRole.id)
+        .eq('organization_id', orgId)
+        .is('branch_id', null)
+        .is('warehouse_id', null)
+        .maybeSingle();
+      if (existingGrant) {
+        console.log(`  ↳ Admin already has 'owner' role`);
+      } else {
+        const { error: urErr } = await supabase
+          .from('user_roles')
+          .insert({ user_id: adminUserId, role_id: ownerRole.id, organization_id: orgId });
+        if (urErr) console.warn(`  ⚠ user_roles insert: ${urErr.message}`);
+        else console.log(`  ↳ Assigned 'owner' role to admin`);
+      }
     }
   }
 
   // =========================================================================
-  // 12. ROW COUNT REPORT
+  // 12. ROW COUNT REPORT (this organization only)
   // =========================================================================
-  console.log('\n=== CHECKPOINT 4 — Row Counts ===');
+  console.log('\n=== CHECKPOINT — Row Counts (this org) ===');
   const tables = [
-    'organizations', 'branches', 'warehouses',
-    'profiles', 'roles', 'permissions', 'role_permissions', 'user_roles',
+    'branches', 'warehouses', 'profiles', 'roles', 'user_roles',
     'units', 'materials',
     'product_categories', 'products', 'product_branch_pricing', 'category_color_pricing_rules',
-    'recipe_versions', 'recipe_items', 'recipe_version_products',
+    'recipe_versions',
   ];
   for (const table of tables) {
-    const { count } = await supabase.from(table).select('*', { count: 'exact', head: true });
+    const { count } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
     console.log(`  ${table.padEnd(35)} ${String(count ?? '?').padStart(4)} rows`);
   }
   console.log('\n✅ Seed complete.');
 }
 
+// --- Recipe plan -----------------------------------------------------------
+
+/**
+ * Turns ratios_and_molds.json into one entry per recipe_version to create:
+ *   { categoryRef, colorLabel, notes, components[], productRefs[] }
+ *
+ * - Categories with `ratios` (tiles, paving, curbstones, ...): one recipe per
+ *   ratio, linked to every product in that product_master category.
+ *   Labels marked '(add-on)' are pigment additions on top of the '(base)'
+ *   ratio ("Color additions on top of white base, per bag of cement"), so
+ *   they are combined with the base components.
+ * - Press machine `items` carry their own ratio per product and map onto two
+ *   product_master categories (bricks/kerbstones and paving). Items with an
+ *   identical mix share one recipe (AGENTS.md §3), labelled by the mix.
+ */
+function buildRecipePlan(productMaster, ratiosMolds) {
+  const productsByCategory = {};
+  const categoryOfProduct  = {};
+  for (const cat of productMaster.categories) {
+    productsByCategory[cat.category_id] = cat.products.map(p => p.product_id);
+    for (const p of cat.products) categoryOfProduct[p.product_id] = cat.category_id;
+  }
+
+  const plan = [];
+  for (const ratCat of ratiosMolds.categories) {
+    if (Array.isArray(ratCat.ratios)) {
+      const productRefs = productsByCategory[ratCat.category_id];
+      if (!productRefs) {
+        console.warn(`  ⚠ ratios category '${ratCat.category_id}' has no product_master category — skipped`);
+        continue;
+      }
+      const base = ratCat.ratios.find(r => /\(base\)/i.test(r.label || ''));
+      for (const ratio of ratCat.ratios) {
+        const isAddOn = /\(add-on\)/i.test(ratio.label || '');
+        if (isAddOn && !base) {
+          console.warn(`  ⚠ ${ratCat.category_id}/${ratio.label} is an add-on but the category has no base ratio — skipped`);
+          continue;
+        }
+        plan.push({
+          categoryRef: ratCat.category_id,
+          colorLabel:  cleanRatioLabel(ratio.label),
+          notes:       isAddOn
+            ? [`Base ratio '${base.label}' plus this color's pigment.`, ratio.notes].filter(Boolean).join(' ')
+            : ratio.notes || null,
+          components:  mergeComponents(isAddOn ? [...base.components, ...ratio.components] : ratio.components),
+          productRefs,
+        });
+      }
+    } else if (Array.isArray(ratCat.items)) {
+      const groups = new Map();
+      for (const item of ratCat.items) {
+        const categoryRef = categoryOfProduct[item.item_id];
+        if (!categoryRef) {
+          console.warn(`  ⚠ ${ratCat.category_id} item '${item.item_id}' is not in product_master — skipped`);
+          continue;
+        }
+        const label = mixLabel(item.ratio);
+        const key = `${categoryRef}|${label}`;
+        if (!groups.has(key)) groups.set(key, { categoryRef, label, components: item.ratio, items: [] });
+        groups.get(key).items.push(item);
+      }
+      for (const g of groups.values()) {
+        plan.push({
+          categoryRef: g.categoryRef,
+          colorLabel:  g.label,
+          notes:       `${ratCat.name} mix shared by: ${g.items.map(i => i.name).join(', ')}.`,
+          components:  mergeComponents(g.components),
+          productRefs: g.items.map(i => i.item_id),
+        });
+      }
+    }
+  }
+  return plan;
+}
+
+/** 'White (base)' → 'White', 'Red (add-on)' → 'Red', missing → 'Plain' */
+function cleanRatioLabel(label) {
+  const clean = (label || '').replace(/\s*\((base|add-on)\)\s*$/i, '').trim();
+  return clean || 'Plain';
+}
+
+/** Deterministic label for a press mix, e.g. 'Cem 1 : Mch 40 : Chip 14' */
+function mixLabel(components) {
+  const short = { cement: 'Cem', mchanga: 'Mch', chip: 'Chip', kokoto: 'Kok', dust: 'Dust', dawa: 'Dawa', rangi: 'Rangi' };
+  return components.map(c => `${short[c.material] || c.material} ${c.quantity ?? '?'}`).join(' : ');
+}
+
+/** recipe_items is unique per (version, material) — refuse silent double-counting. */
+function mergeComponents(components) {
+  const seen = new Set();
+  const out = [];
+  for (const c of components) {
+    const code = materialCodeForName(c.material) || c.material;
+    if (seen.has(code)) {
+      console.warn(`  ⚠ Material '${c.material}' appears twice in one recipe — second entry ignored`);
+      continue;
+    }
+    seen.add(code);
+    out.push(c);
+  }
+  return out;
+}
+
+/** product_id → mold/item (ids match between the two files), with a name fallback. */
+function buildYieldLookup(ratiosMolds) {
+  const byId = {};
+  const byName = {};
+  for (const cat of ratiosMolds.categories) {
+    for (const m of cat.molds || []) {
+      byId[m.mold_id] = m;
+      byName[`${cat.category_id}|${m.name}`] = m;
+    }
+    for (const it of cat.items || []) byId[it.item_id] = it;
+  }
+  return { byId, byName };
+}
+
 // --- Helpers ---------------------------------------------------------------
+
+async function findUserIdByEmail(email) {
+  const target = email.toLowerCase();
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`listUsers failed: ${error.message}`);
+    const hit = data.users.find(u => (u.email || '').toLowerCase() === target);
+    if (hit) return hit.id;
+    if (data.users.length < 1000) return null;
+  }
+}
 
 function materialCodeForName(name) {
   const lower = (name || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -747,6 +901,8 @@ function materialCodeForName(name) {
 }
 
 function unitSymbolToId(unitStr, unitBySymbol) {
+  // 'unit' (used by several ratios in the source) is deliberately NOT mapped:
+  // the notebook does not say which measure it is, so it stays null.
   const map = {
     '50kg bag':   'bag',
     'bag':        'bag',
@@ -764,25 +920,33 @@ function unitSymbolToId(unitStr, unitBySymbol) {
 }
 
 function findCategoryForPriceCategory(priceCat, categoryMap) {
-  // Map price_list_structured category_raw names to category_id_refs
+  // price_list_structured.json `category_raw` (exact strings in the file)
+  // → product_master category_id. Only sections that carry color pricing
+  // need a mapping; the plain sections have no color rules.
   const mapping = {
-    'PAVING BLOCKS (PRESS)':   'press_machine_paving',
-    'FLOOR TILES':             'floor_tiles',
-    'WALL TILES':              'wall_tiles',
-    'PAVING BLOCKS (VIBRO)':   'paving_blocks_vibro',
-    'CURBSTONES':              'curbstones',
-    'TRENCH COVERS':           'trench_covers',
-    'CULVERTS':                'culverts',
-    'NGUZO / POSTS & BICONS':  'posts_and_bicons',
-    'MATOFALI / BLOCKS':       'press_machine_bricks_and_kerbstones',
+    'PAVING BLOCKS (PRESS)':     'press_machine_paving',
+    'PAVING BLOCKS (VIBRATION)': 'paving_blocks_vibro',
+    'FLOOR TILES':               'floor_tiles',
+    'WALL TILES':                'wall_tiles',
   };
   const raw = (priceCat.category_raw || '').trim().toUpperCase();
-  const ref  = mapping[raw];
+  const ref = mapping[raw];
   return ref ? categoryMap[ref] : null;
 }
 
 // --------------------------------------------------------------------------
-main().catch(err => {
-  console.error('\n❌ Seed failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  if (process.argv.includes('--plan')) {
+    for (const r of buildRecipePlan(productMaster, ratiosMolds)) {
+      console.log(`${r.categoryRef.padEnd(38)} ${r.colorLabel.padEnd(36)} ` +
+        `${r.components.map(c => `${c.material}=${c.quantity}`).join(' ')}  → ${r.productRefs.length} products`);
+    }
+  } else {
+    main().catch(err => {
+      console.error('\n❌ Seed failed:', err.message);
+      process.exit(1);
+    });
+  }
+}
+
+module.exports = { buildRecipePlan, buildYieldLookup };
