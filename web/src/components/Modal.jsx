@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-/** Accessible dialog: Escape and backdrop click close it. */
+/**
+ * Accessible dialog: Escape and backdrop click close it. Rendered into
+ * <body> via a portal — page content uses a transform animation, which would
+ * otherwise trap position:fixed inside it (under the sidebar).
+ */
 export default function Modal({ title, onClose, children, footer }) {
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
@@ -9,7 +14,7 @@ export default function Modal({ title, onClose, children, footer }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
@@ -21,6 +26,7 @@ export default function Modal({ title, onClose, children, footer }) {
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

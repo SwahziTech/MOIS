@@ -80,6 +80,25 @@ BEGIN
   EXECUTE 'RESET ROLE';
 END $$;`;
 
+// Deactivation (migration 014): an inactive profile must resolve to no org.
+// Status change + reads happen in a sub-transaction that is always undone.
+const deactivation = `
+DO $$
+DECLARE n bigint;
+BEGIN
+  BEGIN
+    PERFORM set_config('request.jwt.claims', '{}', true); -- trusted context for the status change
+    UPDATE public.profiles SET status = 'inactive' WHERE id = '${ids.testUser}';
+    PERFORM set_config('request.jwt.claims', '${JSON.stringify(testUser)}', true);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    SELECT (SELECT count(*) FROM public.products) + (SELECT count(*) FROM public.branches)
+         + (SELECT count(*) FROM public.organizations) INTO n;
+    RAISE EXCEPTION 'DEACTIVATED_VISIBLE=%', n;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO iso_results(who, test, result) VALUES ('deactivated user', 'read org data after deactivation', SQLERRM);
+  END;
+END $$;`;
+
 const sql = `
 CREATE TEMP TABLE iso_results (seq serial, who text, test text, result text);
 GRANT ALL ON iso_results TO authenticated, anon;
@@ -88,6 +107,7 @@ ${readBlock('test user', testUser)}
 ${writes}
 ${readBlock('stumarcot admin', { sub: ids.stumarcotAdmin, role: 'authenticated' })}
 ${readBlock('anon', { role: 'anon' })}
+${deactivation}
 SELECT who, test, result FROM iso_results ORDER BY seq;`;
 
 const file = path.join(os.tmpdir(), `mois_isolation_${Date.now()}.sql`);
@@ -107,6 +127,7 @@ for (const r of rows) {
   else if (r.who === 'stumarcot admin' && m && m[3] != null) ok = m[3] === '0';
   else if (r.test.startsWith('WRITE')) ok = r.result !== 'WRITE_SUCCEEDED' && !/ROWS_AFFECTED=[1-9]/.test(r.result);
   else if (r.test.startsWith('CONTROL')) ok = r.result === 'WRITE_SUCCEEDED';
+  else if (r.who === 'deactivated user') ok = r.result === 'DEACTIVATED_VISIBLE=0';
   if (/DENIED/.test(r.result) && r.who !== 'anon') ok = false; // reads should filter, not error
   if (!ok) failures.push(r);
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${r.who.padEnd(16)} ${r.test.padEnd(50)} ${r.result}`);
