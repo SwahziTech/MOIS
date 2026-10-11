@@ -24,8 +24,11 @@ export default function App() {
             <Route path="/login"           element={<Login />} />
             <Route path="/signup"          element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password"  element={<ResetPassword />} />
           </Route>
+
+          {/* The recovery link signs the user in, so this page must not sit
+              under AuthLayout (which redirects signed-in users away). */}
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}
           <Route element={<ProtectedLayout />}>

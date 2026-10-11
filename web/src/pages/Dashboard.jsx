@@ -5,7 +5,7 @@ import PageShell from '../components/PageShell';
 
 /** One card per master-data table. `filter` narrows the count query. */
 const STATS = [
-  { key: 'categories', label: 'Product Categories', sub: 'Active categories',    table: 'product_categories',     to: '/products'  },
+  { key: 'categories', label: 'Product Categories', sub: 'In product master',    table: 'product_categories',     to: '/products'  },
   { key: 'products',   label: 'Products',           sub: 'In product master',    table: 'products',               to: '/products'  },
   { key: 'recipes',    label: 'Recipes / BOM',      sub: 'Active recipes',       table: 'recipe_versions',        to: '/recipes',
     filter: q => q.eq('status', 'active') },

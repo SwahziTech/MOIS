@@ -6,6 +6,8 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { ScrollText, Search } from 'lucide-react';
 
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
+
 /*
  * Recipes are shared per category + colour (see migration 011),
  * so each row here is one recipe_version, with its materials and
@@ -34,7 +36,7 @@ export default function Recipes() {
         products:recipe_version_products(count)
       `)
       .order('color_label');
-    if (err) { setError(err.message); setLoading(false); return; }
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     const sorted = (data || []).sort((a, b) =>
       (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0) ||
       (a.category?.name || '').localeCompare(b.category?.name || '')

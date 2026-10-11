@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -14,20 +12,9 @@ function Row({ label, children }) {
 }
 
 export default function Settings() {
-  const { profile, session, userRoles } = useAuth();
-  const [org, setOrg] = useState(null);
+  const { profile, session, userRoles, organization: org } = useAuth();
 
-  useEffect(() => {
-    if (!profile?.organization_id) return;
-    supabase
-      .from('organizations')
-      .select('name, legal_name, status')
-      .eq('id', profile.organization_id)
-      .maybeSingle()
-      .then(({ data }) => setOrg(data));
-  }, [profile?.organization_id]);
-
-  const roles = userRoles.map(ur => ur.role?.name).filter(Boolean);
+  const roles = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))];
 
   return (
     <PageShell title="Settings" subtitle="Organization">

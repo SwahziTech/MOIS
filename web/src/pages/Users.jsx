@@ -7,8 +7,10 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Users, Search, ShieldCheck } from 'lucide-react';
 
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
+
 export default function UsersPage() {
-  const { can } = useAuth();
+  const { organization } = useAuth();
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -17,6 +19,7 @@ export default function UsersPage() {
   async function load() {
     setLoading(true);
     setError('');
+    // Embeds via the user_roles.user_id → profiles.id FK (migration 013).
     const { data, error: err } = await supabase
       .from('profiles')
       .select(`
@@ -25,8 +28,9 @@ export default function UsersPage() {
           role:roles(name)
         )
       `)
+      .eq('organization_id', organization.id)
       .order('created_at');
-    if (err) { setError(err.message); setLoading(false); return; }
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setUsers(data || []);
     setLoading(false);
   }
@@ -55,21 +59,19 @@ export default function UsersPage() {
       title="Users"
       subtitle="Organisation"
       actions={
-        can('users.invite') && (
-          <div className="flex items-center gap-8">
-            <div className="search-wrapper">
-              <Search size={14} className="search-icon" />
-              <input
-                id="users-search"
-                type="search"
-                className="search-input"
-                placeholder="Search users…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
+        <div className="flex items-center gap-8">
+          <div className="search-wrapper">
+            <Search size={14} className="search-icon" />
+            <input
+              id="users-search"
+              type="search"
+              className="search-input"
+              placeholder="Search users…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-        )
+        </div>
       }
     >
       <div className="card">
@@ -99,7 +101,7 @@ export default function UsersPage() {
                         description={
                           search
                             ? `No users match "${search}".`
-                            : 'No users have been created yet. The seed admin user should appear here once logged in.'
+                            : 'No users belong to this organization yet.'
                         }
                       />
                     </td>

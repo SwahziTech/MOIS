@@ -4,7 +4,9 @@ import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
-import { Package, Search, Tag } from 'lucide-react';
+import { Package, Search } from 'lucide-react';
+
+const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
 export default function Products() {
   const [categories,  setCategories]  = useState([]);
@@ -31,8 +33,8 @@ export default function Products() {
         `)
         .order('product_id_ref'),
     ]);
-    if (catRes.error) { setError(catRes.error.message); setLoading(false); return; }
-    if (prodRes.error) { setError(prodRes.error.message); setLoading(false); return; }
+    if (catRes.error) { console.error(catRes.error); setError(LOAD_ERROR); setLoading(false); return; }
+    if (prodRes.error) { console.error(prodRes.error); setError(LOAD_ERROR); setLoading(false); return; }
     setCategories(catRes.data || []);
     setProducts(prodRes.data || []);
     setLoading(false);
