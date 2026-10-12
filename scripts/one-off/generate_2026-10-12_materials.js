@@ -20,7 +20,7 @@ const materialsMaster = read('materials_master.json');
 
 const { buildRecipePlan, canonColor } = require('../seed');
 const {
-  MATERIAL_UNITS, unitSymbolFor, resolveMaterialRef, buildMaterialPlan, productReviewFlags,
+  MATERIAL_UNITS, unitSymbolFor, resolveMaterialRef, isUnpigmented, buildMaterialPlan, productReviewFlags,
 } = require('../lib/materials');
 
 const BRANCHES = ['Mwanza', 'Dar es Salaam', 'Dodoma'];
@@ -102,7 +102,6 @@ for (const s of plan.sources) {
 add(`\n  -- G. Recipe ingredients: generic Mchanga/Rangi → specific materials; 'unit' → bucket`);
 const categoryColours = Object.fromEntries(productMaster.categories.map(c =>
   [c.category_id, new Set((c.color_columns || []).map(canonColor))]));
-const recipeFlags = [];
 for (const r of buildRecipePlan(productMaster, ratiosMolds)) {
   const colourName = canonColor(r.colorLabel);
   const isColour = categoryColours[r.categoryRef]?.has(colourName);
@@ -114,17 +113,18 @@ for (const r of buildRecipePlan(productMaster, ratiosMolds)) {
         AND rv.status = 'active' AND ${isColour ? `cp.name = ${q(colourName)}` : `rv.variant_label = ${q(r.colorLabel)}`})`;
   const tag = `${r.categoryRef}/${label}`;
   for (const comp of r.components) {
-    const target = resolveMaterialRef(comp, { colour: isColour ? colourName : null, sandRef: r.sandRef });
+    const ctx = { colour: isColour ? colourName : null, sandRef: r.sandRef };
     const m = String(comp.material).toLowerCase();
     const legacy = m === 'mchanga' ? 'mchanga_generic' : m.startsWith('rangi') ? 'rangi_generic' : null;
     const unitSym = unitSymbolFor(comp.unit);
-    if (!target) {
-      // e.g. White pigment '—': no line; the recipe gets a review flag instead
-      add(`  DELETE FROM public.recipe_items WHERE recipe_version_id = ${rv} AND material_id = ${mat(legacy)};\n` + assert(1, `G: remove unspecified ${comp.material} from ${tag}`));
-      recipeFlags.push({ rv, code: 'unconfirmed_ingredient',
-        reason: `The source lists '${comp.material}' for ${r.categoryRef} / ${label} with no quantity or type ('—'). Confirm whether this recipe uses it.` });
+    if (isUnpigmented(comp, ctx)) {
+      // White is unpigmented by design ('—' = recorded zero): remove the old
+      // zero-quantity pigment placeholder line; no flag
+      add(`  DELETE FROM public.recipe_items WHERE recipe_version_id = ${rv} AND material_id = ${mat(legacy)};\n` + assert(1, `G: remove zero pigment line from ${tag}`));
       continue;
     }
+    const target = resolveMaterialRef(comp, ctx);
+    if (!target) throw new Error(`No material for '${comp.material}' in ${tag}`);
     if (legacy) {
       add(`  UPDATE public.recipe_items SET material_id = ${mat(target)}, unit_id = ${unit(unitSym)}
     WHERE recipe_version_id = ${rv} AND material_id = ${mat(legacy)};\n` + assert(1, `G: ${comp.material} → ${target} in ${tag}`));
@@ -164,11 +164,10 @@ for (const f of plan.flags) add(flag('material', mat(f.ref), f.code, f.reason));
 for (const f of productReviewFlags(productMaster)) {
   add(flag('product', `(SELECT id FROM public.products WHERE organization_id = org AND product_id_ref = ${q(f.ref)})`, f.code, f.reason));
 }
-for (const f of recipeFlags) add(flag('recipe_version', f.rv, f.code, f.reason));
 
 add(`END $$;`);
 
 const file = path.join(__dirname, '2026-10-12_stumarcot_materials.sql');
 fs.writeFileSync(file, out.join('\n') + '\n');
 console.log(`wrote ${path.relative(process.cwd(), file)}: ${plan.materials.length} materials, ${plan.conversions.length} conversions, ` +
-            `${plan.sources.length} sources, ${plan.flags.length + productReviewFlags(productMaster).length + recipeFlags.length} flags`);
+            `${plan.sources.length} sources, ${plan.flags.length + productReviewFlags(productMaster).length} flags`);

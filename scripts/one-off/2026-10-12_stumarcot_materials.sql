@@ -306,7 +306,7 @@ BEGIN
       WHERE rv.organization_id = org AND pc.category_id_ref = 'floor_tiles' AND rv.version_number = 1
         AND rv.status = 'active' AND cp.name = 'White') AND material_id = (SELECT id FROM public.materials WHERE organization_id = org AND material_id_ref = 'rangi_generic');
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION 'G: remove unspecified rangi from floor_tiles/White: expected 1, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION 'G: remove zero pigment line from floor_tiles/White: expected 1, got %', n; END IF;
 
   UPDATE public.recipe_items SET unit_id = (SELECT id FROM public.units WHERE organization_id = org AND symbol = 'bag')
     WHERE recipe_version_id = (SELECT rv.id FROM public.recipe_versions rv
@@ -521,7 +521,7 @@ BEGIN
       WHERE rv.organization_id = org AND pc.category_id_ref = 'wall_tiles' AND rv.version_number = 1
         AND rv.status = 'active' AND cp.name = 'White') AND material_id = (SELECT id FROM public.materials WHERE organization_id = org AND material_id_ref = 'rangi_generic');
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION 'G: remove unspecified rangi from wall_tiles/White: expected 1, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION 'G: remove zero pigment line from wall_tiles/White: expected 1, got %', n; END IF;
 
   UPDATE public.recipe_items SET unit_id = (SELECT id FROM public.units WHERE organization_id = org AND symbol = 'bag')
     WHERE recipe_version_id = (SELECT rv.id FROM public.recipe_versions rv
@@ -1380,27 +1380,5 @@ BEGIN
       AND f.entity_type = 'product' AND f.entity_id = e.id::text AND f.reason_code = 'unresolved_identity');
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'J: flag product unresolved_identity: expected 1, got %', n; END IF;
-
-  INSERT INTO public.review_flags (organization_id, entity_type, entity_id, reason_code, reason)
-    SELECT org, 'recipe_version', e.id::text, 'unconfirmed_ingredient', 'The source lists ''rangi'' for floor_tiles / White with no quantity or type (''—''). Confirm whether this recipe uses it.' FROM (SELECT (SELECT rv.id FROM public.recipe_versions rv
-      JOIN public.product_categories pc ON pc.id = rv.category_id
-      LEFT JOIN public.color_palette cp ON cp.id = rv.color_id
-      WHERE rv.organization_id = org AND pc.category_id_ref = 'floor_tiles' AND rv.version_number = 1
-        AND rv.status = 'active' AND cp.name = 'White') AS id) e
-    WHERE e.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.review_flags f WHERE f.organization_id = org
-      AND f.entity_type = 'recipe_version' AND f.entity_id = e.id::text AND f.reason_code = 'unconfirmed_ingredient');
-  GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION 'J: flag recipe_version unconfirmed_ingredient: expected 1, got %', n; END IF;
-
-  INSERT INTO public.review_flags (organization_id, entity_type, entity_id, reason_code, reason)
-    SELECT org, 'recipe_version', e.id::text, 'unconfirmed_ingredient', 'The source lists ''rangi'' for wall_tiles / White with no quantity or type (''—''). Confirm whether this recipe uses it.' FROM (SELECT (SELECT rv.id FROM public.recipe_versions rv
-      JOIN public.product_categories pc ON pc.id = rv.category_id
-      LEFT JOIN public.color_palette cp ON cp.id = rv.color_id
-      WHERE rv.organization_id = org AND pc.category_id_ref = 'wall_tiles' AND rv.version_number = 1
-        AND rv.status = 'active' AND cp.name = 'White') AS id) e
-    WHERE e.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.review_flags f WHERE f.organization_id = org
-      AND f.entity_type = 'recipe_version' AND f.entity_id = e.id::text AND f.reason_code = 'unconfirmed_ingredient');
-  GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION 'J: flag recipe_version unconfirmed_ingredient: expected 1, got %', n; END IF;
 
 END $$;

@@ -34,7 +34,16 @@ const BUCKETS_PER_TRUCK = 2500;
 
 // Pigment per recipe colour. Grey uses Rangi Black — notebook glossary
 // "Rangi(Red and Black for both black and grey)"; confirmed 2026-10-12.
+// White has none: it is the natural, unpigmented colour of concrete — the
+// notebook's "—" for White is a recorded zero, not missing data (confirmed
+// by the tenant 2026-10-12). A White recipe therefore has no pigment line.
 const PIGMENT_BY_COLOUR = { Red: 'rangi_red', Black: 'rangi_black', Grey: 'rangi_black' };
+
+/** True when a recipe ingredient is pigment for a colour that takes none. */
+function isUnpigmented(component, ctx) {
+  return String(component.material || '').toLowerCase() === 'rangi'
+    && ctx.colour != null && !(ctx.colour in PIGMENT_BY_COLOUR);
+}
 
 // Generic ingredient names used in ratios_and_molds.json → material_id
 const INGREDIENT_REF = {
@@ -142,5 +151,5 @@ function productReviewFlags(productMaster) {
 
 module.exports = {
   UNIT_ALIASES, MATERIAL_UNITS, BUCKETS_PER_TRUCK, PIGMENT_BY_COLOUR,
-  unitSymbolFor, resolveMaterialRef, buildMaterialPlan, productReviewFlags,
+  unitSymbolFor, resolveMaterialRef, isUnpigmented, buildMaterialPlan, productReviewFlags,
 };

@@ -40,7 +40,7 @@ const ratiosMolds         = JSON.parse(fs.readFileSync(path.join(DOCS, 'ratios_a
 const priceListStructured = JSON.parse(fs.readFileSync(path.join(DOCS, 'price_list_structured.json'), 'utf8'));
 const materialsMaster     = JSON.parse(fs.readFileSync(path.join(DOCS, 'materials_master.json'), 'utf8'));
 const {
-  MATERIAL_UNITS, unitSymbolFor, resolveMaterialRef, buildMaterialPlan, productReviewFlags,
+  MATERIAL_UNITS, unitSymbolFor, resolveMaterialRef, isUnpigmented, buildMaterialPlan, productReviewFlags,
 } = require('./lib/materials');
 
 let supabase; // created in main() — not needed for --plan
@@ -529,7 +529,6 @@ async function seedWithOrg(org) {
   let recipeItemCount    = 0;
   let recipeProductLinks = 0;
   let archivedCount      = 0;
-  const pendingFlags     = []; // review flags raised while building recipes
 
   // A recipe label that names one of its category's colours is a colour
   // recipe (color_id); anything else is a named variant (variant_label).
@@ -582,15 +581,11 @@ async function seedWithOrg(org) {
 
     // Insert recipe items (ingredients)
     for (const comp of recipe.components) {
-      const materialRef = resolveMaterialRef(comp, { colour: key.color_id ? key.display : null, sandRef: recipe.sandRef });
+      const ingredientCtx = { colour: key.color_id ? key.display : null, sandRef: recipe.sandRef };
+      if (isUnpigmented(comp, ingredientCtx)) continue; // White: no pigment by design
+      const materialRef = resolveMaterialRef(comp, ingredientCtx);
       if (!materialRef) {
-        if (comp.quantity == null) {
-          // e.g. pigment on a White recipe, '—' in the notebook: no line, but flag it
-          pendingFlags.push({ entity: 'recipe_version', id: rvId, code: 'unconfirmed_ingredient',
-            reason: `The source lists '${comp.material}' for ${recipe.categoryRef} / ${key.display} with no quantity or type ('—'). Confirm whether this recipe uses it.` });
-        } else {
-          console.warn(`  ⚠ Unknown material '${comp.material}' in ${recipe.categoryRef}/${key.display}`);
-        }
+        console.warn(`  ⚠ Unknown material '${comp.material}' in ${recipe.categoryRef}/${key.display}`);
         continue;
       }
       const matId  = materialByRef[materialRef];
@@ -844,7 +839,6 @@ async function seedWithOrg(org) {
   const flagsWanted = [
     ...materialPlan.flags.map(f => ({ entity: f.entity, id: materialByRef[f.ref], code: f.code, reason: f.reason })),
     ...productReviewFlags(productMaster).map(f => ({ entity: f.entity, id: productMap[f.ref], code: f.code, reason: f.reason })),
-    ...pendingFlags,
   ];
   let flagsRaised = 0;
   for (const f of flagsWanted) {
