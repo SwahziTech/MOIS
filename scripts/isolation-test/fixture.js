@@ -48,5 +48,6 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   const { data: admin } = await sb.from('profiles').select('id').eq('organization_id', stuma.id).limit(1).single();
   const { data: stumaRole } = await sb.from('roles').select('id').eq('organization_id', stuma.id).eq('name', 'owner').single();
   const { data: stumaCat } = await sb.from('product_categories').select('id').eq('organization_id', stuma.id).limit(1).single();
-  console.log(JSON.stringify({ testOrg: org.id, testUser: userId, stumarcotOrg: stuma.id, stumarcotAdmin: admin.id, stumarcotOwnerRole: stumaRole.id, stumarcotCategory: stumaCat.id }));
+  const { data: stumaUnit } = await sb.from('units').select('id').eq('organization_id', stuma.id).limit(1).single();
+  console.log(JSON.stringify({ testOrg: org.id, testUser: userId, stumarcotOrg: stuma.id, stumarcotAdmin: admin.id, stumarcotOwnerRole: stumaRole.id, stumarcotCategory: stumaCat.id, stumarcotUnit: stumaUnit.id }));
 })().catch(e => { console.error('FIXTURE FAILED:', e.message); process.exit(1); });

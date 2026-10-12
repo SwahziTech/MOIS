@@ -48,7 +48,7 @@ export default function Pricing() {
         .from('category_color_pricing_rules')
         .select(`
           id, category_id, pricing_type,
-          base:color_palette(name),
+          base:color_palette!category_color_pricing_rules_base_color_id_fkey(name),
           items:category_color_price_items(amount, color:color_palette(name, display_order)),
           category:product_categories(name, sort_order),
           branch:branches(id, name)

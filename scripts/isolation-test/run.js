@@ -67,7 +67,7 @@ DECLARE n bigint;
 BEGIN
   PERFORM set_config('request.jwt.claims', '${JSON.stringify(testUser)}', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
-  ${attempt('WRITE insert product into other tenant', `INSERT INTO public.products (organization_id, category_id, product_id_ref, canonical_name) VALUES ('${S}','${ids.stumarcotCategory}','iso_probe','probe')`)}
+  ${attempt('WRITE insert product into other tenant', `INSERT INTO public.products (organization_id, category_id, unit_id, product_id_ref, canonical_name) VALUES ('${S}','${ids.stumarcotCategory}','${ids.stumarcotUnit}','iso_probe','probe')`)}
   ${attempt('WRITE update other tenant products', `UPDATE public.products SET canonical_name = 'hacked' WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE delete other tenant products', `DELETE FROM public.products WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update other tenant org', `UPDATE public.organizations SET name = 'hacked' WHERE id = '${S}'`, true)}
@@ -76,7 +76,7 @@ BEGIN
   ${attempt('WRITE move own profile into other tenant', `UPDATE public.profiles SET organization_id = '${S}' WHERE id = '${ids.testUser}'`, true)}
   ${attempt('WRITE update other tenant pricing', `UPDATE public.product_branch_pricing SET price_per_unit_inclusive = 1 WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update permissions catalog', `UPDATE public.permissions SET description = 'x'`, true)}
-  ${attempt('CONTROL insert product into own org', `INSERT INTO public.products (organization_id, category_id, product_id_ref, canonical_name) SELECT '${T}', id, 'iso_control', 'control' FROM public.product_categories WHERE organization_id = '${T}' LIMIT 1`)}
+  ${attempt('CONTROL insert product into own org', `INSERT INTO public.products (organization_id, category_id, unit_id, product_id_ref, canonical_name) SELECT '${T}', c.id, c.default_unit_id, 'iso_control', 'control' FROM public.product_categories c WHERE c.organization_id = '${T}' LIMIT 1`)}
   EXECUTE 'RESET ROLE';
 END $$;`;
 
