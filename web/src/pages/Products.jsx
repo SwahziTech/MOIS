@@ -22,14 +22,15 @@ export default function Products() {
     const [catRes, prodRes] = await Promise.all([
       supabase
         .from('product_categories')
-        .select('id, name, category_id_ref, display_format, stock_unit, sort_order')
+        .select('id, name, category_id_ref, display_format, sort_order')
         .order('sort_order'),
       supabase
         .from('products')
         .select(`
           id, product_id_ref, canonical_name, size_cm,
           pcs_per_sqm, wastani_per_bag, status, notes,
-          category:product_categories(id, name, display_format, stock_unit)
+          category:product_categories(id, name, display_format),
+          unit:units(symbol, name)
         `)
         .order('product_id_ref'),
     ]);
@@ -155,8 +156,8 @@ export default function Products() {
                           : <span style={{ color: 'var(--color-warning)' }} title="Not yet confirmed">?</span>}
                       </td>
                       <td>
-                        <span className={`badge ${p.category?.stock_unit === 'SQM' ? 'badge-info' : 'badge-neutral'}`}>
-                          {p.category?.stock_unit || '—'}
+                        <span className="badge badge-neutral" title={p.unit?.name}>
+                          {p.unit?.symbol || '—'}
                         </span>
                       </td>
                       <td>

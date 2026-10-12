@@ -354,7 +354,8 @@ async function seedWithOrg(org) {
       name:            cat.category_id.replace(/_/g, ' ')
                          .replace(/\b\w/g, c => c.toUpperCase()),
       display_format:  cat.display_format,
-      stock_unit:      cat.stock_unit,
+      // Suggested unit for new products in this category (migration 015)
+      default_unit_id: requireUnit(unitBySymbol, cat.stock_unit, `category ${cat.category_id}`),
       color_columns:   cat.color_columns || null,
       sort_order:      i,
     };
@@ -403,6 +404,8 @@ async function seedWithOrg(org) {
         category_id:     categoryMap[cat.category_id],
         product_id_ref:  p.product_id,
         canonical_name:  p.canonical_name,
+        // Stock unit is fixed per product (AGENTS.md §3); product_master sets it per category
+        unit_id:         requireUnit(unitBySymbol, p.stock_unit ?? cat.stock_unit, `product ${p.product_id}`),
         size_cm:         p.size_cm != null ? String(p.size_cm) : null,
         pcs_per_sqm:     p.pcs_per_sqm ?? null,
         wastani_per_bag: masterYield ?? moldYield,
@@ -907,6 +910,12 @@ function buildYieldLookup(ratiosMolds) {
 }
 
 // --- Helpers ---------------------------------------------------------------
+
+function requireUnit(unitBySymbol, symbol, what) {
+  const id = unitBySymbol[symbol];
+  if (!id) throw new Error(`No unit '${symbol}' in this organization's units table (needed by ${what})`);
+  return id;
+}
 
 async function findUserIdByEmail(email) {
   const target = email.toLowerCase();
