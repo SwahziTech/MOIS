@@ -53,5 +53,22 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   const { data: stumaRole } = await sb.from('roles').select('id').eq('organization_id', stuma.id).eq('name', 'owner').single();
   const { data: stumaCat } = await sb.from('product_categories').select('id').eq('organization_id', stuma.id).limit(1).single();
   const { data: stumaUnit } = await sb.from('units').select('id').eq('organization_id', stuma.id).limit(1).single();
-  console.log(JSON.stringify({ testOrg: org.id, testUser: userId, stumarcotOrg: stuma.id, stumarcotAdmin: admin.id, stumarcotOwnerRole: stumaRole.id, stumarcotCategory: stumaCat.id, stumarcotUnit: stumaUnit.id }));
+  const { data: stumaWh } = await sb.from('warehouses').select('id').eq('organization_id', stuma.id).limit(1).single();
+  const { data: testWh } = await sb.from('warehouses').select('id').eq('organization_id', org.id).limit(1).single();
+  const { data: testProduct } = await sb.from('products').select('id, unit_id').eq('organization_id', org.id).eq('product_id_ref', 'test_secret_product').single();
+  // Inventory data in the test org, so other tenants' reads are tested against real rows
+  // (service role: the ledger takes inserts only from server side or the posting function)
+  await must(sb.from('suppliers').upsert({ organization_id: org.id, name: 'TEST ORG SECRET SUPPLIER' }, { onConflict: 'organization_id,name' }), 'supplier');
+  const { count: ledgerRows } = await sb.from('inventory_movements').select('id', { count: 'exact', head: true }).eq('organization_id', org.id);
+  if (!ledgerRows) {
+    const { data: twh } = await sb.from('warehouses').select('id, branch_id').eq('organization_id', org.id).limit(1).single();
+    const { data: tp } = await sb.from('products').select('id, unit_id').eq('organization_id', org.id).eq('product_id_ref', 'test_secret_product').single();
+    const mov = await must(sb.from('inventory_movements').insert({ organization_id: org.id, movement_type: 'opening_balance',
+      branch_id: twh.branch_id, warehouse_id: twh.id, movement_date: '2026-10-12', created_by: userId, notes: 'isolation fixture' }).select('id').single(), 'movement');
+    await must(sb.from('inventory_transactions').insert({ organization_id: org.id, movement_id: mov.id, transaction_type: 'opening_balance',
+      branch_id: twh.branch_id, warehouse_id: twh.id, product_id: tp.id, quantity: 7, stock_unit_id: tp.unit_id,
+      entered_quantity: 7, entered_unit_id: tp.unit_id, transaction_date: '2026-10-12', created_by: userId }), 'ledger row');
+  }
+  console.log(JSON.stringify({ stumarcotWarehouse: stumaWh.id, testWarehouse: testWh.id, testProduct: testProduct.id, testProductUnit: testProduct.unit_id,
+    testOrg: org.id, testUser: userId, stumarcotOrg: stuma.id, stumarcotAdmin: admin.id, stumarcotOwnerRole: stumaRole.id, stumarcotCategory: stumaCat.id, stumarcotUnit: stumaUnit.id }));
 })().catch(e => { console.error('FIXTURE FAILED:', e.message); process.exit(1); });

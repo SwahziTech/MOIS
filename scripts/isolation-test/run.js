@@ -26,7 +26,8 @@ const TABLES = ['organizations','branches','warehouses','profiles','roles','role
   'product_categories','products','product_branch_pricing','category_color_pricing_rules',
   'recipe_versions','recipe_items','recipe_version_products','permissions',
   'color_palette','product_category_colors','category_color_price_items',
-  'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log'];
+  'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log',
+  'suppliers','inventory_movements','inventory_transactions','stock_balances'];
 
 const readBlock = (who, claims) => `
 DO $$
@@ -78,6 +79,10 @@ BEGIN
   ${attempt('WRITE move own profile into other tenant', `UPDATE public.profiles SET organization_id = '${S}' WHERE id = '${ids.testUser}'`, true)}
   ${attempt('WRITE update other tenant pricing', `UPDATE public.product_branch_pricing SET price_per_unit_inclusive = 1 WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update permissions catalog', `UPDATE public.permissions SET description = 'x'`, true)}
+  ${attempt('WRITE post stock into other tenant warehouse', `PERFORM public.post_inventory_movement(jsonb_build_object('type','opening_balance','warehouse_id','${ids.stumarcotWarehouse}','lines',jsonb_build_array(jsonb_build_object('product_id','${ids.testProduct}','quantity',1,'unit_id','${ids.testProductUnit}'))))`)}
+  ${attempt('WRITE insert supplier into other tenant', `INSERT INTO public.suppliers (organization_id, name) VALUES ('${S}', 'iso_probe')`)}
+  ${attempt('WRITE insert ledger row directly', `INSERT INTO public.inventory_movements (organization_id, movement_type, branch_id, warehouse_id, movement_date, created_by) SELECT '${T}', 'adjustment', w.branch_id, w.id, current_date, '${ids.testUser}' FROM public.warehouses w WHERE w.id = '${ids.testWarehouse}'`)}
+  ${attempt('CONTROL post stock in own warehouse', `PERFORM public.post_inventory_movement(jsonb_build_object('type','receipt','warehouse_id','${ids.testWarehouse}','lines',jsonb_build_array(jsonb_build_object('product_id','${ids.testProduct}','quantity',1,'unit_id','${ids.testProductUnit}'))))`)}
   ${attempt('CONTROL insert product into own org', `INSERT INTO public.products (organization_id, category_id, unit_id, product_id_ref, canonical_name) SELECT '${T}', c.id, c.default_unit_id, 'iso_control', 'control' FROM public.product_categories c WHERE c.organization_id = '${T}' LIMIT 1`)}
   EXECUTE 'RESET ROLE';
 END $$;`;
