@@ -1,118 +1,634 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Layers, Plus, Search, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { dbErrorMessage, slugify } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
+import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
-import { Beaker, Search } from 'lucide-react';
+import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
+const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
 
+/*
+ * Materials master (migration 019): a material is defined once for the
+ * organization — category, stock unit, unit conversions — and each branch
+ * records where it buys it and in which unit. No stock or prices here;
+ * those arrive with the inventory ledger (1b).
+ */
 export default function Materials() {
-  const [materials, setMaterials] = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState('');
-  const [search,    setSearch]    = useState('');
+  const { organization, canManage } = useAuth();
+  const canWriteMaterials = canManage('materials.manage');
+  const canWriteUnits = canManage('materials.manage') || canManage('products.manage');
+
+  const [tab, setTab] = useState('materials');
+  const [materials,  setMaterials]  = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [units,      setUnits]      = useState([]);
+  const [branches,   setBranches]   = useState([]);
+  const [usage,      setUsage]      = useState({});   // material id → { active, any }
+  const [unitUse,    setUnitUse]    = useState({});   // unit id → count of uses
+  const [openFlags,  setOpenFlags]  = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [search,  setSearch]  = useState('');
+  const [filter,  setFilter]  = useState('active');
+  const [editing, setEditing] = useState(null);       // { kind: 'material'|'category'|'unit', row }
 
   async function load() {
-    setLoading(true);
     setError('');
-    const { data, error: err } = await supabase
-      .from('materials')
-      .select(`
-        id, name, code, status, notes,
-        unit:units!materials_unit_id_fkey(symbol, name)
-      `)
-      .order('name');
+    const [matRes, catRes, unitRes, branchRes, itemRes, flagRes, prodRes] = await Promise.all([
+      supabase.from('materials').select(`
+          id, name, material_id_ref, category_id, stock_unit_id, status, notes,
+          conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes),
+          sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, is_primary, status, notes)
+        `).order('name'),
+      supabase.from('material_categories').select('id, name, display_order, status').order('display_order').order('name'),
+      supabase.from('units').select('id, symbol, name, notes, status').order('symbol'),
+      supabase.from('branches').select('id, name, status').order('name'),
+      supabase.from('recipe_items').select('material_id, unit_id, recipe:recipe_versions(status)'),
+      supabase.from('review_flags').select('entity_id').eq('entity_type', 'material').eq('status', 'open'),
+      supabase.from('products').select('unit_id'),
+    ]);
+    const err = matRes.error || catRes.error || unitRes.error || branchRes.error || itemRes.error || flagRes.error || prodRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
-    setMaterials(data || []);
+
+    const use = {};
+    const uUse = {};
+    const bump = id => { if (id) uUse[id] = (uUse[id] || 0) + 1; };
+    for (const it of itemRes.data || []) {
+      const u = (use[it.material_id] ??= { active: 0, any: 0 });
+      u.any++;
+      if (it.recipe?.status === 'active') u.active++;
+      bump(it.unit_id);
+    }
+    for (const m of matRes.data || []) {
+      bump(m.stock_unit_id);
+      m.conversions.forEach(c => bump(c.unit_id));
+      m.sources.forEach(s => bump(s.purchase_unit_id));
+    }
+    (prodRes.data || []).forEach(p => bump(p.unit_id));
+    const flags = {};
+    for (const f of flagRes.data || []) flags[f.entity_id] = (flags[f.entity_id] || 0) + 1;
+
+    setMaterials(matRes.data || []);
+    setCategories(catRes.data || []);
+    setUnits(unitRes.data || []);
+    setBranches((branchRes.data || []).filter(b => b.status === 'active'));
+    setUsage(use);
+    setUnitUse(uUse);
+    setOpenFlags(flags);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  const filtered = !search
-    ? materials
-    : materials.filter(m =>
-        m.name.toLowerCase().includes(search.toLowerCase()) ||
-        (m.code || '').toLowerCase().includes(search.toLowerCase())
-      );
+  const unitById = useMemo(() => Object.fromEntries(units.map(u => [u.id, u])), [units]);
+  const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c])), [categories]);
+  const q = search.trim().toLowerCase();
+  const shown = materials.filter(m =>
+    (filter === 'all' || (filter === 'review' ? openFlags[m.id] : m.status === filter)) &&
+    (!q || m.name.toLowerCase().includes(q) || (m.material_id_ref || '').toLowerCase().includes(q)));
+  const reviewCount = materials.filter(m => openFlags[m.id]).length;
+
+  const addLabel = { materials: 'Add material', categories: 'Add category', units: 'Add unit' }[tab];
+  const canAdd = tab === 'units' ? canWriteUnits : canWriteMaterials;
+  const close = () => setEditing(null);
+  const saved = async () => { setEditing(null); await load(); };
 
   return (
     <PageShell
       title="Materials"
       subtitle="Master Data"
       actions={
-        <div className="search-wrapper">
-          <Search size={14} className="search-icon" />
-          <input
-            id="materials-search"
-            type="search"
-            className="search-input"
-            placeholder="Search materials…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-8">
+          {tab === 'materials' && (
+            <div className="search-wrapper">
+              <Search size={14} className="search-icon" />
+              <input id="materials-search" type="search" className="search-input" placeholder="Search materials…"
+                value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
+          {canAdd && (
+            <button type="button" className="btn btn-primary"
+              onClick={() => setEditing({ kind: { materials: 'material', categories: 'category', units: 'unit' }[tab], row: {} })}>
+              <Plus size={14} /> {addLabel}
+            </button>
+          )}
         </div>
       }
     >
+      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
+        <div className="filter-chips">
+          {[['materials', 'Materials'], ['categories', 'Material categories'], ['units', 'Units']].map(([k, l]) => (
+            <button key={k} type="button" className={`filter-chip${tab === k ? ' is-on' : ''}`} onClick={() => setTab(k)}>{l}</button>
+          ))}
+        </div>
+        {tab === 'materials' && (
+          <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Show"
+            value={filter} onChange={e => setFilter(e.target.value)}>
+            <option value="active">Active</option>
+            <option value="review">Needs review ({reviewCount})</option>
+            <option value="inactive">Inactive</option>
+            <option value="all">All</option>
+          </select>
+        )}
+      </div>
+
       <div className="card">
-        {error ? (
-          <ErrorState message={error} onRetry={load} />
-        ) : (
+        {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Name</th>
-                  <th>Default Unit</th>
-                  <th>Notes</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyState
-                        icon={Beaker}
-                        title="No materials found"
-                        description={search ? `No materials match "${search}".` : 'No materials seeded yet.'}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map(m => (
-                    <tr key={m.id}>
-                      <td>
-                        <code style={{ fontSize: 'var(--text-xs)', background: 'var(--bg-canvas)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>
-                          {m.code || '—'}
-                        </code>
-                      </td>
-                      <td style={{ fontWeight: 500 }}>{m.name}</td>
-                      <td>{m.unit ? `${m.unit.symbol} (${m.unit.name})` : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', maxWidth: 280 }}>{m.notes || '—'}</td>
-                      <td>
-                        <span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>
-                          {m.status}
-                        </span>
-                      </td>
+            {tab === 'materials' && (
+              <table>
+                <thead>
+                  <tr><th>Material</th><th>Category</th><th>Stock unit</th><th>Also counted in</th><th>Sources</th><th>Status</th>{canWriteMaterials && <th aria-label="Actions" />}</tr>
+                </thead>
+                <tbody>
+                  {loading ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+                  : shown.length === 0 ? (
+                    <tr><td colSpan={7}><EmptyState icon={Layers} title="No materials in this view" description={search ? `No materials match "${search}".` : ''} /></td></tr>
+                  ) : shown.map(m => {
+                    const stock = unitById[m.stock_unit_id];
+                    const activeSources = m.sources.filter(s => s.status === 'active');
+                    return (
+                      <tr key={m.id}>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>
+                            {m.name}
+                            {openFlags[m.id] > 0 && <span className="badge badge-warning" style={{ marginLeft: 8 }}><Flag size={11} /> needs review</span>}
+                          </div>
+                          <div className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{m.material_id_ref || '—'}</div>
+                        </td>
+                        <td className="text-muted">{catById[m.category_id]?.name || '—'}</td>
+                        <td>{stock ? <span className="badge badge-neutral" title={stock.name}>{stock.symbol}</span> : <span className="text-muted">not set</span>}</td>
+                        <td className="text-xs">
+                          {m.conversions.length ? m.conversions.map(c => (
+                            <div key={c.unit_id}>1 {unitById[c.unit_id]?.symbol} = {+Number(c.factor_to_stock_unit).toPrecision(6)} {stock?.symbol}</div>
+                          )) : <span className="text-muted">—</span>}
+                        </td>
+                        <td className="text-xs">
+                          {branches.map(b => {
+                            const here = activeSources.filter(s => s.branch_id === b.id);
+                            return (
+                              <div key={b.id}>
+                                <span className="text-muted">{b.name}:</span>{' '}
+                                {here.length ? here.map(s => s.source_name + (s.is_primary && here.length > 1 ? ' (primary)' : '')).join(', ') : <span className="text-muted">—</span>}
+                              </div>
+                            );
+                          })}
+                        </td>
+                        <td><span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{m.status}</span></td>
+                        {canWriteMaterials && (
+                          <td style={{ textAlign: 'right' }}>
+                            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {tab === 'categories' && (
+              <table>
+                <thead><tr><th>Category</th><th>Order</th><th>Materials</th><th>Status</th>{canWriteMaterials && <th aria-label="Actions" />}</tr></thead>
+                <tbody>
+                  {loading ? <SkeletonRow cols={5} /> : categories.length === 0 ? (
+                    <tr><td colSpan={5}><EmptyState icon={Layers} title="No material categories yet" description="Group materials, e.g. aggregates or pigments." /></td></tr>
+                  ) : categories.map(c => (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 500 }}>{c.name}</td>
+                      <td className="text-muted">{c.display_order}</td>
+                      <td className="text-muted">{materials.filter(m => m.category_id === c.id && m.status === 'active').length}</td>
+                      <td><span className={`badge ${c.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{c.status}</span></td>
+                      {canWriteMaterials && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'category', row: c })}>Edit</button></td>}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {!loading && filtered.length > 0 && (
-              <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                {filtered.length} material{filtered.length !== 1 ? 's' : ''}
-              </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {tab === 'units' && (
+              <table>
+                <thead><tr><th>Symbol</th><th>Name</th><th>Notes</th><th>In use</th><th>Status</th>{canWriteUnits && <th aria-label="Actions" />}</tr></thead>
+                <tbody>
+                  {loading ? <SkeletonRow cols={6} /> : units.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 500 }}>{u.symbol}</td>
+                      <td>{u.name}</td>
+                      <td className="text-xs text-muted">{u.notes || '—'}</td>
+                      <td className="text-muted">{unitUse[u.id] ? `${unitUse[u.id]}×` : '—'}</td>
+                      <td><span className={`badge ${u.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{u.status}</span></td>
+                      {canWriteUnits && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'unit', row: u })}>Edit</button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         )}
       </div>
+
+      {editing?.kind === 'material' && (
+        <MaterialModal material={materials.find(m => m.id === editing.row.id) ?? editing.row} organizationId={organization.id} materials={materials}
+          categories={categories} units={units} branches={branches} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
+          onClose={close} onSaved={saved} onChanged={load} />
+      )}
+      {editing?.kind === 'category' && (
+        <SimpleModal title="material category" table="material_categories" entityType="material_category"
+          row={editing.row} organizationId={organization.id}
+          fields={[{ key: 'name', label: 'Name', required: true }, { key: 'display_order', label: 'Display order', type: 'number', default: Math.max(0, ...categories.map(c => c.display_order)) + 1 }]}
+          inactiveNote="Inactive — not offered when choosing a category. Materials already in it keep it."
+          onClose={close} onSaved={saved} />
+      )}
+      {editing?.kind === 'unit' && (
+        <SimpleModal title="unit" table="units" entityType="unit" row={editing.row} organizationId={organization.id}
+          fields={[{ key: 'symbol', label: 'Symbol', required: true }, { key: 'name', label: 'Name', required: true }, { key: 'notes', label: 'Notes' }]}
+          inactiveNote={`Inactive — not offered for new choices.${unitUse[editing.row.id] ? ` Everything already using it (${unitUse[editing.row.id]}×) keeps it.` : ''}`}
+          onClose={close} onSaved={saved} />
+      )}
     </PageShell>
+  );
+}
+
+/** Name-style master records with a status column: material categories, units */
+function SimpleModal({ title, table, entityType, row, organizationId, fields, inactiveNote, onClose, onSaved }) {
+  const isNew = !row.id;
+  const [values, setValues] = useState(Object.fromEntries(fields.map(f => [f.key, row[f.key] ?? f.default ?? ''])));
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    const out = Object.fromEntries(fields.map(f => [f.key,
+      f.type === 'number' ? Number(values[f.key]) || 0 : (String(values[f.key]).trim() || null)]));
+    setBusy(true);
+    const { error: err } = isNew
+      ? await supabase.from(table).insert({ ...out, organization_id: organizationId })
+      : await supabase.from(table).update(out).eq('id', row.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  async function toggle() {
+    setBusy(true);
+    const { error: err } = await supabase.from(table).update({ status: row.status === 'active' ? 'inactive' : 'active' }).eq('id', row.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  return (
+    <Modal title={isNew ? `Add ${title}` : `Edit ${row.name || row.symbol}`} onClose={onClose}
+      footer={<>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="submit" form="simple-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`}
+          disabled={busy || fields.some(f => f.required && !String(values[f.key]).trim())}>Save</button>
+      </>}>
+      <form id="simple-form" className="modal-form" onSubmit={save}>
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {fields.map((f, i) => (
+          <div key={f.key} className="form-group">
+            <label className="form-label" htmlFor={`sf-${f.key}`}>{f.label}</label>
+            <input id={`sf-${f.key}`} className="form-input" type={f.type || 'text'} required={f.required} autoFocus={i === 0}
+              value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))} />
+          </div>
+        ))}
+        {!isNew && (
+          <section>
+            <h3 className="modal-section-title">Status</h3>
+            <p className="text-sm text-muted" style={{ marginBottom: 8 }}>{row.status === 'active' ? 'Deactivating hides it from new choices.' : inactiveNote}</p>
+            <button type="button" className="btn btn-outline" disabled={busy} onClick={toggle}>
+              {row.status === 'active' ? 'Deactivate' : 'Reactivate'}
+            </button>
+          </section>
+        )}
+        {!isNew && <EntityHistory entityType={entityType} entityId={row.id} />}
+      </form>
+    </Modal>
+  );
+}
+
+function uniqueRef(name, taken) {
+  const base = slugify(name);
+  let ref = base;
+  for (let i = 2; taken.has(ref); i++) ref = `${base}_${i}`;
+  return ref;
+}
+
+function MaterialModal({ material, organizationId, materials, categories, units, branches, usage, onClose, onSaved, onChanged }) {
+  const isNew = !material.id;
+  const [name,     setName]     = useState(material.name ?? '');
+  const [category, setCategory] = useState(material.category_id ?? '');
+  const [stockId,  setStockId]  = useState(material.stock_unit_id ?? '');
+  const [notes,    setNotes]    = useState(material.notes ?? '');
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+
+  const unitById = Object.fromEntries(units.map(u => [u.id, u]));
+  const conversions = material.conversions ?? [];
+  const sources = material.sources ?? [];
+  // 021: the stock unit is fixed once anything is expressed relative to it
+  const stockLocked = !!material.stock_unit_id && (conversions.length > 0 || sources.length > 0 || usage.any > 0);
+  const activeUnits = units.filter(u => u.status === 'active' || u.id === material.stock_unit_id);
+  const choosableCategories = categories.filter(c => c.status === 'active' || c.id === material.category_id);
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    const clash = materials.find(m => m.id !== material.id && m.name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (clash) { setError(`A material called "${clash.name}" already exists.`); return; }
+    const row = { name: name.trim(), category_id: category || null, stock_unit_id: stockId || null, notes: notes.trim() || null };
+    setBusy(true);
+    const { error: err } = isNew
+      ? await supabase.from('materials').insert({
+          ...row, organization_id: organizationId, status: 'active',
+          material_id_ref: uniqueRef(row.name, new Set(materials.map(m => m.material_id_ref).filter(Boolean))),
+        })
+      : await supabase.from('materials').update(row).eq('id', material.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  async function toggleStatus() {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.from('materials')
+      .update({ status: material.status === 'active' ? 'inactive' : 'active' }).eq('id', material.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  return (
+    <Modal title={isNew ? 'Add material' : `Edit ${material.name}`} onClose={onClose} size="lg"
+      footer={<>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
+        <button type="submit" form="material-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !name.trim()}>
+          {isNew ? 'Add material' : 'Save details'}
+        </button>
+      </>}>
+      <form id="material-form" className="modal-form" onSubmit={save}>
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {!isNew && <p className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{material.material_id_ref}</p>}
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="mat-name">Name</label>
+            <input id="mat-name" className="form-input" required autoFocus value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="mat-cat">Category</label>
+            <select id="mat-cat" className="form-input" value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">None</option>
+              {choosableCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="mat-stock">Stock unit</label>
+            <select id="mat-stock" className="form-input" value={stockId} disabled={stockLocked} onChange={e => setStockId(e.target.value)}>
+              <option value="">Not set yet</option>
+              {activeUnits.map(u => <option key={u.id} value={u.id}>{u.symbol} — {u.name}</option>)}
+            </select>
+            <span className="form-hint">
+              {stockLocked ? 'Fixed: conversions, sources or recipes are expressed in it.' : 'The unit stock of this material is counted in. Add a unit under Units if it is missing.'}
+            </span>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="mat-notes">Notes</label>
+            <textarea id="mat-notes" className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+        </div>
+      </form>
+
+      {!isNew && (
+        <div className="modal-form mt-16">
+          <ConversionsEditor material={material} organizationId={organizationId} units={activeUnits} unitById={unitById} onChanged={onChanged} />
+          <SourcesEditor material={material} organizationId={organizationId} branches={branches} unitById={unitById} onChanged={onChanged} />
+          <section>
+            <h3 className="modal-section-title">Status</h3>
+            {material.status === 'active' && usage.active > 0 ? (
+              <p className="text-sm text-muted">Used by {usage.active} active recipe line{usage.active === 1 ? '' : 's'}. Save those recipes without it before deactivating.</p>
+            ) : (
+              <>
+                <p className="text-sm text-muted" style={{ marginBottom: 8 }}>
+                  {material.status === 'active' ? 'Deactivating hides it from new recipes and sources. History is kept.' : 'Inactive — kept for history, not offered for new recipes.'}
+                </p>
+                <button type="button" className="btn btn-outline" disabled={busy} onClick={toggleStatus}>
+                  {material.status === 'active' ? 'Deactivate material' : 'Reactivate material'}
+                </button>
+              </>
+            )}
+          </section>
+          <EntityFlags entityType="material" entityId={material.id} canResolve canRaise onChanged={onChanged} />
+          <EntityHistory entityType="material" entityId={material.id} />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** 1 <unit> = factor × stock unit. Saved one line at a time. */
+function ConversionsEditor({ material, organizationId, units, unitById, onChanged }) {
+  const stock = unitById[material.stock_unit_id];
+  const [rows, setRows] = useState((material.conversions ?? []).map(c => ({ ...c, factor: String(c.factor_to_stock_unit), saved: true })));
+  const [busy,  setBusy]  = useState(null);
+  const [error, setError] = useState('');
+  const used = new Set([material.stock_unit_id, ...rows.map(r => r.unit_id)]);
+
+  async function saveRow(i) {
+    const r = rows[i];
+    setError('');
+    const f = numOrNull(r.factor);
+    if (!r.unit_id) { setError('Choose a unit.'); return; }
+    if (!(f > 0)) { setError('The factor must be a number above zero.'); return; }
+    setBusy(i);
+    const { error: err } = await supabase.from('material_unit_conversions').upsert(
+      { organization_id: organizationId, material_id: material.id, unit_id: r.unit_id, factor_to_stock_unit: f, notes: r.notes?.trim() || null },
+      { onConflict: 'material_id,unit_id' });
+    setBusy(null);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setRows(rs => rs.map((x, j) => (j === i ? { ...x, factor_to_stock_unit: f, saved: true } : x)));
+    onChanged();
+  }
+
+  async function removeRow(i) {
+    const r = rows[i];
+    setError('');
+    if (!r.saved) { setRows(rs => rs.filter((_, j) => j !== i)); return; }
+    setBusy(i);
+    const { error: err } = await supabase.from('material_unit_conversions').delete()
+      .eq('material_id', material.id).eq('unit_id', r.unit_id);
+    setBusy(null);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setRows(rs => rs.filter((_, j) => j !== i));
+    onChanged();
+  }
+
+  return (
+    <section className="entity-panel">
+      <h3 className="modal-section-title">Also counted in</h3>
+      {!stock ? (
+        <p className="text-sm text-muted">Set the stock unit first — conversions are expressed in it.</p>
+      ) : (
+        <>
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
+          <div className="ingredient-list">
+            {rows.map((r, i) => {
+              const dirty = !r.saved || Number(r.factor) !== Number(r.factor_to_stock_unit);
+              return (
+                <div key={r.saved ? r.unit_id : `new-${i}`} className="conversion-row">
+                  <span className="text-sm">1</span>
+                  <select className="form-input" aria-label="Unit" value={r.unit_id} disabled={r.saved}
+                    onChange={e => setRows(rs => rs.map((x, j) => (j === i ? { ...x, unit_id: e.target.value } : x)))}>
+                    <option value="" disabled>Unit…</option>
+                    {(r.saved ? [unitById[r.unit_id]] : units.filter(u => !used.has(u.id) || u.id === r.unit_id)).filter(Boolean)
+                      .map(u => <option key={u.id} value={u.id}>{u.symbol}</option>)}
+                  </select>
+                  <span className="text-sm">=</span>
+                  <input type="number" step="any" min="0" className="form-input" aria-label="Factor" value={r.factor}
+                    onChange={e => setRows(rs => rs.map((x, j) => (j === i ? { ...x, factor: e.target.value } : x)))} />
+                  <span className="text-sm">{stock.symbol}</span>
+                  {dirty
+                    ? <button type="button" className="btn btn-outline btn-sm" disabled={busy === i} onClick={() => saveRow(i)}>Save</button>
+                    : <span />}
+                  <button type="button" className="icon-btn" aria-label="Remove conversion" disabled={busy === i} onClick={() => removeRow(i)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm mt-8"
+            onClick={() => setRows(rs => [...rs, { unit_id: '', factor: '', notes: null, saved: false }])}>
+            <Plus size={13} /> Add a unit
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Where each branch buys the material, and in which unit */
+function SourcesEditor({ material, organizationId, branches, unitById, onChanged }) {
+  const [sources, setSources] = useState(material.sources ?? []);
+  const [adding,  setAdding]  = useState(null);   // { branch_id, source_name, purchase_unit_id, is_primary }
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+  // Purchase unit: the stock unit or a listed conversion (enforced by 019)
+  const purchaseUnits = [material.stock_unit_id, ...(material.conversions ?? []).map(c => c.unit_id)].filter(Boolean);
+
+  async function refresh() {
+    const { data } = await supabase.from('material_branch_sources')
+      .select('id, branch_id, source_name, purchase_unit_id, is_primary, status, notes').eq('material_id', material.id);
+    setSources(data || []);
+    onChanged();
+  }
+
+  async function run(fn) {
+    setError('');
+    setBusy(true);
+    const err = await fn();
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return false; }
+    await refresh();
+    return true;
+  }
+
+  // One active primary per branch: clear the old one first
+  const makePrimary = s => run(async () => {
+    const { error: e1 } = await supabase.from('material_branch_sources').update({ is_primary: false })
+      .eq('material_id', material.id).eq('branch_id', s.branch_id).eq('is_primary', true);
+    if (e1) return e1;
+    const { error: e2 } = await supabase.from('material_branch_sources').update({ is_primary: true }).eq('id', s.id);
+    return e2;
+  });
+
+  const toggle = s => run(async () => (await supabase.from('material_branch_sources')
+    .update({ status: s.status === 'active' ? 'inactive' : 'active', ...(s.status === 'active' ? { is_primary: false } : {}) })
+    .eq('id', s.id)).error);
+
+  const setUnit = (s, unitId) => run(async () => (await supabase.from('material_branch_sources')
+    .update({ purchase_unit_id: unitId || null }).eq('id', s.id)).error);
+
+  async function add() {
+    if (!adding.branch_id || !adding.source_name.trim()) { setError('Choose a branch and name the source.'); return; }
+    const first = !sources.some(s => s.branch_id === adding.branch_id && s.status === 'active');
+    const ok = await run(async () => (await supabase.from('material_branch_sources').insert({
+      organization_id: organizationId, material_id: material.id, branch_id: adding.branch_id,
+      source_name: adding.source_name.trim(), purchase_unit_id: adding.purchase_unit_id || null, is_primary: first,
+    })).error);
+    if (ok) setAdding(null);
+  }
+
+  return (
+    <section className="entity-panel">
+      <h3 className="modal-section-title">Sources by branch</h3>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {branches.map(b => {
+        const here = sources.filter(s => s.branch_id === b.id).sort((x, y) => (y.status === 'active') - (x.status === 'active'));
+        return (
+          <div key={b.id} className="mb-8">
+            <div className="text-sm" style={{ fontWeight: 600 }}>{b.name}</div>
+            {here.length === 0 ? <p className="text-xs text-muted">No source recorded.</p> : (
+              <ul className="history-list">
+                {here.map(s => (
+                  <li key={s.id} className="flex items-center gap-8 text-sm" style={{ flexWrap: 'wrap' }}>
+                    <span className={s.status === 'active' ? '' : 'text-muted'}>{s.source_name}</span>
+                    {s.is_primary && s.status === 'active' && <span className="badge badge-accent">primary</span>}
+                    {s.status !== 'active' && <span className="badge badge-neutral">inactive</span>}
+                    <select className="form-input" style={{ width: 'auto', padding: '3px 8px' }} aria-label="Purchase unit"
+                      value={s.purchase_unit_id ?? ''} disabled={busy || s.status !== 'active'} onChange={e => setUnit(s, e.target.value)}>
+                      <option value="">bought in: not set</option>
+                      {purchaseUnits.map(u => <option key={u} value={u}>bought in {unitById[u]?.symbol}</option>)}
+                    </select>
+                    {s.status === 'active' && !s.is_primary && (
+                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => makePrimary(s)}>Make primary</button>
+                    )}
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => toggle(s)}>
+                      {s.status === 'active' ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+      {adding ? (
+        <div className="modal-subform">
+          <div className="form-row">
+            <select className="form-input" aria-label="Branch" value={adding.branch_id} onChange={e => setAdding(a => ({ ...a, branch_id: e.target.value }))}>
+              <option value="" disabled>Branch…</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <input className="form-input" aria-label="Source name" placeholder="Supplier or place" value={adding.source_name}
+              onChange={e => setAdding(a => ({ ...a, source_name: e.target.value }))} />
+          </div>
+          <select className="form-input" aria-label="Purchase unit" value={adding.purchase_unit_id}
+            onChange={e => setAdding(a => ({ ...a, purchase_unit_id: e.target.value }))}>
+            <option value="">Bought in: not set yet</option>
+            {purchaseUnits.map(u => <option key={u} value={u}>Bought in {unitById[u]?.symbol}</option>)}
+          </select>
+          <div className="flex gap-8">
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={add}>Add source</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(null)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-ghost btn-sm"
+          onClick={() => setAdding({ branch_id: '', source_name: '', purchase_unit_id: material.stock_unit_id ?? '' })}>
+          <Plus size={13} /> Add a source
+        </button>
+      )}
+    </section>
   );
 }

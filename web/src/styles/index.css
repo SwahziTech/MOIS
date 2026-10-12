@@ -1492,3 +1492,7 @@ td .flag-actions { margin-top: 0; }
   border: 1px dashed transparent; border-radius: var(--radius-md); background: none; color: inherit; cursor: pointer;
 }
 .price-cell:hover { border-color: var(--border-strong); background: var(--bg-canvas); }
+.conversion-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto 110px auto auto auto;
+  gap: 6px; align-items: center;
+}
