@@ -17,6 +17,7 @@ const ENTITY_NAMES = {
   product_category: ['product_categories', 'name'],
   color:            ['color_palette', 'name'],
   unit:             ['units', 'symbol'],
+  supplier:         ['suppliers', 'name'],
 };
 
 /**

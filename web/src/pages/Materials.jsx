@@ -29,6 +29,7 @@ export default function Materials() {
   const [categories, setCategories] = useState([]);
   const [units,      setUnits]      = useState([]);
   const [branches,   setBranches]   = useState([]);
+  const [suppliers,  setSuppliers]  = useState([]);
   const [usage,      setUsage]      = useState({});   // material id → { active, any }
   const [unitUse,    setUnitUse]    = useState({});   // unit id → count of uses
   const [openFlags,  setOpenFlags]  = useState({});
@@ -40,11 +41,11 @@ export default function Materials() {
 
   async function load() {
     setError('');
-    const [matRes, catRes, unitRes, branchRes, itemRes, flagRes, prodRes] = await Promise.all([
+    const [matRes, catRes, unitRes, branchRes, itemRes, flagRes, prodRes, supRes] = await Promise.all([
       supabase.from('materials').select(`
           id, name, material_id_ref, category_id, stock_unit_id, status, notes,
           conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes),
-          sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, is_primary, status, notes)
+          sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)
         `).order('name'),
       supabase.from('material_categories').select('id, name, display_order, status').order('display_order').order('name'),
       supabase.from('units').select('id, symbol, name, notes, status').order('symbol'),
@@ -52,8 +53,9 @@ export default function Materials() {
       supabase.from('recipe_items').select('material_id, unit_id, recipe:recipe_versions(status)'),
       supabase.from('review_flags').select('entity_id').eq('entity_type', 'material').eq('status', 'open'),
       supabase.from('products').select('unit_id'),
+      supabase.from('suppliers').select('id, name, status').order('name'),
     ]);
-    const err = matRes.error || catRes.error || unitRes.error || branchRes.error || itemRes.error || flagRes.error || prodRes.error;
+    const err = matRes.error || catRes.error || unitRes.error || branchRes.error || itemRes.error || flagRes.error || prodRes.error || supRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
 
     const use = {};
@@ -78,6 +80,7 @@ export default function Materials() {
     setCategories(catRes.data || []);
     setUnits(unitRes.data || []);
     setBranches((branchRes.data || []).filter(b => b.status === 'active'));
+    setSuppliers(supRes.data || []);
     setUsage(use);
     setUnitUse(uUse);
     setOpenFlags(flags);
@@ -235,7 +238,7 @@ export default function Materials() {
 
       {editing?.kind === 'material' && (
         <MaterialModal material={materials.find(m => m.id === editing.row.id) ?? editing.row} organizationId={organization.id} materials={materials}
-          categories={categories} units={units} branches={branches} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
+          categories={categories} units={units} branches={branches} suppliers={suppliers} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
           onClose={close} onSaved={saved} onChanged={load} />
       )}
       {editing?.kind === 'category' && (
@@ -322,7 +325,7 @@ function uniqueRef(name, taken) {
   return ref;
 }
 
-function MaterialModal({ material, organizationId, materials, categories, units, branches, usage, onClose, onSaved, onChanged }) {
+function MaterialModal({ material, organizationId, materials, categories, units, branches, suppliers, usage, onClose, onSaved, onChanged }) {
   const isNew = !material.id;
   const [name,     setName]     = useState(material.name ?? '');
   const [category, setCategory] = useState(material.category_id ?? '');
@@ -412,7 +415,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
       {!isNew && (
         <div className="modal-form mt-16">
           <ConversionsEditor material={material} organizationId={organizationId} units={activeUnits} unitById={unitById} onChanged={onChanged} />
-          <SourcesEditor material={material} organizationId={organizationId} branches={branches} unitById={unitById} onChanged={onChanged} />
+          <SourcesEditor material={material} organizationId={organizationId} branches={branches} suppliers={suppliers} unitById={unitById} onChanged={onChanged} />
           <section>
             <h3 className="modal-section-title">Status</h3>
             {material.status === 'active' && usage.active > 0 ? (
@@ -518,7 +521,7 @@ function ConversionsEditor({ material, organizationId, units, unitById, onChange
 }
 
 /** Where each branch buys the material, and in which unit */
-function SourcesEditor({ material, organizationId, branches, unitById, onChanged }) {
+function SourcesEditor({ material, organizationId, branches, suppliers, unitById, onChanged }) {
   const [sources, setSources] = useState(material.sources ?? []);
   const [adding,  setAdding]  = useState(null);   // { branch_id, source_name, purchase_unit_id, is_primary }
   const [busy,  setBusy]  = useState(false);
@@ -528,7 +531,7 @@ function SourcesEditor({ material, organizationId, branches, unitById, onChanged
 
   async function refresh() {
     const { data } = await supabase.from('material_branch_sources')
-      .select('id, branch_id, source_name, purchase_unit_id, is_primary, status, notes').eq('material_id', material.id);
+      .select('id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes').eq('material_id', material.id);
     setSources(data || []);
     onChanged();
   }
@@ -556,6 +559,9 @@ function SourcesEditor({ material, organizationId, branches, unitById, onChanged
     .update({ status: s.status === 'active' ? 'inactive' : 'active', ...(s.status === 'active' ? { is_primary: false } : {}) })
     .eq('id', s.id)).error);
 
+  const setSupplier = (s, supplierId) => run(async () => (await supabase.from('material_branch_sources')
+    .update({ supplier_id: supplierId || null }).eq('id', s.id)).error);
+
   const setUnit = (s, unitId) => run(async () => (await supabase.from('material_branch_sources')
     .update({ purchase_unit_id: unitId || null }).eq('id', s.id)).error);
 
@@ -564,7 +570,8 @@ function SourcesEditor({ material, organizationId, branches, unitById, onChanged
     const first = !sources.some(s => s.branch_id === adding.branch_id && s.status === 'active');
     const ok = await run(async () => (await supabase.from('material_branch_sources').insert({
       organization_id: organizationId, material_id: material.id, branch_id: adding.branch_id,
-      source_name: adding.source_name.trim(), purchase_unit_id: adding.purchase_unit_id || null, is_primary: first,
+      source_name: adding.source_name.trim(), purchase_unit_id: adding.purchase_unit_id || null,
+      supplier_id: adding.supplier_id || null, is_primary: first,
     })).error);
     if (ok) setAdding(null);
   }
@@ -589,6 +596,11 @@ function SourcesEditor({ material, organizationId, branches, unitById, onChanged
                       value={s.purchase_unit_id ?? ''} disabled={busy || s.status !== 'active'} onChange={e => setUnit(s, e.target.value)}>
                       <option value="">bought in: not set</option>
                       {purchaseUnits.map(u => <option key={u} value={u}>bought in {unitById[u]?.symbol}</option>)}
+                    </select>
+                    <select className="form-input" style={{ width: 'auto', padding: '3px 8px' }} aria-label="Supplier"
+                      value={s.supplier_id ?? ''} disabled={busy || s.status !== 'active'} onChange={e => setSupplier(s, e.target.value)}>
+                      <option value="">supplier: not linked</option>
+                      {suppliers.filter(x => x.status === 'active' || x.id === s.supplier_id).map(x => <option key={x.id} value={x.id}>supplier: {x.name}</option>)}
                     </select>
                     {s.status === 'active' && !s.is_primary && (
                       <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => makePrimary(s)}>Make primary</button>
@@ -617,6 +629,11 @@ function SourcesEditor({ material, organizationId, branches, unitById, onChanged
             onChange={e => setAdding(a => ({ ...a, purchase_unit_id: e.target.value }))}>
             <option value="">Bought in: not set yet</option>
             {purchaseUnits.map(u => <option key={u} value={u}>Bought in {unitById[u]?.symbol}</option>)}
+          </select>
+          <select className="form-input" aria-label="Supplier" value={adding.supplier_id ?? ''}
+            onChange={e => setAdding(a => ({ ...a, supplier_id: e.target.value }))}>
+            <option value="">Supplier: not linked</option>
+            {suppliers.filter(x => x.status === 'active').map(x => <option key={x.id} value={x.id}>Supplier: {x.name}</option>)}
           </select>
           <div className="flex gap-8">
             <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={add}>Add source</button>

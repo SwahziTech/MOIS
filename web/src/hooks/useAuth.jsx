@@ -144,6 +144,18 @@ export function AuthProvider({ children }) {
     return permissions.has(permCode);
   }
 
+  /**
+   * Permission at a specific branch/warehouse: an org-wide, branch or
+   * warehouse role grant (mirrors has_permission_at(), migration 022)
+   */
+  function canAt(permCode, branchId, warehouseId) {
+    return userRoles.some(ur =>
+      (ur.role?.role_permissions || []).some(rp => rp.permission?.code === permCode) &&
+      ((!ur.branch_id && !ur.warehouse_id) ||
+       (!ur.warehouse_id && ur.branch_id === branchId) ||
+       (ur.warehouse_id && ur.warehouse_id === warehouseId)));
+  }
+
   function hasRole(roleName) {
     return userRoles.some(ur => ur.role?.name === roleName);
   }
@@ -162,6 +174,7 @@ export function AuthProvider({ children }) {
     recovering,
     finishRecovery: () => setRecovering(false),
     can,
+    canAt,
     canManage,
     hasRole,
     signIn,

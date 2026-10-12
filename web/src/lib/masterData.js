@@ -25,6 +25,7 @@ export const ENTITY_LABELS = {
   color_pricing_rule: 'Colour pricing rule',
   color_price: 'Colour price',
   review_flag: 'Review flag',
+  supplier: 'Supplier',
 };
 
 /** A message safe to show the user, for an error from a master-data write. */
@@ -33,9 +34,12 @@ export function dbErrorMessage(err, fallback = "We couldn't save this change. Pl
   console.error(err);
   switch (err.code) {
     case '23505': return 'That name is already in use here. Choose a different one.';
-    case '42501': return /deactivate/i.test(err.message || '')
-      ? 'Records cannot be deleted — deactivate them instead.'
-      : "You don't have permission to change this.";
+    case '42501':
+      if (/deactivate/i.test(err.message || '')) return 'Records cannot be deleted — deactivate them instead.';
+      // Postgres' own access errors are not user-facing; our functions' messages are
+      return !err.message || /row-level security|permission denied for/i.test(err.message)
+        ? "You don't have permission to change this."
+        : err.message;
     case '23514': return err.message && !/violates check constraint/i.test(err.message)
       ? err.message                                   // our own trigger messages are user-facing
       : 'That value is not allowed here.';

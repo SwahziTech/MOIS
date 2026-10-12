@@ -16,6 +16,9 @@ import Settings     from './pages/Settings';
 import Categories   from './pages/Categories';
 import Colours      from './pages/Colours';
 import ReviewQueue  from './pages/ReviewQueue';
+import Suppliers    from './pages/Suppliers';
+import Stock        from './pages/Stock';
+import Movements    from './pages/Movements';
 
 export default function App() {
   return (
@@ -40,6 +43,9 @@ export default function App() {
             <Route path="/categories"  element={<Categories />} />
             <Route path="/colours"     element={<Colours />} />
             <Route path="/review"      element={<ReviewQueue />} />
+            <Route path="/suppliers"   element={<Suppliers />} />
+            <Route path="/stock"       element={<Stock />} />
+            <Route path="/movements"   element={<Movements />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />
             <Route path="/users"       element={<UsersPage />} />
