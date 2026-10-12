@@ -1885,23 +1885,23 @@
           },
           "available_in_branches": {
             "Mwanza": {
-              "item_no": 2,
+              "item_no": 1,
               "pcs_per_sqmt_or_unit": 1,
-              "price_exclusive": 13983.050847457627,
-              "vat": 2516.9491525423728,
-              "price_inclusive": 16500,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
               "price_per_sqmt": null
             },
             "Dar es Salaam": {
-              "item_no": 2,
+              "item_no": 1,
               "pcs_per_sqmt_or_unit": 1,
-              "price_exclusive": 13983.050847457627,
-              "vat": 2516.9491525423728,
-              "price_inclusive": 16500,
+              "price_exclusive": 9745.762711864407,
+              "vat": 1754.2372881355932,
+              "price_inclusive": 11500,
               "price_per_sqmt": null
             },
             "Dodoma": {
-              "item_no": 2,
+              "item_no": 1,
               "pcs_per_sqmt_or_unit": 1,
               "price_exclusive": 9745.762711864407,
               "vat": 1754.2372881355932,
@@ -1911,7 +1911,8 @@
           },
           "available_in_all_branches": true,
           "missing_in_branches": [],
-          "price_consistent_across_branches": false
+          "price_consistent_across_branches": true,
+          "note": "Confirmed by Stumarcot 2026-10-12: one product at TZS 11,500 in all branches (Excel row #1 of each branch sheet). The second 'MFUNIKO MDOGO' row (#2) at 16,500 in the Mwanza and Dar es Salaam sheets is an error in those price lists, not a second variant."
         },
         {
           "description_raw": "MFUNIKO MKUBWA",

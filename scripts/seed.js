@@ -1062,7 +1062,7 @@ function unitSymbolToId(unitStr, unitBySymbol) {
 // Products whose price-list rows must NOT be seeded until a pending
 // confirmation arrives. Existing prices for them are left untouched.
 const PRICING_ON_HOLD = {
-  trench_covers_01: "Excel has two 'MFUNIKO MDOGO 500*300*50mm' prices (11,500 / 16,500) — awaiting Stumarcot confirmation (2026-10-12)",
+  // (empty — trench_covers_01 released 2026-10-12: Stumarcot confirmed 11,500)
 };
 
 // price_list_structured.json still uses the pre-migration-016 rule name
