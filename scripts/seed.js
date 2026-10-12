@@ -38,6 +38,10 @@ const DOCS = path.join(__dirname, '..', 'assets', 'docs', 'Stumarcot');
 const productMaster       = JSON.parse(fs.readFileSync(path.join(DOCS, 'product_master.json'), 'utf8'));
 const ratiosMolds         = JSON.parse(fs.readFileSync(path.join(DOCS, 'ratios_and_molds.json'), 'utf8'));
 const priceListStructured = JSON.parse(fs.readFileSync(path.join(DOCS, 'price_list_structured.json'), 'utf8'));
+const materialsMaster     = JSON.parse(fs.readFileSync(path.join(DOCS, 'materials_master.json'), 'utf8'));
+const {
+  MATERIAL_UNITS, unitSymbolFor, resolveMaterialRef, buildMaterialPlan, productReviewFlags,
+} = require('./lib/materials');
 
 let supabase; // created in main() — not needed for --plan
 
@@ -199,7 +203,8 @@ async function seedWithOrg(org) {
     {
       name: 'branch_manager',
       description: 'Branch / factory manager — branch-scoped operational access',
-      permissions: ['products.view','materials.view','materials.manage',
+      // No master-data management: build-plan 1a.1 makes that org-admin only
+      permissions: ['products.view','materials.view',
                     'inventory.view','inventory.receive','inventory.issue','inventory.transfer','inventory.adjust','inventory.count',
                     'procurement.view','procurement.request','procurement.approve',
                     'production.view','production.create','production.execute','production.complete',
@@ -265,7 +270,13 @@ async function seedWithOrg(org) {
         .upsert(permRows, { onConflict: 'role_id,permission_id', ignoreDuplicates: true });
       if (error) throw new Error(`role_permissions upsert failed: ${error.message}`);
     }
-    console.log(`  ↳ Role '${roleDef.name}' — ${permRows.length} permissions`);
+    // System roles are MOIS-defined: drop permissions no longer in the definition
+    const wanted = permRows.map(r => r.permission_id);
+    let extraQuery = supabase.from('role_permissions').delete().eq('role_id', roleRow.id);
+    if (wanted.length) extraQuery = extraQuery.not('permission_id', 'in', `(${wanted.join(',')})`);
+    const { data: removedPerms, error: rmErr } = await extraQuery.select('permission_id');
+    if (rmErr) throw new Error(`role_permissions cleanup failed: ${rmErr.message}`);
+    console.log(`  ↳ Role '${roleDef.name}' — ${permRows.length} permissions${removedPerms.length ? `, ${removedPerms.length} removed` : ''}`);
   }
 
   // =========================================================================
@@ -280,6 +291,7 @@ async function seedWithOrg(org) {
     { symbol: 'SQM',    name: 'Square Metre',             notes: 'Coverage unit for tiles and paving' },
     { symbol: 'PCS',    name: 'Pieces',                   notes: 'Count unit for curbstones, culverts, matofali, posts' },
     { symbol: 'm',      name: 'Metre',                    notes: null },
+    ...Object.entries(MATERIAL_UNITS).map(([symbol, u]) => ({ symbol, ...u })),
   ];
   for (const u of unitDefs) {
     const { data: existing } = await supabase
@@ -303,46 +315,80 @@ async function seedWithOrg(org) {
   console.log(`  ↳ ${unitsRows.length} units`);
 
   // =========================================================================
-  // 6. MATERIALS
-  // From the unique ingredient names across all ratios_and_molds.json categories
+  // 6. MATERIALS (from materials_master.json — as-is)
+  //    Global: category, stock unit, unit conversions. Per branch: sources.
+  //    No stock or price: those come from 1b's ledger transactions.
   // =========================================================================
-  console.log('\n6. Creating materials...');
-  const materialDefs = [
-    { name: 'Cement',             code: 'CEM',  symbol: 'bag',    notes: '50kg bag' },
-    { name: 'Mchanga (Sand)',      code: 'MCH',  symbol: 'bucket', notes: '1 ndoo = 10L ≈ 20kg' },
-    { name: 'Chipping',           code: 'CHIP', symbol: 'bucket', notes: 'Fine aggregate' },
-    { name: 'Kokoto (Aggregate)', code: 'KOK',  symbol: 'bucket', notes: 'Coarse aggregate' },
-    { name: 'Dawa (Additive)',    code: 'DAWA', symbol: 'L',      notes: 'Chemical hardener/additive' },
-    { name: 'Rangi (Pigment)',    code: 'RNG',  symbol: 'kg',     notes: 'Color pigment — Red: 4kg, Grey: 1kg, Black: 2kg per bag' },
-    { name: 'Dust',               code: 'DUST', symbol: 'bucket', notes: 'Stone dust — used in press paving mixes' },
-  ];
-  for (const m of materialDefs) {
-    const { data: existing } = await supabase
-      .from('materials')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('name', m.name)
-      .maybeSingle();
-    if (!existing) {
-      const { error } = await supabase
-        .from('materials')
-        .insert({
-          organization_id: orgId,
-          name:    m.name,
-          code:    m.code,
-          unit_id: unitBySymbol[m.symbol] || null,
-          notes:   m.notes,
-          status:  'active',
-        });
-      if (error) throw new Error(`Material insert failed: ${error.message}`);
-    }
-  }
-  const { data: materialRows } = await supabase
+  console.log('\n6. Materials...');
+  const materialPlan = buildMaterialPlan(materialsMaster, Object.keys(branches));
+
+  const { data: matCatData, error: matCatErr } = await supabase
+    .from('material_categories')
+    .upsert(materialPlan.categories.map((name, i) => ({ organization_id: orgId, name, display_order: i + 1 })),
+            { onConflict: 'organization_id,name' })
+    .select('id, name');
+  if (matCatErr) throw new Error(`Material categories upsert failed: ${matCatErr.message}`);
+  const materialCategoryByName = Object.fromEntries(matCatData.map(c => [c.name, c.id]));
+
+  const { data: materialData, error: materialErr } = await supabase
     .from('materials')
-    .select('id, code')
-    .eq('organization_id', orgId);
-  const matByCode = Object.fromEntries(materialRows.map(m => [m.code, m.id]));
-  console.log(`  ↳ ${materialRows.length} materials`);
+    .upsert(materialPlan.materials.map(m => ({
+      organization_id: orgId,
+      material_id_ref: m.ref,
+      name:            m.name,
+      category_id:     materialCategoryByName[m.category],
+      stock_unit_id:   m.stockUnit ? requireUnit(unitBySymbol, m.stockUnit, `material ${m.ref}`) : null,
+      notes:           m.notes,
+      status:          'active',
+    })), { onConflict: 'organization_id,material_id_ref' })
+    .select('id, material_id_ref');
+  if (materialErr) throw new Error(`Materials upsert failed: ${materialErr.message}`);
+  const materialByRef = Object.fromEntries(materialData.map(m => [m.material_id_ref, m.id]));
+
+  if (materialPlan.conversions.length) {
+    const { error } = await supabase
+      .from('material_unit_conversions')
+      .upsert(materialPlan.conversions.map(c => ({
+        organization_id:      orgId,
+        material_id:          materialByRef[c.ref],
+        unit_id:              requireUnit(unitBySymbol, c.unit, `conversion for ${c.ref}`),
+        factor_to_stock_unit: c.factor,
+        notes:                c.notes,
+      })), { onConflict: 'material_id,unit_id' });
+    if (error) throw new Error(`Unit conversions upsert failed: ${error.message}`);
+  }
+
+  if (materialPlan.sources.length) {
+    const { error } = await supabase
+      .from('material_branch_sources')
+      .upsert(materialPlan.sources.map(src => ({
+        organization_id:  orgId,
+        material_id:      materialByRef[src.ref],
+        branch_id:        branches[src.branch]?.id ?? (() => { throw new Error(`Unknown branch '${src.branch}'`); })(),
+        source_name:      src.sourceName,
+        purchase_unit_id: src.purchaseUnit ? requireUnit(unitBySymbol, src.purchaseUnit, `source for ${src.ref}`) : null,
+        is_primary:       src.isPrimary,
+        notes:            src.notes,
+      })), { onConflict: 'material_id,branch_id,source_name' });
+    if (error) throw new Error(`Material sources upsert failed: ${error.message}`);
+  }
+
+  // Materials no longer in the file are retired once no active recipe uses them
+  const { data: liveMaterials } = await supabase
+    .from('materials').select('id, material_id_ref, name, status').eq('organization_id', orgId);
+  for (const m of liveMaterials.filter(x => x.status === 'active' && !materialByRef[x.material_id_ref])) {
+    const { count } = await supabase
+      .from('recipe_items')
+      .select('id, recipe_versions!inner(status)', { count: 'exact', head: true })
+      .eq('material_id', m.id)
+      .eq('recipe_versions.status', 'active');
+    if (count) { console.warn(`  ⚠ ${m.name} is not in materials_master.json but ${count} active recipe line(s) still use it`); continue; }
+    const { error } = await supabase.from('materials').update({ status: 'inactive' }).eq('id', m.id);
+    if (error) throw new Error(`Material retire failed [${m.name}]: ${error.message}`);
+    console.log(`  ↳ Marked inactive (no longer in materials_master.json): ${m.name}`);
+  }
+  console.log(`  ↳ ${materialData.length} materials, ${materialPlan.categories.length} categories, ` +
+              `${materialPlan.conversions.length} unit conversions, ${materialPlan.sources.length} branch sources`);
 
   // =========================================================================
   // 7. PRODUCT CATEGORIES (from product_master.json — as-is)
@@ -483,6 +529,7 @@ async function seedWithOrg(org) {
   let recipeItemCount    = 0;
   let recipeProductLinks = 0;
   let archivedCount      = 0;
+  const pendingFlags     = []; // review flags raised while building recipes
 
   // A recipe label that names one of its category's colours is a colour
   // recipe (color_id); anything else is a named variant (variant_label).
@@ -535,12 +582,21 @@ async function seedWithOrg(org) {
 
     // Insert recipe items (ingredients)
     for (const comp of recipe.components) {
-      const matId  = matByCode[materialCodeForName(comp.material)];
-      const unitId = unitSymbolToId(comp.unit, unitBySymbol);
-      if (!matId) {
-        console.warn(`  ⚠ Unknown material '${comp.material}' in ${recipe.categoryRef}/${recipe.colorLabel}`);
+      const materialRef = resolveMaterialRef(comp, { colour: key.color_id ? key.display : null, sandRef: recipe.sandRef });
+      if (!materialRef) {
+        if (comp.quantity == null) {
+          // e.g. pigment on a White recipe, '—' in the notebook: no line, but flag it
+          pendingFlags.push({ entity: 'recipe_version', id: rvId, code: 'unconfirmed_ingredient',
+            reason: `The source lists '${comp.material}' for ${recipe.categoryRef} / ${key.display} with no quantity or type ('—'). Confirm whether this recipe uses it.` });
+        } else {
+          console.warn(`  ⚠ Unknown material '${comp.material}' in ${recipe.categoryRef}/${key.display}`);
+        }
         continue;
       }
+      const matId  = materialByRef[materialRef];
+      const unitSymbol = unitSymbolFor(comp.unit);
+      const unitId = unitSymbol ? requireUnit(unitBySymbol, unitSymbol, `recipe ${recipe.categoryRef}/${key.display}`) : null;
+      if (!matId) throw new Error(`Recipe ${recipe.categoryRef}/${key.display} uses '${materialRef}', which is not in materials_master.json`);
 
       const { data: existingItem } = await supabase
         .from('recipe_items')
@@ -781,6 +837,37 @@ async function seedWithOrg(org) {
   }
 
   // =========================================================================
+  // 10b. REVIEW FLAGS — gaps the source files themselves mark as unresolved
+  //      Raised once: a flag an admin resolved or dismissed is not re-opened.
+  // =========================================================================
+  console.log('\n10b. Review flags...');
+  const flagsWanted = [
+    ...materialPlan.flags.map(f => ({ entity: f.entity, id: materialByRef[f.ref], code: f.code, reason: f.reason })),
+    ...productReviewFlags(productMaster).map(f => ({ entity: f.entity, id: productMap[f.ref], code: f.code, reason: f.reason })),
+    ...pendingFlags,
+  ];
+  let flagsRaised = 0;
+  for (const f of flagsWanted) {
+    if (!f.id) throw new Error(`Review flag for unknown ${f.entity}`);
+    const { data: existingFlag } = await supabase
+      .from('review_flags')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('entity_type', f.entity)
+      .eq('entity_id', String(f.id))
+      .eq('reason_code', f.code)
+      .limit(1)
+      .maybeSingle();
+    if (existingFlag) continue;
+    const { error } = await supabase.from('review_flags').insert({
+      organization_id: orgId, entity_type: f.entity, entity_id: String(f.id), reason_code: f.code, reason: f.reason,
+    });
+    if (error) throw new Error(`Review flag insert failed [${f.entity}/${f.code}]: ${error.message}`);
+    flagsRaised++;
+  }
+  console.log(`  ↳ ${flagsWanted.length} review flags wanted, ${flagsRaised} newly raised`);
+
+  // =========================================================================
   // 11. SEED ADMIN USER
   //     Credentials come from .env — never hardcode them here.
   // =========================================================================
@@ -920,6 +1007,7 @@ function buildRecipePlan(productMaster, ratiosMolds) {
             : ratio.notes || null,
           components:  mergeComponents(isAddOn ? [...base.components, ...ratio.components] : ratio.components),
           productRefs,
+          sandRef:     ratCat.sand_material_id ?? null,
         });
       }
     } else if (Array.isArray(ratCat.items)) {
@@ -940,12 +1028,17 @@ function buildRecipePlan(productMaster, ratiosMolds) {
         groups.get(key).items.push(item);
       }
       for (const g of groups.values()) {
+        const sands = [...new Set(g.items.map(i => i.sand_material_id ?? null))];
+        if (sands.length > 1) {
+          throw new Error(`Mix '${g.label}' in ${g.categoryRef} is shared by items with different sands: ${sands.join(', ')}`);
+        }
         plan.push({
           categoryRef: g.categoryRef,
           colorLabel:  g.label,
           notes:       `${ratCat.name} mix shared by: ${g.items.map(i => i.name).join(', ')}.`,
           components:  mergeComponents(g.components),
           productRefs: g.items.map(i => i.item_id),
+          sandRef:     sands[0],
         });
       }
     }
@@ -970,7 +1063,7 @@ function mergeComponents(components) {
   const seen = new Set();
   const out = [];
   for (const c of components) {
-    const code = materialCodeForName(c.material) || c.material;
+    const code = String(c.material || '').toLowerCase();
     if (seen.has(code)) {
       console.warn(`  ⚠ Material '${c.material}' appears twice in one recipe — second entry ignored`);
       continue;
@@ -1012,51 +1105,6 @@ async function findUserIdByEmail(email) {
     if (hit) return hit.id;
     if (data.users.length < 1000) return null;
   }
-}
-
-function materialCodeForName(name) {
-  const lower = (name || '').toLowerCase().replace(/[^a-z]/g, '');
-  const map = {
-    cement:    'CEM',
-    mchanga:   'MCH',
-    mch:       'MCH',
-    sand:      'MCH',
-    chip:      'CHIP',
-    chipping:  'CHIP',
-    chips:     'CHIP',
-    kok:       'KOK',
-    kokoto:    'KOK',
-    aggregate: 'KOK',
-    dawa:      'DAWA',
-    additive:  'DAWA',
-    rangi:     'RNG',
-    rangired:  'RNG',
-    rangigrey: 'RNG',
-    rangiblack:'RNG',
-    pigment:   'RNG',
-    dust:      'DUST',
-    stonedust: 'DUST',
-  };
-  return map[lower] || null;
-}
-
-function unitSymbolToId(unitStr, unitBySymbol) {
-  // 'unit' (used by several ratios in the source) is deliberately NOT mapped:
-  // the notebook does not say which measure it is, so it stays null.
-  const map = {
-    '50kg bag':   'bag',
-    'bag':        'bag',
-    'bucket':     'bucket',
-    'ndoo':       'bucket',
-    'litre':      'L',
-    'l':          'L',
-    'liter':      'L',
-    'kg':         'kg',
-    'sqm':        'SQM',
-    'pcs':        'PCS',
-  };
-  const sym = map[(unitStr || '').toLowerCase()] || unitStr;
-  return unitBySymbol[sym] || null;
 }
 
 // Products whose price-list rows must NOT be seeded until a pending
