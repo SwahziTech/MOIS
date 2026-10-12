@@ -4,15 +4,16 @@ import { supabase } from '../lib/supabase';
 import PageShell from '../components/PageShell';
 
 /** One card per master-data table. `filter` narrows the count query. */
+const active = q => q.eq('status', 'active');
 const STATS = [
-  { key: 'categories', label: 'Product Categories', sub: 'In product master',    table: 'product_categories',     to: '/products'  },
-  { key: 'products',   label: 'Products',           sub: 'In product master',    table: 'products',               to: '/products'  },
-  { key: 'recipes',    label: 'Recipes / BOM',      sub: 'Active recipes',       table: 'recipe_versions',        to: '/recipes',
-    filter: q => q.eq('status', 'active') },
-  { key: 'materials',  label: 'Materials',          sub: 'Raw materials tracked', table: 'materials',             to: '/materials' },
-  { key: 'branches',   label: 'Branches',           sub: 'Active locations',     table: 'branches',               to: '/branches',
-    filter: q => q.eq('status', 'active') },
+  { key: 'categories', label: 'Product Categories', sub: 'Active categories',    table: 'product_categories',     to: '/categories', filter: active },
+  { key: 'products',   label: 'Products',           sub: 'Active products',      table: 'products',               to: '/products',   filter: active },
+  { key: 'recipes',    label: 'Recipes / BOM',      sub: 'Active recipes',       table: 'recipe_versions',        to: '/recipes',    filter: active },
+  { key: 'materials',  label: 'Materials',          sub: 'Active materials',     table: 'materials',              to: '/materials',  filter: active },
+  { key: 'branches',   label: 'Branches',           sub: 'Active locations',     table: 'branches',               to: '/branches',   filter: active },
   { key: 'pricing',    label: 'Price Entries',      sub: 'Across all branches',  table: 'product_branch_pricing', to: '/pricing'   },
+  { key: 'review',     label: 'Needs Review',       sub: 'Open review flags',    table: 'review_flags',           to: '/review',
+    filter: q => q.eq('status', 'open') },
 ];
 
 const fmt = new Intl.NumberFormat('en-US');
@@ -76,14 +77,6 @@ export default function Dashboard() {
             <div className="stat-card-sub">{s.sub}</div>
           </Link>
         ))}
-      </section>
-
-      <section className="info-card">
-        <h2 className="info-card-title">Phase 1a — Foundation</h2>
-        <p className="info-card-desc">
-          Master data seeded. Auth and org structure active. Next phase: inventory
-          transaction tables, production logs, and sales flow.
-        </p>
       </section>
     </PageShell>
   );
