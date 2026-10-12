@@ -1487,3 +1487,8 @@ td .flag-actions { margin-top: 0; }
 @media (max-width: 560px) {
   .ingredient-row { grid-template-columns: 1fr 80px; }
 }
+.price-cell {
+  display: block; width: 100%; text-align: left; padding: 4px 6px; margin: -4px -6px;
+  border: 1px dashed transparent; border-radius: var(--radius-md); background: none; color: inherit; cursor: pointer;
+}
+.price-cell:hover { border-color: var(--border-strong); background: var(--bg-canvas); }

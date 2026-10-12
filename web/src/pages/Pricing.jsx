@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { formatMoney } from '../lib/format';
+import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
+import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
-import { DollarSign, Search, Palette } from 'lucide-react';
+import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
+import { DollarSign, Search, Palette, Plus } from 'lucide-react';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -15,239 +18,465 @@ const RULE_TYPE = {
   absolute_price_per_sqmt: 'Price per m²',
 };
 
+const round2 = n => Math.round(n * 100) / 100;
+const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
+/** VAT rate (%) implied by a price row's own figures, or null */
+const impliedVatRate = r => (r?.price_per_unit_exclusive > 0 && r?.price_per_unit_inclusive != null
+  ? round2((r.price_per_unit_inclusive / r.price_per_unit_exclusive - 1) * 100) : null);
+
+/*
+ * Prices per product per branch (product_branch_pricing; color_id NULL =
+ * the base price) and colour pricing rules per category per branch
+ * (category_color_pricing_rules + category_color_price_items). Edits change
+ * the row in place; audit_log keeps every old value.
+ */
 export default function Pricing() {
-  const { organization } = useAuth();
+  const { organization, canManage } = useAuth();
+  const canWrite = canManage('products.manage');
   const money = v => formatMoney(v, organization?.currency_code);
 
-  const [rows,     setRows]     = useState([]);
-  const [rules,    setRules]    = useState([]);
-  const [colouredCategories, setColouredCategories] = useState(new Set());
-  const [branches, setBranches] = useState([]);
+  const [tab,        setTab]        = useState('prices');
+  const [prices,     setPrices]     = useState([]);
+  const [rules,      setRules]      = useState([]);
+  const [products,   setProducts]   = useState([]);
+  const [branches,   setBranches]   = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
-  const [branchId, setBranchId] = useState('all');
+  const [categoryId, setCategoryId] = useState(null);
+  const [unpricedOnly, setUnpricedOnly] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(null);   // { product, branch, row }
+  const [editingRule,  setEditingRule]  = useState(null);   // { category, branch, rule }
 
   async function load() {
-    setLoading(true);
     setError('');
-    const [priceRes, branchRes, ruleRes, catColourRes] = await Promise.all([
+    const [priceRes, branchRes, ruleRes, prodRes, catRes] = await Promise.all([
       supabase
         .from('product_branch_pricing')
         .select(`
-          id, is_available, price_consistent_across_branches,
-          price_per_unit_exclusive, price_per_unit_inclusive,
-          price_per_sqm_inclusive, pcs_per_sqm_at_pricing, source_item_no,
-          color:color_palette(name),
-          product:products(canonical_name, product_id_ref, category_id),
-          branch:branches(id, name)
-        `)
-        .order('source_item_no', { nullsFirst: false }),
-      supabase.from('branches').select('id, name').order('name'),
+          id, product_id, branch_id, color_id, is_available,
+          price_per_unit_exclusive, vat_per_unit, price_per_unit_inclusive,
+          price_per_sqm_inclusive, pcs_per_sqm_at_pricing, raw_notes
+        `),
+      supabase.from('branches').select('id, name, status').order('name'),
       supabase
         .from('category_color_pricing_rules')
-        .select(`
-          id, category_id, pricing_type,
-          base:color_palette!category_color_pricing_rules_base_color_id_fkey(name),
-          items:category_color_price_items(amount, color:color_palette(name, display_order)),
-          category:product_categories(name, sort_order),
-          branch:branches(id, name)
-        `),
-      supabase.from('product_category_colors').select('category_id'),
+        .select('id, category_id, branch_id, pricing_type, base_color_id, items:category_color_price_items(color_id, amount)'),
+      supabase.from('products')
+        .select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol)')
+        .order('canonical_name'),
+      supabase.from('product_categories')
+        .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
+        .order('sort_order'),
     ]);
-    const err = priceRes.error || branchRes.error || ruleRes.error || catColourRes.error;
+    const err = priceRes.error || branchRes.error || ruleRes.error || prodRes.error || catRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
-    setRows(priceRes.data || []);
-    setBranches(branchRes.data || []);
-    setRules((ruleRes.data || []).sort((a, b) =>
-      (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0) ||
-      (a.branch?.name || '').localeCompare(b.branch?.name || '')
-    ));
-    setColouredCategories(new Set((catColourRes.data || []).map(c => c.category_id)));
+    setPrices(priceRes.data || []);
+    setBranches((branchRes.data || []).filter(b => b.status === 'active'));
+    setRules(ruleRes.data || []);
+    setProducts(prodRes.data || []);
+    setCategories(catRes.data || []);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  // Base colour name per category+branch, from that category's pricing rule
-  const baseColour = useMemo(() => {
+  // Base price row per product × branch
+  const basePrice = useMemo(() => {
     const m = {};
-    for (const r of rules) if (r.base?.name) m[`${r.category_id}|${r.branch?.id}`] = r.base.name;
+    for (const p of prices) if (!p.color_id) m[`${p.product_id}|${p.branch_id}`] = p;
     return m;
-  }, [rules]);
+  }, [prices]);
+  const colourRows = prices.filter(p => p.color_id).length;
 
-  /**
-   * A NULL colour is the base price: the category's base colour (named by
-   * its pricing rule) for coloured categories, the only colour otherwise.
-   */
-  function colourLabel(row) {
-    if (row.color?.name) return row.color.name;
-    const base = baseColour[`${row.product?.category_id}|${row.branch?.id}`];
-    if (base) return `${base} (base)`;
-    return colouredCategories.has(row.product?.category_id) ? 'Base colour' : null;
-  }
+  // Most common VAT rate in this organization's own prices: a starting
+  // suggestion for a brand-new price, always shown and editable
+  const usualVatRate = useMemo(() => {
+    const counts = {};
+    for (const p of prices) { const r = impliedVatRate(p); if (r != null) counts[r] = (counts[r] || 0) + 1; }
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return best ? Number(best[0]) : null;
+  }, [prices]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows.filter(r =>
-      (branchId === 'all' || r.branch?.id === branchId) &&
-      (!q ||
-        (r.product?.canonical_name || '').toLowerCase().includes(q) ||
-        (colourLabel(r) || '').toLowerCase().includes(q))
-    );
-    // colourLabel depends on rules/colouredCategories
-  }, [rows, search, branchId, baseColour, colouredCategories]); // eslint-disable-line react-hooks/exhaustive-deps
+  const q = search.trim().toLowerCase();
+  const shownProducts = products.filter(p =>
+    (p.status === 'active' || branches.some(b => basePrice[`${p.id}|${b.id}`])) &&
+    (!categoryId || p.category_id === categoryId) &&
+    (!q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q)) &&
+    (!unpricedOnly || (p.status === 'active' && branches.some(b => !basePrice[`${p.id}|${b.id}`])))
+  );
+  const unpricedCount = products.filter(p => p.status === 'active' && branches.every(b => !basePrice[`${p.id}|${b.id}`])).length;
 
-  const visibleRules = rules.filter(r => branchId === 'all' || r.branch?.id === branchId);
-  // Area pricing is shown only when some visible product is priced by area
-  const showArea = filtered.some(r => r.price_per_sqm_inclusive != null);
-  const cols = showArea ? 7 : 6;
+  const colouredCategories = categories.filter(c => c.colors.length > 0 && (categoryId == null || c.id === categoryId));
+  const colourName = Object.fromEntries(categories.flatMap(c => c.colors.map(x => [x.color_id, x.color?.name])));
 
   return (
     <PageShell
       title="Pricing"
       subtitle="Master Data"
-      actions={
-        <>
-          <select
-            id="pricing-branch"
-            className="form-input"
-            style={{ width: 160, height: 34 }}
-            value={branchId}
-            onChange={e => setBranchId(e.target.value)}
-            aria-label="Filter by branch"
-          >
-            <option value="all">All branches</option>
-            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <div className="search-wrapper">
-            <Search size={14} className="search-icon" />
-            <input
-              id="pricing-search"
-              type="search"
-              className="search-input"
-              placeholder="Search product or colour…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-        </>
-      }
+      actions={tab === 'prices' && (
+        <div className="search-wrapper">
+          <Search size={14} className="search-icon" />
+          <input id="pricing-search" type="search" className="search-input" placeholder="Search products…"
+            value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      )}
     >
-      <div className="card">
-        {error ? (
-          <ErrorState message={error} onRetry={load} />
-        ) : (
+      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
+        <div className="filter-chips">
+          <button type="button" className={`filter-chip${tab === 'prices' ? ' is-on' : ''}`} onClick={() => setTab('prices')}>
+            Product prices
+          </button>
+          <button type="button" className={`filter-chip${tab === 'colours' ? ' is-on' : ''}`} onClick={() => setTab('colours')}>
+            Colour pricing
+          </button>
+        </div>
+        <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Category"
+          value={categoryId ?? ''} onChange={e => setCategoryId(e.target.value || null)}>
+          <option value="">All categories</option>
+          {categories.filter(c => c.status === 'active').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {tab === 'prices' && (
+          <label className="text-sm flex items-center gap-4">
+            <input type="checkbox" checked={unpricedOnly} onChange={e => setUnpricedOnly(e.target.checked)} />
+            Missing a price ({unpricedCount} with none)
+          </label>
+        )}
+      </div>
+
+      {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
+      : tab === 'prices' ? (
+        <div className="card">
           <div className="table-container">
             <table>
               <thead>
                 <tr>
                   <th>Product</th>
-                  <th>Colour</th>
-                  <th>Branch</th>
-                  <th style={{ textAlign: 'right' }}>Unit (ex VAT)</th>
-                  <th style={{ textAlign: 'right' }}>Unit (inc VAT)</th>
-                  {showArea && <th style={{ textAlign: 'right' }}>Per m² (inc VAT)</th>}
-                  <th>Status</th>
+                  {branches.map(b => <th key={b.id}>{b.name}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={cols}>
-                      <EmptyState
-                        icon={DollarSign}
-                        title="No price entries found"
-                        description={search ? `No prices match "${search}".` : 'No prices set yet.'}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map(r => (
-                    <tr key={r.id}>
-                      <td style={{ fontWeight: 500 }}>{r.product?.canonical_name || '—'}</td>
-                      <td>{colourLabel(r) ? <span className="badge badge-accent">{colourLabel(r)}</span> : <span className="text-muted">—</span>}</td>
-                      <td>
-                        {r.branch?.name || '—'}
-                        {!r.price_consistent_across_branches && (
-                          <span className="badge badge-warning" style={{ marginLeft: 6 }} title="Price differs between branches">varies</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(r.price_per_unit_exclusive)}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{money(r.price_per_unit_inclusive)}</td>
-                      {showArea && (
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          {money(r.price_per_sqm_inclusive)}
-                          {r.price_per_sqm_inclusive != null && r.pcs_per_sqm_at_pricing && (
-                            <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{r.pcs_per_sqm_at_pricing} pcs per m²</div>
-                          )}
-                        </td>
-                      )}
-                      <td>
-                        <span className={`badge ${r.is_available ? 'badge-success' : 'badge-neutral'}`}>
-                          {r.is_available ? 'available' : 'unavailable'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {!loading && filtered.length > 0 && (
-              <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                {filtered.length} price entr{filtered.length !== 1 ? 'ies' : 'y'}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!loading && !error && visibleRules.length > 0 && (
-        <section className="card mt-24" aria-labelledby="colour-pricing-title">
-          <div className="card-header">
-            <h2 id="colour-pricing-title" className="card-title flex items-center gap-8">
-              <Palette size={16} strokeWidth={1.8} /> Colour pricing
-            </h2>
-            <span className="text-muted text-sm">Prices above are for each category's base colour</span>
-          </div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Branch</th>
-                  <th>Base colour</th>
-                  <th>Rule</th>
-                  <th>Other colours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRules.map(rule => (
-                  <tr key={rule.id}>
-                    <td style={{ fontWeight: 500 }}>{rule.category?.name || '—'}</td>
-                    <td>{rule.branch?.name || '—'}</td>
-                    <td>{rule.base?.name || '—'}</td>
-                    <td className="text-muted">{RULE_TYPE[rule.pricing_type] || rule.pricing_type}</td>
+                {loading ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={branches.length + 1 || 4} />)
+                : shownProducts.length === 0 ? (
+                  <tr><td colSpan={branches.length + 1}>
+                    <EmptyState icon={DollarSign} title="No products in this view" description={search ? `No products match "${search}".` : ''} />
+                  </td></tr>
+                ) : shownProducts.map(p => (
+                  <tr key={p.id}>
                     <td>
-                      <div className="flex gap-4" style={{ flexWrap: 'wrap' }}>
-                        {[...(rule.items || [])]
-                          .sort((a, b) => (a.color?.display_order ?? 0) - (b.color?.display_order ?? 0))
-                          .map(item => (
-                            <span key={item.color?.name} className="badge badge-neutral">
-                              {item.color?.name}: {rule.pricing_type === 'delta_over_base_color' ? '+' : ''}{money(item.amount)}
-                            </span>
-                          ))}
-                      </div>
+                      <div style={{ fontWeight: 500 }}>{p.canonical_name}{p.status !== 'active' && <span className="text-muted"> (inactive)</span>}</div>
+                      <div className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{p.product_id_ref}</div>
                     </td>
+                    {branches.map(b => {
+                      const row = basePrice[`${p.id}|${b.id}`];
+                      const cell = row ? (
+                        <>
+                          <div className={row.is_available ? '' : 'text-muted'}>
+                            {row.price_per_sqm_inclusive != null ? `${money(row.price_per_sqm_inclusive)} /m²` : money(row.price_per_unit_inclusive)}
+                          </div>
+                          <div className="text-xs text-muted">
+                            {!row.is_available ? 'not sold here'
+                              : row.price_per_sqm_inclusive != null ? `${money(row.price_per_unit_inclusive)} each · ${row.pcs_per_sqm_at_pricing} per m²` : 'incl. VAT'}
+                          </div>
+                        </>
+                      ) : <span className="text-muted">—</span>;
+                      return (
+                        <td key={b.id}>
+                          {canWrite && (p.status === 'active' || row) ? (
+                            <button type="button" className="price-cell" onClick={() => setEditingPrice({ product: p, branch: b, row })}
+                              aria-label={`${row ? 'Edit' : 'Add'} ${p.canonical_name} price in ${b.name}`}>
+                              {row ? cell : <span className="text-muted flex items-center gap-4"><Plus size={12} /> Add</span>}
+                            </button>
+                          ) : cell}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
+            {!loading && (
+              <div className="table-footer-note">
+                Prices include VAT and are the base price; other colours follow the category's colour pricing.
+                {colourRows > 0 && ` ${colourRows} colour-specific price row${colourRows === 1 ? '' : 's'} not shown here.`}
+              </div>
+            )}
           </div>
-        </section>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-16">
+          {loading ? <div className="card"><table><tbody><SkeletonRow cols={4} /></tbody></table></div>
+          : colouredCategories.length === 0 ? (
+            <div className="card"><EmptyState icon={Palette} title="No coloured categories" description="Give a category colours under Categories to price colours." /></div>
+          ) : colouredCategories.map(cat => (
+            <div key={cat.id} className="card">
+              <div className="card-header"><h2 className="card-title">{cat.name}</h2></div>
+              <div className="table-container">
+                <table>
+                  <thead><tr><th>Branch</th><th>Base colour</th><th>Rule</th><th>Other colours</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
+                  <tbody>
+                    {branches.map(b => {
+                      const rule = rules.find(r => r.category_id === cat.id && r.branch_id === b.id);
+                      return (
+                        <tr key={b.id}>
+                          <td style={{ fontWeight: 500 }}>{b.name}</td>
+                          {rule ? <>
+                            <td>{colourName[rule.base_color_id] || '—'}</td>
+                            <td className="text-muted">{RULE_TYPE[rule.pricing_type] || rule.pricing_type}</td>
+                            <td>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {[...rule.items]
+                                  .sort((x, y) => (cat.colors.find(c => c.color_id === x.color_id)?.display_order ?? 0) - (cat.colors.find(c => c.color_id === y.color_id)?.display_order ?? 0))
+                                  .map(i => (
+                                    <span key={i.color_id} className="badge badge-neutral">
+                                      {colourName[i.color_id]}: {rule.pricing_type === 'delta_over_base_color' ? '+' : ''}{money(i.amount)}
+                                    </span>
+                                  ))}
+                                {rule.items.length === 0 && <span className="text-muted">—</span>}
+                              </div>
+                            </td>
+                          </> : <td colSpan={3} className="text-muted">No colour pricing — colours other than the base have no price here.</td>}
+                          {canWrite && (
+                            <td style={{ textAlign: 'right' }}>
+                              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingRule({ category: cat, branch: b, rule })}>
+                                {rule ? 'Edit' : 'Add'}
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editingPrice && (
+        <PriceModal {...editingPrice} organization={organization} usualVatRate={usualVatRate}
+          onClose={() => setEditingPrice(null)} onSaved={async () => { setEditingPrice(null); await load(); }} />
+      )}
+      {editingRule && (
+        <RuleModal {...editingRule} organization={organization}
+          onClose={() => setEditingRule(null)} onSaved={async () => { setEditingRule(null); await load(); }} />
       )}
     </PageShell>
+  );
+}
+
+function PriceModal({ product, branch, row, organization, usualVatRate, onClose, onSaved }) {
+  const isNew = !row;
+  const money = v => formatMoney(v, organization?.currency_code);
+  const [byArea,    setByArea]    = useState(row ? row.price_per_sqm_inclusive != null : product.pcs_per_sqm != null);
+  const [perSqm,    setPerSqm]    = useState(row?.price_per_sqm_inclusive ?? '');
+  const [pcs,       setPcs]       = useState(row?.pcs_per_sqm_at_pricing ?? product.pcs_per_sqm ?? '');
+  const [perUnit,   setPerUnit]   = useState(row?.price_per_unit_inclusive ?? '');
+  const [vatRate,   setVatRate]   = useState(row ? impliedVatRate(row) ?? '' : usualVatRate ?? '');
+  const [available, setAvailable] = useState(row?.is_available ?? true);
+  const [notes,     setNotes]     = useState(row?.raw_notes ?? '');
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+
+  // Per-unit price incl. VAT: entered directly, or per m² ÷ pieces per m²
+  const unitInc = byArea
+    ? (numOrNull(perSqm) != null && Number(pcs) > 0 ? numOrNull(perSqm) / Number(pcs) : null)
+    : numOrNull(perUnit);
+  const rate = numOrNull(vatRate);
+  const unitEx = unitInc != null && rate != null ? unitInc / (1 + rate / 100) : null;
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    if (byArea) {
+      if (!(numOrNull(perSqm) > 0)) { setError('Enter the price per m².'); return; }
+      if (!Number.isInteger(Number(pcs)) || !(Number(pcs) > 0)) { setError('Pieces per m² must be a whole number above zero.'); return; }
+    } else if (!(unitInc > 0)) { setError('Enter the price.'); return; }
+    if (rate != null && !(rate >= 0 && rate < 100)) { setError('VAT rate must be between 0 and 100.'); return; }
+
+    const fields = {
+      price_per_unit_inclusive: round2(unitInc),
+      price_per_unit_exclusive: unitEx != null ? round2(unitEx) : null,
+      vat_per_unit:             unitEx != null ? round2(unitInc - unitEx) : null,
+      price_per_sqm_inclusive:  byArea ? numOrNull(perSqm) : null,
+      pcs_per_sqm_at_pricing:   byArea ? Number(pcs) : null,
+      is_available:             available,
+      raw_notes:                notes.trim() || null,
+    };
+    // Price and VAT rate untouched: keep the stored figures exactly as they
+    // are (no rounding drift, and no silent "correction" of source rows)
+    if (row && rate === impliedVatRate(row) && round2(unitInc) === round2(row.price_per_unit_inclusive)) {
+      fields.price_per_unit_inclusive = row.price_per_unit_inclusive;
+      fields.price_per_unit_exclusive = row.price_per_unit_exclusive;
+      fields.vat_per_unit             = row.vat_per_unit;
+    }
+    setBusy(true);
+    const { error: err } = isNew
+      ? await supabase.from('product_branch_pricing').insert({
+          ...fields, organization_id: organization.id, product_id: product.id, branch_id: branch.id, color_id: null,
+        })
+      : await supabase.from('product_branch_pricing').update(fields).eq('id', row.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  return (
+    <Modal title={`${product.canonical_name} — ${branch.name}`} onClose={onClose}
+      footer={<>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="submit" form="price-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>
+          {isNew ? 'Add price' : 'Save'}
+        </button>
+      </>}>
+      <form id="price-form" className="modal-form" onSubmit={save}>
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        <p className="text-sm text-muted">Base price{product.unit?.symbol ? ` · stocked in ${product.unit.symbol}` : ''}. Other colours follow the category's colour pricing.</p>
+        <label className="text-sm flex items-center gap-8">
+          <input type="checkbox" checked={byArea} onChange={e => setByArea(e.target.checked)} />
+          Priced per m²
+        </label>
+        {byArea ? (
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="pr-sqm">Price per m² (incl. VAT)</label>
+              <input id="pr-sqm" type="number" step="any" min="0" className="form-input" autoFocus value={perSqm} onChange={e => setPerSqm(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="pr-pcs">Pieces per m²</label>
+              <input id="pr-pcs" type="number" step="1" min="1" className="form-input" value={pcs} onChange={e => setPcs(e.target.value)} />
+            </div>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label" htmlFor="pr-unit">Price each (incl. VAT)</label>
+            <input id="pr-unit" type="number" step="any" min="0" className="form-input" autoFocus value={perUnit} onChange={e => setPerUnit(e.target.value)} />
+          </div>
+        )}
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="pr-vat">VAT rate (%)</label>
+            <input id="pr-vat" type="number" step="any" min="0" className="form-input" placeholder="Not recorded" value={vatRate} onChange={e => setVatRate(e.target.value)} />
+            <span className="form-hint">{row ? 'As implied by this price\'s current figures.' : 'Suggested from your other prices — check it.'}</span>
+          </div>
+          <div className="form-group">
+            <span className="form-label">Works out to</span>
+            <p className="text-sm">
+              {unitInc != null ? <>{money(round2(unitInc))} each incl. VAT{unitEx != null && <><br />{money(round2(unitEx))} excl. VAT</>}</> : '—'}
+            </p>
+          </div>
+        </div>
+        <label className="text-sm flex items-center gap-8">
+          <input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)} />
+          Sold at {branch.name}
+        </label>
+        <div className="form-group">
+          <label className="form-label" htmlFor="pr-notes">Notes</label>
+          <input id="pr-notes" className="form-input" value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+        {!isNew && <EntityFlags entityType="product_price" entityId={row.id} canResolve />}
+        {!isNew && <EntityHistory entityType="product_price" entityId={row.id} />}
+      </form>
+    </Modal>
+  );
+}
+
+function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
+  const isNew = !rule;
+  const colours = [...category.colors].sort((a, b) => a.display_order - b.display_order);
+  const [baseId, setBaseId] = useState(rule?.base_color_id ?? colours[0]?.color_id ?? '');
+  const [type,   setType]   = useState(rule?.pricing_type ?? 'delta_over_base_color');
+  const [amounts, setAmounts] = useState(Object.fromEntries((rule?.items || []).map(i => [i.color_id, String(i.amount)])));
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+  const money = v => formatMoney(v, organization?.currency_code);
+  const others = colours.filter(c => c.color_id !== baseId);
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    for (const c of others) {
+      const v = numOrNull(amounts[c.color_id]);
+      if (v != null && !(v >= 0)) { setError(`${c.color?.name}: enter zero or more, or leave blank.`); return; }
+    }
+    setBusy(true);
+    let ruleId = rule?.id;
+    if (isNew) {
+      const { data, error: err } = await supabase.from('category_color_pricing_rules')
+        .insert({ organization_id: organization.id, category_id: category.id, branch_id: branch.id, base_color_id: baseId, pricing_type: type })
+        .select('id').single();
+      if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+      ruleId = data.id;
+    } else if (rule.base_color_id !== baseId || rule.pricing_type !== type) {
+      const { error: err } = await supabase.from('category_color_pricing_rules')
+        .update({ base_color_id: baseId, pricing_type: type }).eq('id', ruleId);
+      if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    }
+
+    const current = Object.fromEntries((rule?.items || []).map(i => [i.color_id, Number(i.amount)]));
+    const upserts = others
+      .filter(c => numOrNull(amounts[c.color_id]) != null && numOrNull(amounts[c.color_id]) !== current[c.color_id])
+      .map(c => ({ organization_id: organization.id, rule_id: ruleId, color_id: c.color_id, amount: numOrNull(amounts[c.color_id]) }));
+    // Blank amounts, and the base colour itself, have no item
+    const removals = Object.keys(current).filter(id => id === baseId || numOrNull(amounts[id]) == null);
+    if (upserts.length) {
+      const { error: err } = await supabase.from('category_color_price_items').upsert(upserts, { onConflict: 'rule_id,color_id' });
+      if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    }
+    if (removals.length) {
+      const { error: err } = await supabase.from('category_color_price_items').delete().eq('rule_id', ruleId).in('color_id', removals);
+      if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    }
+    setBusy(false);
+    onSaved();
+  }
+
+  return (
+    <Modal title={`${category.name} — ${branch.name} colour pricing`} onClose={onClose}
+      footer={<>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="submit" form="rule-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !baseId}>
+          {isNew ? 'Add colour pricing' : 'Save'}
+        </button>
+      </>}>
+      <form id="rule-form" className="modal-form" onSubmit={save}>
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="rule-base">Base colour</label>
+            <select id="rule-base" className="form-input" value={baseId} onChange={e => setBaseId(e.target.value)}>
+              {colours.map(c => <option key={c.color_id} value={c.color_id}>{c.color?.name}</option>)}
+            </select>
+            <span className="form-hint">Products' own prices are for this colour.</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="rule-type">Other colours are priced as</label>
+            <select id="rule-type" className="form-input" value={type} onChange={e => setType(e.target.value)}>
+              {Object.entries(RULE_TYPE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <section>
+          <h3 className="modal-section-title">{type === 'delta_over_base_color' ? 'Amount added per m²' : 'Price per m²'} (incl. VAT)</h3>
+          <div className="flex flex-col gap-8">
+            {others.map(c => (
+              <div key={c.color_id} className="form-row" style={{ alignItems: 'center' }}>
+                <label className="text-sm" htmlFor={`amt-${c.color_id}`}>{c.color?.name}</label>
+                <input id={`amt-${c.color_id}`} type="number" step="any" min="0" className="form-input" placeholder="No price"
+                  value={amounts[c.color_id] ?? ''} onChange={e => setAmounts(a => ({ ...a, [c.color_id]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted mt-8">
+            Blank means that colour has no price at {branch.name}.
+            {type === 'delta_over_base_color' && others[0] && numOrNull(amounts[others[0].color_id]) != null &&
+              ` e.g. ${others[0].color?.name} = base price + ${money(numOrNull(amounts[others[0].color_id]))} per m².`}
+          </p>
+        </section>
+        {!isNew && <EntityHistory entityType="color_pricing_rule" entityId={rule.id} />}
+      </form>
+    </Modal>
   );
 }
