@@ -1,0 +1,200 @@
+{
+  "_readme": "Raw materials master data for Stumarcot, transcribed from the user's 'Materials master.md' project doc (2026-10-12). Purchase unit = what the supplier sells in. Inventory unit = what MOIS tracks stock in. conversion_to_inventory_unit = how many inventory units per 1 purchase unit. qty_on_hand and last_recorded_price are intentionally null here - this file defines the material catalog, not current stock or cost; those are live, user-entered, transaction-derived values per the user's own note ('qty is the stock count and cost is the current price as last recorded by user') and belong in the database (1b materials ledger), not a static seed value that goes stale.",
+  "_decisions_log": [
+    {
+      "date": "2026-10-12",
+      "topic": "Source document",
+      "decision": "Transcribed verbatim from 'Materials master.md'. No quantities or prices were given in the source - left null, not guessed.",
+      "action_taken": "Created this file as the seed input for 1a.1's materials master data and 1b's materials ledger."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Open: which sand type per recipe",
+      "decision": "Three distinct sand materials exist (Mchanga Laini, Mweupe, Mnene) from two sources, but every recipe in ratios_and_molds.json specifies generic 'mchanga' with no type. NOT guessed - recipes keep generic 'mchanga' as the material reference until the user specifies which sand type each product category actually uses. RESOLVED 2026-10-12: see per-material notes and ratios_and_molds.json for the full category/item mapping.",
+      "action_taken": "Flagged as open. material_id 'mchanga_generic' kept as a placeholder reference in recipes until resolved; the 3 specific sand materials exist in this file as real purchasable/stockable materials regardless. Mapping applied: vibro categories -> Mweupe; press paving + Chipping/Hollow Block + Kerbstones + Culverts + Posts&Bicons -> Laini; plain Sand Block/Tofali only -> Mnene."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Open: Mafuta/oil's role",
+      "decision": "Not an ingredient in any recipe in ratios_and_molds.json. Likely machine fuel or lubricant (operational cost), not a BOM material. Not assumed either way.",
+      "action_taken": "Included as a material (it's a real purchased, stocked item) but flagged as not yet linked to any recipe or cost category - needs user confirmation of its purpose before 1d (production costing) decides whether it's a per-unit production cost or a fixed overhead."
+    }
+  ],
+  "materials": [
+    {
+      "material_id": "cement",
+      "category": "Cement",
+      "name": "Cement",
+      "purchase_unit": "50kg bag",
+      "inventory_unit": "50kg bag",
+      "conversion_to_inventory_unit": 1,
+      "source": "Wholesalers",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Cem' in all recipe ratios - already the unit used throughout ratios_and_molds.json."
+    },
+    {
+      "material_id": "mchanga_laini",
+      "category": "Mchanga (sand)",
+      "name": "Mchanga Laini",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "1 Trip/Truck = 20 Cbm, so 1 Cbm = 1/20 = 0.05 trucks. 20 Cbm = 2500 ndoo/buckets, so 1 truck = 2500 ndoo, 1 ndoo = 0.008 Cbm.",
+      "source": "Msanga (27km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Used in: press-machine paving (Rectangular/Zigzag/H-Paver/Worldcup/Z-Plain/W-Cup), the Chipping and Hollow Block items in Blocks (NOT the plain Sand Block/Tofali items - those use Mchanga Mnene), Kerbstones (50/80 Press), Culverts, and Posts & Bicons (Nguzo/Bicon). Confirmed by user 2026-10-12."
+    },
+    {
+      "material_id": "mchanga_mweupe",
+      "category": "Mchanga (sand)",
+      "name": "Mchanga Mweupe",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "Same conversion as Mchanga Laini: 1 truck = 20 Cbm = 2500 ndoo.",
+      "source": "Msanga (27km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Used in ALL vibro-production categories: floor_tiles, wall_tiles, paving_blocks_vibro, curbstones, trench_covers. Confirmed by user 2026-10-12."
+    },
+    {
+      "material_id": "mchanga_mnene",
+      "category": "Mchanga (sand)",
+      "name": "Mchanga Mnene",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "Same conversion as the other two sand types: 1 truck = 20 Cbm = 2500 ndoo.",
+      "source": "Kikombo (21km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Used ONLY for the plain Sand Block / Tofali items in Blocks (press_01 Tofali 5\", press_02 Tofali 4\", press_03/Sand Block, press_16 unlabeled-height Sand Block) - NOT the Chipping or Hollow Block variants in the same category, which use Mchanga Laini instead. Confirmed by user 2026-10-12."
+    },
+    {
+      "material_id": "dust",
+      "category": "Dust",
+      "name": "Dust",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "1 truck = 20 Cbm = 2500 ndoo, same conversion family as sand/chip/kokoto.",
+      "source": "Manchali (20km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Dust' in press machine paving recipes (press_09a-10, press_14/15 families)."
+    },
+    {
+      "material_id": "chipping",
+      "category": "Chipping",
+      "name": "Chipping",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "Same conversion family: 1 truck = 20 Cbm = 2500 ndoo.",
+      "source": "Manchali (20km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Chip' throughout ratios_and_molds.json (curbstones, trench covers, press products, culverts, posts)."
+    },
+    {
+      "material_id": "kokoto",
+      "category": "Kokoto / Aggregate",
+      "name": "Kokoto / Aggregate",
+      "purchase_unit": "Cbm",
+      "inventory_unit": "Trip/Truck",
+      "conversion_to_inventory_unit": 0.05,
+      "conversion_note": "Same conversion family: 1 truck = 20 Cbm = 2500 ndoo.",
+      "source": "Manchali (20km)",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Kok' in curbstones, culverts, posts & bicons recipes."
+    },
+    {
+      "material_id": "dawa",
+      "category": "Chemical additive / hardener",
+      "name": "Dawa",
+      "purchase_unit": "200L barrel",
+      "inventory_unit": "litre",
+      "conversion_to_inventory_unit": 200,
+      "source": "Dar",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Dawa (litre)' in floor tile and wall tile recipes exactly."
+    },
+    {
+      "material_id": "rangi_red",
+      "category": "Rangi",
+      "name": "Rangi Red",
+      "purchase_unit": "25kg bag",
+      "inventory_unit": "kg",
+      "conversion_to_inventory_unit": 25,
+      "source": "Dar",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Rangi (kg)' Red entries in floor tile, wall tile, and paving recipes."
+    },
+    {
+      "material_id": "rangi_black",
+      "category": "Rangi",
+      "name": "Rangi Black",
+      "purchase_unit": "25kg bag",
+      "inventory_unit": "kg",
+      "conversion_to_inventory_unit": 25,
+      "source": "Dar",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches 'Rangi (kg)' Black entries. No separate Rangi Grey material listed in the source doc even though Grey is a recipe color - Grey likely uses a smaller amount of one of these two pigments (per the notebook's 'Rangi(Red and Black for both black and grey)' glossary note) rather than needing its own material. Not assumed further - flagging for user confirmation if it matters for costing."
+    },
+    {
+      "material_id": "mafuta_oil",
+      "category": "Mafuta/oil",
+      "name": "Mafuta/oil",
+      "purchase_unit": "20L dumu",
+      "inventory_unit": "litre",
+      "conversion_to_inventory_unit": 20,
+      "source": "Shop",
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": false,
+      "note": "Not an ingredient in any recipe - likely machine fuel/lubricant, an operational cost rather than a BOM material. Needs user confirmation of its actual use before 1d decides how to cost it."
+    },
+    {
+      "material_id": "steel_r6",
+      "category": "Steel",
+      "name": "R6 (6mm steel)",
+      "purchase_unit": null,
+      "inventory_unit": null,
+      "conversion_to_inventory_unit": null,
+      "source": null,
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches the 'R' steel_gauge variant on culverts (400R/600R/900R) exactly. Purchase/inventory unit not given in the source doc - awaiting user entry (likely purchased by length, e.g. per metre or per rod)."
+    },
+    {
+      "material_id": "steel_10mm",
+      "category": "Steel",
+      "name": "10mm steel",
+      "purchase_unit": null,
+      "inventory_unit": null,
+      "conversion_to_inventory_unit": null,
+      "source": null,
+      "qty_on_hand": null,
+      "last_recorded_price": null,
+      "used_in_recipes": true,
+      "note": "Matches the 'N' steel_gauge variant on culverts (400N/600N/900N) exactly. Purchase/inventory unit not given - awaiting user entry."
+    }
+  ]
+}

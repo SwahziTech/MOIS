@@ -543,7 +543,9 @@
         }
       ],
       "production_method": "vibro",
-      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds",
+      "sand_material_id": "mchanga_mweupe",
+      "sand_material_note": "Confirmed by user 2026-10-12: all vibro-production categories use Mchanga Mweupe."
     },
     {
       "category_id": "wall_tiles",
@@ -778,7 +780,9 @@
         }
       ],
       "production_method": "vibro",
-      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds",
+      "sand_material_id": "mchanga_mweupe",
+      "sand_material_note": "Confirmed by user 2026-10-12: all vibro-production categories use Mchanga Mweupe."
     },
     {
       "category_id": "paving_blocks_vibro",
@@ -1001,7 +1005,9 @@
         }
       ],
       "production_method": "vibro",
-      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds",
+      "sand_material_id": "mchanga_mweupe",
+      "sand_material_note": "Confirmed by user 2026-10-12: all vibro-production categories use Mchanga Mweupe."
     },
     {
       "category_id": "curbstones",
@@ -1137,7 +1143,9 @@
         }
       ],
       "production_method": "vibro",
-      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds",
+      "sand_material_id": "mchanga_mweupe",
+      "sand_material_note": "Confirmed by user 2026-10-12: all vibro-production categories use Mchanga Mweupe."
     },
     {
       "category_id": "trench_covers",
@@ -1261,7 +1269,9 @@
         }
       ],
       "production_method": "vibro",
-      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds"
+      "capacity_model": "max_daily_output_pcs_equals_qty_of_molds",
+      "sand_material_id": "mchanga_mweupe",
+      "sand_material_note": "Confirmed by user 2026-10-12: all vibro-production categories use Mchanga Mweupe."
     },
     {
       "category_id": "press_machine_products",
@@ -1291,7 +1301,9 @@
           "estimated_daily_output_pcs_range": {
             "min": 2500,
             "max": 10000
-          }
+          },
+          "sand_material_id": "mchanga_mnene",
+          "sand_material_note": "Confirmed by user 2026-10-12: plain Sand Block/Tofali uses Mchanga Mnene, distinct from the Chipping/Hollow Block variants in the same category."
         },
         {
           "item_id": "press_02",
@@ -1315,7 +1327,9 @@
           "estimated_daily_output_pcs_range": {
             "min": 3000,
             "max": 12000
-          }
+          },
+          "sand_material_id": "mchanga_mnene",
+          "sand_material_note": "Confirmed by user 2026-10-12: plain Sand Block/Tofali uses Mchanga Mnene, distinct from the Chipping/Hollow Block variants in the same category."
         },
         {
           "item_id": "press_03",
@@ -1344,7 +1358,9 @@
             "Tofali 6\""
           ],
           "commercial_category": "blocks",
-          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Sand Block' at 450x230x150mm - height (150mm) matches Tofali 6\" exactly. Notebook name 'Tofali 6\"' kept as alt_name."
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Sand Block' at 450x230x150mm - height (150mm) matches Tofali 6\" exactly. Notebook name 'Tofali 6\"' kept as alt_name.",
+          "sand_material_id": "mchanga_mnene",
+          "sand_material_note": "Confirmed by user 2026-10-12: plain Sand Block/Tofali uses Mchanga Mnene, distinct from the Chipping/Hollow Block variants in the same category."
         },
         {
           "item_id": "press_04",
@@ -1378,7 +1394,9 @@
             "Tofali 6\" Chipping"
           ],
           "commercial_category": "blocks",
-          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Chipping Block' - the only chipping variant in the price list, height (150mm) matches Tofali 6\" Chipping exactly."
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Chipping Block' - the only chipping variant in the price list, height (150mm) matches Tofali 6\" Chipping exactly.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_05",
@@ -1412,7 +1430,9 @@
             "Tofali Tundu 6\""
           ],
           "commercial_category": "blocks",
-          "note": "Confirmed by SwahziTech 2026-10-12: user confirmed 'Hollow Block' in the price list is Tofali Tundu, not Trench Cover's 'Hollow' (that earlier match was wrong - different product, different size). Height matches Tofali Tundu 6\" (150mm); price list's recorded length/width (450x230mm) differs slightly from notebook's (390x200mm) - real-world measurement variance, not treated as a different product."
+          "note": "Confirmed by SwahziTech 2026-10-12: user confirmed 'Hollow Block' in the price list is Tofali Tundu, not Trench Cover's 'Hollow' (that earlier match was wrong - different product, different size). Height matches Tofali Tundu 6\" (150mm); price list's recorded length/width (450x230mm) differs slightly from notebook's (390x200mm) - real-world measurement variance, not treated as a different product.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_06",
@@ -1441,7 +1461,9 @@
           "estimated_daily_output_pcs_range": {
             "min": 3000,
             "max": 12000
-          }
+          },
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_07",
@@ -1475,7 +1497,9 @@
             "Kerbstone 50x350x15"
           ],
           "commercial_category": "curbstones",
-          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '50 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 50x350x15' kept as alt_name."
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '50 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 50x350x15' kept as alt_name.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_08",
@@ -1509,7 +1533,9 @@
             "Kerbstone 80x350x15"
           ],
           "commercial_category": "curbstones",
-          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '80 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 80x350x15' kept as alt_name."
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '80 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 80x350x15' kept as alt_name.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_09a",
@@ -1549,7 +1575,9 @@
           "alt_names": [
             "Rectangular (30MPa, 6cm)"
           ],
-          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (30MPa, 6cm))."
+          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (30MPa, 6cm)).",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_09b",
@@ -1589,7 +1617,9 @@
           },
           "alt_names": [
             "Rectangular (30-35MPa, 8cm)"
-          ]
+          ],
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_10",
@@ -1629,7 +1659,9 @@
           "alt_names": [
             "Rectangular (40-45MPa, 8cm)"
           ],
-          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (40-45MPa, 8cm))."
+          "note": " Confirmed by SwahziTech 2026-10-12: price-list 'Rectangular/Square Rough Paving' IS this product, size and grade match exactly (Rectangular (40-45MPa, 8cm)).",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_11",
@@ -1666,7 +1698,9 @@
           "estimated_daily_output_pcs_range": {
             "min": 8250,
             "max": 33000
-          }
+          },
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_13",
@@ -1706,7 +1740,9 @@
           },
           "alt_names": [
             "Worldcup"
-          ]
+          ],
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_14a",
@@ -1739,7 +1775,9 @@
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_14b",
@@ -1772,7 +1810,9 @@
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_14c",
@@ -1807,7 +1847,9 @@
           "alt_names": [
             "2IG-2AG 40MPa (notebook mistranscription of ZIGZAG - confirmed by user 2026-10-12)"
           ],
-          "note": "Confirmed by SwahziTech 2026-10-12: the notebook's 'Paving 2IG-2AG 40MPa' entry (item 12) was a mistranscription of 'ZIGZAG' - this IS that product. Ratio matches exactly (Cem 1 : Mch 8 : Dust 2 : Chip 6), confirming the earlier Rectangular-alias ratio was correct. wastani_per_bag=105 is a REAL recorded figure from the notebook, not inherited/assumed. pcs_per_sqm and m2_covered_per_bag still not recorded anywhere - left null, to be fed by user via 1a.1 Master Data Admin UI."
+          "note": "Confirmed by SwahziTech 2026-10-12: the notebook's 'Paving 2IG-2AG 40MPa' entry (item 12) was a mistranscription of 'ZIGZAG' - this IS that product. Ratio matches exactly (Cem 1 : Mch 8 : Dust 2 : Chip 6), confirming the earlier Rectangular-alias ratio was correct. wastani_per_bag=105 is a REAL recorded figure from the notebook, not inherited/assumed. pcs_per_sqm and m2_covered_per_bag still not recorded anywhere - left null, to be fed by user via 1a.1 Master Data Admin UI.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_15a",
@@ -1840,7 +1882,9 @@
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_15b",
@@ -1873,7 +1917,9 @@
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_15c",
@@ -1906,7 +1952,9 @@
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 40MPa'), since same quality + same press machine = same ratio. Ratio copied from press_10. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 40MPa'), since same quality + same press machine = same ratio. Ratio copied from press_10. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured.",
+          "sand_material_id": "mchanga_laini",
+          "sand_material_note": "Confirmed by user 2026-10-12."
         },
         {
           "item_id": "press_16",
@@ -1919,7 +1967,9 @@
           "m2_covered_per_bag": null,
           "alt_names": [],
           "commercial_category": "blocks",
-          "note": "Real product (price list, 'Sand Block' at 450x230mm, no height given, $1300 - cheaper than the 150mm Sand Block). Ambiguous between Tofali 4\" and Tofali 5\" - not guessed. Kept as its own entry; tenant to merge/edit via the Master Data Admin UI once they confirm which brick this actually is."
+          "note": "Real product (price list, 'Sand Block' at 450x230mm, no height given, $1300 - cheaper than the 150mm Sand Block). Ambiguous between Tofali 4\" and Tofali 5\" - not guessed. Kept as its own entry; tenant to merge/edit via the Master Data Admin UI once they confirm which brick this actually is.",
+          "sand_material_id": "mchanga_mnene",
+          "sand_material_note": "Confirmed by user 2026-10-12: plain Sand Block/Tofali uses Mchanga Mnene, distinct from the Chipping/Hollow Block variants in the same category."
         }
       ],
       "production_method": "press",
@@ -2050,7 +2100,9 @@
       ],
       "production_method": "steel_ring_cast",
       "capacity_model": null,
-      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press."
+      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press.",
+      "sand_material_id": "mchanga_laini",
+      "sand_material_note": "Confirmed by user 2026-10-12."
     },
     {
       "category_id": "posts_and_bicons",
@@ -2114,7 +2166,9 @@
       ],
       "production_method": "steel_roller_cast",
       "capacity_model": null,
-      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press."
+      "note": "Capacity model not yet defined for this production method - needs separate confirmation, different again from both vibro and press.",
+      "sand_material_id": "mchanga_laini",
+      "sand_material_note": "Confirmed by user 2026-10-12."
     }
   ],
   "_decisions_log": [
@@ -2213,6 +2267,12 @@
       "topic": "Remaining price-list items - included, not pre-resolved",
       "decision": "User: stop resolving every ambiguity manually - include ALL price-list products and ALL notebook mold entries as real catalog items, and let the tenant (via the Master Data Admin UI, phase 1a.1) clarify/merge conflicts themselves inside the app. MOIS is a multi-tenant product, not built only for Stumarcot - hardcoding every judgment call into seed data doesn't generalize to a second tenant with their own naming quirks.",
       "action_taken": "Added as standalone, unresolved entries rather than guessed-merged: U Dot Paver, Z Dot (paving_blocks_vibro); 50 Draft, Draft(300x300), Draft(490x450 dup) (floor_tiles); Sand Block unlabeled-height (press_16/blocks). Each flagged with its ambiguity in its own note field so the admin UI can surface it as a 'possible duplicate / needs review' item rather than this being invisible."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Sand type per category/item - resolved",
+      "decision": "User confirmed the full mapping: all vibro-production categories (floor_tiles, wall_tiles, paving_blocks_vibro, curbstones, trench_covers) use Mchanga Mweupe. Press-machine paving (Rectangular/Zigzag/H-Paver/Worldcup/Z-Plain/W-Cup), the Chipping and Hollow Block items within Blocks, Kerbstones (50/80 Press), Culverts, and Posts & Bicons all use Mchanga Laini. Only the PLAIN Sand Block/Tofali items within Blocks (press_01/02/03/16) use Mchanga Mnene - this is a real split within a single category, not a category-wide rule.",
+      "action_taken": "Added sand_material_id (and sand_material_note) to each vibro category, to culverts and posts_and_bicons at the category level, and to each individual item in press_machine_products (split 3 ways within that one category)."
     }
   ]
 }
