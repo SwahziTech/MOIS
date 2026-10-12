@@ -43,7 +43,26 @@ subset: products, categories, units, recipes) — NOT suppliers/customers yet.
 - No inventory, production, sales, or costing logic yet — intentional
 
 ## 1a.1 — Master Data Admin UI
-**Status: CURRENT**
+**Status: done (2026-10-12)**
+
+Verified, not just claimed: migrations 018-021 applied live after PGlite
+dry runs on a live snapshot; 86/86 live tenant-isolation checks; every
+screen loaded against live data. Screens: colours, product categories,
+products (incl. merging duplicates), recipes/BOM (every ingredient change
+saves a new version via create_recipe_version; saved versions are frozen),
+per-branch prices + colour pricing rules, materials (conversions,
+per-branch sources, material categories, units), and a review queue for
+"needs review" flags. Writes need an org-wide admin grant
+(has_permission); deactivate-only; field-level audit_log. First real use:
+"Draft (490x450mm)" merged into "50 Draft" by the tenant (2026-10-12).
+
+Consequence carried forward: once an org has app edits, the app is its
+source of truth — scripts/seed.js refuses such orgs unless
+--force-reseed-org-with-app-edits is passed. Open data left for the tenant
+to settle in the app (not code gaps): open review flags, active products
+with no price, steel stock/purchase units, Mwanza/Dar material sources.
+Known limitation: colour pricing rules have no status, so a rule can be
+emptied but not retired.
 
 Not in the original PRD phasing — inserted because 1a seeded products,
 recipes, and prices directly from the three source JSON files via script,
@@ -93,7 +112,7 @@ seed-only approach deliberately skipped.
   new kinds of data (suppliers/customers still arrive in 1b/1e as planned)
 
 ## 1b — Inventory Engine
-**Status: not started**
+**Status: CURRENT**
 
 PRD section: 4.6 (Inventory)
 
