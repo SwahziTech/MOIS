@@ -1,5 +1,5 @@
 {
-  "_readme": "Raw materials master data for Stumarcot, transcribed from the user's 'Materials master.md' project doc (2026-10-12). Purchase unit = what the supplier sells in. Inventory unit = what MOIS tracks stock in. conversion_to_inventory_unit = how many inventory units per 1 purchase unit. qty_on_hand and last_recorded_price are intentionally null here - this file defines the material catalog, not current stock or cost; those are live, user-entered, transaction-derived values per the user's own note ('qty is the stock count and cost is the current price as last recorded by user') and belong in the database (1b materials ledger), not a static seed value that goes stale.",
+  "_readme": "Raw materials master data for Stumarcot, transcribed from the user's 'Materials master.md' project doc (2026-10-12). Purchase unit = what the supplier sells in. Inventory unit = what MOIS tracks stock in. conversion_to_inventory_unit = how many inventory units per 1 purchase unit. qty_on_hand and last_recorded_price are intentionally null here - this file defines the material catalog, not current stock or cost; those are live, user-entered, transaction-derived values per the user's own note ('qty is the stock count and cost is the current price as last recorded by user') and belong in the database (1b materials ledger), not a static seed value that goes stale. IMPORTANT (added 2026-10-12): every material's 'source' field and every price figure in this file is DODOMA BRANCH data only. Mwanza and Dar es Salaam may buy the same materials from different suppliers at different prices - confirmed by the user. The production/consumption FLOW is the same across all three branches (same recipes, same ratios, same conversions) - only sourcing and purchase price vary by branch. This is structurally identical to how product pricing already varies by branch (product_branch_pricing) - materials need the same per-branch treatment, not a single global 'source' text field on the material.",
   "_decisions_log": [
     {
       "date": "2026-10-12",
@@ -18,6 +18,12 @@
       "topic": "Open: Mafuta/oil's role",
       "decision": "Not an ingredient in any recipe in ratios_and_molds.json. Likely machine fuel or lubricant (operational cost), not a BOM material. Not assumed either way.",
       "action_taken": "Included as a material (it's a real purchased, stocked item) but flagged as not yet linked to any recipe or cost category - needs user confirmation of its purpose before 1d (production costing) decides whether it's a per-unit production cost or a fixed overhead."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Source/price is per-branch, not global - correction to earlier default",
+      "decision": "User confirmed: all material data gathered so far is Dodoma-specific. Mwanza and Dar es Salaam may source the same materials from different suppliers at different prices. The production flow (recipes, ratios, conversions) is identical across branches - only sourcing/price varies. This corrects the earlier default (a single plain-text 'source' field on the material) - source and purchase price need a per-branch structure, mirroring product_branch_pricing exactly, not a single column.",
+      "action_taken": "Tagged every material's existing source as Dodoma-specific in this file. Schema correction relayed to Claude Code before the materials foundation work is built, so it isn't built against the wrong (single global source) assumption."
     }
   ],
   "materials": [
@@ -32,7 +38,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Cem' in all recipe ratios - already the unit used throughout ratios_and_molds.json."
+      "note": "Matches 'Cem' in all recipe ratios - already the unit used throughout ratios_and_molds.json.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "mchanga_laini",
@@ -46,7 +54,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Used in: press-machine paving (Rectangular/Zigzag/H-Paver/Worldcup/Z-Plain/W-Cup), the Chipping and Hollow Block items in Blocks (NOT the plain Sand Block/Tofali items - those use Mchanga Mnene), Kerbstones (50/80 Press), Culverts, and Posts & Bicons (Nguzo/Bicon). Confirmed by user 2026-10-12."
+      "note": "Used in: press-machine paving (Rectangular/Zigzag/H-Paver/Worldcup/Z-Plain/W-Cup), the Chipping and Hollow Block items in Blocks (NOT the plain Sand Block/Tofali items - those use Mchanga Mnene), Kerbstones (50/80 Press), Culverts, and Posts & Bicons (Nguzo/Bicon). Confirmed by user 2026-10-12.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "mchanga_mweupe",
@@ -60,7 +70,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Used in ALL vibro-production categories: floor_tiles, wall_tiles, paving_blocks_vibro, curbstones, trench_covers. Confirmed by user 2026-10-12."
+      "note": "Used in ALL vibro-production categories: floor_tiles, wall_tiles, paving_blocks_vibro, curbstones, trench_covers. Confirmed by user 2026-10-12.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "mchanga_mnene",
@@ -74,7 +86,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Used ONLY for the plain Sand Block / Tofali items in Blocks (press_01 Tofali 5\", press_02 Tofali 4\", press_03/Sand Block, press_16 unlabeled-height Sand Block) - NOT the Chipping or Hollow Block variants in the same category, which use Mchanga Laini instead. Confirmed by user 2026-10-12."
+      "note": "Used ONLY for the plain Sand Block / Tofali items in Blocks (press_01 Tofali 5\", press_02 Tofali 4\", press_03/Sand Block, press_16 unlabeled-height Sand Block) - NOT the Chipping or Hollow Block variants in the same category, which use Mchanga Laini instead. Confirmed by user 2026-10-12.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "dust",
@@ -88,7 +102,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Dust' in press machine paving recipes (press_09a-10, press_14/15 families)."
+      "note": "Matches 'Dust' in press machine paving recipes (press_09a-10, press_14/15 families).",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "chipping",
@@ -102,7 +118,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Chip' throughout ratios_and_molds.json (curbstones, trench covers, press products, culverts, posts)."
+      "note": "Matches 'Chip' throughout ratios_and_molds.json (curbstones, trench covers, press products, culverts, posts).",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "kokoto",
@@ -116,7 +134,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Kok' in curbstones, culverts, posts & bicons recipes."
+      "note": "Matches 'Kok' in curbstones, culverts, posts & bicons recipes.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "dawa",
@@ -129,7 +149,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Dawa (litre)' in floor tile and wall tile recipes exactly."
+      "note": "Matches 'Dawa (litre)' in floor tile and wall tile recipes exactly.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "rangi_red",
@@ -142,7 +164,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Rangi (kg)' Red entries in floor tile, wall tile, and paving recipes."
+      "note": "Matches 'Rangi (kg)' Red entries in floor tile, wall tile, and paving recipes.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "rangi_black",
@@ -155,7 +179,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": true,
-      "note": "Matches 'Rangi (kg)' Black entries. No separate Rangi Grey material listed in the source doc even though Grey is a recipe color - Grey likely uses a smaller amount of one of these two pigments (per the notebook's 'Rangi(Red and Black for both black and grey)' glossary note) rather than needing its own material. Not assumed further - flagging for user confirmation if it matters for costing."
+      "note": "Matches 'Rangi (kg)' Black entries. No separate Rangi Grey material listed in the source doc even though Grey is a recipe color - Grey likely uses a smaller amount of one of these two pigments (per the notebook's 'Rangi(Red and Black for both black and grey)' glossary note) rather than needing its own material. Not assumed further - flagging for user confirmation if it matters for costing.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "mafuta_oil",
@@ -168,7 +194,9 @@
       "qty_on_hand": null,
       "last_recorded_price": null,
       "used_in_recipes": false,
-      "note": "Not an ingredient in any recipe - likely machine fuel/lubricant, an operational cost rather than a BOM material. Needs user confirmation of its actual use before 1d decides how to cost it."
+      "note": "Not an ingredient in any recipe - likely machine fuel/lubricant, an operational cost rather than a BOM material. Needs user confirmation of its actual use before 1d decides how to cost it.",
+      "source_branch": "Dodoma",
+      "source_note": "This source is Dodoma's supplier only. Mwanza/Dar es Salaam may use different suppliers and prices for this same material - needs their own entries, not assumed to match Dodoma."
     },
     {
       "material_id": "steel_r6",
