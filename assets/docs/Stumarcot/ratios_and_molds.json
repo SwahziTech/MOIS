@@ -478,6 +478,68 @@
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
           "max_daily_output_pcs": null
+        },
+        {
+          "mold_id": "floor_tiles_22",
+          "mold_no": 22,
+          "name": "50 Plain",
+          "size_cm": "50x50",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Confirmed real product (price list, 500x500mm). No notebook match ('40 plain' is 40x40cm, different size). Uses the shared floor-tile ratio (confirmed 2026-10-11: all tiles use the same ratio) - only mold count/yield not yet recorded, awaiting entry."
+        },
+        {
+          "mold_id": "floor_tiles_23",
+          "mold_no": 23,
+          "name": "40 8gon (new size)",
+          "size_cm": "40x40",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Confirmed real product (price list, 400x400mm). Notebook only records '30 8gon' (30x30cm) - this is a larger size variant of the same 8gon shape, not yet in the notebook. Uses the shared floor-tile ratio; mold count/yield not yet recorded, awaiting entry."
+        },
+        {
+          "mold_id": "floor_tiles_24",
+          "mold_no": null,
+          "name": "50 Draft",
+          "size_cm": "49x45",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "note": "Real product (price list, 490x450mm). Not confidently matched to '30 Draft' or 'Draft 9' (both 30x30cm, different size). Kept as its own entry, shared floor-tile ratio applies; mold/yield not recorded. Tenant to merge/edit if it's actually the same product under a different size record."
+        },
+        {
+          "mold_id": "floor_tiles_25",
+          "mold_no": null,
+          "name": "Draft",
+          "size_cm": "30x30",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "note": "Real product (price list, 300x300mm). Possibly the same as '30 Draft' or 'Draft 9' - not confidently merged to either since both notebook entries are near-identical. Kept as its own entry; tenant to merge/edit via the Master Data Admin UI."
+        },
+        {
+          "mold_id": "floor_tiles_26",
+          "mold_no": null,
+          "name": "Draft (490x450mm)",
+          "size_cm": "49x45",
+          "qty_of_molds": null,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "note": "Real product (price list, 490x450mm) - appears as a SEPARATE row from '50 Draft' despite the identical size, which may mean the price list itself has a duplicate entry. Kept as its own entry rather than silently deduplicated - worth the tenant checking the original price list file and merging/deleting via the admin UI if it is in fact a duplicate."
         }
       ],
       "production_method": "vibro",
@@ -666,7 +728,11 @@
           "extra_parameters": {
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
-          "max_daily_output_pcs": 22
+          "max_daily_output_pcs": 22,
+          "alt_names": [
+            "Wall Gamba"
+          ],
+          "note": "Price list calls this 'Wall Gamba' - name match ('Gamba'), treated as same product. Flagged, not independently size-confirmed (price list gives no size_mm for this row)."
         },
         {
           "mold_id": "wall_tiles_04",
@@ -697,6 +763,18 @@
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
           "max_daily_output_pcs": 12
+        },
+        {
+          "mold_id": "wall_tiles_06",
+          "mold_no": 6,
+          "name": "Wall Ngazi",
+          "size": null,
+          "qty": null,
+          "m2": null,
+          "pcs_per_m2": null,
+          "wastani": null,
+          "alt_names": [],
+          "note": "Confirmed real product (price list), no match to any notebook wall tile mold (Mahogany/Cloud/Gamba/Banzi/Mawingu). Genuinely new - no ratio/size/yield data, awaiting entry."
         }
       ],
       "production_method": "vibro",
@@ -896,6 +974,30 @@
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
           "max_daily_output_pcs": 675
+        },
+        {
+          "mold_id": "paving_vibro_08",
+          "mold_no": null,
+          "name": "U Dot Paver",
+          "qty_of_molds": null,
+          "m2": null,
+          "pcs_per_m2": null,
+          "wastani": null,
+          "m2_per_bag": null,
+          "alt_names": [],
+          "note": "Real product (price list). Possibly the same as 'U-Dot Kubwa' or 'U-Dot Ndogo' but not confidently matched to either - kept as its own entry rather than guessed onto one. No ratio/mold data recorded for it specifically. To be reviewed/merged by the tenant via the Master Data Admin UI, not pre-resolved here."
+        },
+        {
+          "mold_id": "paving_vibro_09",
+          "mold_no": null,
+          "name": "Z Dot",
+          "qty_of_molds": null,
+          "m2": null,
+          "pcs_per_m2": null,
+          "wastani": null,
+          "m2_per_bag": null,
+          "alt_names": [],
+          "note": "Real product (price list). Possibly a variant of 'Z Plain' but not confidently matched - kept as its own entry. No ratio/mold data recorded. To be reviewed/merged by the tenant via the Master Data Admin UI."
         }
       ],
       "production_method": "vibro",
@@ -969,7 +1071,7 @@
         {
           "mold_id": "curbstones_03",
           "mold_no": 3,
-          "name": "60 Round",
+          "name": "60 Oval",
           "size_cm": "60x25x10",
           "qty_of_molds": 10,
           "coverage_m2": null,
@@ -979,7 +1081,11 @@
           "extra_parameters": {
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
-          "max_daily_output_pcs": 10
+          "max_daily_output_pcs": 10,
+          "alt_names": [
+            "60 Round"
+          ],
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '60 Oval'; notebook recorded it as '60 Round'. Same product, same mold, same ratio/yield data - name merged, price list name primary."
         },
         {
           "mold_id": "curbstones_04",
@@ -995,6 +1101,39 @@
             "capacity_note": "One cast-and-cure cycle per mold per day. qty_of_molds is the hard daily production ceiling for this specific product, confirmed by SwahziTech 2026-09-25."
           },
           "max_daily_output_pcs": 5
+        },
+        {
+          "mold_id": "curbstones_05",
+          "mold_no": 5,
+          "name": "100 Lock",
+          "size_cm": "100x25x10",
+          "qty_of_molds": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Confirmed by SwahziTech 2026-10-12: real product, sold in Mwanza, not currently sold in Dodoma (our primary data branch). Uses the category's shared ratio; no mold count or yield recorded yet - awaiting data entry via 1a.1 Master Data Admin UI. Size inferred from price list size_mm (1000x250x100mm), not from notebook."
+        },
+        {
+          "mold_id": "curbstones_06",
+          "mold_no": 6,
+          "name": "Panasonic",
+          "size_cm": "100x30x10",
+          "qty_of_molds": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Confirmed by SwahziTech 2026-10-12: real product, sold in Mwanza, not currently sold in Dodoma. Uses the category's shared ratio; no mold count or yield recorded yet - awaiting data entry via 1a.1 Master Data Admin UI. Size inferred from price list size_mm (1000x300x100mm)."
+        },
+        {
+          "mold_id": "curbstones_07",
+          "mold_no": 7,
+          "name": "100 Bevo",
+          "size_cm": "100x25x10",
+          "qty_of_molds": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Confirmed by SwahziTech 2026-10-12: real product, sold in Mwanza, not currently sold in Dodoma. Same size as '100 Sq' but a beveled-edge variant (like '50 Bevo' is to '50 Sq') - treated as a distinct mold, not merged with 100 Sq, since shape differs. Uses the category's shared ratio; no mold count or yield recorded yet - awaiting data entry."
         }
       ],
       "production_method": "vibro",
@@ -1181,7 +1320,7 @@
         {
           "item_id": "press_03",
           "item_no": 3,
-          "name": "Tofali 6\"",
+          "name": "Sand Block (450x230x150mm)",
           "size_cm": "46x21x15",
           "ratio": [
             {
@@ -1200,12 +1339,17 @@
           "estimated_daily_output_pcs_range": {
             "min": 2000,
             "max": 8000
-          }
+          },
+          "alt_names": [
+            "Tofali 6\""
+          ],
+          "commercial_category": "blocks",
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Sand Block' at 450x230x150mm - height (150mm) matches Tofali 6\" exactly. Notebook name 'Tofali 6\"' kept as alt_name."
         },
         {
           "item_id": "press_04",
           "item_no": 4,
-          "name": "Tofali 6\" Chipping",
+          "name": "Chipping Block (450x230x150mm)",
           "size_cm": "46x21x15",
           "ratio": [
             {
@@ -1229,12 +1373,17 @@
           "estimated_daily_output_pcs_range": {
             "min": 2000,
             "max": 8000
-          }
+          },
+          "alt_names": [
+            "Tofali 6\" Chipping"
+          ],
+          "commercial_category": "blocks",
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this 'Chipping Block' - the only chipping variant in the price list, height (150mm) matches Tofali 6\" Chipping exactly."
         },
         {
           "item_id": "press_05",
           "item_no": 5,
-          "name": "Tofali Tundu 6\"",
+          "name": "Hollow Block (450x230x150mm)",
           "size_cm": "39x20x15",
           "ratio": [
             {
@@ -1258,7 +1407,12 @@
           "estimated_daily_output_pcs_range": {
             "min": 3500,
             "max": 14000
-          }
+          },
+          "alt_names": [
+            "Tofali Tundu 6\""
+          ],
+          "commercial_category": "blocks",
+          "note": "Confirmed by SwahziTech 2026-10-12: user confirmed 'Hollow Block' in the price list is Tofali Tundu, not Trench Cover's 'Hollow' (that earlier match was wrong - different product, different size). Height matches Tofali Tundu 6\" (150mm); price list's recorded length/width (450x230mm) differs slightly from notebook's (390x200mm) - real-world measurement variance, not treated as a different product."
         },
         {
           "item_id": "press_06",
@@ -1292,7 +1446,7 @@
         {
           "item_id": "press_07",
           "item_no": 7,
-          "name": "Kerbstone 50x350x15",
+          "name": "50 Press",
           "size_cm": "50x35x15",
           "ratio": [
             {
@@ -1316,12 +1470,17 @@
           "estimated_daily_output_pcs_range": {
             "min": 450,
             "max": 1800
-          }
+          },
+          "alt_names": [
+            "Kerbstone 50x350x15"
+          ],
+          "commercial_category": "curbstones",
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '50 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 50x350x15' kept as alt_name."
         },
         {
           "item_id": "press_08",
           "item_no": 8,
-          "name": "Kerbstone 80x350x15",
+          "name": "80 Press",
           "size_cm": "80x39x15",
           "ratio": [
             {
@@ -1345,7 +1504,12 @@
           "estimated_daily_output_pcs_range": {
             "min": 250,
             "max": 1000
-          }
+          },
+          "alt_names": [
+            "Kerbstone 80x350x15"
+          ],
+          "commercial_category": "curbstones",
+          "note": "Confirmed by SwahziTech 2026-10-12: price list calls this '80 PRESS', grouped under Cubstones commercially even though it's produced on the press machine (production_method stays 'press' here - this field only changes how it's categorized/stocked, not how it's made). Notebook name 'Kerbstone 80x350x15' kept as alt_name."
         },
         {
           "item_id": "press_09a",
@@ -1505,43 +1669,6 @@
           }
         },
         {
-          "item_id": "press_12",
-          "item_no": 12,
-          "name": "Paving 2IG-2AG 40MPa",
-          "size_cm": null,
-          "ratio": [
-            {
-              "material": "cement",
-              "unit": "50kg bag",
-              "quantity": 1
-            },
-            {
-              "material": "mchanga",
-              "unit": "unit",
-              "quantity": 8
-            },
-            {
-              "material": "dust",
-              "unit": "unit",
-              "quantity": 2
-            },
-            {
-              "material": "chip",
-              "unit": "unit",
-              "quantity": 6
-            }
-          ],
-          "wastani_per_bag": 105,
-          "yield_note": "Only yield known: 105 pcs/bag. Coverage (pcs/sqm) not given in source - to be fed later.",
-          "note": "Size marked 'will be filled later' in source",
-          "m2_covered_per_bag": null,
-          "pcs_per_sqm": null,
-          "estimated_daily_output_pcs_range": {
-            "min": 5250,
-            "max": 21000
-          }
-        },
-        {
           "item_id": "press_13",
           "item_no": 13,
           "name": "Paving W/Cup",
@@ -1586,72 +1713,213 @@
           "item_no": null,
           "name": "Paving Zigzag 30MPa (6cm)",
           "size_cm": "210x100x60mm",
-          "ratio": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
           "wastani_per_bag": null,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
         },
         {
           "item_id": "press_14b",
           "item_no": null,
           "name": "Paving Zigzag 30-35MPa (8cm)",
           "size_cm": "210x100x80mm",
-          "ratio": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
           "wastani_per_bag": null,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+          "note": "Confirmed by SwahziTech 2026-10-12: Zigzag uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - Zigzag's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
         },
         {
           "item_id": "press_14c",
           "item_no": null,
           "name": "Paving Zigzag 40-45MPa (8cm)",
           "size_cm": "210x100x80mm",
-          "ratio": null,
-          "wastani_per_bag": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 8
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 2
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 6
+            }
+          ],
+          "wastani_per_bag": 105,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
-          "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a real, separate product from both Z-Plain and Rectangular/6-8cm-30-40MPa. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed."
+          "alt_names": [
+            "2IG-2AG 40MPa (notebook mistranscription of ZIGZAG - confirmed by user 2026-10-12)"
+          ],
+          "note": "Confirmed by SwahziTech 2026-10-12: the notebook's 'Paving 2IG-2AG 40MPa' entry (item 12) was a mistranscription of 'ZIGZAG' - this IS that product. Ratio matches exactly (Cem 1 : Mch 8 : Dust 2 : Chip 6), confirming the earlier Rectangular-alias ratio was correct. wastani_per_bag=105 is a REAL recorded figure from the notebook, not inherited/assumed. pcs_per_sqm and m2_covered_per_bag still not recorded anywhere - left null, to be fed by user via 1a.1 Master Data Admin UI."
         },
         {
           "item_id": "press_15a",
           "item_no": null,
           "name": "H-Paver 30MPa (6cm)",
           "size_cm": "200x13.3x60mm",
-          "ratio": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
           "wastani_per_bag": null,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 6cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09a. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
         },
         {
           "item_id": "press_15b",
           "item_no": null,
           "name": "H-Paver 30-35MPa (8cm)",
           "size_cm": "200x13.3x80mm",
-          "ratio": null,
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 10
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 4
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 8
+            }
+          ],
           "wastani_per_bag": null,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 30MPa'), since same quality + same press machine = same ratio. Ratio copied from press_09b. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
         },
         {
           "item_id": "press_15c",
           "item_no": null,
           "name": "H-Paver 40-45MPa (8cm)",
           "size_cm": "200x13.3x80mm",
+          "ratio": [
+            {
+              "material": "cement",
+              "unit": "50kg bag",
+              "quantity": 1
+            },
+            {
+              "material": "mchanga",
+              "unit": "unit",
+              "quantity": 8
+            },
+            {
+              "material": "dust",
+              "unit": "unit",
+              "quantity": 2
+            },
+            {
+              "material": "chip",
+              "unit": "unit",
+              "quantity": 6
+            }
+          ],
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null,
+          "m2_covered_per_bag": null,
+          "alt_names": [],
+          "note": "Confirmed by SwahziTech 2026-10-12: H-Paver uses the SAME mix ratio as the matching Rectangular grade/thickness variant ('Paving 8cm 40MPa'), since same quality + same press machine = same ratio. Ratio copied from press_10. Yield (wastani_per_bag) and coverage (pcs_per_sqm) are NOT copied - H-Paver's mold/shape differs from Rectangular's, so actual yield is not assumed to match. Left null, to be fed by the user (Phase 1a.1 Master Data Admin UI) once measured."
+        },
+        {
+          "item_id": "press_16",
+          "item_no": null,
+          "name": "Sand Block (unlabeled height)",
+          "size_cm": null,
           "ratio": null,
           "wastani_per_bag": null,
           "pcs_per_sqm": null,
           "m2_covered_per_bag": null,
           "alt_names": [],
-          "note": "Confirmed by SwahziTech 2026-10-12 as a distinct product, separate from Rectangular and Zigzag. No ratio, yield, or coverage data exists anywhere in the source notebook - genuine gap, not guessed. Width recorded as 13.3 (unit as given in source price list, not reinterpreted)."
+          "commercial_category": "blocks",
+          "note": "Real product (price list, 'Sand Block' at 450x230mm, no height given, $1300 - cheaper than the 150mm Sand Block). Ambiguous between Tofali 4\" and Tofali 5\" - not guessed. Kept as its own entry; tenant to merge/edit via the Master Data Admin UI once they confirm which brick this actually is."
         }
       ],
       "production_method": "press",
@@ -1903,6 +2171,48 @@
       "topic": "Press-paving family fully resolved: Rectangular, Zigzag, H Paver, Worldcup",
       "decision": "Rectangular IS the existing 3 products (Paving 6cm 30MPa / 8cm 30MPa / 8cm 40MPa) under a different name - sizes match exactly, aliased not duplicated. Zigzag and H Paver are each real, separate product FAMILIES with 3 size/grade variants apiece, confirmed by SwahziTech 2026-10-12, none of which have ratio data in the source notebook. The previous turn's single generic 'Paving Zigzag' (press_14) was WRONG and has been removed, replaced by 3 correctly-sized variants.",
       "action_taken": "Added 'Rectangular (...)' aliases to press_09a/09b/10. Removed incorrect press_14 stub. Added press_14a/14b/14c (Zigzag) and press_15a/15b/15c (H-Paver), 6 new products total, all with null ratio/yield data and an explicit note."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Zigzag / H-Paver mix ratios (press_14a-c, press_15a-c)",
+      "decision": "User confirmed: ratios for the same quality grade on the same machine are the same. Zigzag and H-Paver mixes = same ratio as the matching Rectangular grade/thickness variant (press_09a/09b/press_10). Yield and coverage fields are NOT copied across - genuinely unmeasured for these shapes, left null pending user entry via the 1a.1 Master Data Admin UI.",
+      "action_taken": "press_14a/14b/14c ratio <- press_09a/09b/10 respectively. press_15a/15b/15c ratio <- press_09a/09b/10 respectively. wastani_per_bag, pcs_per_sqm, m2_covered_per_bag left null on all six."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Canonical product reference",
+      "decision": "User confirmed: price_list_structured.json is the true reference for which products exist - every real Stumarcot product is in that document. product_master.json and ratios_and_molds.json attach structure/ratio data onto the products the price list names; they do not independently define product existence. Any product in the price list not yet mirrored here is a gap to close, not a naming question to re-litigate.",
+      "action_taken": "Recorded as standing rule. No full re-reconciliation pass run in this edit - press_machine_products section re-verified against price list names directly; other categories not re-audited in this pass."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Press item 12 '2IG-2AG 40MPa' identity resolved",
+      "decision": "User confirmed this notebook entry is a mistranscription of 'ZIGZAG' (Z/2 and handwriting ambiguity). It IS Zigzag 40-45MPa (8cm) = press_14c. Ratio matched exactly before merging, confirming correctness. The real recorded wastani_per_bag=105 is now on press_14c instead of being left null.",
+      "action_taken": "press_12 merged into press_14c (wastani_per_bag=105 carried over, alt_name added). Standalone press_12 item removed - it was always the same product, not a separate one."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Standing rule reaffirmed",
+      "decision": "User: 'always confirm via the price list.' Price_list_structured.json is the first thing to check for ANY product-identity ambiguity, before guessing or asking the user - the price list is the canonical reference for what Stumarcot's real products and names are.",
+      "action_taken": "Recorded as standing rule for all future data reconciliation work."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Full price-list reconciliation pass (categories, Kerbstones, curbstones, blocks, wall/floor tiles)",
+      "decision": "User: price list is the true product reference; include every product name in it; merge using price-list name as primary where a notebook match exists. Resolved in this pass: Kerbstones renamed '50 Press'/'80 Press', recategorized commercially under curbstones (production method stays press); '60 Round' renamed '60 Oval'; Sand Block(150mm)=Tofali 6\", Chipping Block=Tofali 6\" Chipping, Hollow Block=Tofali Tundu 6\" (NOT Trench Cover Hollow - that was a wrong match, corrected); Wall Gamba=Gamba Sq; Buibui(250mm)=25 Buibui; 3 trench cover items matched by exact size (Mdogo Tundu 5, 60 Matundu 6, 60 Bevo). New products added with no ratio/yield data, awaiting entry: 100 Lock, Panasonic, 100 Bevo (curbstones, Mwanza-only, not sold in Dodoma), Wall Ngazi, 50 Plain, 40 8gon-new-size.",
+      "action_taken": "See individual item notes throughout the file for each change."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Still open after this pass - not guessed",
+      "decision": "Blank-height Sand Block ($1300) - ambiguous between Tofali 4\" and Tofali 5\", not merged. 'U DOT PAVER' and 'Z DOT' (Paving Blocks Vibration) - no confident match to U-Dot Kubwa/Ndogo or Z Plain, not yet added as new or merged. Two 'DRAFT' rows (300x300mm and duplicate 490x450mm sizes) - ambiguous against '30 Draft'/'Draft 9', and a possible duplicate entry in the price list itself worth the user double-checking against the source file.",
+      "action_taken": "Left unmatched, flagged, not guessed - needs user input."
+    },
+    {
+      "date": "2026-10-12",
+      "topic": "Remaining price-list items - included, not pre-resolved",
+      "decision": "User: stop resolving every ambiguity manually - include ALL price-list products and ALL notebook mold entries as real catalog items, and let the tenant (via the Master Data Admin UI, phase 1a.1) clarify/merge conflicts themselves inside the app. MOIS is a multi-tenant product, not built only for Stumarcot - hardcoding every judgment call into seed data doesn't generalize to a second tenant with their own naming quirks.",
+      "action_taken": "Added as standalone, unresolved entries rather than guessed-merged: U Dot Paver, Z Dot (paving_blocks_vibro); 50 Draft, Draft(300x300), Draft(490x450 dup) (floor_tiles); Sand Block unlabeled-height (press_16/blocks). Each flagged with its ambiguity in its own note field so the admin UI can surface it as a 'possible duplicate / needs review' item rather than this being invisible."
     }
   ]
 }

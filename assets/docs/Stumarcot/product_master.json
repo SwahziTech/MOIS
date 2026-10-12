@@ -79,6 +79,31 @@
       "canonical_name": "Zigzag (3 variants) and H-Paver (3 variants)",
       "resolved_as": "RESOLVED 2026-10-12 - both confirmed as real, separate product families, each with 3 size/grade variants.",
       "action_needed": "Ratio/yield data still missing for all 6 - cannot be produced correctly until SwahziTech supplies mix ratios."
+    },
+    {
+      "date": "2026-10-12",
+      "item": "Zigzag / H-Paver ratios",
+      "resolution": "Ratio = same as matching Rectangular grade/thickness variant (confirmed by SwahziTech). Yield/pcs-per-sqm NOT assumed to match - left null for user to feed via 1a.1 Master Data Admin UI."
+    },
+    {
+      "date": "2026-10-12",
+      "item": "Canonical product reference",
+      "resolution": "price_list_structured.json confirmed by user as the true product-existence reference. product_master.json mirrors it; does not define products independently."
+    },
+    {
+      "date": "2026-10-12",
+      "item": "2IG-2AG 40MPa -> Zigzag 40-45MPa",
+      "resolution": "Confirmed mistranscription. Merged into press_14c with its real wastani_per_bag=105."
+    },
+    {
+      "date": "2026-10-12",
+      "item": "WALL GAMBA (price list) vs Gamba Sq (wall_tiles_03)",
+      "resolution": "Unmerged at tenant's instruction. WALL GAMBA is its own product wall_tiles_07 (needs review) with its own price-list row; possibly the same as Gamba Sq, not confirmed."
+    },
+    {
+      "date": "2026-10-12",
+      "item": "MAYAI 490x460mm (price list) vs 40 Mayai 400x400 (floor_tiles_06)",
+      "resolution": "Different tile (size). canonical_match removed in price_list_structured.json; the 490x460 row stays unmatched/unpriced until the tenant identifies it."
     }
   ],
   "categories": [
@@ -247,6 +272,36 @@
           "pcs_per_sqm": 6,
           "alt_names": [],
           "note": "Confirmed via catalog. Uses the shared floor_tiles ratio (same as all other floor tile molds) - resolved 2026-09-25, no longer missing data."
+        },
+        {
+          "product_id": "floor_tiles_22",
+          "canonical_name": "50 Plain",
+          "alt_names": [],
+          "note": "New size, no mold/yield data yet."
+        },
+        {
+          "product_id": "floor_tiles_23",
+          "canonical_name": "40 8gon (new size)",
+          "alt_names": [],
+          "note": "New size variant of 8gon shape, no mold/yield data yet."
+        },
+        {
+          "product_id": "floor_tiles_24",
+          "canonical_name": "50 Draft",
+          "alt_names": [],
+          "note": "Unresolved vs 30 Draft/Draft 9 - tenant to merge if same product."
+        },
+        {
+          "product_id": "floor_tiles_25",
+          "canonical_name": "Draft",
+          "alt_names": [],
+          "note": "Unresolved vs 30 Draft/Draft 9 - tenant to merge if same product."
+        },
+        {
+          "product_id": "floor_tiles_26",
+          "canonical_name": "Draft (490x450mm)",
+          "alt_names": [],
+          "note": "Possible duplicate of '50 Draft' in the price list itself - tenant to verify and merge/delete."
         }
       ]
     },
@@ -295,6 +350,18 @@
           "size_cm": "40x20",
           "pcs_per_sqm": 12,
           "alt_names": []
+        },
+        {
+          "product_id": "wall_tiles_06",
+          "canonical_name": "Wall Ngazi",
+          "alt_names": [],
+          "note": "New product, no data yet."
+        },
+        {
+          "product_id": "wall_tiles_07",
+          "canonical_name": "Wall Gamba",
+          "alt_names": [],
+          "note": "NEEDS REVIEW: possibly the same product as Gamba Sq (wall_tiles_03) but NOT confirmed - the price list gives it a different price (1,214.29 vs 1,159.09 TZS) and coverage (21 vs 22 pcs/m2). Kept as its own product until the tenant merges or confirms it (2026-10-12)."
         }
       ]
     },
@@ -364,6 +431,18 @@
           "size_cm": null,
           "pcs_per_sqm": 18,
           "alt_names": []
+        },
+        {
+          "product_id": "paving_vibro_08",
+          "canonical_name": "U Dot Paver",
+          "alt_names": [],
+          "note": "Possibly same as U-Dot Kubwa/Ndogo - unresolved, tenant to merge/edit if needed."
+        },
+        {
+          "product_id": "paving_vibro_09",
+          "canonical_name": "Z Dot",
+          "alt_names": [],
+          "note": "Possibly a Z Plain variant - unresolved, tenant to merge/edit if needed."
         }
       ]
     },
@@ -386,15 +465,54 @@
         },
         {
           "product_id": "curbstones_03",
-          "canonical_name": "60 Round",
+          "canonical_name": "60 Oval",
           "size_cm": "60x25x10",
-          "alt_names": []
+          "alt_names": [
+            "60 Round"
+          ]
         },
         {
           "product_id": "curbstones_04",
           "canonical_name": "50 Bevo",
           "size_cm": "50x25x10",
           "alt_names": []
+        },
+        {
+          "product_id": "press_07",
+          "canonical_name": "50 Press",
+          "size_cm": "50x35x15",
+          "alt_names": [
+            "Kerbstone 50x350x15"
+          ]
+        },
+        {
+          "product_id": "press_08",
+          "canonical_name": "80 Press",
+          "size_cm": "80x39x15",
+          "alt_names": [
+            "Kerbstone 80x350x15"
+          ]
+        },
+        {
+          "product_id": "curbstones_05",
+          "canonical_name": "100 Lock",
+          "size_cm": "100x25x10",
+          "alt_names": [],
+          "note": "Sold in Mwanza and Dar es Salaam, not Dodoma (per price list). No mold/yield data yet."
+        },
+        {
+          "product_id": "curbstones_06",
+          "canonical_name": "Panasonic",
+          "size_cm": "100x30x10",
+          "alt_names": [],
+          "note": "Sold in Mwanza and Dar es Salaam, not Dodoma (per price list). No mold/yield data yet."
+        },
+        {
+          "product_id": "curbstones_07",
+          "canonical_name": "100 Bevo",
+          "size_cm": "100x25x10",
+          "alt_names": [],
+          "note": "Sold in Mwanza and Dar es Salaam, not Dodoma (per price list). Beveled variant of 100 Sq, distinct mold. No yield data yet."
         }
       ]
     },
@@ -442,7 +560,7 @@
       ]
     },
     {
-      "category_id": "press_machine_bricks_and_kerbstones",
+      "category_id": "blocks",
       "display_format": "plain",
       "stock_unit": "PCS",
       "products": [
@@ -450,32 +568,39 @@
           "product_id": "press_01",
           "canonical_name": "Tofali 5\"",
           "size_cm": "46x21x13",
-          "alt_names": []
+          "alt_names": [],
+          "note": "Not yet matched to a price-list name under Blocks - may be the unlabeled/cheaper Sand Block row. Needs confirmation."
         },
         {
           "product_id": "press_02",
           "canonical_name": "Tofali 4\"",
           "size_cm": "46x21x10",
-          "alt_names": []
+          "alt_names": [],
+          "note": "Not yet matched to a price-list name under Blocks - may be the unlabeled/cheaper Sand Block row. Needs confirmation."
         },
         {
           "product_id": "press_03",
-          "canonical_name": "Tofali 6\"",
+          "canonical_name": "Sand Block (450x230x150mm)",
           "size_cm": "46x21x15",
-          "alt_names": []
+          "alt_names": [
+            "Tofali 6\""
+          ]
         },
         {
           "product_id": "press_04",
-          "canonical_name": "Tofali 6\" Chipping",
+          "canonical_name": "Chipping Block (450x230x150mm)",
           "size_cm": "46x21x15",
-          "alt_names": []
+          "alt_names": [
+            "Tofali 6\" Chipping"
+          ]
         },
         {
           "product_id": "press_05",
-          "canonical_name": "Tofali Tundu 6\"",
+          "canonical_name": "Hollow Block (450x230x150mm)",
           "size_cm": "39x20x15",
           "alt_names": [
-            "6'' Hollow"
+            "6'' Hollow",
+            "Tofali Tundu 6\""
           ]
         },
         {
@@ -487,18 +612,13 @@
           ]
         },
         {
-          "product_id": "press_07",
-          "canonical_name": "Kerbstone 50x350x15",
-          "size_cm": "50x35x15",
-          "alt_names": []
-        },
-        {
-          "product_id": "press_08",
-          "canonical_name": "Kerbstone 80x350x15",
-          "size_cm": "80x39x15",
-          "alt_names": []
+          "product_id": "press_16",
+          "canonical_name": "Sand Block (unlabeled height)",
+          "alt_names": [],
+          "note": "Ambiguous between Tofali 4\"/5\" - tenant to merge/edit."
         }
-      ]
+      ],
+      "name": "Blocks"
     },
     {
       "category_id": "press_machine_paving",
@@ -550,13 +670,6 @@
           "pcs_per_sqm": null
         },
         {
-          "product_id": "press_12",
-          "canonical_name": "Paving 2IG-2AG 40MPa",
-          "size_cm": null,
-          "wastani_per_bag": 105,
-          "pcs_per_sqm": null
-        },
-        {
           "product_id": "press_13",
           "canonical_name": "Paving W/Cup",
           "size_cm": null,
@@ -571,42 +684,56 @@
           "canonical_name": "Paving Zigzag 30MPa (6cm)",
           "size_cm": "210x100x60mm",
           "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "note": "Mix ratio confirmed same as Paving 6cm 30MPa (same quality/machine). Yield/coverage not yet measured for Zigzag - see ratios_and_molds.json.",
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null
         },
         {
           "product_id": "press_14b",
           "canonical_name": "Paving Zigzag 30-35MPa (8cm)",
           "size_cm": "210x100x80mm",
           "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "note": "Mix ratio confirmed same as Paving 8cm 30MPa (same quality/machine). Yield/coverage not yet measured for Zigzag - see ratios_and_molds.json.",
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null
         },
         {
           "product_id": "press_14c",
           "canonical_name": "Paving Zigzag 40-45MPa (8cm)",
           "size_cm": "210x100x80mm",
-          "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "alt_names": [
+            "2IG-2AG 40MPa (mistranscription of ZIGZAG)"
+          ],
+          "note": "wastani_per_bag=105 is a real recorded figure (notebook's '2IG-2AG 40MPa' entry, confirmed as Zigzag mistranscribed). pcs_per_sqm still not recorded - see ratios_and_molds.json.",
+          "wastani_per_bag": 105,
+          "pcs_per_sqm": null
         },
         {
           "product_id": "press_15a",
           "canonical_name": "H-Paver 30MPa (6cm)",
           "size_cm": "200x13.3x60mm",
           "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "note": "Mix ratio confirmed same as Paving 6cm 30MPa (same quality/machine). Yield/coverage not yet measured for H-Paver - see ratios_and_molds.json.",
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null
         },
         {
           "product_id": "press_15b",
           "canonical_name": "H-Paver 30-35MPa (8cm)",
           "size_cm": "200x13.3x80mm",
           "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "note": "Mix ratio confirmed same as Paving 8cm 30MPa (same quality/machine). Yield/coverage not yet measured for H-Paver - see ratios_and_molds.json.",
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null
         },
         {
           "product_id": "press_15c",
           "canonical_name": "H-Paver 40-45MPa (8cm)",
           "size_cm": "200x13.3x80mm",
           "alt_names": [],
-          "note": "No ratio data exists - see ratios_and_molds.json for full note."
+          "note": "Mix ratio confirmed same as Paving 8cm 40MPa (same quality/machine). Yield/coverage not yet measured for H-Paver - see ratios_and_molds.json.",
+          "wastani_per_bag": null,
+          "pcs_per_sqm": null
         }
       ]
     },

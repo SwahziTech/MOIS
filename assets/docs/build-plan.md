@@ -18,7 +18,19 @@ always show one CURRENT phase and nothing more than that being actively built.
 ---
 
 ## 1a — Foundation & Master Data
-**Status: CURRENT**
+**Status: done (2026-10-12)**
+
+Verified, not just claimed: 62/62 live tenant-isolation checks passed, real
+Stumarcot org/branches seeded, Google OAuth + invite flow + branch-scoped
+roles tested end-to-end with a real external account, migrations 013-014
+closed the anon-write hole and the profiles/user_roles relationship bug,
+admin credentials rotated off the leaked value, and all previously-missing
+pricing (culverts split into N/R variants, Rectangular/Zigzag/H-Paver/
+Worldcup resolved against the price list) has been re-seeded. Known real
+gap carried forward, not hidden: Zigzag (3 variants) and H-Paver (3
+variants) have no recipe/ratio data anywhere in the source notebook - they
+have prices but can't yet be costed or produced from a BOM. See
+`ratios_and_molds.json` `_decisions_log` for the full trail.
 
 PRD sections covered: 4.1 (Auth), 4.2 (Org/Multi-tenancy), 4.4 (Master Data
 subset: products, categories, units, recipes) — NOT suppliers/customers yet.
@@ -29,6 +41,56 @@ subset: products, categories, units, recipes) — NOT suppliers/customers yet.
   from `product_master.json` / `ratios_and_molds.json` /
   `price_list_structured.json`
 - No inventory, production, sales, or costing logic yet — intentional
+
+## 1a.1 — Master Data Admin UI
+**Status: CURRENT**
+
+Not in the original PRD phasing — inserted because 1a seeded products,
+recipes, and prices directly from the three source JSON files via script,
+with no way for an org admin to change any of it without a developer
+re-running a seed. That's fine for getting Stumarcot live once; it's not
+fine as an ongoing way to run the business. Confirmed with the user to do
+this before 1b rather than after, so 1b's inventory transactions are built
+against data that's already properly editable, not against a seed script.
+
+**Why this matters beyond Stumarcot:** reconciling Stumarcot's real data
+(2026-10-12) against their price list surfaced real-world messiness that
+is NOT Stumarcot-specific — ambiguous product names, likely duplicate
+price-list rows, products with no recorded recipe/yield, branch-specific
+product variants. MOIS is a multi-tenant product; a second tenant will
+have their own version of this same messiness with their own naming
+conventions. The fix is not "get Stumarcot's data perfectly clean before
+building" — it's this screen. Nothing about this UI should assume
+Stumarcot's categories, color palette, or unit types are fixed; a tenant
+defines and corrects their own catalog here, Stumarcot being the first
+one doing it. Build it generic now, not Stumarcot-shaped now and
+generalized later.
+
+PRD section: 4.4 (Master Data) — the editing/management half that 1a's
+seed-only approach deliberately skipped.
+
+- Org-admin-only screens (not branch managers) to create/edit/deactivate:
+  products (name, category, color structure, unit), recipes/BOM ratios
+  per category+color, molds within a category (inherits the category's
+  shared ratio), per-branch prices, and the global color palette
+- A "needs review" flag on any product, visible in these screens, for
+  items seeded with an unresolved identity (duplicate name, uncertain
+  size, missing recipe) — Stumarcot's own seed has ~10 of these right now
+  (see `ratios_and_molds.json` `_decisions_log`, 2026-10-12 entries). The
+  admin merges/edits/dismisses them here instead of a developer doing it
+  in a JSON file.
+- Every edit writes to the SAME tables 1a seeded — this is not a parallel
+  system, it replaces the "edit the JSON and re-run the seed script" path
+  going forward
+- No hard delete on anything with existing stock/recipe/price history —
+  deactivate (soft-delete) only, so historical transactions and reports
+  in later phases never point at a vanished product
+- Basic audit trail: who changed what field, old value, new value, when —
+  this is real pricing/recipe data a manufacturing business runs on;
+  silent edits are not acceptable
+- Out of scope here: no inventory, production, or sales logic — this
+  phase only makes 1a's existing master data editable, it doesn't add
+  new kinds of data (suppliers/customers still arrive in 1b/1e as planned)
 
 ## 1b — Inventory Engine
 **Status: not started**

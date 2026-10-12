@@ -52,7 +52,11 @@
         {
           "description_raw": "RECTANGULAR (30-35MPa)",
           "size_mm": "200*100*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_09b",
+            "canonical_name": "Paving 8cm 30MPa"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 1,
@@ -86,7 +90,11 @@
         {
           "description_raw": "RECTANGULAR (40-45 Mpa)",
           "size_mm": "200*100*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_10",
+            "canonical_name": "Paving 8cm 40MPa"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 2,
@@ -120,7 +128,11 @@
         {
           "description_raw": "RECTANGULAR  (30MPa)",
           "size_mm": "200*100*60mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_09a",
+            "canonical_name": "Paving 6cm 30MPa"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 3,
@@ -154,7 +166,11 @@
         {
           "description_raw": "ZIGZAG (30-35MPa)",
           "size_mm": "210*100*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_14b",
+            "canonical_name": "Paving Zigzag 30-35MPa (8cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 4,
@@ -188,7 +204,11 @@
         {
           "description_raw": "ZIGZAG (40-45MPa)",
           "size_mm": "210*100*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_14c",
+            "canonical_name": "Paving Zigzag 40-45MPa (8cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 5,
@@ -222,7 +242,11 @@
         {
           "description_raw": "ZIGZAG (30 Mpa)",
           "size_mm": "210*100*60mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_14a",
+            "canonical_name": "Paving Zigzag 30MPa (6cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 6,
@@ -256,7 +280,11 @@
         {
           "description_raw": "H PAVER (30-35MPa)",
           "size_mm": "200*13.3*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_15b",
+            "canonical_name": "H-Paver 30-35MPa (8cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 7,
@@ -290,7 +318,11 @@
         {
           "description_raw": "H PAVER (40-45MPa)",
           "size_mm": "200*13.3*80mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_15c",
+            "canonical_name": "H-Paver 40-45MPa (8cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 8,
@@ -324,7 +356,11 @@
         {
           "description_raw": "H PAVER (30 Mpa)",
           "size_mm": "200*13.3*60mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_15a",
+            "canonical_name": "H-Paver 30MPa (6cm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 9,
@@ -358,7 +394,11 @@
         {
           "description_raw": "WORLDCUP (30MPa)",
           "size_mm": "250*13.5*60mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_paving",
+            "product_id": "press_13",
+            "canonical_name": "Paving W/Cup"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 10,
@@ -439,7 +479,11 @@
         {
           "description_raw": "U DOT PAVER",
           "size_mm": null,
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_vibro_08",
+            "canonical_name": "U Dot Paver"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 1,
@@ -651,7 +695,11 @@
         {
           "description_raw": "Z DOT",
           "size_mm": null,
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "paving_blocks_vibro",
+            "product_id": "paving_vibro_09",
+            "canonical_name": "Z Dot"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 7,
@@ -833,7 +881,11 @@
         {
           "description_raw": "50PLAIN",
           "size_mm": "500*500*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_22",
+            "canonical_name": "50 Plain"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 4,
@@ -861,7 +913,11 @@
         {
           "description_raw": "50 DRAFT",
           "size_mm": "490*450*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_24",
+            "canonical_name": "50 Draft"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 5,
@@ -882,11 +938,7 @@
         {
           "description_raw": "MAYAI",
           "size_mm": "490*460*20mm",
-          "canonical_match": {
-            "category_id": "floor_tiles",
-            "product_id": "floor_tiles_06",
-            "canonical_name": "40 Mayai"
-          },
+          "canonical_match": null,
           "available_in_branches": {
             "Mwanza": {
               "item_no": 6,
@@ -909,7 +961,8 @@
           "missing_in_branches": [
             "Dodoma"
           ],
-          "price_consistent_across_branches": true
+          "price_consistent_across_branches": true,
+          "note": "Unmatched 2026-10-12: 490x460mm is a different tile from 40 Mayai (400x400, floor_tiles_06). Left unpriced until the tenant identifies it."
         },
         {
           "description_raw": "40DOT",
@@ -1015,7 +1068,11 @@
         {
           "description_raw": "40 8GON",
           "size_mm": "400*400*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_23",
+            "canonical_name": "40 8gon (new size)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 10,
@@ -1099,7 +1156,11 @@
         {
           "description_raw": "DRAFT",
           "size_mm": "300*300*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_25",
+            "canonical_name": "Draft"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 13,
@@ -1209,7 +1270,11 @@
         {
           "description_raw": "BUIBUI",
           "size_mm": "250*250*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_18",
+            "canonical_name": "25 Buibui"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 16,
@@ -1243,7 +1308,11 @@
         {
           "description_raw": "DRAFT",
           "size_mm": "490*450*20mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "floor_tiles",
+            "product_id": "floor_tiles_26",
+            "canonical_name": "Draft (490x450mm)"
+          },
           "available_in_branches": {
             "Dar es Salaam": {
               "item_no": 5,
@@ -1722,7 +1791,11 @@
         {
           "description_raw": "WALL GAMBA",
           "size_mm": null,
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_07",
+            "canonical_name": "Wall Gamba"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 6,
@@ -1756,7 +1829,11 @@
         {
           "description_raw": "WALL NGAZI",
           "size_mm": null,
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "wall_tiles",
+            "product_id": "wall_tiles_06",
+            "canonical_name": "Wall Ngazi"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 7,
@@ -1801,7 +1878,11 @@
         {
           "description_raw": "MFUNIKO MDOGO",
           "size_mm": "500*300*50mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "trench_covers",
+            "product_id": "trench_covers_01",
+            "canonical_name": "50 Mdogo Tundu 5"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 2,
@@ -1835,7 +1916,11 @@
         {
           "description_raw": "MFUNIKO MKUBWA",
           "size_mm": "600*400*70mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "trench_covers",
+            "product_id": "trench_covers_03",
+            "canonical_name": "60 Matundu 6"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 3,
@@ -1869,7 +1954,11 @@
         {
           "description_raw": "BEVO",
           "size_mm": "600*400*70mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "trench_covers",
+            "product_id": "trench_covers_04",
+            "canonical_name": "60 Bevo"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 4,
@@ -1990,7 +2079,11 @@
         {
           "description_raw": "60 OVAL",
           "size_mm": "600*250*100mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_03",
+            "canonical_name": "60 Oval"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 3,
@@ -2024,7 +2117,11 @@
         {
           "description_raw": "100 BEVO",
           "size_mm": "1000*250*100mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_07",
+            "canonical_name": "100 Bevo"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 4,
@@ -2090,7 +2187,11 @@
         {
           "description_raw": "100 LOCK",
           "size_mm": "1000*250*100mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_05",
+            "canonical_name": "100 Lock"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 6,
@@ -2118,7 +2219,11 @@
         {
           "description_raw": "PANASONIC",
           "size_mm": "1000*300*100mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "curbstones_06",
+            "canonical_name": "Panasonic"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 7,
@@ -2146,7 +2251,11 @@
         {
           "description_raw": "50 PRESS",
           "size_mm": "500*350*150mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "press_07",
+            "canonical_name": "50 Press"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 8,
@@ -2180,7 +2289,11 @@
         {
           "description_raw": "80 PRESS",
           "size_mm": "800*350*150mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "curbstones",
+            "product_id": "press_08",
+            "canonical_name": "80 Press"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 9,
@@ -2225,7 +2338,11 @@
         {
           "description_raw": "SAND BLOCK",
           "size_mm": "450*230*",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "blocks",
+            "product_id": "press_16",
+            "canonical_name": "Sand Block (unlabeled height)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 1,
@@ -2254,12 +2371,17 @@
           },
           "available_in_all_branches": true,
           "missing_in_branches": [],
-          "price_consistent_across_branches": true
+          "price_consistent_across_branches": true,
+          "note": "NOT matched - ambiguous between Tofali 4\" (press_02) and Tofali 5\" (press_01). Price list gives no height for this row (blank), and it's cheaper than the 150mm Sand Block, consistent with either a thinner (4\") or mid (5\") brick. Needs user confirmation before merging - not guessed."
         },
         {
           "description_raw": "SAND BLOCK",
           "size_mm": "450*230*150mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_products",
+            "product_id": "press_03",
+            "canonical_name": "Sand Block (450x230x150mm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 2,
@@ -2293,7 +2415,11 @@
         {
           "description_raw": "CHIPPING BLOCK",
           "size_mm": "450*230*150mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "press_machine_products",
+            "product_id": "press_04",
+            "canonical_name": "Chipping Block (450x230x150mm)"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 3,
@@ -2328,9 +2454,9 @@
           "description_raw": "HOLLOW BLOCK",
           "size_mm": "450*230*150mm",
           "canonical_match": {
-            "category_id": "trench_covers",
-            "product_id": "trench_covers_06",
-            "canonical_name": "Hollow"
+            "category_id": "press_machine_products",
+            "product_id": "press_05",
+            "canonical_name": "Hollow Block (450x230x150mm)"
           },
           "available_in_branches": {
             "Mwanza": {
@@ -2376,7 +2502,11 @@
         {
           "description_raw": "400R",
           "size_mm": "1000*400mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_400_R",
+            "canonical_name": "400R"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 1,
@@ -2410,7 +2540,11 @@
         {
           "description_raw": "400N",
           "size_mm": "1000*400mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_400_N",
+            "canonical_name": "400N"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 2,
@@ -2444,7 +2578,11 @@
         {
           "description_raw": "600R",
           "size_mm": "1000*600mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_600_R",
+            "canonical_name": "600R"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 3,
@@ -2478,7 +2616,11 @@
         {
           "description_raw": "600N",
           "size_mm": "1000*600mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_600_N",
+            "canonical_name": "600N"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 4,
@@ -2512,7 +2654,11 @@
         {
           "description_raw": "900R",
           "size_mm": "1000*900mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_900_R",
+            "canonical_name": "900R"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 5,
@@ -2546,7 +2692,11 @@
         {
           "description_raw": "900N",
           "size_mm": "1000*900mm",
-          "canonical_match": null,
+          "canonical_match": {
+            "category_id": "culverts",
+            "product_id": "culverts_900_N",
+            "canonical_name": "900N"
+          },
           "available_in_branches": {
             "Mwanza": {
               "item_no": 6,
