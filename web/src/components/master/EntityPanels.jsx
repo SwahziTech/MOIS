@@ -10,10 +10,12 @@ function formatWhen(ts) {
 
 /**
  * Review flags on any master-data entity. Admins (canResolve) can mark a flag
- * resolved or dismissed with a note; flags are never deleted.
+ * resolved or dismissed with a note; flags are never deleted. With canRaise,
+ * an admin can also flag the record by hand.
  */
-export function EntityFlags({ entityType, entityId, canResolve, onChanged }) {
-  const { session } = useAuth();
+export function EntityFlags({ entityType, entityId, canResolve, canRaise, onChanged }) {
+  const { session, organization } = useAuth();
+  const [newReason, setNewReason] = useState('');
   const [flags, setFlags]   = useState([]);
   const [note,  setNote]    = useState({});
   const [busy,  setBusy]    = useState(null);
@@ -47,9 +49,28 @@ export function EntityFlags({ entityType, entityId, canResolve, onChanged }) {
     onChanged?.();
   }
 
+  async function raise() {
+    setError('');
+    setBusy('new');
+    const { error: err } = await supabase.from('review_flags').insert({
+      organization_id: organization.id, entity_type: entityType, entity_id: String(entityId),
+      reason_code: 'manual', reason: newReason.trim(), created_by: session?.user?.id ?? null,
+    });
+    setBusy(null);
+    if (err) {
+      setError(err.code === '23505'
+        ? 'This record already has an open flag raised by hand — add to that one, or close it first.'
+        : dbErrorMessage(err));
+      return;
+    }
+    setNewReason('');
+    await load();
+    onChanged?.();
+  }
+
   const open = flags.filter(f => f.status === 'open');
   const closed = flags.filter(f => f.status !== 'open');
-  if (!flags.length) return null;
+  if (!flags.length && !canRaise) return null;
 
   return (
     <section className="entity-panel">
@@ -85,6 +106,15 @@ export function EntityFlags({ entityType, entityId, canResolve, onChanged }) {
           </li>
         ))}
       </ul>
+      {canRaise && (
+        <div className="flag-actions">
+          <input className="form-input" placeholder="Flag for review — what needs checking?" aria-label="Reason to flag for review"
+            value={newReason} onChange={e => setNewReason(e.target.value)} />
+          <button type="button" className="btn btn-outline btn-sm" disabled={busy === 'new' || !newReason.trim()} onClick={raise}>
+            <Flag size={13} /> Flag
+          </button>
+        </div>
+      )}
     </section>
   );
 }

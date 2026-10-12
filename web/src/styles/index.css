@@ -1467,3 +1467,15 @@ td .flag-actions { margin-top: 0; }
 .choice-chip input { margin: 0; }
 .choice-chip.is-on { border-color: var(--text-primary); }
 .choice-chip.is-locked { cursor: not-allowed; opacity: 0.75; }
+.modal.modal-lg { max-width: 720px; }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip {
+  padding: 5px 12px; border-radius: 999px; border: none; cursor: pointer;
+  font-size: var(--text-xs); font-weight: 500;
+  background: var(--color-light-grey); color: var(--text-secondary);
+}
+.filter-chip.is-on { background: rgba(183,165,122,0.18); color: var(--accent-text); font-weight: 600; }
+.table-footer-note {
+  padding: 10px 14px; border-top: 1px solid var(--border);
+  font-size: var(--text-xs); color: var(--text-muted);
+}

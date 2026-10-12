@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
  * <body> via a portal — page content uses a transform animation, which would
  * otherwise trap position:fixed inside it (under the sidebar).
  */
-export default function Modal({ title, onClose, children, footer }) {
+export default function Modal({ title, onClose, children, footer, size }) {
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -16,7 +16,7 @@ export default function Modal({ title, onClose, children, footer }) {
 
   return createPortal(
     <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className={`modal${size === 'lg' ? ' modal-lg' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
           <h2 id="modal-title" className="card-title">{title}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">

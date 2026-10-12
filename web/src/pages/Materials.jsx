@@ -21,7 +21,7 @@ export default function Materials() {
       .from('materials')
       .select(`
         id, name, code, status, notes,
-        unit:units(symbol, name)
+        unit:units!materials_unit_id_fkey(symbol, name)
       `)
       .order('name');
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
