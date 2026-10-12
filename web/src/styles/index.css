@@ -1479,3 +1479,11 @@ td .flag-actions { margin-top: 0; }
   padding: 10px 14px; border-top: 1px solid var(--border);
   font-size: var(--text-xs); color: var(--text-muted);
 }
+.ingredient-list { display: flex; flex-direction: column; gap: 6px; }
+.ingredient-row {
+  display: grid; grid-template-columns: minmax(0, 2fr) 90px minmax(0, 1fr) auto auto;
+  gap: 6px; align-items: center;
+}
+@media (max-width: 560px) {
+  .ingredient-row { grid-template-columns: 1fr 80px; }
+}
