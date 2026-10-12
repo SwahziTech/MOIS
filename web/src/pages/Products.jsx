@@ -52,6 +52,12 @@ export default function Products() {
     return matchCat && matchSearch;
   });
 
+  // Coverage and yield are optional, industry-specific measures: show their
+  // columns only when some product in view actually records them.
+  const showCoverage = filtered.some(p => p.pcs_per_sqm != null);
+  const showYield    = filtered.some(p => p.wastani_per_bag != null);
+  const cols = 6 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0);
+
   return (
     <PageShell
       title="Products"
@@ -111,25 +117,25 @@ export default function Products() {
                   <th>Name</th>
                   <th>Category</th>
                   <th>Size</th>
-                  <th>Pcs / SQM</th>
-                  <th>Wastani / Bag</th>
+                  {showCoverage && <th title="Pieces needed to cover one square metre">Pieces per m²</th>}
+                  {showYield && <th title="Pieces produced per batch of the product's recipe">Yield per batch</th>}
                   <th>Stock Unit</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+                  Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={cols}>
                       <EmptyState
                         icon={Package}
                         title="No products found"
                         description={
                           search
                             ? `No products match "${search}".`
-                            : 'No products have been seeded yet.'
+                            : 'No products yet.'
                         }
                       />
                     </td>
@@ -145,16 +151,20 @@ export default function Products() {
                         <span className="badge badge-neutral">{p.category?.name || '—'}</span>
                       </td>
                       <td>{p.size_cm || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td>
-                        {p.pcs_per_sqm != null
-                          ? p.pcs_per_sqm
-                          : <span style={{ color: 'var(--color-warning)' }} title="Not yet confirmed">?</span>}
-                      </td>
-                      <td>
-                        {p.wastani_per_bag != null
-                          ? p.wastani_per_bag
-                          : <span style={{ color: 'var(--color-warning)' }} title="Not yet confirmed">?</span>}
-                      </td>
+                      {showCoverage && (
+                        <td>
+                          {p.pcs_per_sqm != null
+                            ? p.pcs_per_sqm
+                            : <span className="text-muted" title="Not recorded yet">—</span>}
+                        </td>
+                      )}
+                      {showYield && (
+                        <td>
+                          {p.wastani_per_bag != null
+                            ? p.wastani_per_bag
+                            : <span className="text-muted" title="Not recorded yet">—</span>}
+                        </td>
+                      )}
                       <td>
                         <span className="badge badge-neutral" title={p.unit?.name}>
                           {p.unit?.symbol || '—'}

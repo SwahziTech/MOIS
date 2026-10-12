@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { formatMoney } from '../lib/format';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -8,26 +10,18 @@ import { DollarSign, Search, Palette } from 'lucide-react';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
-const tzs = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const money = v => (v == null ? '—' : `TZS ${tzs.format(v)}`);
-
 const RULE_TYPE = {
-  delta_per_sqmt_over_offwhite: 'Surcharge per SQM over base',
-  absolute_price_per_sqmt:      'Price per SQM',
+  delta_over_base_color:   'Added to the base-colour price',
+  absolute_price_per_sqmt: 'Price per m²',
 };
 
-/**
- * Price-list rows carry no colour of their own: a NULL colour is the base
- * price — the base colour for coloured categories, the only colour otherwise.
- */
-function colourLabel(row) {
-  if (row.color) return row.color;
-  return row.product?.category?.display_format === 'colored' ? 'OffWhite (base)' : null;
-}
-
 export default function Pricing() {
+  const { organization } = useAuth();
+  const money = v => formatMoney(v, organization?.currency_code);
+
   const [rows,     setRows]     = useState([]);
   const [rules,    setRules]    = useState([]);
+  const [colouredCategories, setColouredCategories] = useState(new Set());
   const [branches, setBranches] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
@@ -37,15 +31,15 @@ export default function Pricing() {
   async function load() {
     setLoading(true);
     setError('');
-    const [priceRes, branchRes, ruleRes] = await Promise.all([
+    const [priceRes, branchRes, ruleRes, catColourRes] = await Promise.all([
       supabase
         .from('product_branch_pricing')
         .select(`
-          id, color, is_available, price_consistent_across_branches,
+          id, is_available, price_consistent_across_branches,
           price_per_unit_exclusive, price_per_unit_inclusive,
           price_per_sqm_inclusive, pcs_per_sqm_at_pricing, source_item_no,
-          product:products(canonical_name, product_id_ref,
-            category:product_categories(display_format)),
+          color:color_palette(name),
+          product:products(canonical_name, product_id_ref, category_id),
           branch:branches(id, name)
         `)
         .order('source_item_no', { nullsFirst: false }),
@@ -53,24 +47,45 @@ export default function Pricing() {
       supabase
         .from('category_color_pricing_rules')
         .select(`
-          id, base_color, pricing_type, color_prices,
+          id, category_id, pricing_type,
+          base:color_palette(name),
+          items:category_color_price_items(amount, color:color_palette(name, display_order)),
           category:product_categories(name, sort_order),
           branch:branches(id, name)
         `),
+      supabase.from('product_category_colors').select('category_id'),
     ]);
-    if (priceRes.error)  { console.error(priceRes.error); setError(LOAD_ERROR);  setLoading(false); return; }
-    if (branchRes.error) { console.error(branchRes.error); setError(LOAD_ERROR); setLoading(false); return; }
-    if (ruleRes.error)   { console.error(ruleRes.error); setError(LOAD_ERROR);   setLoading(false); return; }
+    const err = priceRes.error || branchRes.error || ruleRes.error || catColourRes.error;
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setRows(priceRes.data || []);
     setBranches(branchRes.data || []);
     setRules((ruleRes.data || []).sort((a, b) =>
       (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0) ||
       (a.branch?.name || '').localeCompare(b.branch?.name || '')
     ));
+    setColouredCategories(new Set((catColourRes.data || []).map(c => c.category_id)));
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+
+  // Base colour name per category+branch, from that category's pricing rule
+  const baseColour = useMemo(() => {
+    const m = {};
+    for (const r of rules) if (r.base?.name) m[`${r.category_id}|${r.branch?.id}`] = r.base.name;
+    return m;
+  }, [rules]);
+
+  /**
+   * A NULL colour is the base price: the category's base colour (named by
+   * its pricing rule) for coloured categories, the only colour otherwise.
+   */
+  function colourLabel(row) {
+    if (row.color?.name) return row.color.name;
+    const base = baseColour[`${row.product?.category_id}|${row.branch?.id}`];
+    if (base) return `${base} (base)`;
+    return colouredCategories.has(row.product?.category_id) ? 'Base colour' : null;
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -80,9 +95,13 @@ export default function Pricing() {
         (r.product?.canonical_name || '').toLowerCase().includes(q) ||
         (colourLabel(r) || '').toLowerCase().includes(q))
     );
-  }, [rows, search, branchId]);
+    // colourLabel depends on rules/colouredCategories
+  }, [rows, search, branchId, baseColour, colouredCategories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleRules = rules.filter(r => branchId === 'all' || r.branch?.id === branchId);
+  // Area pricing is shown only when some visible product is priced by area
+  const showArea = filtered.some(r => r.price_per_sqm_inclusive != null);
+  const cols = showArea ? 7 : 6;
 
   return (
     <PageShell
@@ -128,20 +147,20 @@ export default function Pricing() {
                   <th>Branch</th>
                   <th style={{ textAlign: 'right' }}>Unit (ex VAT)</th>
                   <th style={{ textAlign: 'right' }}>Unit (inc VAT)</th>
-                  <th style={{ textAlign: 'right' }}>Per SQM (inc VAT)</th>
+                  {showArea && <th style={{ textAlign: 'right' }}>Per m² (inc VAT)</th>}
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+                  Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={cols}>
                       <EmptyState
                         icon={DollarSign}
                         title="No price entries found"
-                        description={search ? `No prices match "${search}".` : 'No prices seeded yet.'}
+                        description={search ? `No prices match "${search}".` : 'No prices set yet.'}
                       />
                     </td>
                   </tr>
@@ -158,12 +177,14 @@ export default function Pricing() {
                       </td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(r.price_per_unit_exclusive)}</td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{money(r.price_per_unit_inclusive)}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {money(r.price_per_sqm_inclusive)}
-                        {r.pcs_per_sqm_at_pricing && (
-                          <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{r.pcs_per_sqm_at_pricing} pcs/sqm</div>
-                        )}
-                      </td>
+                      {showArea && (
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {money(r.price_per_sqm_inclusive)}
+                          {r.price_per_sqm_inclusive != null && r.pcs_per_sqm_at_pricing && (
+                            <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{r.pcs_per_sqm_at_pricing} pcs per m²</div>
+                          )}
+                        </td>
+                      )}
                       <td>
                         <span className={`badge ${r.is_available ? 'badge-success' : 'badge-neutral'}`}>
                           {r.is_available ? 'available' : 'unavailable'}
@@ -189,7 +210,7 @@ export default function Pricing() {
             <h2 id="colour-pricing-title" className="card-title flex items-center gap-8">
               <Palette size={16} strokeWidth={1.8} /> Colour pricing
             </h2>
-            <span className="text-muted text-sm">Prices above are for the base colour</span>
+            <span className="text-muted text-sm">Prices above are for each category's base colour</span>
           </div>
           <div className="table-container">
             <table>
@@ -197,7 +218,7 @@ export default function Pricing() {
                 <tr>
                   <th>Category</th>
                   <th>Branch</th>
-                  <th>Base</th>
+                  <th>Base colour</th>
                   <th>Rule</th>
                   <th>Other colours</th>
                 </tr>
@@ -207,15 +228,17 @@ export default function Pricing() {
                   <tr key={rule.id}>
                     <td style={{ fontWeight: 500 }}>{rule.category?.name || '—'}</td>
                     <td>{rule.branch?.name || '—'}</td>
-                    <td>{rule.base_color}</td>
+                    <td>{rule.base?.name || '—'}</td>
                     <td className="text-muted">{RULE_TYPE[rule.pricing_type] || rule.pricing_type}</td>
                     <td>
                       <div className="flex gap-4" style={{ flexWrap: 'wrap' }}>
-                        {Object.entries(rule.color_prices || {}).map(([colour, amount]) => (
-                          <span key={colour} className="badge badge-neutral">
-                            {colour}: {rule.pricing_type === 'delta_per_sqmt_over_offwhite' ? '+' : ''}{money(amount)}
-                          </span>
-                        ))}
+                        {[...(rule.items || [])]
+                          .sort((a, b) => (a.color?.display_order ?? 0) - (b.color?.display_order ?? 0))
+                          .map(item => (
+                            <span key={item.color?.name} className="badge badge-neutral">
+                              {item.color?.name}: {rule.pricing_type === 'delta_over_base_color' ? '+' : ''}{money(item.amount)}
+                            </span>
+                          ))}
                       </div>
                     </td>
                   </tr>

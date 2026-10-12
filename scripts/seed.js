@@ -105,6 +105,10 @@ async function main() {
     console.log(`  ↳ Created: ${org.name} (${org.id})`);
   }
 
+  // Tenant setting: Stumarcot prices in Tanzanian shillings (price list "TSH").
+  const { error: curErr } = await supabase.from('organizations').update({ currency_code: 'TZS' }).eq('id', org.id);
+  if (curErr) throw new Error(`Currency update failed: ${curErr.message}`);
+
   await seedWithOrg(org);
 }
 
@@ -343,41 +347,73 @@ async function seedWithOrg(org) {
   // =========================================================================
   // 7. PRODUCT CATEGORIES (from product_master.json — as-is)
   // =========================================================================
-  console.log('\n7. Creating product categories...');
-  const categoryMap = {}; // category_id_ref → DB uuid
+  console.log('\n7. Colour palette and product categories...');
 
-  for (let i = 0; i < productMaster.categories.length; i++) {
-    const cat = productMaster.categories[i];
-    const row = {
-      organization_id: orgId,
-      category_id_ref: cat.category_id,
-      name:            cat.category_id.replace(/_/g, ' ')
-                         .replace(/\b\w/g, c => c.toUpperCase()),
-      display_format:  cat.display_format,
-      // Suggested unit for new products in this category (migration 015)
-      default_unit_id: requireUnit(unitBySymbol, cat.stock_unit, `category ${cat.category_id}`),
-      color_columns:   cat.color_columns || null,
-      sort_order:      i,
-    };
-    const { data: existing } = await supabase
-      .from('product_categories')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('category_id_ref', cat.category_id)
-      .maybeSingle();
-    if (existing) {
-      categoryMap[cat.category_id] = existing.id;
-    } else {
-      const { data: inserted, error } = await supabase
-        .from('product_categories')
-        .insert(row)
-        .select('id')
-        .single();
-      if (error) throw new Error(`Category insert failed: ${error.message}`);
-      categoryMap[cat.category_id] = inserted.id;
+  // Palette: every colour named in the categories' colour columns, under its
+  // canonical name (canonColor), in first-appearance order. Colours already
+  // in the palette — including ones an admin added — are left as they are.
+  const colourOrder = [];
+  for (const cat of productMaster.categories) {
+    for (const c of cat.color_columns || []) {
+      const name = canonColor(c);
+      if (!colourOrder.includes(name)) colourOrder.push(name);
     }
   }
-  console.log(`  ↳ ${Object.keys(categoryMap).length} categories`);
+  const { data: paletteRows, error: palErr } = await supabase
+    .from('color_palette').select('id, name').eq('organization_id', orgId);
+  if (palErr) throw new Error(`Palette load failed: ${palErr.message}`);
+  const paletteByName = Object.fromEntries(paletteRows.map(c => [c.name, c.id]));
+  for (const [i, name] of colourOrder.entries()) {
+    if (paletteByName[name]) continue;
+    const { data: inserted, error } = await supabase
+      .from('color_palette')
+      .insert({ organization_id: orgId, name, display_order: i + 1 })
+      .select('id').single();
+    if (error) throw new Error(`Palette insert failed [${name}]: ${error.message}`);
+    paletteByName[name] = inserted.id;
+  }
+  const colourId = name => {
+    const id = paletteByName[canonColor(name)];
+    if (!id) throw new Error(`Colour '${name}' is not in the palette`);
+    return id;
+  };
+  console.log(`  ↳ palette: ${colourOrder.join(', ')}`);
+
+  // Categories: upserted so name, order and suggested unit follow the file.
+  // (A category whose id_ref changes must be renamed in place beforehand —
+  // see scripts/one-off — or it would be created anew.)
+  const categoryRows = productMaster.categories.map((cat, i) => ({
+    organization_id: orgId,
+    category_id_ref: cat.category_id,
+    name:            cat.name || cat.category_id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    display_format:  cat.display_format,
+    // Suggested unit for new products in this category (migration 015)
+    default_unit_id: requireUnit(unitBySymbol, cat.stock_unit, `category ${cat.category_id}`),
+    sort_order:      i,
+  }));
+  const { data: catData, error: catErr } = await supabase
+    .from('product_categories')
+    .upsert(categoryRows, { onConflict: 'organization_id,category_id_ref' })
+    .select('id, category_id_ref');
+  if (catErr) throw new Error(`Category upsert failed: ${catErr.message}`);
+  const categoryMap = Object.fromEntries(catData.map(c => [c.category_id_ref, c.id])); // category_id_ref → DB uuid
+
+  // Colours each category comes in (adds missing links; never removes ones
+  // an admin added)
+  const categoryColourRows = productMaster.categories.flatMap(cat =>
+    (cat.color_columns || []).map((c, i) => ({
+      organization_id: orgId,
+      category_id:     categoryMap[cat.category_id],
+      color_id:        colourId(c),
+      display_order:   i + 1,
+    })));
+  if (categoryColourRows.length) {
+    const { error } = await supabase
+      .from('product_category_colors')
+      .upsert(categoryColourRows, { onConflict: 'category_id,color_id', ignoreDuplicates: true });
+    if (error) throw new Error(`Category colours upsert failed: ${error.message}`);
+  }
+  console.log(`  ↳ ${Object.keys(categoryMap).length} categories, ${categoryColourRows.length} category colours`);
 
   // =========================================================================
   // 8. PRODUCTS (from product_master.json — as-is, nulls preserved)
@@ -448,17 +484,31 @@ async function seedWithOrg(org) {
   let recipeProductLinks = 0;
   let archivedCount      = 0;
 
+  // A recipe label that names one of its category's colours is a colour
+  // recipe (color_id); anything else is a named variant (variant_label).
+  const categoryColours = Object.fromEntries(productMaster.categories.map(c =>
+    [c.category_id, new Set((c.color_columns || []).map(canonColor))]));
+  const recipeKey = recipe => {
+    const name = canonColor(recipe.colorLabel);
+    return categoryColours[recipe.categoryRef]?.has(name)
+      ? { color_id: colourId(name), variant_label: null, display: name }
+      : { color_id: null, variant_label: recipe.colorLabel, display: recipe.colorLabel };
+  };
+
   for (const recipe of plan) {
     const catDbId = categoryMap[recipe.categoryRef];
+    const key = recipeKey(recipe);
 
-    const { data: existingRV } = await supabase
+    let rvQuery = supabase
       .from('recipe_versions')
       .select('id')
       .eq('organization_id', orgId)
       .eq('category_id', catDbId)
-      .eq('color_label', recipe.colorLabel)
-      .eq('version_number', 1)
-      .maybeSingle();
+      .eq('version_number', 1);
+    rvQuery = key.color_id
+      ? rvQuery.eq('color_id', key.color_id).is('variant_label', null)
+      : rvQuery.is('color_id', null).eq('variant_label', key.variant_label);
+    const { data: existingRV } = await rvQuery.maybeSingle();
 
     let rvId;
     if (existingRV) {
@@ -469,7 +519,8 @@ async function seedWithOrg(org) {
         .insert({
           organization_id: orgId,
           category_id:     catDbId,
-          color_label:     recipe.colorLabel,
+          color_id:        key.color_id,
+          variant_label:   key.variant_label,
           version_number:  1,
           effective_date:  '2026-09-27',
           status:          'active',
@@ -540,20 +591,21 @@ async function seedWithOrg(org) {
   // longer produces (e.g. the old incomplete 'Red (add-on)' paving rows).
   // Archiving keeps the history; nothing is deleted.
   const expectedByCategory = {};
-  for (const r of plan) (expectedByCategory[r.categoryRef] ||= new Set()).add(r.colorLabel);
+  for (const r of plan) (expectedByCategory[r.categoryRef] ||= new Set()).add(recipeKey(r).display);
   for (const [categoryRef, labels] of Object.entries(expectedByCategory)) {
     const { data: activeRVs } = await supabase
       .from('recipe_versions')
-      .select('id, color_label')
+      .select('id, variant_label, color:color_palette(name)')
       .eq('organization_id', orgId)
       .eq('category_id', categoryMap[categoryRef])
       .eq('version_number', 1)
       .eq('status', 'active');
     for (const rv of activeRVs || []) {
-      if (labels.has(rv.color_label)) continue;
+      const label = rv.color?.name ?? rv.variant_label;
+      if (labels.has(label)) continue;
       const { error } = await supabase.from('recipe_versions').update({ status: 'archived' }).eq('id', rv.id);
-      if (error) throw new Error(`RecipeVersion archive failed [${categoryRef}/${rv.color_label}]: ${error.message}`);
-      console.log(`  ↳ Archived stale recipe ${categoryRef}/${rv.color_label}`);
+      if (error) throw new Error(`RecipeVersion archive failed [${categoryRef}/${label}]: ${error.message}`);
+      console.log(`  ↳ Archived stale recipe ${categoryRef}/${label}`);
       archivedCount++;
     }
   }
@@ -569,8 +621,10 @@ async function seedWithOrg(org) {
   let colorRuleRows = 0;
   const unmatched = [];
   const nameMatched = [];
-  const excelMatched = [];
-  let removed = 0;
+  const held = [];
+  const noPrice = [];
+  const collisions = [];
+  const pricedBy = {}; // productId|branchId → price-list row that priced it this run
 
   const branchByName = Object.fromEntries(Object.entries(branches).map(([name, b]) => [name, b.id]));
 
@@ -596,19 +650,30 @@ async function seedWithOrg(org) {
           .maybeSingle();
 
         if (!existingRule) {
-          const { error } = await supabase
+          if (!colorRule.base_color) {
+            console.warn(`  ⚠ Color rule [${priceCat.category_raw}/${branchName}] names no base colour — skipped`);
+            continue;
+          }
+          const { data: rule, error } = await supabase
             .from('category_color_pricing_rules')
             .insert({
               organization_id: orgId,
               category_id:     catDbId,
               branch_id:       branchId,
-              base_color:      colorRule.base_color || 'OffWhite',
-              pricing_type:    colorRule.pricing_type,
-              color_prices:    colorRule.other_colors || {},
+              base_color_id:   colourId(colorRule.base_color),
+              pricing_type:    PRICING_TYPE[colorRule.pricing_type] ?? colorRule.pricing_type,
               raw_notes:       colorRule.raw_notes || null,
-            });
-          if (error) console.warn(`  ⚠ Color rule insert failed [${priceCat.category_raw}/${branchName}]: ${error.message}`);
-          else colorRuleRows++;
+            })
+            .select('id').single();
+          if (error) { console.warn(`  ⚠ Color rule insert failed [${priceCat.category_raw}/${branchName}]: ${error.message}`); continue; }
+          const items = Object.entries(colorRule.other_colors || {}).map(([colour, amount]) => ({
+            organization_id: orgId, rule_id: rule.id, color_id: colourId(colour), amount,
+          }));
+          if (items.length) {
+            const { error: itemErr } = await supabase.from('category_color_price_items').insert(items);
+            if (itemErr) throw new Error(`Color price items insert failed [${priceCat.category_raw}/${branchName}]: ${itemErr.message}`);
+          }
+          colorRuleRows++;
         }
       }
     }
@@ -616,21 +681,15 @@ async function seedWithOrg(org) {
     // Seed per-product pricing
     for (const product of priceCat.products) {
       // canonical_match is an object { category_id, product_id, canonical_name } or null.
-      // Order: Excel-rejected match → Excel decision → canonical_match →
-      // confirmed name/alias (CULVERTS, PAVING BLOCKS (PRESS)).
-      const rejected = excelDecision(EXCEL_REJECTED, priceCat, product);
-      let productRef = rejected ? null : product.canonical_match?.product_id;
-      if (rejected) {
-        removed += await removeRejectedPrices(rejected, product, productMap, branchByName);
-      } else if (!productRef) {
-        const excel = excelDecision(EXCEL_MATCHES, priceCat, product);
-        if (excel) {
-          productRef = excel.product;
-          excelMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
-        } else {
-          productRef = matchByConfirmedName(priceCat, product, productMaster);
-          if (productRef) nameMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
-        }
+      // Fallback for null: confirmed name/alias (CULVERTS, PAVING BLOCKS (PRESS)).
+      let productRef = product.canonical_match?.product_id;
+      if (!productRef) {
+        productRef = matchByConfirmedName(priceCat, product, productMaster);
+        if (productRef) nameMatched.push(`${priceCat.category_raw}: ${product.description_raw.trim()} → ${productRef}`);
+      }
+      if (productRef && PRICING_ON_HOLD[productRef]) {
+        held.push(`${productRef} (${product.description_raw.trim()}): ${PRICING_ON_HOLD[productRef]}`);
+        continue;
       }
       if (!productRef) {
         unmatched.push(`${priceCat.category_raw}: ${product.description_raw}${product.size_mm ? ` (${product.size_mm})` : ''}`);
@@ -648,17 +707,33 @@ async function seedWithOrg(org) {
         const branchId = branchByName[branchName];
         if (!branchId) continue;
 
-        // The price list carries no per-row color: every row is the
-        // base (OffWhite) price, stored as color = NULL. Other colors come
-        // from category_color_pricing_rules.
-        const color = product.color || null;
-        let existingQuery = supabase
+        // No price recorded for this branch: leave it unpriced (to be filled
+        // in later), never an empty price row
+        if (pricing.price_inclusive == null && pricing.price_exclusive == null && pricing.price_per_sqmt == null) {
+          noPrice.push(`${productRef} / ${branchName} (${product.description_raw.trim()})`);
+          continue;
+        }
+
+        // Two price-list rows for one product+branch can't both be the base
+        // price — report it instead of silently keeping whichever came first
+        const pairKey = `${productDbId}|${branchId}`;
+        const thisRow = `${priceCat.category_raw}: ${product.description_raw.trim()} #${pricing.item_no}`;
+        if (pricedBy[pairKey] && pricedBy[pairKey] !== thisRow) {
+          collisions.push(`${productRef} / ${branchName}: '${pricedBy[pairKey]}' and '${thisRow}' — second not seeded`);
+          continue;
+        }
+        pricedBy[pairKey] = thisRow;
+
+        // The price list carries no per-row colour: every row is the base
+        // price, stored as color_id = NULL. Other colours come from
+        // category_color_pricing_rules.
+        const { data: existingPricing } = await supabase
           .from('product_branch_pricing')
           .select('id')
           .eq('product_id', productDbId)
-          .eq('branch_id', branchId);
-        existingQuery = color === null ? existingQuery.is('color', null) : existingQuery.eq('color', color);
-        const { data: existingPricing } = await existingQuery.maybeSingle();
+          .eq('branch_id', branchId)
+          .is('color_id', null)
+          .maybeSingle();
         if (existingPricing) continue;
 
         const { error } = await supabase
@@ -667,7 +742,7 @@ async function seedWithOrg(org) {
             organization_id:                  orgId,
             product_id:                       productDbId,
             branch_id:                        branchId,
-            color,
+            color_id:                         null,
             price_per_unit_exclusive:         pricing.price_exclusive ?? null,
             vat_per_unit:                     pricing.vat ?? null,
             price_per_unit_inclusive:         pricing.price_inclusive ?? null,
@@ -687,11 +762,15 @@ async function seedWithOrg(org) {
     }
   }
   console.log(`  ↳ ${pricingRows} pricing rows, ${colorRuleRows} color rules`);
-  if (excelMatched.length) {
-    console.log(`  ↳ ${excelMatched.length} price-list rows matched by Excel decision (EXCEL_MATCHES):`);
-    for (const m of excelMatched) console.log(`      - ${m}`);
+  for (const [title, list] of [
+    ['price rows ON HOLD (not seeded)', held],
+    ['branch entries with no price in the source (left unpriced)', noPrice],
+    ['PRICE COLLISIONS (two price-list rows → one product+branch)', collisions],
+  ]) {
+    if (!list.length) continue;
+    console.log(`  ↳ ${list.length} ${title}:`);
+    for (const m of list) console.log(`      - ${m}`);
   }
-  if (removed) console.log(`  ↳ ${removed} wrongly-matched price rows removed (EXCEL_REJECTED)`);
   if (nameMatched.length) {
     console.log(`  ↳ ${nameMatched.length} price-list rows matched by confirmed name/alias:`);
     for (const m of nameMatched) console.log(`      - ${m}`);
@@ -795,7 +874,8 @@ async function seedWithOrg(org) {
  *   { categoryRef, colorLabel, notes, components[], productRefs[] }
  *
  * - Categories with `ratios` (tiles, paving, curbstones, ...): one recipe per
- *   ratio, linked to every product in that product_master category.
+ *   ratio, linked to every product in that product_master category except
+ *   products that carry their own press mix (ratiosMolds items).
  *   Labels marked '(add-on)' are pigment additions on top of the '(base)'
  *   ratio ("Color additions on top of white base, per bag of cement"), so
  *   they are combined with the base components.
@@ -811,10 +891,16 @@ function buildRecipePlan(productMaster, ratiosMolds) {
     for (const p of cat.products) categoryOfProduct[p.product_id] = cat.category_id;
   }
 
+  // Products with their own per-item mix (press machine items) never take a
+  // category's shared recipe — e.g. press kerbstones filed under Curbstones
+  // must not also get the vibro curbstone 'Standard' ratio.
+  const ownMixProducts = new Set(
+    ratiosMolds.categories.flatMap(c => (c.items || []).map(i => i.item_id)));
+
   const plan = [];
   for (const ratCat of ratiosMolds.categories) {
     if (Array.isArray(ratCat.ratios)) {
-      const productRefs = productsByCategory[ratCat.category_id];
+      const productRefs = productsByCategory[ratCat.category_id]?.filter(ref => !ownMixProducts.has(ref));
       if (!productRefs) {
         console.warn(`  ⚠ ratios category '${ratCat.category_id}' has no product_master category — skipped`);
         continue;
@@ -973,63 +1059,24 @@ function unitSymbolToId(unitStr, unitBySymbol) {
   return unitBySymbol[sym] || null;
 }
 
-// Product identity decided from the ORIGINAL Excel price list
-// (assets/docs/Stumarcot/price list 2026.xlsx — the real document), where
-// price_list_structured.json's canonical_match is missing or points at the
-// wrong product. Decided 2026-10-12 at the user's instruction; each entry
-// names its evidence. A row is identified by section + description + size.
-// Anything the Excel cannot settle stays unpriced, to be fed later.
-const EXCEL_MATCHES = [
-  { section: 'FLOOR TILES', description: 'DRAFT', size: '300*300*20mm', product: 'floor_tiles_15',
-    evidence: "30x30 'Draft'; same '30 <name>' convention as '30 8GON'/'8GON' → 30 8gon. Excel lists 'DRAFT 9' separately." },
-  { section: 'FLOOR TILES', description: 'BUIBUI', size: '250*250*20mm', product: 'floor_tiles_18',
-    evidence: "25x25 'Buibui', 16 pcs/sqm — same convention as 'CHUCHU 250*250' → 25 Chuchu." },
-  { section: 'TRENCH COVERS', description: 'BEVO', size: '600*400*70mm', product: 'trench_covers_04',
-    evidence: "Name and size match '60 Bevo' (60x40x7) exactly." },
-  { section: 'CUBSTONES', description: '50 PRESS', size: '500*350*150mm', product: 'press_07',
-    evidence: "Press kerbstone; size matches 'Kerbstone 50x350x15' (50x35x15) exactly." },
-  { section: 'CUBSTONES', description: '80 PRESS', size: '800*350*150mm', product: 'press_08',
-    evidence: "Matches the name 'Kerbstone 80x350x15' exactly. NOTE: product_master size_cm says 80x39x15 — conflicts with its own name; confirm." },
-];
+// Products whose price-list rows must NOT be seeded until a pending
+// confirmation arrives. Existing prices for them are left untouched.
+const PRICING_ON_HOLD = {
+  trench_covers_01: "Excel has two 'MFUNIKO MDOGO 500*300*50mm' prices (11,500 / 16,500) — awaiting Stumarcot confirmation (2026-10-12)",
+};
 
-// canonical_match entries in price_list_structured.json that the Excel shows
-// are the wrong product. Their prices are not seeded and existing rows are
-// removed; the price-list row stays unmatched until confirmed.
-const EXCEL_REJECTED = [
-  { section: 'BLOCKS', description: 'HOLLOW BLOCK', size: '450*230*150mm', product: 'trench_covers_06',
-    evidence: "Excel BLOCKS section, 450x230x150mm building block at TZS 1,888 — not trench cover 'Hollow' (70x50x12cm)." },
-  { section: 'FLOOR TILES', description: 'MAYAI', size: '490*460*20mm', product: 'floor_tiles_06',
-    evidence: "490x460mm tile; '40 Mayai' is 400x400 and is listed separately in the Excel (Dodoma '40 MAYAI', TZS 4,250)." },
-];
+// price_list_structured.json still uses the pre-migration-016 rule name
+const PRICING_TYPE = {
+  delta_per_sqmt_over_offwhite: 'delta_over_base_color',
+};
 
-const normRowKey = (section, description, size) =>
-  [section, description, size].map(s => String(s ?? '').replace(/\s+/g, ' ').trim().toUpperCase()).join('|');
-
-function excelDecision(list, priceCat, row) {
-  const key = normRowKey(priceCat.category_raw, row.description_raw, row.size_mm);
-  return list.find(d => normRowKey(d.section, d.description, d.size) === key) || null;
-}
-
-/** Deletes base-price rows that came from a rejected canonical_match. Returns rows removed. */
-async function removeRejectedPrices(rejected, row, productMap, branchByName) {
-  const productId = productMap[rejected.product];
-  if (!productId) return 0;
-  let n = 0;
-  for (const [branchName, pricing] of Object.entries(row.available_in_branches || {})) {
-    const branchId = branchByName[branchName];
-    if (!branchId) continue;
-    const { data, error } = await supabase
-      .from('product_branch_pricing')
-      .delete()
-      .eq('product_id', productId)
-      .eq('branch_id', branchId)
-      .eq('source_item_no', pricing.item_no)
-      .is('color', null)
-      .select('id');
-    if (error) throw new Error(`Removing rejected price failed [${rejected.product}/${branchName}]: ${error.message}`);
-    n += data.length;
-  }
-  return n;
+// Tenant colour naming (Stumarcot, confirmed 2026-10-12): the source files
+// spell the base colour 'White', 'OffWhite' and 'White/OffWhite' — one
+// colour, named 'White'. Other names are used as written.
+const COLOUR_ALIASES = { 'White/OffWhite': 'White', 'OffWhite': 'White' };
+function canonColor(name) {
+  const clean = String(name ?? '').replace(/\s*\((base|add-on)\)\s*$/i, '').trim();
+  return COLOUR_ALIASES[clean] ?? clean;
 }
 
 // Price-list sections whose rows SwahziTech confirmed on 2026-10-12 map to
@@ -1114,4 +1161,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildRecipePlan, buildYieldLookup, matchByConfirmedName, excelDecision, EXCEL_MATCHES, EXCEL_REJECTED };
+module.exports = { buildRecipePlan, buildYieldLookup, matchByConfirmedName, canonColor };

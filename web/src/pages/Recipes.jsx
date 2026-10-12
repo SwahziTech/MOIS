@@ -8,8 +8,11 @@ import { ScrollText, Search } from 'lucide-react';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
+/** A recipe is either for a palette colour or a named variant (e.g. a press mix). */
+const variantName = r => r.color?.name ?? r.variant_label ?? '—';
+
 /*
- * Recipes are shared per category + colour (see migration 011),
+ * Recipes are shared per category + colour or variant (migrations 011, 016),
  * so each row here is one recipe_version, with its materials and
  * the number of products that use it.
  */
@@ -26,7 +29,8 @@ export default function Recipes() {
     const { data, error: err } = await supabase
       .from('recipe_versions')
       .select(`
-        id, color_label, version_number, effective_date, status, notes,
+        id, variant_label, version_number, effective_date, status, notes,
+        color:color_palette(name, display_order),
         category:product_categories(name, sort_order),
         items:recipe_items(
           quantity, quantity_confirmed,
@@ -35,10 +39,11 @@ export default function Recipes() {
         ),
         products:recipe_version_products(count)
       `)
-      .order('color_label');
+      .order('variant_label');
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     const sorted = (data || []).sort((a, b) =>
       (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0) ||
+      (a.color?.display_order ?? 999) - (b.color?.display_order ?? 999) ||
       (a.category?.name || '').localeCompare(b.category?.name || '')
     );
     setRecipes(sorted);
@@ -53,7 +58,7 @@ export default function Recipes() {
       (status === 'all' || r.status === status) &&
       (!q ||
         (r.category?.name || '').toLowerCase().includes(q) ||
-        r.color_label.toLowerCase().includes(q))
+        variantName(r).toLowerCase().includes(q))
     );
   }, [recipes, search, status]);
 
@@ -98,7 +103,7 @@ export default function Recipes() {
               <thead>
                 <tr>
                   <th>Category</th>
-                  <th>Colour</th>
+                  <th>Colour / variant</th>
                   <th>Version</th>
                   <th>Materials (per batch)</th>
                   <th>Products</th>
@@ -123,7 +128,7 @@ export default function Recipes() {
                   filtered.map(r => (
                     <tr key={r.id}>
                       <td style={{ fontWeight: 500 }}>{r.category?.name || '—'}</td>
-                      <td><span className="badge badge-accent">{r.color_label}</span></td>
+                      <td><span className="badge badge-accent">{variantName(r)}</span></td>
                       <td>v{r.version_number}</td>
                       <td style={{ fontSize: 'var(--text-xs)' }}>
                         {r.items?.length ? (
