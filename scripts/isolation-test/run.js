@@ -24,7 +24,9 @@ const ids = JSON.parse(execFileSync('node', [path.join(__dirname, 'fixture.js')]
 
 const TABLES = ['organizations','branches','warehouses','profiles','roles','role_permissions','user_roles','units','materials',
   'product_categories','products','product_branch_pricing','category_color_pricing_rules',
-  'recipe_versions','recipe_items','recipe_version_products','permissions'];
+  'recipe_versions','recipe_items','recipe_version_products','permissions',
+  'color_palette','product_category_colors','category_color_price_items',
+  'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log'];
 
 const readBlock = (who, claims) => `
 DO $$

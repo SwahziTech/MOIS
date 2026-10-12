@@ -41,6 +41,10 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   await must(sb.from('products').upsert({ organization_id: org.id, category_id: cat.id, unit_id: unit.id, product_id_ref: 'test_secret_product', canonical_name: 'TEST ORG SECRET PRODUCT' }, { onConflict: 'organization_id,product_id_ref' }), 'product');
   let role = await must(sb.from('roles').select('id').eq('organization_id', org.id).eq('name', 'owner').maybeSingle(), 'role lookup');
   if (!role) role = await must(sb.from('roles').insert({ organization_id: org.id, name: 'owner', is_system_role: true }).select('id').single(), 'role');
+  // A real owner holds every permission (writes check has_permission, migration 018)
+  const perms = await must(sb.from('permissions').select('id'), 'permissions');
+  await must(sb.from('role_permissions').upsert(perms.map(p => ({ role_id: role.id, permission_id: p.id })),
+    { onConflict: 'role_id,permission_id', ignoreDuplicates: true }), 'role permissions');
   const ur = await must(sb.from('user_roles').select('id').eq('user_id', userId).eq('role_id', role.id).maybeSingle(), 'ur lookup');
   if (!ur) await must(sb.from('user_roles').insert({ user_id: userId, role_id: role.id, organization_id: org.id }), 'user_role');
 
