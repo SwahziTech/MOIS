@@ -28,6 +28,14 @@
  * Usage:
  *   node seed.js            write to the database
  *   node seed.js --plan     print the recipe plan only (no DB access)
+ *
+ * Organizations edited in the app are protected: once anyone has changed an
+ * organization's data in the app (an audit_log row recorded as an app
+ * change), the app is that organization's source of truth and this script
+ * refuses to run against it — re-seeding would overwrite those edits with the
+ * JSON files (e.g. reactivate merged products, recreate moved prices). The
+ * only override is passing this flag explicitly; nothing passes it by default:
+ *   node seed.js --force-reseed-org-with-app-edits
  */
 
 const path = require('path');
@@ -44,6 +52,36 @@ const {
 } = require('./lib/materials');
 
 let supabase; // created in main() — not needed for --plan
+
+const OVERRIDE_FLAG = '--force-reseed-org-with-app-edits';
+
+/**
+ * Refuse to seed an organization whose data has been edited in the app,
+ * unless OVERRIDE_FLAG is passed. Fails closed: if the check can't run, the
+ * seed doesn't either.
+ */
+async function refuseIfEditedInApp(org) {
+  const { count, error } = await supabase
+    .from('audit_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', org.id)
+    .eq('changed_via', 'app');
+  if (error) throw new Error(`Could not check for app edits (audit_log): ${error.message} — not seeding.`);
+  if (!count) return;
+
+  const changes = `${count} change${count === 1 ? '' : 's'}`;
+  if (!process.argv.includes(OVERRIDE_FLAG)) {
+    console.error(
+      `\nREFUSED: ${org.name} (${org.id}) has ${changes} made in the app (audit_log).\n` +
+      'Its data is now maintained in the app, not in the JSON files. Re-seeding would overwrite\n' +
+      'those edits (e.g. reactivate merged products, recreate moved prices, rewrite recipe history).\n\n' +
+      'Make the change in the app instead. Nothing was written.\n\n' +
+      `To overwrite app edits anyway (rarely right), pass ${OVERRIDE_FLAG} explicitly.`
+    );
+    process.exit(2);
+  }
+  console.warn(`  ⚠ ${OVERRIDE_FLAG}: seeding over ${changes} made in the app for ${org.name}.`);
+}
 
 // --------------------------------------------------------------------------
 async function main() {
@@ -89,6 +127,7 @@ async function main() {
   let org = existingOrgs[0];
   if (org) {
     console.log(`  ↳ Already exists: ${org.name} (${org.id})`);
+    await refuseIfEditedInApp(org);   // before any write
   } else {
     const { data: inserted, error: orgErr } = await supabase
       .from('organizations')
