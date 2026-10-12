@@ -13,6 +13,9 @@ import UsersPage    from './pages/Users';
 import Recipes      from './pages/Recipes';
 import Pricing      from './pages/Pricing';
 import Settings     from './pages/Settings';
+import Categories   from './pages/Categories';
+import Colours      from './pages/Colours';
+import ReviewQueue  from './pages/ReviewQueue';
 
 export default function App() {
   return (
@@ -34,6 +37,9 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route index               element={<Dashboard />} />
             <Route path="/products"    element={<Products />} />
+            <Route path="/categories"  element={<Categories />} />
+            <Route path="/colours"     element={<Colours />} />
+            <Route path="/review"      element={<ReviewQueue />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />
             <Route path="/users"       element={<UsersPage />} />

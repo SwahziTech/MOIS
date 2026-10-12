@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid,
+  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -22,9 +22,12 @@ const NAV = [
     section: 'Master Data',
     items: [
       { label: 'Products',      to: '/products',  icon: Package,    perm: 'products.view'  },
+      { label: 'Categories',    to: '/categories', icon: FolderTree, perm: 'products.view' },
+      { label: 'Colours',       to: '/colours',  icon: Palette,    perm: 'products.view' },
       { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
       { label: 'Recipes / BOM', to: '/recipes',   icon: ScrollText, perm: 'products.view'  },
       { label: 'Pricing',       to: '/pricing',   icon: DollarSign, perm: 'products.view'  },
+      { label: 'Review queue',  to: '/review',   icon: Flag,       perm: 'products.view' },
     ],
   },
   {

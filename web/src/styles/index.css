@@ -1446,3 +1446,24 @@ a.stat-card:focus-visible {
   .main-wrapper { margin-left: var(--sidebar-width-sm); }
   .page-content { padding: 16px; }
 }
+
+/* ── Master data: flags, history, choice chips ─────────────── */
+.entity-panel { border-top: 1px solid var(--border); padding-top: 14px; }
+.entity-panel > summary { cursor: pointer; list-style: none; }
+.entity-panel > summary::-webkit-details-marker { display: none; }
+.flag-list, .history-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; }
+.flag-item { padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+.flag-open { border-color: var(--color-warning); background: var(--bg-warning); }
+.flag-closed { opacity: 0.8; }
+.flag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.flag-actions .form-input { flex: 1 1 180px; min-width: 0; padding-top: 5px; padding-bottom: 5px; }
+td .flag-actions { margin-top: 0; }
+.history-list li { line-height: 1.5; }
+.choice-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.choice-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: var(--text-sm); cursor: pointer;
+}
+.choice-chip input { margin: 0; }
+.choice-chip.is-on { border-color: var(--text-primary); }
+.choice-chip.is-locked { cursor: not-allowed; opacity: 0.75; }

@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
   const [organization, setOrganization] = useState(null);
   const [userRoles,    setUserRoles]    = useState([]);
   const [permissions,  setPermissions]  = useState(EMPTY_SET);
+  const [orgWidePermissions, setOrgWidePermissions] = useState(EMPTY_SET);
   const [profileReady, setProfileReady] = useState(false);
   const [recovering,   setRecovering]   = useState(false);
   const loadedFor = useRef(null); // user id whose profile is loaded / loading
@@ -56,11 +57,16 @@ export function AuthProvider({ children }) {
     }
     if (loadedFor.current !== userId) return;
 
-    // Flatten permissions into a Set
+    // Flatten permissions into Sets: all grants, and org-wide grants only
+    // (master-data writes require an org-wide grant — has_permission(), 018)
     const permSet = new Set();
+    const orgWideSet = new Set();
     for (const ur of roles) {
+      const orgWide = !ur.branch_id && !ur.warehouse_id;
       for (const rp of ur.role?.role_permissions || []) {
-        if (rp.permission?.code) permSet.add(rp.permission.code);
+        if (!rp.permission?.code) continue;
+        permSet.add(rp.permission.code);
+        if (orgWide) orgWideSet.add(rp.permission.code);
       }
     }
 
@@ -68,6 +74,7 @@ export function AuthProvider({ children }) {
     setOrganization(org);
     setUserRoles(roles);
     setPermissions(permSet);
+    setOrgWidePermissions(orgWideSet);
     setProfileReady(true);
   }, []);
 
@@ -85,6 +92,7 @@ export function AuthProvider({ children }) {
         setOrganization(null);
         setUserRoles([]);
         setPermissions(EMPTY_SET);
+        setOrgWidePermissions(EMPTY_SET);
         setProfileReady(false);
         return;
       }
@@ -127,6 +135,11 @@ export function AuthProvider({ children }) {
     });
   }
 
+  /** Master-data administration: the permission via an org-wide role grant */
+  function canManage(permCode) {
+    return orgWidePermissions.has(permCode);
+  }
+
   function can(permCode) {
     return permissions.has(permCode);
   }
@@ -149,6 +162,7 @@ export function AuthProvider({ children }) {
     recovering,
     finishRecovery: () => setRecovering(false),
     can,
+    canManage,
     hasRole,
     signIn,
     signInWithGoogle,
