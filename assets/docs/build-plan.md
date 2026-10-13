@@ -161,6 +161,8 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 
 PRD section: 4.18 (Subscription & Billing), Snippe.sh integration.
 
+- Org onboarding (PRD 5.1): pre-fill new org's timezone from browserTimeZone() at creation, editable after.
+
 Deliberately sequenced LAST within Phase 1, not first, despite the PRD
 listing it under "V1 required." Reasoning: billing has zero dependency on
 being built early, and building it before the operational core is proven
