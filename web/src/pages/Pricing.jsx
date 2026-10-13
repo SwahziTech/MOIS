@@ -447,7 +447,7 @@ function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
           <div className="form-group">
             <label className="form-label" htmlFor="rule-base">Base colour</label>
             <select id="rule-base" className="form-input" value={baseId} onChange={e => setBaseId(e.target.value)}>
-              {colours.map(c => <option key={c.color_id} value={c.color_id}>{c.color?.name}</option>)}
+              {colours.map(c => <option key={c.color_id} value={c.color_id}>{c.color?.name}{c.color?.is_active === false ? ' (discontinued)' : ''}</option>)}
             </select>
             <span className="form-hint">Products' own prices are for this colour.</span>
           </div>
@@ -463,7 +463,7 @@ function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
           <div className="flex flex-col gap-8">
             {others.map(c => (
               <div key={c.color_id} className="form-row" style={{ alignItems: 'center' }}>
-                <label className="text-sm" htmlFor={`amt-${c.color_id}`}>{c.color?.name}</label>
+                <label className="text-sm" htmlFor={`amt-${c.color_id}`}>{c.color?.name}{c.color?.is_active === false ? ' (discontinued)' : ''}</label>
                 <input id={`amt-${c.color_id}`} type="number" step="any" min="0" className="form-input" placeholder="No price"
                   value={amounts[c.color_id] ?? ''} onChange={e => setAmounts(a => ({ ...a, [c.color_id]: e.target.value }))} />
               </div>

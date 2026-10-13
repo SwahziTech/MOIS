@@ -214,7 +214,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                       {needsColour && (
                         <select className="form-input" aria-label="Colour" value={l.colorId} onChange={e => setLine(i, { colorId: e.target.value })}>
                           <option value="">Colour…</option>
-                          {item.colorIds.map(c => <option key={c} value={c}>{colorById[c]?.name}</option>)}
+                          {item.colorIds.map(c => <option key={c} value={c}>{colorById[c]?.name}{colorById[c]?.is_active === false ? ' (discontinued)' : ''}</option>)}
                         </select>
                       )}
                       {type === 'adjustment' && (

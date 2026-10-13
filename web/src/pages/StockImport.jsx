@@ -19,7 +19,7 @@ const LOAD_ERROR = "We couldn't load the catalogue. Please try again.";
  * all or nothing. Resolved names are remembered (import_aliases).
  */
 export default function StockImport() {
-  const { organization, canAt, canManage } = useAuth();
+  const { organization, session, canAt, canManage } = useAuth();
   const navigate = useNavigate();
   const today = orgToday(organization?.timezone);
   const [catalog, setCatalog] = useState(null);
@@ -37,6 +37,10 @@ export default function StockImport() {
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [fileText, setFileText] = useState('');
+  const [draftId,  setDraftId]  = useState(null);
+  const [drafts,   setDrafts]   = useState([]);
+  const [saveState, setSaveState] = useState('');      // '' | saving | saved | failed
 
   async function loadCatalog() {
     setLoadError('');
@@ -64,26 +68,74 @@ export default function StockImport() {
     return c;
   }
 
-  useEffect(() => { loadCatalog(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function loadDrafts() {
+    const { data } = await supabase.from('stock_import_drafts')
+      .select('id, file_name, warehouse_id, as_of_date, updated_at, created_by, line_choices')
+      .eq('status', 'draft').order('updated_at', { ascending: false });
+    setDrafts(data || []);
+  }
+
+  useEffect(() => { loadCatalog(); loadDrafts(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Every change is saved to the draft (migration 025), so work survives the
+  // tab closing and can be reviewed before anything posts
+  useEffect(() => {
+    if (!draftId || step === 'done') return;
+    setSaveState('saving');
+    const t = setTimeout(async () => {
+      const { error: err } = await supabase.from('stock_import_drafts').update({
+        table_choices: tableChoice, line_choices: choices, warehouse_id: warehouseId || null,
+        as_of_date: date || null, file_name: fileName || null, updated_by: session?.user?.id ?? null,
+      }).eq('id', draftId);
+      setSaveState(err ? 'failed' : 'saved');
+      if (err) console.error(err);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [draftId, choices, tableChoice, warehouseId, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prodById = useMemo(() => Object.fromEntries((catalog?.products || []).map(p => [p.id, p])), [catalog]);
   const catById  = useMemo(() => Object.fromEntries((catalog?.categories || []).map(c => [c.id, c])), [catalog]);
   const colById  = useMemo(() => Object.fromEntries((catalog?.colors || []).map(c => [c.id, c])), [catalog]);
   const unitById = useMemo(() => Object.fromEntries((catalog?.units || []).map(u => [u.id, u])), [catalog]);
 
-  function analyse(text, cat = catalog) {
+  function analyse(text, cat = catalog, saved = null) {
     const p = parseStockSheet(text);
-    const m = matchSheet(p, cat);
-    setParsed(p);
-    setMatched(m);
-    setTableChoice(Object.fromEntries(m.tables.map(t => [t.index, {
+    const first = matchSheet(p, cat);
+    const tables = Object.fromEntries(first.tables.map(t => [t.index, saved?.tables?.[t.index] ?? {
       categoryId: t.cat.id ?? '',
       unitId: cat.units.find(u => normalize(u.symbol) === normalize(t.defaultUnit) || normalize(u.name) === normalize(t.defaultUnit))?.id ?? '',
-    }])));
-    setChoices(Object.fromEntries(m.lines.map(l => [l.id, {
+    }]));
+    // Categories chosen by hand (in a resumed draft) steer the product matching
+    const extra = first.tables
+      .filter(t => t.category && tables[t.index]?.categoryId && tables[t.index].categoryId !== t.cat.id)
+      .map(t => ({ alias_type: 'category', scope: '', alias_normalized: normalize(t.category), category_id: tables[t.index].categoryId }));
+    const m = extra.length ? { tables: first.tables, lines: matchSheet(p, { ...cat, aliases: [...cat.aliases, ...extra] }).lines } : first;
+    setParsed(p);
+    setMatched(m);
+    setTableChoice(tables);
+    setChoices(Object.fromEntries(m.lines.map(l => [l.id, saved?.lines?.[l.id] ?? {
       productId: l.product.id ?? '', colorId: l.colour?.id ?? '', unitId: l.unitId ?? '', qty: l.qty, date: '', skip: false,
     }])));
     setStep('resolve');
+  }
+
+  async function resume(d) {
+    setError('');
+    const { data, error: err } = await supabase.from('stock_import_drafts').select('*').eq('id', d.id).single();
+    if (err) { setError(dbErrorMessage(err, "We couldn't open that draft.")); return; }
+    setDraftId(data.id);
+    setFileName(data.file_name || '');
+    setFileText(data.file_text);
+    setWarehouseId(data.warehouse_id || '');
+    setDate(data.as_of_date || today);
+    analyse(data.file_text, catalog, { tables: data.table_choices, lines: data.line_choices });
+    setSaveState('saved');
+  }
+
+  async function discard() {
+    if (draftId) await supabase.from('stock_import_drafts').update({ status: 'discarded', updated_by: session?.user?.id ?? null }).eq('id', draftId);
+    setDraftId(null); setParsed(null); setMatched(null); setFileName(''); setFileText(''); setStep('upload'); setSaveState('');
+    loadDrafts();
   }
 
   function onFile(e) {
@@ -91,7 +143,18 @@ export default function StockImport() {
     if (!f) return;
     setFileName(f.name);
     const r = new FileReader();
-    r.onload = () => analyse(String(r.result));
+    r.onload = async () => {
+      const text = String(r.result);
+      setFileText(text);
+      analyse(text);
+      const { data, error: err } = await supabase.from('stock_import_drafts').insert({
+        organization_id: organization.id, file_name: f.name, file_text: text,
+        warehouse_id: warehouseId || null, as_of_date: date || null, created_by: session.user.id,
+      }).select('id').single();
+      if (err) { console.error(err); setSaveState('failed'); return; }
+      setDraftId(data.id);
+      loadDrafts();
+    };
     r.readAsText(f);
   }
 
@@ -112,10 +175,21 @@ export default function StockImport() {
 
   const setChoice = (id, patch) => setChoices(cs => ({ ...cs, [id]: { ...cs[id], ...patch } }));
 
+  // Pieces counted for a product stocked by area convert at the product's
+  // pieces per m² (decided 2026-10-14) — shown on the line, undoable
+  const conversionFor = (c, unitId) => {
+    const prod = prodById[c.productId];
+    if (!prod || !unitId || unitId === prod.unitId || !(Number(prod.pcsPerSqm) > 0) || c.noConvert) return null;
+    if (normalize(unitById[unitId]?.symbol) !== 'pcs') return null;
+    return { qty: Math.round((Number(c.qty) / Number(prod.pcsPerSqm)) * 10000) / 10000, unitId: prod.unitId, pcsPerSqm: Number(prod.pcsPerSqm) };
+  };
+
   // A table's own unit stands in for lines whose heading had none
   const effective = l => {
     const c = choices[l.id] || {};
-    return { ...c, unitId: c.unitId || (!l.unitExplicit ? tableChoice[l.table]?.unitId : '') || '' };
+    const unitId = c.unitId || (!l.unitExplicit ? tableChoice[l.table]?.unitId : '') || '';
+    const conv = conversionFor(c, unitId);
+    return conv ? { ...c, qty: conv.qty, unitId: conv.unitId, converted: conv } : { ...c, unitId };
   };
   const problemsOf = l => (catalog ? lineProblems({ ...l, unitId: effective(l).unitId }, effective(l), catalog) : []);
 
@@ -168,7 +242,8 @@ export default function StockImport() {
       const c = effective(l);
       (byDate[c.date || date] ??= []).push({ product_id: c.productId, ...(c.colorId ? { color_id: c.colorId } : {}), quantity: Number(c.qty), unit_id: c.unitId });
     }
-    const conversions = ready.filter(l => choices[l.id].converted).map(l => `${l.typeText}${l.colourText ? ' ' + l.colourText : ''}: ${l.qty}${l.unitText} → ${choices[l.id].qty}`);
+    const conversions = ready.map(l => ({ l, e: effective(l) })).filter(x => x.e.converted)
+      .map(({ l, e }) => `${l.typeText}${l.colourText ? ' ' + l.colourText : ''}: ${l.qty}${l.unitText} at ${e.converted.pcsPerSqm}/m² → ${e.qty} ${unitById[e.unitId]?.symbol}`);
     const movements = Object.entries(byDate).sort().map(([d, ls]) => ({
       type: 'opening_balance', warehouse_id: warehouseId, movement_date: d, reference: fileName || null,
       notes: conversions.length ? `Converted from pieces: ${conversions.join('; ')}` : null, lines: ls,
@@ -198,6 +273,11 @@ export default function StockImport() {
     const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { movements, aliases } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't post the import. Nothing was recorded.")); return; }
+    if (draftId) {
+      await supabase.from('stock_import_drafts').update({
+        status: 'posted', posted_movement_ids: data, table_choices: tableChoice, line_choices: choices, updated_by: session?.user?.id ?? null,
+      }).eq('id', draftId);
+    }
     setResult({ movements: data.length, lines: ready.length, aliases: aliases.length });
     setStep('done');
   }
@@ -247,6 +327,26 @@ export default function StockImport() {
                 <span className="form-hint">Applies to every line unless you change a line's own date below.</span>
               </div>
             </div>
+            {!matched && drafts.length > 0 && (
+              <div className="flex flex-col gap-4">
+                <span className="text-sm" style={{ fontWeight: 600 }}>Continue a saved import</span>
+                {drafts.map(d => (
+                  <div key={d.id} className="flex items-center gap-8 text-sm" style={{ flexWrap: 'wrap' }}>
+                    <span>{d.file_name || 'Untitled sheet'}</span>
+                    <span className="text-muted">
+                      {Object.keys(d.line_choices || {}).length} lines · saved {new Date(d.updated_at).toLocaleString('en-GB', { timeZone: organization?.timezone || undefined })}
+                    </span>
+                    <button type="button" className="btn btn-outline btn-sm" disabled={!catalog} onClick={() => resume(d)}>Continue</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {matched && (
+              <div className="flex items-center gap-8 text-xs text-muted">
+                {saveState === 'saving' ? 'Saving draft…' : saveState === 'saved' ? 'Draft saved — you can close this page and continue later.' : saveState === 'failed' ? <span className="text-error">Draft not saved — check your connection.</span> : null}
+                {draftId && <button type="button" className="btn btn-ghost btn-sm" onClick={discard}>Discard draft</button>}
+              </div>
+            )}
             <label className="btn btn-outline" style={{ alignSelf: 'flex-start' }}>
               <Upload size={14} /> {fileName ? `Replace ${fileName}` : 'Choose file (.csv)'}
               <input type="file" accept=".csv,.txt,text/csv,text/plain" hidden onChange={onFile} disabled={!catalog} />
@@ -301,8 +401,7 @@ export default function StockImport() {
                             const pcat = prod && catById[prod.categoryId];
                             const problems = c.skip ? [] : problemsOf(l);
                             const opts = productOptions(l);
-                            const unitMismatch = prod && e.unitId && e.unitId !== prod.unitId;
-                            const canConvert = unitMismatch && prod.pcsPerSqm && normalize(unitById[e.unitId]?.symbol) === 'pcs';
+                            const undone = c.noConvert && conversionFor({ ...c, noConvert: false }, c.unitId || '');
                             return (
                               <tr key={l.id} className={c.skip ? 'row-muted' : ''}>
                                 <td className="text-sm">
@@ -326,7 +425,7 @@ export default function StockImport() {
                                     <>
                                       <select className="form-input" aria-label="Colour" value={c.colorId} disabled={c.skip} onChange={ev => setChoice(l.id, { colorId: ev.target.value })}>
                                         <option value="">{l.colourText ? `"${l.colourText}" — choose…` : 'Choose…'}</option>
-                                        {pcat.colorIds.map(id => <option key={id} value={id}>{colById[id]?.name}</option>)}
+                                        {pcat.colorIds.map(id => <option key={id} value={id}>{colById[id]?.name}{colById[id]?.isActive === false ? ' (discontinued)' : ''}</option>)}
                                       </select>
                                       {l.colourText && !c.colorId && canCreate && !catalog.colors.some(x => normalize(x.name) === normalize(l.colourText) && pcat.colorIds.includes(x.id)) && (
                                         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => createColour(l)}>
@@ -337,16 +436,18 @@ export default function StockImport() {
                                   ) : <span className="text-muted">—</span>}
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
-                                  {qtyText(c.qty)} {unitById[e.unitId]?.symbol ?? l.unitText ?? ''}
-                                  {canConvert && !c.skip && (
-                                    <div>
-                                      <button type="button" className="btn btn-ghost btn-sm"
-                                        onClick={() => setChoice(l.id, { qty: Math.round((l.qty / prod.pcsPerSqm) * 10000) / 10000, unitId: prod.unitId, converted: true })}>
-                                        Convert at {prod.pcsPerSqm} pcs/m² → {qtyText(Math.round((l.qty / prod.pcsPerSqm) * 10000) / 10000)} {unitById[prod.unitId]?.symbol}
-                                      </button>
+                                  {qtyText(e.qty)} {unitById[e.unitId]?.symbol ?? l.unitText ?? ''}
+                                  {e.converted && (
+                                    <div className="text-xs text-muted">
+                                      from {l.qty}{l.unitText} at {e.converted.pcsPerSqm} pcs/m²
+                                      {!c.skip && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChoice(l.id, { noConvert: true })}>don't convert</button>}
                                     </div>
                                   )}
-                                  {c.converted && <div className="text-xs text-muted">from {l.qty}{l.unitText}</div>}
+                                  {undone && !c.skip && (
+                                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChoice(l.id, { noConvert: false })}>
+                                      Convert at {undone.pcsPerSqm} pcs/m²
+                                    </button>
+                                  )}
                                 </td>
                                 <td>
                                   <input type="date" className="form-input" style={{ width: 150 }} max={today} aria-label="Line date"
