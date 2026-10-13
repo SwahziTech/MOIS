@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
-import { MOVEMENT_TYPES, warehouseLabel, qtyText } from '../../lib/inventory';
+import { MOVEMENT_TYPES, warehouseLabel, qtyText, itemKey, orgToday, matchSuppliers } from '../../lib/inventory';
 import Modal from '../Modal';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ key: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
 
 /**
@@ -15,15 +14,17 @@ const emptyLine = () => ({ key: '', quantity: '', unitId: '', unitCost: '', dire
  * offers what the user may do and shows the effect before posting.
  */
 export default function MovementModal({ type, refs, balances, defaultWarehouseId, onClose, onPosted }) {
-  const { canAt } = useAuth();
+  const { canAt, organization } = useAuth();
+  const today = orgToday(organization?.timezone);
   const def = MOVEMENT_TYPES[type];
   const { warehouses, items, unitById, suppliers } = refs;
 
   const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && canAt(def.perm, w.branch_id, w.id));
   const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === defaultWarehouseId) ? defaultWarehouseId : (allowed[0]?.id ?? ''));
   const [toWarehouseId, setToWarehouseId] = useState('');
-  const [supplierId, setSupplierId] = useState('');
-  const [date,      setDate]      = useState(today());
+  const [supplier,  setSupplier]  = useState(null);   // { id } | { newName } | null
+  const [date,      setDate]      = useState(today);
+  const [asOf,      setAsOf]      = useState(null);   // balances at a past date
   const [reference, setReference] = useState('');
   const [reason,    setReason]    = useState('');
   const [notes,     setNotes]     = useState('');
@@ -34,7 +35,22 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const itemList = useMemo(() => Object.values(items).filter(i => i.status === 'active'), [items]);
   const materials = itemList.filter(i => i.kind === 'material');
   const products = itemList.filter(i => i.kind === 'product');
-  const balanceOf = key => Number(balances[`${warehouseId}|${key}`] ?? 0);
+  const wh = warehouses.find(w => w.id === warehouseId);
+  // Earlier dates need stock-adjustment permission at the store (migration 023)
+  const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);
+  useEffect(() => { if (!canBackdate) setDate(today); }, [canBackdate, today]);
+
+  // Stock as of the chosen date, for the previews; the server re-checks
+  // every later date too when posting
+  useEffect(() => {
+    if (!date || date >= today) { setAsOf(null); return; }
+    let live = true;
+    supabase.rpc('stock_balances_as_of', { p_date: date }).then(({ data }) => {
+      if (live) setAsOf(Object.fromEntries((data || []).map(b => [`${b.warehouse_id}|${itemKey(b)}`, b.quantity])));
+    });
+    return () => { live = false; };
+  }, [date, today]);
+  const balanceOf = key => Number((asOf ?? balances)[`${warehouseId}|${key}`] ?? 0);
 
   function setLine(i, patch) {
     setLines(ls => ls.map((l, j) => {
@@ -67,12 +83,14 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     }
     if (type === 'transfer' && !toWarehouseId) { setError('Choose where the stock goes.'); return; }
     if (type === 'adjustment' && !reason.trim()) { setError('Give a reason for the adjustment.'); return; }
+    if (supplier?.pendingConfirm) { setError('Choose one of the suggested suppliers, or confirm the new one.'); return; }
 
     const payload = {
       type, warehouse_id: warehouseId, movement_date: date,
       reference: reference.trim() || null, reason: reason.trim() || null, notes: notes.trim() || null,
       ...(type === 'transfer' ? { to_warehouse_id: toWarehouseId } : {}),
-      ...(type === 'receipt' && supplierId ? { supplier_id: supplierId } : {}),
+      ...(type === 'receipt' && supplier?.id ? { supplier_id: supplier.id } : {}),
+      ...(type === 'receipt' && supplier?.newName ? { new_supplier_name: supplier.newName } : {}),
       lines: filled.map(l => {
         const item = items[l.key];
         const q = Number(l.quantity);
@@ -125,23 +143,21 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
             ) : (
               <div className="form-group">
                 <label className="form-label" htmlFor="mv-date">Date</label>
-                <input id="mv-date" type="date" className="form-input" max={today()} value={date} onChange={e => setDate(e.target.value)} />
+                <input id="mv-date" type="date" className="form-input" max={today} value={date} disabled={!canBackdate}
+                  onChange={e => setDate(e.target.value)} />
+                <span className="form-hint">{canBackdate ? (date < today ? 'Earlier date: stock is checked as of then and at every later date.' : 'Today, or an earlier date if this happened before.') : 'Today only — earlier dates need stock-adjustment permission.'}</span>
               </div>
             )}
           </div>
           <div className="form-row">
             {type === 'receipt' ? (
-              <div className="form-group">
-                <label className="form-label" htmlFor="mv-sup">Supplier</label>
-                <select id="mv-sup" className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Not recorded</option>
-                  {suppliers.filter(s => s.status === 'active').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
+              <SupplierField suppliers={suppliers} value={supplier} onChange={setSupplier} />
             ) : type === 'transfer' ? (
               <div className="form-group">
                 <label className="form-label" htmlFor="mv-date">Date</label>
-                <input id="mv-date" type="date" className="form-input" max={today()} value={date} onChange={e => setDate(e.target.value)} />
+                <input id="mv-date" type="date" className="form-input" max={today} value={date} disabled={!canBackdate}
+                  onChange={e => setDate(e.target.value)} />
+                <span className="form-hint">{canBackdate ? (date < today ? 'Earlier date: stock is checked as of then and at every later date.' : 'Today, or an earlier date if this happened before.') : 'Today only — earlier dates need stock-adjustment permission.'}</span>
               </div>
             ) : (
               <div className="form-group">
@@ -166,10 +182,11 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                 const sq = stockQty(l);
                 const stockSym = unitById[item?.stockUnitId]?.symbol ?? '';
                 let preview = '';
+                const when = date < today ? ` on ${date}` : '';
                 if (item && bal != null) {
-                  if (type === 'count') preview = sq != null ? `records ${qtyText(bal)} ${stockSym} → difference ${sq - bal >= 0 ? '+' : ''}${qtyText(sq - bal)}` : `records ${qtyText(bal)} ${stockSym}`;
-                  else if (type === 'issue' || type === 'transfer' || (type === 'adjustment' && l.direction === 'remove')) preview = `${qtyText(bal)} ${stockSym} in stock${sq != null && sq > bal ? ' — not enough' : ''}`;
-                  else preview = `${qtyText(bal)} ${stockSym} in stock${sq != null && l.unitId !== item.stockUnitId ? ` · adds ${qtyText(sq)} ${stockSym}` : ''}`;
+                  if (type === 'count') preview = sq != null ? `records${when} ${qtyText(bal)} ${stockSym} → difference ${sq - bal >= 0 ? '+' : ''}${qtyText(sq - bal)}` : `records ${qtyText(bal)} ${stockSym}`;
+                  else if (type === 'issue' || type === 'transfer' || (type === 'adjustment' && l.direction === 'remove')) preview = `${qtyText(bal)} ${stockSym} in stock${when}${sq != null && sq > bal ? ' — not enough' : ''}`;
+                  else preview = `${qtyText(bal)} ${stockSym} in stock${when}${sq != null && l.unitId !== item.stockUnitId ? ` · adds ${qtyText(sq)} ${stockSym}` : ''}`;
                 }
                 return (
                   <div key={i} className="movement-line">
@@ -220,5 +237,61 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         </>}
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Supplier for a receipt: pick an existing one, or type a new name. Names
+ * equal ignoring case/spacing/punctuation are the same supplier (the
+ * database refuses a second); close matches are suggested before a new one
+ * is created, which happens only when the receipt is posted.
+ */
+function SupplierField({ suppliers, value, onChange }) {
+  const active = suppliers.filter(s => s.status === 'active');
+  const [text, setText] = useState('');
+  const chosen = value?.id ? suppliers.find(s => s.id === value.id) : null;
+  const { exact, similar } = matchSuppliers(text, active);
+
+  function type(t) {
+    setText(t);
+    const m = matchSuppliers(t, active);
+    if (!t.trim()) onChange(null);
+    else if (m.exact) onChange({ id: m.exact.id });
+    else onChange({ newName: t.trim(), pendingConfirm: m.similar.length > 0 });
+  }
+
+  if (chosen) {
+    return (
+      <div className="form-group">
+        <span className="form-label">Supplier</span>
+        <div className="flex items-center gap-8 text-sm">
+          <span className="badge badge-accent">{chosen.name}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setText(''); onChange(null); }}>Change</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="form-group">
+      <label className="form-label" htmlFor="mv-sup">Supplier (optional)</label>
+      <input id="mv-sup" className="form-input" list="mv-sup-list" autoComplete="off" placeholder="Type to find or add"
+        value={text} onChange={e => type(e.target.value)} />
+      <datalist id="mv-sup-list">{active.map(s => <option key={s.id} value={s.name} />)}</datalist>
+      {text.trim() && !exact && (
+        similar.length > 0 ? (
+          <div className="text-xs mt-8">
+            <span className="text-muted">Did you mean </span>
+            {similar.map(s => (
+              <button key={s.id} type="button" className="btn btn-ghost btn-sm" onClick={() => { setText(s.name); onChange({ id: s.id }); }}>{s.name}</button>
+            ))}
+            {value?.pendingConfirm ? (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => onChange({ newName: text.trim(), pendingConfirm: false })}>
+                No — add “{text.trim()}” as new
+              </button>
+            ) : <span className="text-muted"> · “{text.trim()}” will be added as a new supplier</span>}
+          </div>
+        ) : <span className="form-hint">New supplier — added when this receipt is posted.</span>
+      )}
+    </div>
   );
 }

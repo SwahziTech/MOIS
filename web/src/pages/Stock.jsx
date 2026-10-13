@@ -3,7 +3,7 @@ import { Boxes, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } from '../lib/inventory';
+import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -19,7 +19,9 @@ const ACTIONS = ['receipt', 'issue', 'transfer', 'adjustment', 'count', 'opening
  * movement.
  */
 export default function Stock() {
-  const { canAt } = useAuth();
+  const { canAt, organization } = useAuth();
+  const today = orgToday(organization?.timezone);
+  const [asOfDate, setAsOfDate] = useState('');   // '' = now
   const [refs,     setRefs]     = useState(null);
   const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,12 +33,14 @@ export default function Stock() {
   const [showZero,    setShowZero]    = useState(false);
   const [posting,     setPosting]     = useState(null);   // movement type
 
-  async function load() {
+  async function load(date = asOfDate) {
     setError('');
     try {
       const [r, bal] = await Promise.all([
         loadInventoryRefs(),
-        supabase.from('stock_balances').select('warehouse_id, material_id, product_id, stock_unit_id, quantity, last_movement_date'),
+        date && date < today
+          ? supabase.rpc('stock_balances_as_of', { p_date: date })
+          : supabase.from('stock_balances').select('warehouse_id, material_id, product_id, stock_unit_id, quantity, last_movement_date'),
       ]);
       if (bal.error) throw bal.error;
       setRefs(r);
@@ -108,6 +112,11 @@ export default function Stock() {
           <option value="product">Products</option>
         </select>
         <label className="text-sm flex items-center gap-4">
+          As of
+          <input type="date" className="form-input" style={{ width: 'auto' }} max={today} value={asOfDate || today}
+            onChange={e => { const d = e.target.value === today ? '' : e.target.value; setAsOfDate(d); setLoading(true); load(d); }} />
+        </label>
+        <label className="text-sm flex items-center gap-4">
           <input type="checkbox" checked={showZero} onChange={e => setShowZero(e.target.checked)} /> Show zero stock
         </label>
       </div>
@@ -142,7 +151,7 @@ export default function Stock() {
             </table>
             {!loading && rows.length > 0 && (
               <div className="table-footer-note">
-                Calculated from posted movements — see <Link to="/movements">Movements</Link> for the full history.
+                {asOfDate ? `Stock at the end of ${asOfDate}, from movements dated up to then. ` : ''}Calculated from posted movements — see <Link to="/movements">Movements</Link> for the full history.
               </div>
             )}
           </div>

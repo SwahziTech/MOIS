@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -12,7 +15,7 @@ function Row({ label, children }) {
 }
 
 export default function Settings() {
-  const { profile, session, userRoles, organization: org } = useAuth();
+  const { profile, session, userRoles, organization: org, canManage } = useAuth();
 
   const roles = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))];
 
@@ -24,6 +27,8 @@ export default function Settings() {
           <div className="card-body" style={{ paddingTop: 6 }}>
             <Row label="Name">{org?.name}</Row>
             <Row label="Legal name">{org?.legal_name}</Row>
+            <Row label="Currency">{org?.currency_code}</Row>
+            <Row label="Time zone"><TimeZone org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Status">
               {org?.status && <span className="badge badge-success">{org.status}</span>}
             </Row>
@@ -57,5 +62,52 @@ export default function Settings() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+/**
+ * The organization's time zone decides what "today" is for stock movements
+ * (migration 023): today's date can be posted by anyone allowed to, earlier
+ * dates need stock-adjustment permission.
+ */
+function TimeZone({ org, canEdit }) {
+  const { reloadProfile } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [value,   setValue]   = useState(org?.timezone ?? 'UTC');
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+  const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [value];
+  const localTime = tz => { try { return new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+
+  async function save() {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.from('organizations').update({ timezone: value }).eq('id', org.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setEditing(false);
+    reloadProfile();
+  }
+
+  if (!editing) {
+    return (
+      <span className="flex items-center gap-8">
+        {org?.timezone ?? 'UTC'} <span className="text-muted" style={{ fontWeight: 400 }}>({localTime(org?.timezone ?? 'UTC')} now)</span>
+        {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Change</button>}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-4">
+      <span className="flex items-center gap-8">
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Time zone" value={value} onChange={e => setValue(e.target.value)}>
+          {zones.map(z => <option key={z} value={z}>{z}</option>)}
+        </select>
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+      </span>
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>Decides what "today" is for stock movements. {localTime(value)} there now.</span>
+      {error && <span className="text-xs text-error">{error}</span>}
+    </span>
   );
 }

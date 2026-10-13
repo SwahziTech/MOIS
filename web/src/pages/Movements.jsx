@@ -5,6 +5,9 @@ import { useAuth } from '../hooks/useAuth';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } from '../lib/inventory';
+
+/** Date (YYYY-MM-DD) a timestamp falls on in the organization's time zone */
+const dateIn = (ts, tz) => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC' }).format(new Date(ts)); } catch { return String(ts).slice(0, 10); } };
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -20,6 +23,7 @@ const PAGE = 200;
  * and keeps both on record.
  */
 export default function Movements() {
+  const { organization } = useAuth();
   const [refs,      setRefs]      = useState(null);
   const [movements, setMovements] = useState([]);
   const [people,    setPeople]    = useState({});
@@ -101,6 +105,9 @@ export default function Movements() {
                     <td>
                       <span className="badge badge-neutral">{MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type}</span>
                       {reversedBy[m.id] && <span className="badge badge-warning" style={{ marginLeft: 4 }}>reversed</span>}
+                      {dateIn(m.created_at, organization?.timezone) > m.movement_date && (
+                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${dateIn(m.created_at, organization?.timezone)}`}>entered later</span>
+                      )}
                     </td>
                     <td className="text-sm">{where(m)}</td>
                     <td className="text-sm">{summary(m)}</td>
@@ -132,6 +139,11 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
   const [confirm, setConfirm] = useState(false);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
+  const [after, setAfter] = useState({});   // line id → store balance after it (date order)
+  useEffect(() => {
+    supabase.from('inventory_ledger_running').select('id, running_balance').eq('movement_id', m.id)
+      .then(({ data }) => setAfter(Object.fromEntries((data || []).map(r => [r.id, r.running_balance]))));
+  }, [m.id]);
   const canReverse = m.movement_type !== 'reversal' && !reversal && canAt('inventory.adjust', m.branch_id, m.warehouse_id);
   const unit = id => refs.unitById[id]?.symbol ?? '';
 
@@ -156,13 +168,14 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
           {m.reason && <><dt>Reason</dt><dd>{m.reason}</dd></>}
           {m.reference && <><dt>Reference</dt><dd>{m.reference}</dd></>}
           {m.notes && <><dt>Notes</dt><dd>{m.notes}</dd></>}
-          <dt>Posted</dt><dd>{new Date(m.created_at).toLocaleString('en-GB')} by {people[m.created_by] || 'a user'}</dd>
+          <dt>Dated</dt><dd>{m.movement_date}</dd>
+          <dt>Recorded</dt><dd>{new Date(m.created_at).toLocaleString('en-GB', { timeZone: organization?.timezone || undefined })} by {people[m.created_by] || 'a user'}</dd>
           {original && <><dt>Reverses</dt><dd>{MOVEMENT_TYPES[original.movement_type]?.noun} of {original.movement_date}</dd></>}
           {reversal && <><dt>Reversed</dt><dd>{reversal.movement_date} — {reversal.reason}</dd></>}
         </dl>
         <div className="table-container">
           <table>
-            <thead><tr><th>Item</th><th>Store</th><th>As entered</th><th style={{ textAlign: 'right' }}>Stock change</th></tr></thead>
+            <thead><tr><th>Item</th><th>Store</th><th>As entered</th><th style={{ textAlign: 'right' }}>Stock change</th><th style={{ textAlign: 'right' }} title="Stock in that store right after this line, in date order">Balance after</th></tr></thead>
             <tbody>
               {m.lines.map(l => (
                 <tr key={l.id}>
@@ -177,6 +190,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
                   <td style={{ textAlign: 'right', fontWeight: 600 }} className={Number(l.quantity) < 0 ? 'text-error' : ''}>
                     {Number(l.quantity) > 0 ? '+' : ''}{qtyText(l.quantity)} {unit(l.stock_unit_id)}
                   </td>
+                  <td style={{ textAlign: 'right' }} className="text-muted">{after[l.id] != null ? `${qtyText(after[l.id])} ${unit(l.stock_unit_id)}` : '—'}</td>
                 </tr>
               ))}
             </tbody>

@@ -58,3 +58,58 @@ export async function loadInventoryRefs() {
 
 /** Trim a numeric for display: 2.5000 → 2.5 */
 export const qtyText = n => (n == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(Number(n)));
+
+/** Today's date (YYYY-MM-DD) in the organization's time zone */
+export function orgToday(timezone) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: timezone || 'UTC' }).format(new Date()); }
+  catch { return new Date().toISOString().slice(0, 10); }
+}
+
+// --- Supplier names --------------------------------------------------------
+// Same rule as the database's unique index (migration 023): case, spaces and
+// punctuation don't make a different supplier.
+export const normalizeName = s => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+
+// For suggestions only: company-form words don't distinguish suppliers
+const FORM_WORDS = /\b(ltd|limited|co|company|plc|inc|corp|enterprises?|group|the|and)\b/g;
+const core = s => normalizeName(String(s ?? '').toLowerCase().replace(/&/g, ' and ').replace(/[.,]/g, ' ').replace(FORM_WORDS, ' '));
+
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return 1 - prev[b.length] / Math.max(a.length, b.length);
+}
+
+/**
+ * Existing suppliers matching a typed name: { exact, similar[] }. exact is
+ * the same name ignoring case/spacing/punctuation (the database refuses a
+ * second one); similar are likely the same supplier written differently.
+ */
+export function matchSuppliers(typed, suppliers) {
+  const n = normalizeName(typed);
+  if (!n) return { exact: null, similar: [] };
+  const exact = suppliers.find(s => normalizeName(s.name) === n) ?? null;
+  const c = core(typed);
+  const similar = suppliers
+    .filter(s => s !== exact)
+    .map(s => {
+      const sc = core(s.name);
+      const score = Math.max(similarity(c, sc),
+        c.length >= 3 && sc.length >= 3 && (sc.includes(c) || c.includes(sc)) ? 0.85 : 0);
+      return { supplier: s, score };
+    })
+    .filter(x => x.score >= 0.75)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map(x => x.supplier);
+  return { exact, similar };
+}
