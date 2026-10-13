@@ -3,10 +3,10 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
-import { MOVEMENT_TYPES, warehouseLabel, qtyText, itemKey, orgToday, matchSuppliers } from '../../lib/inventory';
+import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers } from '../../lib/inventory';
 import Modal from '../Modal';
 
-const emptyLine = () => ({ key: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
+const emptyLine = () => ({ key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
 
 /**
  * Record one stock movement. Everything is validated again and posted
@@ -17,7 +17,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const { canAt, organization } = useAuth();
   const today = orgToday(organization?.timezone);
   const def = MOVEMENT_TYPES[type];
-  const { warehouses, items, unitById, suppliers } = refs;
+  const { warehouses, items, unitById, colorById, suppliers } = refs;
 
   const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && canAt(def.perm, w.branch_id, w.id));
   const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === defaultWarehouseId) ? defaultWarehouseId : (allowed[0]?.id ?? ''));
@@ -46,17 +46,24 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     if (!date || date >= today) { setAsOf(null); return; }
     let live = true;
     supabase.rpc('stock_balances_as_of', { p_date: date }).then(({ data }) => {
-      if (live) setAsOf(Object.fromEntries((data || []).map(b => [`${b.warehouse_id}|${itemKey(b)}`, b.quantity])));
+      if (live) setAsOf(Object.fromEntries((data || []).map(b => [`${b.warehouse_id}|${stockKey(b)}`, b.quantity])));
     });
     return () => { live = false; };
   }, [date, today]);
-  const balanceOf = key => Number((asOf ?? balances)[`${warehouseId}|${key}`] ?? 0);
+  const balanceOf = l => {
+    const item = items[l.key];
+    const row = { [item.kind === 'material' ? 'material_id' : 'product_id']: item.id, color_id: l.colorId || null };
+    return Number((asOf ?? balances)[`${warehouseId}|${stockKey(row)}`] ?? 0);
+  };
 
   function setLine(i, patch) {
     setLines(ls => ls.map((l, j) => {
       if (j !== i) return l;
       const next = { ...l, ...patch };
-      if (patch.key !== undefined) next.unitId = items[patch.key]?.stockUnitId ?? '';
+      if (patch.key !== undefined) {
+        next.unitId = items[patch.key]?.stockUnitId ?? '';
+        next.colorId = '';
+      }
       return next;
     }));
   }
@@ -74,7 +81,9 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     setError('');
     const filled = lines.filter(l => l.key);
     if (!filled.length) { setError('Add at least one item.'); return; }
-    if (new Set(filled.map(l => l.key)).size !== filled.length) { setError('An item appears twice — combine the lines.'); return; }
+    if (new Set(filled.map(l => `${l.key}|${l.colorId}`)).size !== filled.length) { setError('An item appears twice — combine the lines.'); return; }
+    const noColour = filled.find(l => items[l.key].colorIds?.length && !l.colorId);
+    if (noColour) { setError(`${items[noColour.key].name}: choose the colour.`); return; }
     for (const l of filled) {
       const q = Number(l.quantity);
       if (l.quantity === '' || !Number.isFinite(q) || (type === 'count' ? q < 0 : q <= 0)) {
@@ -96,6 +105,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         const q = Number(l.quantity);
         return {
           [item.kind === 'material' ? 'material_id' : 'product_id']: item.id,
+          ...(l.colorId ? { color_id: l.colorId } : {}),
           quantity: type === 'adjustment' && l.direction === 'remove' ? -q : q,
           unit_id: l.unitId,
           ...((type === 'receipt' || type === 'opening_balance') && l.unitCost !== '' ? { unit_cost: Number(l.unitCost) } : {}),
@@ -178,7 +188,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
             <div className="ingredient-list">
               {lines.map((l, i) => {
                 const item = items[l.key];
-                const bal = l.key ? balanceOf(l.key) : null;
+                const needsColour = !!item?.colorIds?.length;
+                const bal = l.key && (!needsColour || l.colorId) ? balanceOf(l) : null;
                 const sq = stockQty(l);
                 const stockSym = unitById[item?.stockUnitId]?.symbol ?? '';
                 let preview = '';
@@ -200,6 +211,12 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                           {products.map(p => <option key={p.key} value={p.key}>{p.name} · {p.category}</option>)}
                         </optgroup>
                       </select>
+                      {needsColour && (
+                        <select className="form-input" aria-label="Colour" value={l.colorId} onChange={e => setLine(i, { colorId: e.target.value })}>
+                          <option value="">Colour…</option>
+                          {item.colorIds.map(c => <option key={c} value={c}>{colorById[c]?.name}</option>)}
+                        </select>
+                      )}
                       {type === 'adjustment' && (
                         <select className="form-input" aria-label="Direction" value={l.direction} onChange={e => setLine(i, { direction: e.target.value })}>
                           <option value="remove">Remove</option>

@@ -26,6 +26,7 @@ export const ENTITY_LABELS = {
   color_price: 'Colour price',
   review_flag: 'Review flag',
   supplier: 'Supplier',
+  import_alias: 'Import name match',
 };
 
 /** A message safe to show the user, for an error from a master-data write. */

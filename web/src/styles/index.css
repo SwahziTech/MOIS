@@ -1505,3 +1505,5 @@ td .flag-actions { margin-top: 0; }
 .detail-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .detail-list dt { color: var(--text-muted); }
 .detail-list dd { margin: 0; }
+.text-success { color: var(--color-success); }
+.row-muted td { opacity: 0.55; }

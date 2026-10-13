@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText, orgToday } from '../lib/inventory';
+import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, stockKey, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -20,6 +20,7 @@ const ACTIONS = ['receipt', 'issue', 'transfer', 'adjustment', 'count', 'opening
  */
 export default function Stock() {
   const { canAt, organization } = useAuth();
+  const navigate = useNavigate();
   const today = orgToday(organization?.timezone);
   const [asOfDate, setAsOfDate] = useState('');   // '' = now
   const [refs,     setRefs]     = useState(null);
@@ -55,7 +56,7 @@ export default function Stock() {
   useEffect(() => { load(); }, []);
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
-  const balanceMap = useMemo(() => Object.fromEntries(balances.map(b => [`${b.warehouse_id}|${itemKey(b)}`, b.quantity])), [balances]);
+  const balanceMap = useMemo(() => Object.fromEntries(balances.map(b => [`${b.warehouse_id}|${stockKey(b)}`, b.quantity])), [balances]);
   const branches = useMemo(() => {
     const m = {};
     for (const w of refs?.warehouses || []) if (w.branch) m[w.branch.id] = w.branch.name;
@@ -74,7 +75,8 @@ export default function Stock() {
       && (!warehouseId || b.warehouse_id === warehouseId)
       && (!kind || b.item.kind === kind)
       && (!q || b.item.name.toLowerCase().includes(q)))
-    .sort((a, b) => a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh)));
+    .sort((a, b) => a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh))
+      || (refs.colorById[a.color_id]?.display_order ?? 0) - (refs.colorById[b.color_id]?.display_order ?? 0));
 
   return (
     <PageShell
@@ -89,6 +91,9 @@ export default function Stock() {
     >
       {allowedActions.length > 0 && (
         <div className="flex gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
+          {allowedActions.includes('opening_balance') && (
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/stock/import')}>Import stock sheet</button>
+          )}
           {allowedActions.map(t => (
             <button key={t} type="button" className={`btn ${t === 'receipt' ? 'btn-primary' : 'btn-outline'}`} disabled={!refs} onClick={() => setPosting(t)}>
               {MOVEMENT_TYPES[t].label}
@@ -135,9 +140,9 @@ export default function Stock() {
                       description={balances.length ? 'Change the filters to see more.' : 'Start by posting opening balances for what is on hand, then receive and issue as stock moves.'} />
                   </td></tr>
                 ) : rows.map(b => (
-                  <tr key={`${b.warehouse_id}|${itemKey(b)}`}>
+                  <tr key={`${b.warehouse_id}|${stockKey(b)}`}>
                     <td>
-                      <div style={{ fontWeight: 500 }}>{b.item.name}</div>
+                      <div style={{ fontWeight: 500 }}>{b.item.name}{b.color_id && <span className="badge badge-neutral" style={{ marginLeft: 6 }}>{refs.colorById[b.color_id]?.name}</span>}</div>
                       <div className="text-xs text-muted">{b.item.kind === 'material' ? 'Material' : `Product · ${b.item.category ?? ''}`}</div>
                     </td>
                     <td className="text-muted">{warehouseLabel(b.wh)}</td>

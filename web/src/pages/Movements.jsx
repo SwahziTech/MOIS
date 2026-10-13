@@ -41,7 +41,7 @@ export default function Movements() {
         supabase.from('inventory_movements')
           .select(`id, movement_type, movement_date, created_at, created_by, branch_id, warehouse_id, to_warehouse_id,
                    reference, reason, notes, reverses_movement_id, supplier:suppliers(name),
-                   lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, quantity, stock_unit_id,
+                   lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, color_id, quantity, stock_unit_id,
                                                 entered_quantity, entered_unit_id, counted_quantity, unit_cost)`)
           .order('movement_date', { ascending: false }).order('created_at', { ascending: false })
           .limit(PAGE),
@@ -179,7 +179,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
             <tbody>
               {m.lines.map(l => (
                 <tr key={l.id}>
-                  <td>{refs.items[itemKey(l)]?.name ?? '—'}</td>
+                  <td>{refs.items[itemKey(l)]?.name ?? '—'}{l.color_id && <span className="text-muted"> · {refs.colorById[l.color_id]?.name}</span>}</td>
                   <td className="text-sm text-muted">{warehouseLabel(whById[l.warehouse_id])}</td>
                   <td className="text-sm">
                     {l.transaction_type === 'count'
