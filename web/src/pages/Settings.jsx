@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { dbErrorMessage } from '../lib/masterData';
+import { browserTimeZone } from '../lib/format';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -76,6 +77,7 @@ function TimeZone({ org, canEdit }) {
   const [value,   setValue]   = useState(org?.timezone ?? 'UTC');
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
+  const deviceZone = browserTimeZone();
   const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [value];
   const localTime = tz => { try { return new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 
@@ -106,7 +108,14 @@ function TimeZone({ org, canEdit }) {
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
       </span>
-      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>Decides what "today" is for stock movements. {localTime(value)} there now.</span>
+      {deviceZone && deviceZone !== value && (
+        <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setValue(deviceZone)}>
+          Use this device's time zone ({deviceZone})
+        </button>
+      )}
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>
+        One setting for the whole organization — it decides what "today" is for stock movements, the same for everyone. {localTime(value)} there now.
+      </span>
       {error && <span className="text-xs text-error">{error}</span>}
     </span>
   );

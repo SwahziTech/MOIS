@@ -149,7 +149,9 @@ async function main() {
   }
 
   // Tenant setting: Stumarcot prices in Tanzanian shillings (price list "TSH").
-  const { error: curErr } = await supabase.from('organizations').update({ currency_code: 'TZS' }).eq('id', org.id);
+  // Tenant configuration: money in TZS; "today" for the stock ledger is Tanzanian time (023)
+  const { error: curErr } = await supabase.from('organizations')
+    .update({ currency_code: 'TZS', timezone: 'Africa/Dar_es_Salaam' }).eq('id', org.id);
   if (curErr) throw new Error(`Currency update failed: ${curErr.message}`);
 
   await seedWithOrg(org);

@@ -12,3 +12,15 @@ export function formatMoney(value, currencyCode) {
     maximumFractionDigits: 0,
   }).format(value);
 }
+
+/**
+ * The browser's IANA time zone (e.g. 'Africa/Dar_es_Salaam'), or null.
+ * Use it ONLY as the one-time default when an organization is created
+ * (organizations.timezone) — never as a per-user "today": the ledger's date
+ * boundary is the organization's setting, so everyone at a store agrees on
+ * what day it is (migration 023).
+ */
+export function browserTimeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; }
+  catch { return null; }
+}
