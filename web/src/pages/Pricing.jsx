@@ -177,7 +177,7 @@ export default function Pricing() {
                           </div>
                           <div className="text-xs text-muted">
                             {!row.is_available ? 'not sold here'
-                              : row.price_per_sqm_inclusive != null ? `${money(row.price_per_unit_inclusive)} each · ${row.pcs_per_sqm_at_pricing} per m²` : 'incl. VAT'}
+                              : row.price_per_sqm_inclusive != null ? (row.price_per_unit_inclusive != null && row.pcs_per_sqm_at_pricing ? `${money(row.price_per_unit_inclusive)} each · ${row.pcs_per_sqm_at_pricing} per m²` : 'per-piece price not set') : 'incl. VAT'}
                           </div>
                         </>
                       ) : <span className="text-muted">—</span>;
