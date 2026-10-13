@@ -59,7 +59,7 @@ export default function StockImport() {
       categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id,
         colorIds: pcc.data.filter(p => p.category_id === x.id).sort((a, b) => a.display_order - b.display_order).map(p => p.color_id) })),
       products: prods.data.map(p => ({ id: p.id, name: p.canonical_name, categoryId: p.category_id, unitId: p.unit_id, pcsPerSqm: p.pcs_per_sqm, status: p.status })),
-      colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active })),
+      colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active, display_order: x.display_order })),
       units: units.data.map(u => ({ id: u.id, symbol: u.symbol, name: u.name })),
       aliases: aliases.data,
     };
@@ -198,16 +198,21 @@ export default function StockImport() {
   const open  = lines.filter(l => !choices[l.id]?.skip && problemsOf(l).length > 0);
   const skipped = lines.filter(l => choices[l.id]?.skip);
 
-  // Same product + colour twice on one date can't be one opening balance
-  const dupes = useMemo(() => {
-    const seen = {}, out = new Set();
+  // Sheet lines that resolve to the same product + colour on the same date
+  // (e.g. a row restating a product under another name) are added together
+  // into ONE opening balance — shown on each line and in the preview
+  const combined = useMemo(() => {
+    const groups = {};
     for (const l of ready) {
       const c = effective(l);
       const k = `${c.date || date}|${c.productId}|${c.colorId}`;
-      if (seen[k]) { out.add(l.id); out.add(seen[k]); } else seen[k] = l.id;
+      (groups[k] ??= { key: k, date: c.date || date, productId: c.productId, colorId: c.colorId, unitId: c.unitId, qty: 0, lines: [] });
+      groups[k].qty = Math.round((groups[k].qty + Number(c.qty)) * 10000) / 10000;
+      groups[k].lines.push(l);
     }
-    return out;
+    return Object.values(groups);
   }, [ready, choices, date]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dupes = useMemo(() => new Set(combined.filter(g => g.lines.length > 1).flatMap(g => g.lines.map(l => l.id))), [combined]);
 
   async function createColour(l) {
     const prod = prodById[choices[l.id].productId];
@@ -238,15 +243,18 @@ export default function StockImport() {
     setError('');
     if (!warehouseId) { setError('Choose the store.'); return; }
     const byDate = {};
-    for (const l of ready) {
-      const c = effective(l);
-      (byDate[c.date || date] ??= []).push({ product_id: c.productId, ...(c.colorId ? { color_id: c.colorId } : {}), quantity: Number(c.qty), unit_id: c.unitId });
+    for (const g of combined) {
+      (byDate[g.date] ??= []).push({ product_id: g.productId, ...(g.colorId ? { color_id: g.colorId } : {}), quantity: g.qty, unit_id: g.unitId });
     }
+    const merges = combined.filter(g => g.lines.length > 1)
+      .map(g => `${prodById[g.productId]?.name}${g.colorId ? ' ' + colById[g.colorId]?.name : ''} = ${g.lines.map(l => `${l.typeText} ${l.qty}`).join(' + ')}`);
     const conversions = ready.map(l => ({ l, e: effective(l) })).filter(x => x.e.converted)
       .map(({ l, e }) => `${l.typeText}${l.colourText ? ' ' + l.colourText : ''}: ${l.qty}${l.unitText} at ${e.converted.pcsPerSqm}/m² → ${e.qty} ${unitById[e.unitId]?.symbol}`);
     const movements = Object.entries(byDate).sort().map(([d, ls]) => ({
       type: 'opening_balance', warehouse_id: warehouseId, movement_date: d, reference: fileName || null,
-      notes: conversions.length ? `Converted from pieces: ${conversions.join('; ')}` : null, lines: ls,
+      notes: [conversions.length ? `Converted from pieces: ${conversions.join('; ')}` : '', merges.length ? `Sheet lines added together: ${merges.join('; ')}` : '']
+        .filter(Boolean).join(' | ') || null,
+      lines: ls,
     }));
 
     // Teach the names the admin resolved by hand
@@ -365,7 +373,7 @@ export default function StockImport() {
                 <span className="badge badge-success">{ready.length} ready</span>
                 <span className={`badge ${open.length ? 'badge-warning' : 'badge-neutral'}`}>{open.length} need a decision</span>
                 <span className="badge badge-neutral">{skipped.length} skipped</span>
-                {dupes.size > 0 && <span className="badge badge-warning">{dupes.size} duplicated</span>}
+                {dupes.size > 0 && <span className="badge badge-neutral">{dupes.size} lines added together</span>}
               </div>
 
               {matched.tables.map(t => {
@@ -456,7 +464,7 @@ export default function StockImport() {
                                 <td className="text-xs">
                                   {c.skip ? <span className="text-muted">skipped</span>
                                     : problems.length ? <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {problems.join('; ')}</span>
-                                    : dupes.has(l.id) ? <span className="text-error">same product and colour twice</span>
+                                    : dupes.has(l.id) ? <span className="text-success">ready · added to the other {prodById[e.productId]?.name}{e.colorId ? ' ' + colById[e.colorId]?.name : ''} line</span>
                                     : <span className="text-success">ready</span>}
                                   <label className="flex items-center gap-4 mt-8">
                                     <input type="checkbox" checked={!!c.skip} onChange={ev => setChoice(l.id, { skip: ev.target.checked })} /> skip
@@ -474,24 +482,27 @@ export default function StockImport() {
 
               {step === 'preview' ? (
                 <div className="card">
-                  <div className="card-header"><h2 className="card-title">Preview — {ready.length} lines</h2></div>
+                  <div className="card-header"><h2 className="card-title">Preview — {combined.length} opening balances from {ready.length} sheet lines</h2></div>
                   <div className="table-container">
                     <table>
-                      <thead><tr><th>Product</th><th>Colour</th><th>Date</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Running total</th></tr></thead>
+                      <thead><tr><th>Product</th><th>Colour</th><th>Date</th><th>From the sheet</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Running total</th></tr></thead>
                       <tbody>
                         {(() => {
                           const run = {};
-                          return [...ready].sort((a, b) => (prodById[effective(a).productId]?.name || '').localeCompare(prodById[effective(b).productId]?.name || ''))
-                            .map(l => {
-                              const e = effective(l);
-                              const u = unitById[e.unitId]?.symbol;
-                              run[u] = (run[u] || 0) + Number(e.qty);
+                          return [...combined].sort((a, b) => (prodById[a.productId]?.name || '').localeCompare(prodById[b.productId]?.name || '')
+                              || (colById[a.colorId]?.display_order ?? 0) - (colById[b.colorId]?.display_order ?? 0))
+                            .map(g => {
+                              const u = unitById[g.unitId]?.symbol;
+                              run[u] = Math.round(((run[u] || 0) + g.qty) * 10000) / 10000;
                               return (
-                                <tr key={l.id}>
-                                  <td>{prodById[e.productId]?.name}</td>
-                                  <td className="text-muted">{colById[e.colorId]?.name ?? '—'}</td>
-                                  <td className="text-muted">{e.date || date}</td>
-                                  <td style={{ textAlign: 'right' }}>{qtyText(e.qty)} {u}</td>
+                                <tr key={g.key}>
+                                  <td>{prodById[g.productId]?.name}</td>
+                                  <td className="text-muted">{colById[g.colorId]?.name ?? '—'}</td>
+                                  <td className="text-muted">{g.date}</td>
+                                  <td className="text-xs text-muted">
+                                    {g.lines.map(l => `${l.typeText} ${l.raw}${effective(l).converted ? ' (converted)' : ''}`).join(' + ')}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>{qtyText(g.qty)} {u}</td>
                                   <td style={{ textAlign: 'right' }} className="text-muted">{qtyText(run[u])} {u}</td>
                                 </tr>
                               );
@@ -503,11 +514,11 @@ export default function StockImport() {
                   <div className="card-body flex flex-col gap-8">
                     {error && <div className="alert alert-error" role="alert">{error}</div>}
                     <p className="text-sm text-muted">
-                      Posts {ready.length} opening balances at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}
+                      Posts {combined.length} opening balances at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}
                       {skipped.length ? `; ${skipped.length} skipped lines are not recorded` : ''}. All or nothing — and an item that already has stock here is refused.
                     </p>
                     <div className="flex gap-8">
-                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>Post {ready.length} opening balances</button>
+                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>Post {combined.length} opening balances</button>
                       <button type="button" className="btn btn-ghost" onClick={() => setStep('resolve')}>Back</button>
                     </div>
                   </div>
@@ -516,7 +527,7 @@ export default function StockImport() {
                 <div className="flex flex-col gap-8">
                   {error && <div className="alert alert-error" role="alert">{error}</div>}
                   <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}
-                    disabled={!ready.length || open.length > 0 || dupes.size > 0 || !warehouseId}
+                    disabled={!ready.length || open.length > 0 || !warehouseId}
                     onClick={() => setStep('preview')}>
                     {open.length ? `Resolve or skip ${open.length} line${open.length === 1 ? '' : 's'} first` : !warehouseId ? 'Choose the store first' : `Preview ${ready.length} lines`}
                   </button>
