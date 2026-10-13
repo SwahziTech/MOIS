@@ -7,6 +7,8 @@ import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
+import Decisions from '../components/master/Decisions';
+import { useSearchParams } from 'react-router-dom';
 
 const LOAD_ERROR = "We couldn't load the review queue. Please try again.";
 
@@ -27,6 +29,8 @@ const ENTITY_NAMES = {
  */
 export default function ReviewQueue() {
   const { session, canManage } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'decisions' ? 'decisions' : 'flags';
   const canResolve = canManage('products.manage') || canManage('materials.manage');
   const [flags,   setFlags]   = useState([]);
   const [names,   setNames]   = useState({});
@@ -82,6 +86,11 @@ export default function ReviewQueue() {
 
   return (
     <PageShell title="Review queue" subtitle="Master Data">
+      <div className="filter-chips mb-16">
+        <button type="button" className={`filter-chip${tab === 'flags' ? ' is-on' : ''}`} onClick={() => setParams({})}>Open flags ({flags.length})</button>
+        <button type="button" className={`filter-chip${tab === 'decisions' ? ' is-on' : ''}`} onClick={() => setParams({ tab: 'decisions' })}>Decisions</button>
+      </div>
+      {tab === 'decisions' ? <Decisions /> : <>
       {types.length > 1 && (
         <div className="flex items-center gap-8 mb-16">
           <label className="text-sm text-muted" htmlFor="rq-filter">Show</label>
@@ -135,6 +144,7 @@ export default function ReviewQueue() {
           </div>
         )}
       </div>
+      </>}
     </PageShell>
   );
 }

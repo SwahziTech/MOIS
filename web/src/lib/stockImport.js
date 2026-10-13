@@ -209,21 +209,35 @@ function rank(text, candidates, nameOf, limit = 4, threshold = 0.45) {
 /**
  * Match parsed lines to the catalogue.
  * catalog: { categories:[{id,name,colorIds:[]}], products:[{id,name,categoryId,unitId,pcsPerSqm,status}],
- *            colors:[{id,name}], units:[{id,symbol,name}], aliases:[{alias_type,scope,alias_normalized,product_id,color_id,category_id}] }
- * Each result: { status: 'exact'|'suggested'|'none', id, via, suggestions:[{id,score}] }
- * - exact: a saved alias, or the same name (ignoring case/spacing/punctuation)
- * - suggested: close matches for the admin to confirm
+ *            colors:[{id,name}], units:[{id,symbol,name}],
+ *            decisions:[{id,subject_type,context_normalized,term_normalized,decision,product_id,color_id,category_id,decided_by_label}] }
+ *   decisions = the active rows of identity_decisions (migration 026)
+ * Each result: { status: 'exact'|'suggested'|'none'|'not_tracked', id, via, decision, suggestions:[{id,score}] }
+ * - exact: a recorded decision, or the same name (ignoring case/spacing/punctuation)
+ * - suggested: close matches for the admin to confirm (never ones a decision says it is NOT)
  * - none: nothing close — the admin picks, creates, or skips
+ * - not_tracked: a decision says this term isn't stocked — skip it
  */
 export function matchSheet(parsed, catalog) {
   const activeProducts = catalog.products.filter(p => p.status === 'active');
-  const alias = (type, scope, text) => catalog.aliases.find(a =>
-    a.alias_type === type && a.alias_normalized === normalize(text) && (a.scope === normalize(scope) || a.scope === ''));
+  const decisions = catalog.decisions || [];
+  // The standing answer for a term: one recorded for this context, else one for anywhere
+  const answer = (type, context, text) => {
+    const t = normalize(text), c = normalize(context);
+    const mine = decisions.filter(d => d.subject_type === type && d.term_normalized === t && d.decision !== 'distinct_from');
+    return mine.find(d => d.context_normalized === c) || mine.find(d => d.context_normalized === '') || null;
+  };
+  // Records a decision says the term is NOT
+  const notThese = (type, context, text) => new Set(decisions
+    .filter(d => d.subject_type === type && d.decision === 'distinct_from' && d.term_normalized === normalize(text)
+      && (d.context_normalized === normalize(context) || d.context_normalized === ''))
+    .map(d => d.product_id ?? d.color_id ?? d.category_id));
+  const via = d => `decided: ${d.decided_by_label}`;
 
   // Categories per table
   const tables = parsed.tables.map(t => {
-    const a = t.category && alias('category', '', t.category);
-    if (a) return { ...t, cat: { status: 'exact', id: a.category_id, via: 'saved match', suggestions: [] } };
+    const a = t.category && answer('category', '', t.category);
+    if (a?.category_id) return { ...t, cat: { status: 'exact', id: a.category_id, via: via(a), decision: a.id, suggestions: [] } };
     const same = catalog.categories.filter(c => normalize(c.name) === normalize(t.category));
     if (t.category && same.length === 1) return { ...t, cat: { status: 'exact', id: same[0].id, via: 'same name', suggestions: [] } };
     const sug = t.category ? rank(t.category, catalog.categories, c => c.name, 3, 0.4) : [];
@@ -239,14 +253,18 @@ export function matchSheet(parsed, catalog) {
 
     // Product
     let product;
-    const pa = alias('product', t.category, l.typeText);
-    const sameName = activeProducts.filter(p => normalize(p.name) === normalize(l.typeText) && (!catIds.length || catIds.includes(p.categoryId)));
-    if (pa) product = { status: 'exact', id: pa.product_id, via: 'saved match', suggestions: [] };
+    const pa = answer('product', t.category, l.typeText);
+    const excluded = notThese('product', t.category, l.typeText);
+    const sameName = activeProducts.filter(p => normalize(p.name) === normalize(l.typeText) && !excluded.has(p.id)
+      && (!catIds.length || catIds.includes(p.categoryId)));
+    if (pa?.decision === 'not_tracked') product = { status: 'not_tracked', id: null, via: via(pa), decision: pa.id, suggestions: [] };
+    else if (pa?.product_id) product = { status: 'exact', id: pa.product_id, via: via(pa), decision: pa.id, suggestions: [] };
     else if (sameName.length === 1) product = { status: 'exact', id: sameName[0].id, via: 'same name', suggestions: [] };
     else {
-      const inCats = activeProducts.filter(p => catIds.includes(p.categoryId));
-      let sug = rank(l.typeText, inCats.length ? inCats : activeProducts, p => p.name);
-      if (!sug.length && inCats.length) sug = rank(l.typeText, activeProducts, p => p.name, 3, 0.6);   // elsewhere in the catalogue
+      const candidates = activeProducts.filter(p => !excluded.has(p.id));
+      const inCats = candidates.filter(p => catIds.includes(p.categoryId));
+      let sug = rank(l.typeText, inCats.length ? inCats : candidates, p => p.name);
+      if (!sug.length && inCats.length) sug = rank(l.typeText, candidates, p => p.name, 3, 0.6);   // elsewhere in the catalogue
       // strong: every word accounted for AND in the heading's category — still the admin's call
       product = { status: sug.length ? 'suggested' : 'none', id: null, suggestions: sug.map(s => ({
         id: s.item.id, score: Number(s.score.toFixed(2)),
@@ -258,9 +276,9 @@ export function matchSheet(parsed, catalog) {
     // Colour
     let colour = null;
     if (l.colourText) {
-      const ca = alias('color', '', l.colourText);
+      const ca = answer('color', t.category, l.colourText);
       const same = catalog.colors.find(c => normalize(c.name) === normalize(l.colourText));
-      if (ca) colour = { status: 'exact', id: ca.color_id, via: 'saved match', suggestions: [] };
+      if (ca?.color_id) colour = { status: 'exact', id: ca.color_id, via: via(ca), decision: ca.id, suggestions: [] };
       else if (same) colour = { status: 'exact', id: same.id, via: 'same name', suggestions: [] };
       else {
         const sug = rank(l.colourText, catalog.colors, c => c.name, 2, 0.6);

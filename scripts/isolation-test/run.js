@@ -27,7 +27,7 @@ const TABLES = ['organizations','branches','warehouses','profiles','roles','role
   'recipe_versions','recipe_items','recipe_version_products','permissions',
   'color_palette','product_category_colors','category_color_price_items',
   'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log',
-  'suppliers','inventory_movements','inventory_transactions','stock_balances','import_aliases','stock_import_drafts'];
+  'suppliers','inventory_movements','inventory_transactions','stock_balances','identity_decisions','stock_import_drafts'];
 
 const readBlock = (who, claims) => `
 DO $$

@@ -16,7 +16,9 @@ const LOAD_ERROR = "We couldn't load the catalogue. Please try again.";
  * written until "Post": the sheet is parsed and matched in the browser, the
  * admin resolves every line, previews the batch, and it posts through
  * post_inventory_batch() — every movement via post_inventory_movement(),
- * all or nothing. Resolved names are remembered (import_aliases).
+ * all or nothing. Every name resolved by hand is recorded as a standing
+ * identity decision (identity_decisions, migration 026), so it is never
+ * asked again; recorded decisions match exactly next time.
  */
 export default function StockImport() {
   const { organization, session, canAt, canManage } = useAuth();
@@ -44,16 +46,18 @@ export default function StockImport() {
 
   async function loadCatalog() {
     setLoadError('');
-    const [cats, pcc, prods, colors, units, aliases, wh] = await Promise.all([
+    const [cats, pcc, prods, colors, units, decisions, wh] = await Promise.all([
       supabase.from('product_categories').select('id, name, status, sort_order, default_unit_id').order('sort_order'),
       supabase.from('product_category_colors').select('category_id, color_id, display_order'),
       supabase.from('products').select('id, canonical_name, category_id, unit_id, pcs_per_sqm, status').order('canonical_name'),
       supabase.from('color_palette').select('id, name, display_order, is_active').order('display_order'),
       supabase.from('units').select('id, symbol, name, status'),
-      supabase.from('import_aliases').select('alias_type, scope, alias_normalized, product_id, color_id, category_id'),
+      supabase.from('identity_decisions')
+        .select('id, subject_type, context_normalized, term_normalized, decision, product_id, color_id, category_id, decided_by_label')
+        .eq('status', 'active'),
       supabase.from('warehouses').select('id, name, status, branch_id, branch:branches(id, name, status)').order('name'),
     ]);
-    const err = [cats, pcc, prods, colors, units, aliases, wh].find(r => r.error)?.error;
+    const err = [cats, pcc, prods, colors, units, decisions, wh].find(r => r.error)?.error;
     if (err) { console.error(err); setLoadError(LOAD_ERROR); return null; }
     const c = {
       categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id,
@@ -61,7 +65,7 @@ export default function StockImport() {
       products: prods.data.map(p => ({ id: p.id, name: p.canonical_name, categoryId: p.category_id, unitId: p.unit_id, pcsPerSqm: p.pcs_per_sqm, status: p.status })),
       colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active, display_order: x.display_order })),
       units: units.data.map(u => ({ id: u.id, symbol: u.symbol, name: u.name })),
-      aliases: aliases.data,
+      decisions: decisions.data,
     };
     setCatalog(c);
     setWarehouses(wh.data.filter(w => w.status === 'active' && canAt('inventory.adjust', w.branch_id, w.id)));
@@ -108,13 +112,14 @@ export default function StockImport() {
     // Categories chosen by hand (in a resumed draft) steer the product matching
     const extra = first.tables
       .filter(t => t.category && tables[t.index]?.categoryId && tables[t.index].categoryId !== t.cat.id)
-      .map(t => ({ alias_type: 'category', scope: '', alias_normalized: normalize(t.category), category_id: tables[t.index].categoryId }));
-    const m = extra.length ? { tables: first.tables, lines: matchSheet(p, { ...cat, aliases: [...cat.aliases, ...extra] }).lines } : first;
+      .map(t => ({ id: null, subject_type: 'category', context_normalized: '', term_normalized: normalize(t.category), decision: 'same_as', category_id: tables[t.index].categoryId, decided_by_label: 'this import' }));
+    const m = extra.length ? { tables: first.tables, lines: matchSheet(p, { ...cat, decisions: [...cat.decisions, ...extra] }).lines } : first;
     setParsed(p);
     setMatched(m);
     setTableChoice(tables);
     setChoices(Object.fromEntries(m.lines.map(l => [l.id, saved?.lines?.[l.id] ?? {
-      productId: l.product.id ?? '', colorId: l.colour?.id ?? '', unitId: l.unitId ?? '', qty: l.qty, date: '', skip: false,
+      productId: l.product.id ?? '', colorId: l.colour?.id ?? '', unitId: l.unitId ?? '', qty: l.qty, date: '',
+      skip: l.product.status === 'not_tracked',   // a decision says this isn't stocked
     }])));
     setStep('resolve');
   }
@@ -167,8 +172,8 @@ export default function StockImport() {
     const extra = Object.entries(next)
       .map(([i, v]) => ({ t: matched.tables[i], v }))
       .filter(({ t: tt, v }) => tt.category && v.categoryId && v.categoryId !== tt.cat.id)
-      .map(({ t: tt, v }) => ({ alias_type: 'category', scope: '', alias_normalized: normalize(tt.category), category_id: v.categoryId }));
-    const m = matchSheet(parsed, { ...catalog, aliases: [...catalog.aliases, ...extra] });
+      .map(({ t: tt, v }) => ({ id: null, subject_type: 'category', context_normalized: '', term_normalized: normalize(tt.category), decision: 'same_as', category_id: v.categoryId, decided_by_label: 'this import' }));
+    const m = matchSheet(parsed, { ...catalog, decisions: [...catalog.decisions, ...extra] });
     setMatched({ tables: matched.tables, lines: m.lines });   // keep each table's original match labels
     setChoices(cs => Object.fromEntries(m.lines.map(l => [l.id, cs[l.id]?.productId ? cs[l.id] : { ...cs[l.id], productId: l.product.id ?? '' }])));
   }
@@ -257,28 +262,38 @@ export default function StockImport() {
       lines: ls,
     }));
 
-    // Teach the names the admin resolved by hand
-    const aliases = [];
+    // Every name resolved by hand becomes a standing decision (never asked again)
+    const decisions = [];
     const seen = new Set();
+    const why = (l, c) => c.evidence || `Chosen while importing ${fileName || 'a stock sheet'} (sheet line ${l.lineNo})`;
     for (const l of ready) {
       const t = matched.tables[l.table];
       const c = effective(l);
       if (l.product.status !== 'exact' || l.product.id !== c.productId) {
-        const k = `p|${t.category}|${normalize(l.typeText)}`;
-        if (!seen.has(k)) { seen.add(k); aliases.push({ alias_type: 'product', scope: t.category, alias_text: l.typeText, product_id: c.productId }); }
+        const k = `p|${normalize(t.category)}|${normalize(l.typeText)}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          decisions.push({ subject_type: 'product', context: t.category, term: l.typeText, decision: 'same_as', product_id: c.productId, evidence: why(l, c) });
+        }
       }
       if (l.colourText && c.colorId && (l.colour?.status !== 'exact' || l.colour.id !== c.colorId)) {
         const k = `c|${normalize(l.colourText)}`;
-        if (!seen.has(k)) { seen.add(k); aliases.push({ alias_type: 'color', scope: '', alias_text: l.colourText, color_id: c.colorId }); }
+        if (!seen.has(k)) {
+          seen.add(k);
+          decisions.push({ subject_type: 'color', context: '', term: l.colourText, decision: 'same_as', color_id: c.colorId, evidence: why(l, c) });
+        }
       }
     }
     for (const t of matched.tables) {
       const chosen = tableChoice[t.index]?.categoryId;
-      if (t.category && chosen && t.cat.id !== chosen) aliases.push({ alias_type: 'category', scope: '', alias_text: t.category, category_id: chosen });
+      if (t.category && chosen && t.cat.id !== chosen) {
+        decisions.push({ subject_type: 'category', context: '', term: t.category, decision: 'same_as', category_id: chosen,
+          evidence: `Chosen while importing ${fileName || 'a stock sheet'} (table heading, line ${t.firstLine})` });
+      }
     }
 
     setBusy(true);
-    const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { movements, aliases } });
+    const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { movements, decisions } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't post the import. Nothing was recorded.")); return; }
     if (draftId) {
@@ -286,7 +301,7 @@ export default function StockImport() {
         status: 'posted', posted_movement_ids: data, table_choices: tableChoice, line_choices: choices, updated_by: session?.user?.id ?? null,
       }).eq('id', draftId);
     }
-    setResult({ movements: data.length, lines: ready.length, aliases: aliases.length });
+    setResult({ movements: data.length, lines: ready.length, decisions: decisions.length });
     setStep('done');
   }
 
@@ -307,7 +322,7 @@ export default function StockImport() {
       {step === 'done' ? (
         <div className="card"><div className="card-body flex flex-col gap-12">
           <p className="flex items-center gap-8"><CheckCircle2 size={18} className="text-success" /> Posted {result.lines} opening-balance lines in {result.movements} movement{result.movements === 1 ? '' : 's'}.</p>
-          {result.aliases > 0 && <p className="text-sm text-muted">{result.aliases} name match{result.aliases === 1 ? '' : 'es'} remembered for the next sheet.</p>}
+          {result.decisions > 0 && <p className="text-sm text-muted">{result.decisions} name{result.decisions === 1 ? '' : 's'} recorded as decisions — see Review queue → Decisions.</p>}
           <div className="flex gap-8">
             <button type="button" className="btn btn-primary" onClick={() => navigate('/movements')}>See movements</button>
             <button type="button" className="btn btn-outline" onClick={() => navigate('/stock')}>See stock</button>

@@ -385,7 +385,8 @@ function ProductModal({ product, organization, categories, units, products, onCl
  * they differ so the admin can correct the survivor's prices deliberately.
  */
 function MergePanel({ product, products, currencyCode, onCancel, onMerged }) {
-  const { session } = useAuth();
+  const { session, organization, profile } = useAuth();
+  const me = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || session?.user?.email || 'a user';
   const candidates = products
     .filter(p => p.id !== product.id && p.status === 'active' && p.category_id === product.category_id)
     .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name));
@@ -428,6 +429,14 @@ function MergePanel({ product, products, currencyCode, onCancel, onMerged }) {
     }).eq('entity_type', 'product').eq('entity_id', product.id).eq('status', 'open');
     setBusy(false);
     if (flagErr) { setError(`Deactivated, but its flags could not be closed: ${dbErrorMessage(flagErr)}`); return; }
+    // The merge answers "is X the same as Y" for good (migration 026)
+    const { error: decErr } = await supabase.from('identity_decisions').insert({
+      organization_id: organization.id, subject_type: 'product', term: product.canonical_name, context: '',
+      decision: 'same_as', product_id: target.id, source: 'merge',
+      evidence: `Merged into ${target.canonical_name} (${target.product_id_ref}) in the Products screen`,
+      decided_by: session?.user?.id, decided_by_label: me,
+    });
+    if (decErr && decErr.code !== '23505') { setError(`Merged, but the decision could not be recorded: ${dbErrorMessage(decErr)}`); return; }
     onMerged();
   }
 

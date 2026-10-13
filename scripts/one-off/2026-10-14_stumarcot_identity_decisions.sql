@@ -80,6 +80,8 @@ BEGIN
    'Stumarcot: a new floor tile, priced at the standard floor-tile tier.', 'chat', chat_label, '2026-10-14'),
   ('product', 'U-DOT', 'PAVING BLOCKS', 'same_as', 'U-Dot Kubwa', 'paving_blocks_vibro', NULL,
    'Stumarcot: U-DOT on the paving stock sheet is U-Dot Kubwa.', 'chat', chat_label, '2026-10-14'),
+  ('product', 'MIKUBWA CM 80', 'TRENCHCOVERS', 'same_as', 'Hollow', 'trench_covers', NULL,
+   'Stumarcot answered "Trench cover" when asked whether MIKUBWA CM 80 is Mkubwa Nondo (its own row), Trench Cover "Hollow" (70x50) or a new product - read as Trench Cover "Hollow". Correct it here if that reading is wrong.', 'chat', chat_label, '2026-10-14'),
   ('color', 'MAROON', '', 'same_as', NULL, NULL, 'Maroon',
    'Stumarcot: Maroon was a one-time test batch — recorded as a colour, inactive (discontinued) immediately so the stock can be sold down.', 'chat', chat_label, '2026-10-14');
 
