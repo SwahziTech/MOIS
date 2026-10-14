@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 
 /*
  * Navigation tabs. An item with `perm` is shown only to users holding that
@@ -50,6 +51,7 @@ const NAV = [
 
 export default function Sidebar() {
   const { profile, session, organization, userRoles, can, signOut } = useAuth();
+  const { branchId, setBranchId, branches, allowAll } = useBranch();
   const navigate = useNavigate();
 
   const fullName =
@@ -91,6 +93,18 @@ export default function Sidebar() {
           <span className="sidebar-system-label">MOIS Platform</span>
         </div>
       </div>
+
+      {/* Branch the screens are looking at */}
+      {branches.length > 0 && (
+        <div className="sidebar-branch">
+          <label className="sidebar-section-label" htmlFor="sidebar-branch">Branch</label>
+          <select id="sidebar-branch" className="form-input sidebar-branch-select" value={branchId}
+            disabled={!allowAll && branches.length === 1} onChange={e => setBranchId(e.target.value)}>
+            {allowAll && <option value="">All branches</option>}
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="sidebar-nav" aria-label="Main navigation">

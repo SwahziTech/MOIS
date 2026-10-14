@@ -3,6 +3,7 @@ import { Boxes, Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, stockKey, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -28,7 +29,7 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
-  const [branchId,    setBranchId]    = useState('');
+  const { branchId, setBranchId, branches, allowAll } = useBranch();
   const [warehouseId, setWarehouseId] = useState('');
   const [kind,        setKind]        = useState('');
   const [showZero,    setShowZero]    = useState(false);
@@ -41,7 +42,7 @@ export default function Stock() {
         loadInventoryRefs(),
         date && date < today
           ? supabase.rpc('stock_balances_as_of', { p_date: date })
-          : supabase.from('stock_balances').select('warehouse_id, material_id, product_id, stock_unit_id, quantity, last_movement_date'),
+          : supabase.from('stock_balances').select('warehouse_id, material_id, product_id, color_id, stock_unit_id, quantity, last_movement_date'),
       ]);
       if (bal.error) throw bal.error;
       setRefs(r);
@@ -54,14 +55,10 @@ export default function Stock() {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { setWarehouseId(''); }, [branchId]);
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const balanceMap = useMemo(() => Object.fromEntries(balances.map(b => [`${b.warehouse_id}|${stockKey(b)}`, b.quantity])), [balances]);
-  const branches = useMemo(() => {
-    const m = {};
-    for (const w of refs?.warehouses || []) if (w.branch) m[w.branch.id] = w.branch.name;
-    return Object.entries(m).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [refs]);
 
   const activeWarehouses = (refs?.warehouses || []).filter(w => w.status === 'active');
   const allowedActions = ACTIONS.filter(t => activeWarehouses.some(w => canAt(MOVEMENT_TYPES[t].perm, w.branch_id, w.id)));
@@ -103,9 +100,9 @@ export default function Stock() {
       )}
 
       <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Branch" value={branchId} onChange={e => { setBranchId(e.target.value); setWarehouseId(''); }}>
-          <option value="">All branches</option>
-          {branches.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Branch" value={branchId} onChange={e => setBranchId(e.target.value)}>
+          {allowAll && <option value="">All branches</option>}
+          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Store" value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
           <option value="">All stores</option>

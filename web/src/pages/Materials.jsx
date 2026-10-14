@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Layers, Plus, Search, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage, slugify } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -21,6 +22,7 @@ const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
  */
 export default function Materials() {
   const { organization, canManage } = useAuth();
+  const { inBranch } = useBranch();
   const canWriteMaterials = canManage('materials.manage');
   const canWriteUnits = canManage('materials.manage') || canManage('products.manage');
 
@@ -28,7 +30,9 @@ export default function Materials() {
   const [materials,  setMaterials]  = useState([]);
   const [categories, setCategories] = useState([]);
   const [units,      setUnits]      = useState([]);
-  const [branches,   setBranches]   = useState([]);
+  const [allBranches, setBranches]  = useState([]);
+  // The branch picked in the sidebar ('' = all)
+  const branches = allBranches.filter(b => inBranch(b.id));
   const [suppliers,  setSuppliers]  = useState([]);
   const [usage,      setUsage]      = useState({});   // material id → { active, any }
   const [unitUse,    setUnitUse]    = useState({});   // unit id → count of uses

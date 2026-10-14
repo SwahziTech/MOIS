@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Upload, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import { warehouseLabel, qtyText, orgToday } from '../lib/inventory';
 import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/stockImport';
@@ -22,6 +23,7 @@ const LOAD_ERROR = "We couldn't load the catalogue. Please try again.";
  */
 export default function StockImport() {
   const { organization, session, canAt, canManage } = useAuth();
+  const { inBranch } = useBranch();
   const navigate = useNavigate();
   const today = orgToday(organization?.timezone);
   const [catalog, setCatalog] = useState(null);
@@ -373,7 +375,7 @@ export default function StockImport() {
                 <label className="form-label" htmlFor="imp-wh">Store</label>
                 <select id="imp-wh" className="form-input" value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
                   <option value="">Choose…</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
+                  {warehouses.filter(w => inBranch(w.branch_id) || w.id === warehouseId).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
                 </select>
                 {!warehouses.length && catalog && <span className="form-hint">You need stock-adjustment permission at a store to import opening balances.</span>}
               </div>

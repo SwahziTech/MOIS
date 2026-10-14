@@ -19,6 +19,8 @@ export const MOVEMENT_TYPES = {
   opening_balance: { label: 'Opening balance', noun: 'Opening balance', perm: 'inventory.adjust',
                      help: 'Stock already on hand when you start using MOIS — once per item per store.' },
   reversal:        { label: 'Reversal',        noun: 'Reversal',        perm: 'inventory.adjust', help: '' },
+  // stock moved from one product to another when a name is resolved (migration 028)
+  reclassification: { label: 'Reclassify',     noun: 'Reclassification', perm: 'products.manage', help: '' },
 };
 
 /** "Dodoma — Raw Materials Store" */

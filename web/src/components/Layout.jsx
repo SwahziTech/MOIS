@@ -3,6 +3,7 @@ import { Building2, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Sidebar from './Sidebar';
 import AuthBrand from './AuthBrand';
+import { BranchProvider } from '../hooks/useBranch';
 
 // Full-screen spinner shown during auth session resolution
 function FullscreenLoader() {
@@ -59,12 +60,12 @@ export function ProtectedLayout() {
   if (organization.status !== 'active') return <NoOrganization inactive />;
 
   return (
-    <>
+    <BranchProvider>
       <Sidebar />
       <div className="main-wrapper">
         <Outlet />
       </div>
-    </>
+    </BranchProvider>
   );
 }
 

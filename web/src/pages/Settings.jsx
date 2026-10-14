@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import { browserTimeZone } from '../lib/format';
 import PageShell from '../components/PageShell';
@@ -30,6 +31,7 @@ export default function Settings() {
             <Row label="Legal name">{org?.legal_name}</Row>
             <Row label="Currency">{org?.currency_code}</Row>
             <Row label="Time zone"><TimeZone org={org} canEdit={canManage('org.manage')} /></Row>
+            <Row label="Default branch"><DefaultBranch org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Status">
               {org?.status && <span className="badge badge-success">{org.status}</span>}
             </Row>
@@ -63,6 +65,56 @@ export default function Settings() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+/**
+ * Which branch everyone's screens open on (migration 030) — e.g. the branch
+ * being verified first while others are rolled out later. Anyone can still
+ * switch branch in the sidebar.
+ */
+function DefaultBranch({ org, canEdit }) {
+  const { reloadProfile } = useAuth();
+  const { branches } = useBranch();
+  const [editing, setEditing] = useState(false);
+  const [value,   setValue]   = useState(org?.default_branch_id ?? '');
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+  const current = branches.find(b => b.id === org?.default_branch_id)?.name ?? 'All branches';
+
+  async function save() {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.from('organizations').update({ default_branch_id: value || null }).eq('id', org.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setEditing(false);
+    reloadProfile();
+  }
+
+  if (!editing) {
+    return (
+      <span className="flex items-center gap-8">
+        {current}
+        {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Change</button>}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-4">
+      <span className="flex items-center gap-8">
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Default branch" value={value} onChange={e => setValue(e.target.value)}>
+          <option value="">All branches</option>
+          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+      </span>
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>
+        The branch screens open on for everyone, until they pick another in the sidebar.
+      </span>
+      {error && <span className="text-xs text-error">{error}</span>}
+    </span>
   );
 }
 

@@ -276,6 +276,19 @@ ul, ol { list-style: none; }
   text-transform: uppercase;
 }
 
+.sidebar-branch {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-branch-select {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 13px;
+}
+
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -1442,7 +1455,7 @@ a.stat-card:focus-visible {
 @media (max-width: 768px) {
   .sidebar { width: var(--sidebar-width-sm); }
   .sidebar-logo-text, .sidebar-section-label, .sidebar-item span,
-  .sidebar-user-info { display: none; }
+  .sidebar-user-info, .sidebar-branch { display: none; }
   .main-wrapper { margin-left: var(--sidebar-width-sm); }
   .page-content { padding: 16px; }
 }

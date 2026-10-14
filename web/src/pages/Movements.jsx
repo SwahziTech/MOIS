@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } from '../lib/inventory';
@@ -24,6 +25,7 @@ const PAGE = 200;
  */
 export default function Movements() {
   const { organization } = useAuth();
+  const { branchId, inBranch } = useBranch();
   const [refs,      setRefs]      = useState(null);
   const [movements, setMovements] = useState([]);
   const [people,    setPeople]    = useState({});
@@ -62,10 +64,12 @@ export default function Movements() {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { setWarehouseId(''); }, [branchId]);
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const reversedBy = useMemo(() => Object.fromEntries(movements.filter(m => m.reverses_movement_id).map(m => [m.reverses_movement_id, m])), [movements]);
   const shown = movements.filter(m => (!type || m.movement_type === type)
+    && (inBranch(whById[m.warehouse_id]?.branch_id) || inBranch(whById[m.to_warehouse_id]?.branch_id))
     && (!warehouseId || m.warehouse_id === warehouseId || m.to_warehouse_id === warehouseId));
 
   const where = m => m.movement_type === 'transfer'
@@ -86,7 +90,7 @@ export default function Movements() {
         </select>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Store" value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
           <option value="">All stores</option>
-          {(refs?.warehouses || []).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
+          {(refs?.warehouses || []).filter(w => inBranch(w.branch_id)).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
         </select>
       </div>
 
