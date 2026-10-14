@@ -22,10 +22,29 @@ export default function FlagChoices({ flag, name, refs, onDone }) {
   const [choice, setChoice] = useState(null);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
+  // The admin's own words: saved as typed, never interpreted (migration 029 —
+  // kept as data for the future AI features of build-plan 1f)
+  const [text,  setText]  = useState(flag.admin_explanation ?? '');
+  const [saved, setSaved] = useState(flag.admin_explanation ?? '');
+  const [noteState, setNoteState] = useState('');
+
+  async function saveNote() {
+    const { error: err } = await supabase.from('review_flags').update({
+      admin_explanation: text.trim() ? text : null, admin_explanation_by: refs.me.id, admin_explanation_at: new Date().toISOString(),
+    }).eq('id', flag.id);
+    if (err) return err;
+    setSaved(text);
+    return null;
+  }
 
   async function run(fn) {
     setError('');
     setBusy(true);
+    // whatever was typed is kept, whichever choice is made
+    if (text !== saved) {
+      const noteErr = await saveNote();
+      if (noteErr) { setBusy(false); setError(dbErrorMessage(noteErr)); return; }
+    }
     const err = await fn();
     setBusy(false);
     if (err) { setError(typeof err === 'string' ? err : dbErrorMessage(err, "That didn't work. Please try again.")); return; }
@@ -67,6 +86,19 @@ export default function FlagChoices({ flag, name, refs, onDone }) {
       {choice === 'correct' && (
         <CorrectMatch decisionId={flag.entity_id} flag={flag} refs={refs} busy={busy} run={run} onBack={() => setChoice(null)} />
       )}
+      <div className="flex flex-col gap-4 mt-8">
+        <label className="text-xs text-muted" htmlFor={`explain-${flag.id}`}>Explain in your own words (optional)</label>
+        <textarea id={`explain-${flag.id}`} className="form-input" rows={2} value={text}
+          placeholder="Anything the choices above don't cover"
+          onChange={e => { setText(e.target.value); setNoteState(''); }} />
+        {text !== saved && (
+          <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} disabled={busy}
+            onClick={async () => { const err = await saveNote(); setNoteState(err ? 'failed' : 'saved'); if (err) setError(dbErrorMessage(err)); }}>
+            Save note
+          </button>
+        )}
+        {noteState === 'saved' && text === saved && <span className="text-xs text-success">Note saved.</span>}
+      </div>
     </div>
   );
 }

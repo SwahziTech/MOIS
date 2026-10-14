@@ -156,6 +156,8 @@ PRD sections: 4.15 (Dashboards & Reports), 7 (AI Features — V1 slice only:
 Ask MOIS, basic authorized queries, basic analysis, AI-assisted document
 drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 
+- Input already waiting: `review_flags.admin_explanation` (migration 029) — admins' free-text notes on Review-queue flags, saved as-is since 1b, deliberately not interpreted yet (AI proposing stock-affecting actions from it was considered for earlier and declined on 2026-10-14).
+
 ## 1g — Billing
 **Status: not started**
 

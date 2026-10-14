@@ -58,7 +58,7 @@ export default function ReviewQueue() {
     setError('');
     const { data, error: err } = await supabase
       .from('review_flags')
-      .select('id, entity_type, entity_id, reason_code, reason, created_at')
+      .select('id, entity_type, entity_id, reason_code, reason, created_at, admin_explanation')
       .eq('status', 'open')
       .order('entity_type').order('created_at');
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
