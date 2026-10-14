@@ -196,7 +196,31 @@ export default function StockImport() {
     const conv = conversionFor(c, unitId);
     return conv ? { ...c, qty: conv.qty, unitId: conv.unitId, converted: conv } : { ...c, unitId };
   };
-  const problemsOf = l => (catalog ? lineProblems({ ...l, unitId: effective(l).unitId }, effective(l), catalog) : []);
+  // Standing import rule: a line nobody has matched to a product isn't
+  // guessed and doesn't block — it becomes a placeholder product named as on
+  // the sheet, flagged for review with the likely products as the choices.
+  const placeholderFor = l => {
+    const c = choices[l.id] || {};
+    if (c.productId || c.skip || !matched) return null;
+    const t = matched.tables[l.table];
+    const sug = l.product.suggestions.slice(0, 3);
+    const sugCats = [...new Set(sug.map(x => prodById[x.id]?.categoryId))];
+    const categoryId = tableChoice[l.table]?.categoryId || t.cat.id || (sugCats.length === 1 ? sugCats[0] : '') || '';
+    return { key: `${categoryId}|${normalize(l.typeText)}`, name: l.typeText, categoryId, context: t.category,
+             candidates: sug.filter(x => prodById[x.id]?.categoryId === categoryId).map(x => x.id) };
+  };
+  const problemsOf = l => {
+    if (!catalog) return [];
+    const ph = placeholderFor(l);
+    if (!ph) return lineProblems({ ...l, unitId: effective(l).unitId }, effective(l), catalog);
+    const e = effective(l);
+    const cat = catById[ph.categoryId];
+    const out = [];
+    if (!cat) out.push('Choose this table\'s category above, so the new product can be filed');
+    if (!e.unitId) out.push(l.unitText ? `Unknown unit "${l.unitText}"` : 'No unit — the table heading has none');
+    if (cat?.colorIds.length && !(e.colorId || l.colour?.id)) out.push(l.colourText ? `Colour "${l.colourText}" isn't set up` : 'Choose the colour');
+    return out;
+  };
 
   const lines = matched?.lines || [];
   const ready = lines.filter(l => !choices[l.id]?.skip && problemsOf(l).length === 0);
@@ -210,8 +234,10 @@ export default function StockImport() {
     const groups = {};
     for (const l of ready) {
       const c = effective(l);
-      const k = `${c.date || date}|${c.productId}|${c.colorId}`;
-      (groups[k] ??= { key: k, date: c.date || date, productId: c.productId, colorId: c.colorId, unitId: c.unitId, qty: 0, lines: [] });
+      const ph = placeholderFor(l);
+      const colorId = c.colorId || (ph ? l.colour?.id ?? '' : '');
+      const k = `${c.date || date}|${ph ? 'ph:' + ph.key : c.productId}|${colorId}`;
+      (groups[k] ??= { key: k, date: c.date || date, productId: c.productId, placeholder: ph, colorId, unitId: c.unitId, qty: 0, lines: [] });
       groups[k].qty = Math.round((groups[k].qty + Number(c.qty)) * 10000) / 10000;
       groups[k].lines.push(l);
     }
@@ -248,11 +274,18 @@ export default function StockImport() {
     setError('');
     if (!warehouseId) { setError('Choose the store.'); return; }
     const byDate = {};
+    const placeholders = {};
     for (const g of combined) {
-      (byDate[g.date] ??= []).push({ product_id: g.productId, ...(g.colorId ? { color_id: g.colorId } : {}), quantity: g.qty, unit_id: g.unitId });
+      if (g.placeholder) {
+        placeholders[g.placeholder.key] ??= { key: g.placeholder.key, name: g.placeholder.name, category_id: g.placeholder.categoryId,
+          unit_id: g.unitId, context: g.placeholder.context, candidate_product_ids: g.placeholder.candidates,
+          why: `It appeared on ${fileName || 'a stock sheet'} without a clear match.` };
+      }
+      (byDate[g.date] ??= []).push({ ...(g.placeholder ? { placeholder_key: g.placeholder.key } : { product_id: g.productId }),
+        ...(g.colorId ? { color_id: g.colorId } : {}), quantity: g.qty, unit_id: g.unitId });
     }
     const merges = combined.filter(g => g.lines.length > 1)
-      .map(g => `${prodById[g.productId]?.name}${g.colorId ? ' ' + colById[g.colorId]?.name : ''} = ${g.lines.map(l => `${l.typeText} ${l.qty}`).join(' + ')}`);
+      .map(g => `${g.placeholder?.name ?? prodById[g.productId]?.name}${g.colorId ? ' ' + colById[g.colorId]?.name : ''} = ${g.lines.map(l => `${l.typeText} ${l.qty}`).join(' + ')}`);
     const conversions = ready.map(l => ({ l, e: effective(l) })).filter(x => x.e.converted)
       .map(({ l, e }) => `${l.typeText}${l.colourText ? ' ' + l.colourText : ''}: ${l.qty}${l.unitText} at ${e.converted.pcsPerSqm}/m² → ${e.qty} ${unitById[e.unitId]?.symbol}`);
     const movements = Object.entries(byDate).sort().map(([d, ls]) => ({
@@ -293,7 +326,7 @@ export default function StockImport() {
     }
 
     setBusy(true);
-    const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { movements, decisions } });
+    const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { placeholders: Object.values(placeholders), movements, decisions } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't post the import. Nothing was recorded.")); return; }
     if (draftId) {
@@ -479,6 +512,10 @@ export default function StockImport() {
                                 <td className="text-xs">
                                   {c.skip ? <span className="text-muted">skipped</span>
                                     : problems.length ? <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {problems.join('; ')}</span>
+                                    : placeholderFor(l) ? <span className="text-warning">
+                                        New product "{l.typeText}" will be added to {catById[placeholderFor(l).categoryId]?.name} and flagged in the Review queue
+                                        {placeholderFor(l).candidates.length ? ` — it may be ${placeholderFor(l).candidates.map(id => prodById[id]?.name).join(' or ')}` : ''}
+                                      </span>
                                     : dupes.has(l.id) ? <span className="text-success">ready · added to the other {prodById[e.productId]?.name}{e.colorId ? ' ' + colById[e.colorId]?.name : ''} line</span>
                                     : <span className="text-success">ready</span>}
                                   <label className="flex items-center gap-4 mt-8">
@@ -504,14 +541,14 @@ export default function StockImport() {
                       <tbody>
                         {(() => {
                           const run = {};
-                          return [...combined].sort((a, b) => (prodById[a.productId]?.name || '').localeCompare(prodById[b.productId]?.name || '')
+                          return [...combined].sort((a, b) => (a.placeholder?.name ?? prodById[a.productId]?.name ?? '').localeCompare(b.placeholder?.name ?? prodById[b.productId]?.name ?? '')
                               || (colById[a.colorId]?.display_order ?? 0) - (colById[b.colorId]?.display_order ?? 0))
                             .map(g => {
                               const u = unitById[g.unitId]?.symbol;
                               run[u] = Math.round(((run[u] || 0) + g.qty) * 10000) / 10000;
                               return (
                                 <tr key={g.key}>
-                                  <td>{prodById[g.productId]?.name}</td>
+                                  <td>{g.placeholder ? <>{g.placeholder.name} <span className="badge badge-warning">new · to review</span></> : prodById[g.productId]?.name}</td>
                                   <td className="text-muted">{colById[g.colorId]?.name ?? '—'}</td>
                                   <td className="text-muted">{g.date}</td>
                                   <td className="text-xs text-muted">

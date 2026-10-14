@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BookCheck, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -36,7 +37,8 @@ export default function Decisions() {
   const [error,   setError]   = useState('');
   const [status,  setStatus]  = useState('active');
   const [subject, setSubject] = useState('');
-  const [search,  setSearch]  = useState('');
+  const [params] = useSearchParams();
+  const [search,  setSearch]  = useState(params.get('q') ?? '');
   const [editing, setEditing] = useState(null);    // { mode: 'new'|'correct'|'revoke', row }
 
   async function load() {

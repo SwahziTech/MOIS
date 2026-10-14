@@ -1506,4 +1506,5 @@ td .flag-actions { margin-top: 0; }
 .detail-list dt { color: var(--text-muted); }
 .detail-list dd { margin: 0; }
 .text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
 .row-muted td { opacity: 0.55; }

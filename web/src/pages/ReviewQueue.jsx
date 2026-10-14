@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import Decisions from '../components/master/Decisions';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 
 const LOAD_ERROR = "We couldn't load the review queue. Please try again.";
 
@@ -20,6 +20,17 @@ const ENTITY_NAMES = {
   color:            ['color_palette', 'name'],
   unit:             ['units', 'symbol'],
   supplier:         ['suppliers', 'name'],
+  identity_decision: ['identity_decisions', 'term'],
+};
+
+// Where an admin goes to act on a flag
+const OPEN_LINK = {
+  product:           f => `/products?edit=${f.entity_id}`,
+  material:          () => '/materials',
+  product_category:  () => '/categories',
+  color:             () => '/colours',
+  supplier:          () => '/suppliers',
+  identity_decision: (f, name) => `/review?tab=decisions&q=${encodeURIComponent(name ?? '')}`,
 };
 
 /**
@@ -121,6 +132,11 @@ export default function ReviewQueue() {
                     <td style={{ verticalAlign: 'top' }}>
                       <div style={{ fontWeight: 500 }}>{names[`${f.entity_type}:${f.entity_id}`] || '—'}</div>
                       <div className="text-xs text-muted">{ENTITY_LABELS[f.entity_type] || f.entity_type}</div>
+                      {OPEN_LINK[f.entity_type] && (
+                        <Link className="btn btn-ghost btn-sm" style={{ paddingLeft: 0 }} to={OPEN_LINK[f.entity_type](f, names[`${f.entity_type}:${f.entity_id}`])}>
+                          Open
+                        </Link>
+                      )}
                     </td>
                     <td className="text-sm" style={{ verticalAlign: 'top', maxWidth: 420 }}>{f.reason}</td>
                     {canResolve && (

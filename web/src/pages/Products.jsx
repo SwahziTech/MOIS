@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Package, Search, Plus, Flag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -60,6 +61,16 @@ export default function Products() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Links from the Review queue open a product directly (?edit=<id>)
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('edit');
+    if (!id || !products.length) return;
+    const p = products.find(x => x.id === id);
+    if (p) { setStatusFilter('all'); setEditing(p); }
+    setParams({}, { replace: true });
+  }, [params, products]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const q = search.trim().toLowerCase();
   const filtered = products.filter(p => {
@@ -429,11 +440,24 @@ function MergePanel({ product, products, currencyCode, onCancel, onMerged }) {
     }).eq('entity_type', 'product').eq('entity_id', product.id).eq('status', 'open');
     setBusy(false);
     if (flagErr) { setError(`Deactivated, but its flags could not be closed: ${dbErrorMessage(flagErr)}`); return; }
-    // The merge answers "is X the same as Y" for good (migration 026)
-    const { error: decErr } = await supabase.from('identity_decisions').insert({
+    // The merge answers "is X the same as Y" for good (migration 026). If the
+    // name already has an answer (e.g. an import placeholder), correct it.
+    const evidence = `Merged into ${target.canonical_name} (${target.product_id_ref}) in the Products screen`;
+    const { data: existing } = await supabase.from('identity_decisions').select('id, product_id')
+      .eq('subject_type', 'product').eq('status', 'active').eq('context_normalized', '')
+      .eq('term_normalized', product.canonical_name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''))
+      .in('decision', ['same_as', 'new_record']).maybeSingle();
+    if (existing && existing.product_id !== target.id) {
+      const { error: corrErr } = await supabase.rpc('correct_identity_decision',
+        { p_id: existing.id, p_new: { decision: 'same_as', product_id: target.id }, p_evidence: evidence });
+      if (corrErr) { setError(`Merged, but the decision could not be updated: ${dbErrorMessage(corrErr)}`); return; }
+      onMerged();
+      return;
+    }
+    const { error: decErr } = existing ? { error: null } : await supabase.from('identity_decisions').insert({
       organization_id: organization.id, subject_type: 'product', term: product.canonical_name, context: '',
       decision: 'same_as', product_id: target.id, source: 'merge',
-      evidence: `Merged into ${target.canonical_name} (${target.product_id_ref}) in the Products screen`,
+      evidence,
       decided_by: session?.user?.id, decided_by_label: me,
     });
     if (decErr && decErr.code !== '23505') { setError(`Merged, but the decision could not be recorded: ${dbErrorMessage(decErr)}`); return; }
