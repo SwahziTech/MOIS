@@ -1508,3 +1508,5 @@ td .flag-actions { margin-top: 0; }
 .text-success { color: var(--color-success); }
 .text-warning { color: var(--color-warning); }
 .row-muted td { opacity: 0.55; }
+.flag-choices { min-width: 260px; max-width: 420px; }
+.flag-choices .btn { justify-content: flex-start; }

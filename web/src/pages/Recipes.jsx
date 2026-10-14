@@ -63,7 +63,7 @@ export default function Recipes() {
         .select('id, name, status, stock_unit_id, conversions:material_unit_conversions(unit_id)')
         .order('name'),
       supabase.from('units').select('id, symbol, name'),
-      supabase.from('products').select('id, canonical_name, product_id_ref, category_id, status').order('canonical_name'),
+      supabase.from('products').select('id, canonical_name, product_id_ref, size_cm, category_id, status').order('canonical_name'),
     ]);
     const err = rvRes.error || catRes.error || matRes.error || unitRes.error || prodRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
@@ -473,7 +473,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                 ) : (
                   <div className="choice-chips">
                     {categoryProducts.map(p => (
-                      <label key={p.id} className={`choice-chip${linked.has(p.id) ? ' is-on' : ''}`} title={p.product_id_ref}>
+                      <label key={p.id} className={`choice-chip${linked.has(p.id) ? ' is-on' : ''}`} title={p.size_cm ? `Size ${p.size_cm}` : undefined}>
                         <input type="checkbox" checked={linked.has(p.id)} onChange={() => toggleProduct(p.id)} />
                         {p.canonical_name}{p.status !== 'active' ? ' (inactive)' : ''}
                       </label>

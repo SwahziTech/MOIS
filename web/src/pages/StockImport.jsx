@@ -469,12 +469,14 @@ export default function StockImport() {
                                     onChange={ev => setChoice(l.id, { productId: ev.target.value, colorId: l.colour?.id ?? '' })}>
                                     <option value="">{l.product.status === 'none' ? 'No match — choose…' : 'Choose…'}</option>
                                     {opts.sug.length > 0 && <optgroup label="Suggested">
-                                      {opts.sug.map(s => <option key={s.id} value={s.id}>{prodById[s.id]?.name}{s.otherCategory ? ` — ${catById[prodById[s.id]?.categoryId]?.name}` : ''}{s.strong ? ' ✓' : ''}</option>)}
+                                      {opts.sug.map(s => <option key={s.id} value={s.id}>{prodById[s.id]?.name}{s.otherCategory ? ` — ${catById[prodById[s.id]?.categoryId]?.name}` : ''}{s.strong ? ' (good match)' : ''}</option>)}
                                     </optgroup>}
                                     <optgroup label="This category">{opts.inCat.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
                                     <optgroup label="Other categories">{opts.rest.map(p => <option key={p.id} value={p.id}>{p.name} — {catById[p.categoryId]?.name}</option>)}</optgroup>
                                   </select>
-                                  {l.product.status === 'exact' && c.productId === l.product.id && <div className="text-xs text-muted">{l.product.via}</div>}
+                                  {l.product.status === 'exact' && c.productId === l.product.id && (
+                                    <div className="text-xs text-muted">{l.product.via === 'same name' ? 'same name as on the sheet' : l.product.via.replace(/^decided: /, 'decided earlier by ')}</div>
+                                  )}
                                 </td>
                                 <td>
                                   {pcat?.colorIds.length ? (

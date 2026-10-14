@@ -311,7 +311,7 @@ export function lineProblems(line, choice, catalog) {
     if (coloured && !choice.colorId) problems.push(line.colourText ? `Colour "${line.colourText}" isn't set up` : 'Choose the colour');
     if (coloured && choice.colorId && !cat.colorIds.includes(choice.colorId)) problems.push(`That colour isn't one of ${cat.name}'s colours`);
     if (!coloured && choice.colorId) problems.push(`${cat?.name} has no colours`);
-    if (unitId && unitId !== product.unitId) problems.push('Unit differs from the product\'s stock unit');
+    if (unitId && unitId !== product.unitId) problems.push('Counted in a different unit from the one this product is stocked in');
   }
   if (!(line.qty > 0)) problems.push('Quantity must be above zero');
   return problems;

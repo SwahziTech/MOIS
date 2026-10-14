@@ -64,7 +64,7 @@ export default function Pricing() {
         .from('category_color_pricing_rules')
         .select('id, category_id, branch_id, pricing_type, base_color_id, items:category_color_price_items(color_id, amount)'),
       supabase.from('products')
-        .select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol)')
+        .select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol), category:product_categories(name)')
         .order('canonical_name'),
       supabase.from('product_categories')
         .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
@@ -166,7 +166,7 @@ export default function Pricing() {
                   <tr key={p.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{p.canonical_name}{p.status !== 'active' && <span className="text-muted"> (inactive)</span>}</div>
-                      <div className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{p.product_id_ref}</div>
+                      <div className="text-xs text-muted">{p.category?.name}</div>
                     </td>
                     {branches.map(b => {
                       const row = basePrice[`${p.id}|${b.id}`];

@@ -21,6 +21,16 @@ const DECISIONS = {
 const SOURCES = { import: 'stock import', review_queue: 'review queue', product_edit: 'product edit', merge: 'product merge', chat: 'chat', source_records: 'project records' };
 const TARGET_COL = { product: 'product_id', color: 'color_id', category: 'category_id', material: 'material_id', supplier: 'supplier_id' };
 
+/** Evidence as a person would say it (older entries cite internal file names) */
+export const plainEvidence = e => String(e ?? '')
+  .replace(/^_decisions_log:\s*/i, 'Recorded in the project notes: ')
+  .replace(/product_master\.json alt_names of (.+?)\.?$/i, 'Recorded as another name for $1 in the original product list.')
+  .replace(/\s*\(supersedes product_master\.json naming_resolutions[^)]*\)/i, ' (this replaces an earlier note in the original product list)')
+  .replace(/\(migrated from import_aliases\)/i, '')
+  .replace(/merged via alias/gi, 'recorded under another name')
+  .replace(/press_\d+[a-z]?|floor_tiles_\d+|wall_tiles_\d+/gi, '')
+  .replace(/\s{2,}/g, ' ').trim();
+
 const targetName = d => d.product?.canonical_name ?? d.color?.name ?? d.category?.name ?? d.material?.name ?? d.supplier?.name ?? null;
 
 /*
@@ -74,7 +84,7 @@ export default function Decisions() {
   const q = search.trim().toLowerCase();
   const shown = rows.filter(r => (status === 'all' || (status === 'active' ? r.status === 'active' : r.status !== 'active'))
     && (!subject || r.subject_type === subject)
-    && (!q || r.term.toLowerCase().includes(q) || (targetName(r) || '').toLowerCase().includes(q) || r.evidence.toLowerCase().includes(q)));
+    && (!q || r.term.toLowerCase().includes(q) || (targetName(r) || '').toLowerCase().includes(q) || plainEvidence(r.evidence).toLowerCase().includes(q)));
   const counts = useMemo(() => ({ active: rows.filter(r => r.status === 'active').length, history: rows.filter(r => r.status !== 'active').length }), [rows]);
   const cols = canEdit ? 5 : 4;
 
@@ -123,7 +133,7 @@ export default function Decisions() {
                       {DECISIONS[r.decision]}{targetName(r) ? <> <strong>{targetName(r)}</strong></> : ''}
                       {r.status !== 'active' && <div className="text-xs text-muted">{r.status === 'superseded' ? 'replaced' : 'withdrawn'}{r.status_note ? ` — ${r.status_note}` : ''}</div>}
                     </td>
-                    <td className="text-xs text-muted" style={{ verticalAlign: 'top', maxWidth: 380 }}>{r.evidence}</td>
+                    <td className="text-xs text-muted" style={{ verticalAlign: 'top', maxWidth: 380 }}>{plainEvidence(r.evidence)}</td>
                     <td className="text-xs text-muted" style={{ verticalAlign: 'top' }}>
                       {r.decided_by_label}<br />{new Date(r.decided_at).toLocaleDateString('en-GB', { timeZone: organization?.timezone || undefined })} · {SOURCES[r.source] ?? r.source}
                     </td>

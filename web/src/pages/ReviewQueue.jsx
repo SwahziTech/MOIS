@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import Decisions from '../components/master/Decisions';
+import FlagChoices from '../components/master/FlagChoices';
 import { useSearchParams, Link } from 'react-router-dom';
 
 const LOAD_ERROR = "We couldn't load the review queue. Please try again.";
@@ -39,7 +40,7 @@ const OPEN_LINK = {
  * record's own history.
  */
 export default function ReviewQueue() {
-  const { session, canManage } = useAuth();
+  const { session, profile, canManage } = useAuth();
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'decisions' ? 'decisions' : 'flags';
   const canResolve = canManage('products.manage') || canManage('materials.manage');
@@ -51,6 +52,7 @@ export default function ReviewQueue() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [actionError, setActionError] = useState('');
+  const [refs, setRefs] = useState(null);
 
   async function load() {
     setError('');
@@ -73,6 +75,31 @@ export default function ReviewQueue() {
     setNames(Object.fromEntries(lookups.flat()));
     setFlags(data || []);
     setLoading(false);
+    loadRefs();
+  }
+
+  // What the choices need: products, categories, stores, colours, units
+  async function loadRefs() {
+    const [pr, ca, co, un, wh, tx] = await Promise.all([
+      supabase.from('products').select('id, canonical_name, category_id, status').order('canonical_name'),
+      supabase.from('product_categories').select('id, name, status').order('sort_order'),
+      supabase.from('color_palette').select('id, name'),
+      supabase.from('units').select('id, symbol'),
+      supabase.from('warehouses').select('id, name, branch:branches(name)'),
+      supabase.from('inventory_transactions').select('product_id, transaction_date').not('product_id', 'is', null),
+    ]);
+    const first = {};
+    for (const t of tx.data || []) if (!first[t.product_id] || t.transaction_date < first[t.product_id]) first[t.product_id] = t.transaction_date;
+    setRefs({
+      products: (pr.data || []).map(x => ({ id: x.id, name: x.canonical_name, categoryId: x.category_id, status: x.status })),
+      categories: (ca.data || []).filter(c => c.status === 'active'),
+      categoryName: Object.fromEntries((ca.data || []).map(c => [c.id, c.name])),
+      colorName: Object.fromEntries((co.data || []).map(c => [c.id, c.name])),
+      unitSymbol: Object.fromEntries((un.data || []).map(u => [u.id, u.symbol])),
+      storeName: Object.fromEntries((wh.data || []).map(w => [w.id, `${w.branch?.name} — ${w.name}`])),
+      firstStockDate: first,
+      me: { id: session?.user?.id, name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || session?.user?.email || 'an admin' },
+    });
   }
 
   useEffect(() => { load(); }, []);
@@ -119,7 +146,7 @@ export default function ReviewQueue() {
           <div className="table-container">
             <table>
               <thead>
-                <tr><th>Record</th><th>What needs review</th>{canResolve && <th>Decision</th>}</tr>
+                <tr><th>What</th><th>What's uncertain</th>{canResolve && <th>Your choices</th>}</tr>
               </thead>
               <tbody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
@@ -141,16 +168,8 @@ export default function ReviewQueue() {
                     <td className="text-sm" style={{ verticalAlign: 'top', maxWidth: 420 }}>{f.reason}</td>
                     {canResolve && (
                       <td style={{ verticalAlign: 'top' }}>
-                        <div className="flag-actions">
-                          <input className="form-input" placeholder="Note (optional)" aria-label="Resolution note"
-                            value={note[f.id] || ''} onChange={e => setNote(n => ({ ...n, [f.id]: e.target.value }))} />
-                          <button type="button" className="btn btn-outline btn-sm" disabled={busy === f.id} onClick={() => close(f, 'resolved')}>
-                            <CheckCircle2 size={13} /> Resolved
-                          </button>
-                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === f.id} onClick={() => close(f, 'dismissed')}>
-                            <XCircle size={13} /> Dismiss
-                          </button>
-                        </div>
+                        {refs ? <FlagChoices flag={f} name={names[`${f.entity_type}:${f.entity_id}`]} refs={refs} onDone={load} />
+                              : <span className="text-xs text-muted">Loading…</span>}
                       </td>
                     )}
                   </tr>

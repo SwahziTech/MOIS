@@ -84,7 +84,7 @@ export default function Products() {
   // columns only when some product in view actually records them.
   const showCoverage = filtered.some(p => p.pcs_per_sqm != null);
   const showYield    = filtered.some(p => p.wastani_per_bag != null);
-  const cols = 6 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (canWrite ? 1 : 0);
+  const cols = 5 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (canWrite ? 1 : 0);
 
   return (
     <PageShell
@@ -141,7 +141,6 @@ export default function Products() {
             <table>
               <thead>
                 <tr>
-                  <th>Product ID</th>
                   <th>Name</th>
                   <th>Category</th>
                   <th>Size</th>
@@ -168,9 +167,6 @@ export default function Products() {
                 ) : (
                   filtered.map(p => (
                     <tr key={p.id}>
-                      <td style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                        {p.product_id_ref}
-                      </td>
                       <td style={{ fontWeight: 500 }}>
                         {p.canonical_name}
                         {openFlags[p.id] > 0 && (
@@ -267,7 +263,7 @@ function ProductModal({ product, organization, categories, units, products, onCl
     setError('');
     const clash = products.find(p => p.id !== product.id && p.status === 'active'
       && p.category_id === category && sameName(p.canonical_name, name));
-    if (clash) { setError(`"${clash.canonical_name}" already exists in this category (${clash.product_id_ref}).`); return; }
+    if (clash) { setError(`"${clash.canonical_name}" already exists in this category.`); return; }
     for (const [label, v] of [['Pieces per m²', coverage], ['Yield per batch', yieldPer]]) {
       const n = numOrNull(v);
       if (n !== null && !(n > 0)) { setError(`${label} must be a positive number, or blank if not recorded.`); return; }
@@ -309,7 +305,6 @@ function ProductModal({ product, organization, categories, units, products, onCl
       </>}>
       <form id="product-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {!isNew && <p className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{product.product_id_ref}</p>}
         <div className="form-group">
           <label className="form-label" htmlFor="prod-name">Name</label>
           <input id="prod-name" className="form-input" required autoFocus value={name} onChange={e => setName(e.target.value)} />
@@ -436,13 +431,13 @@ function MergePanel({ product, products, currencyCode, onCancel, onMerged }) {
       status: 'resolved',
       resolved_at: new Date().toISOString(),
       resolved_by: session?.user?.id ?? null,
-      resolution_note: `Merged into ${target.canonical_name} (${target.product_id_ref}); this product deactivated.`,
+      resolution_note: `Merged into ${target.canonical_name}; this product was retired.`,
     }).eq('entity_type', 'product').eq('entity_id', product.id).eq('status', 'open');
     setBusy(false);
     if (flagErr) { setError(`Deactivated, but its flags could not be closed: ${dbErrorMessage(flagErr)}`); return; }
     // The merge answers "is X the same as Y" for good (migration 026). If the
     // name already has an answer (e.g. an import placeholder), correct it.
-    const evidence = `Merged into ${target.canonical_name} (${target.product_id_ref}) in the Products screen`;
+    const evidence = `Merged into ${target.canonical_name} in the Products screen`;
     const { data: existing } = await supabase.from('identity_decisions').select('id, product_id')
       .eq('subject_type', 'product').eq('status', 'active').eq('context_normalized', '')
       .eq('term_normalized', product.canonical_name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''))
@@ -473,7 +468,7 @@ function MergePanel({ product, products, currencyCode, onCancel, onMerged }) {
       ) : (
         <select className="form-input" aria-label="Product that stays" value={targetId} onChange={e => setTargetId(e.target.value)}>
           <option value="">Choose the product that stays…</option>
-          {candidates.map(p => <option key={p.id} value={p.id}>{p.canonical_name} ({p.product_id_ref})</option>)}
+          {candidates.map(p => <option key={p.id} value={p.id}>{p.canonical_name}{p.size_cm ? ` (${p.size_cm})` : ''}</option>)}
         </select>
       )}
       {target && prices && (
