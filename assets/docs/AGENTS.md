@@ -156,11 +156,16 @@ against a cause).
 
 ## 8. Git
 
-- Commit locally as you go, with real, logical commit messages.
-- NEVER push to GitHub, and never run any command that publishes or shares
-  this code outside the local machine, without an explicit instruction in
-  that session to do so. This holds even if a past session pushed before —
-  each push needs its own explicit go-ahead.
+- Commit locally as you go, with real, logical commit messages. Committing
+  is normal, expected work.
+- NEVER run `git push` — or any command that pushes to a remote (push
+  --force, pushing tags, pushing another branch, etc.) or otherwise
+  publishes or shares this code outside the local machine — unless the
+  user's message contains the literal words "git push". No exceptions for
+  "it's ready", "this seems safe to share", or a push in an earlier message
+  or session: every push needs its own literal "git push".
+- If you think something should be pushed, say so and wait for the user to
+  type "git push". Never push first and report it afterwards.
 
 ## 9. Scope discipline
 
