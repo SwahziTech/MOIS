@@ -27,7 +27,8 @@ const TABLES = ['organizations','branches','warehouses','profiles','roles','role
   'recipe_versions','recipe_items','recipe_version_products','permissions',
   'color_palette','product_category_colors','category_color_price_items',
   'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log',
-  'suppliers','inventory_movements','inventory_transactions','stock_balances','identity_decisions','stock_import_drafts'];
+  'suppliers','inventory_movements','inventory_transactions','stock_balances','identity_decisions','stock_import_drafts',
+  'branch_products','product_size_specs','branch_yield_overrides','pending_changes'];
 
 const readBlock = (who, claims) => `
 DO $$
@@ -77,6 +78,9 @@ BEGIN
   ${attempt('WRITE grant self other tenant owner role', `INSERT INTO public.user_roles (user_id, role_id, organization_id) VALUES ('${ids.testUser}','${ids.stumarcotOwnerRole}','${S}')`)}
   ${attempt('WRITE grant self other tenant role under own org', `INSERT INTO public.user_roles (user_id, role_id, organization_id) VALUES ('${ids.testUser}','${ids.stumarcotOwnerRole}','${T}')`)}
   ${attempt('WRITE move own profile into other tenant', `UPDATE public.profiles SET organization_id = '${S}' WHERE id = '${ids.testUser}'`, true)}
+  ${attempt('WRITE update other tenant catalogue', `UPDATE public.branch_products SET status = 'inactive' WHERE organization_id = '${S}'`, true)}
+  ${attempt('WRITE update other tenant materials', `UPDATE public.materials SET notes = 'hacked' WHERE organization_id = '${S}'`, true)}
+  ${attempt('WRITE request approval at other tenant store', `PERFORM public.request_change('stock_movement', NULL, jsonb_build_object('type','adjustment','warehouse_id','${ids.stumarcotWarehouse}','lines','[]'::jsonb), 'probe')`)}
   ${attempt('WRITE update other tenant pricing', `UPDATE public.product_branch_pricing SET price_per_unit_inclusive = 1 WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update permissions catalog', `UPDATE public.permissions SET description = 'x'`, true)}
   ${attempt('WRITE post stock into other tenant warehouse', `PERFORM public.post_inventory_movement(jsonb_build_object('type','opening_balance','warehouse_id','${ids.stumarcotWarehouse}','lines',jsonb_build_array(jsonb_build_object('product_id','${ids.testProduct}','quantity',1,'unit_id','${ids.testProductUnit}'))))`)}

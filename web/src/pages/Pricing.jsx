@@ -32,9 +32,11 @@ const impliedVatRate = r => (r?.price_per_unit_exclusive > 0 && r?.price_per_uni
  * the row in place; audit_log keeps every old value.
  */
 export default function Pricing() {
-  const { organization, canManage } = useAuth();
+  const { organization, canManage, canAt } = useAuth();
   const { inBranch } = useBranch();
   const canWrite = canManage('products.manage');
+  // A branch's managers may propose its prices; an org admin approves (033)
+  const canProposeAt = b => !canWrite && canAt('products.manage', b.id, null);
   const money = v => formatMoney(v, organization?.currency_code);
 
   const [tab,        setTab]        = useState('prices');
@@ -199,7 +201,7 @@ export default function Pricing() {
                       ) : <span className="text-muted">—</span>;
                       return (
                         <td key={b.id}>
-                          {canWrite && (p.status === 'active' || row) ? (
+                          {(canWrite || canProposeAt(b)) && (p.status === 'active' || row) ? (
                             <button type="button" className="price-cell" onClick={() => setEditingPrice({ product: p, branch: b, row })}
                               aria-label={`${row ? 'Edit' : 'Add'} ${p.canonical_name} price in ${b.name}`}>
                               {row ? cell : <span className="text-muted flex items-center gap-4"><Plus size={12} /> Add</span>}
@@ -275,6 +277,7 @@ export default function Pricing() {
           colours={categories.find(c => c.id === editingPrice.product.category_id)?.colors ?? []}
           baseColourId={rules.find(r => r.category_id === editingPrice.product.category_id && r.branch_id === editingPrice.branch.id)?.base_color_id ?? null}
           colourRows={prices.filter(x => x.color_id && x.product_id === editingPrice.product.id && x.branch_id === editingPrice.branch.id)}
+          viaApproval={!canWrite}
           onClose={() => setEditingPrice(null)} onSaved={async () => { setEditingPrice(null); await load(); }} />
       )}
       {editingRule && (
@@ -285,7 +288,7 @@ export default function Pricing() {
   );
 }
 
-function PriceModal({ product, branch, row, organization, usualVatRate, colours, baseColourId, colourRows, onClose, onSaved }) {
+function PriceModal({ product, branch, row, organization, usualVatRate, colours, baseColourId, colourRows, viaApproval, onClose, onSaved }) {
   const isNew = !row;
   const money = v => formatMoney(v, organization?.currency_code);
   // Most prices are per m²; per piece is the exception
@@ -296,6 +299,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
   const [vatRate,   setVatRate]   = useState(row ? impliedVatRate(row) ?? '' : usualVatRate ?? '');
   const [available, setAvailable] = useState(row?.is_available ?? true);
   const [notes,     setNotes]     = useState(row?.raw_notes ?? '');
+  const [submitted, setSubmitted] = useState(false);
   // Product-specific colour prices, in the same unit as the base price
   const otherColours = [...colours].sort((a, b) => a.display_order - b.display_order).filter(c => c.color_id !== baseColourId);
   const colourRowById = Object.fromEntries(colourRows.map(r => [r.color_id, r]));
@@ -351,13 +355,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
       fields.price_per_unit_exclusive = row.price_per_unit_exclusive;
       fields.vat_per_unit             = row.vat_per_unit;
     }
-    setBusy(true);
-    const { error: err } = isNew
-      ? await supabase.from('product_branch_pricing').insert({
-          ...fields, organization_id: organization.id, product_id: product.id, branch_id: branch.id, color_id: null,
-        })
-      : await supabase.from('product_branch_pricing').update(fields).eq('id', row.id);
-    if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    const changes = [{ color_id: null, existingId: row?.id, fields }];
 
     // Colour prices: add, change, or blank out. Rows are never deleted — a
     // row with no price follows the category's colour pricing again.
@@ -372,15 +370,42 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
           && (existing.price_per_sqm_inclusive != null) === byArea
           && existing.pcs_per_sqm_at_pricing === cf.pcs_per_sqm_at_pricing
           && existing.is_available === available) continue;
-      const { error: e2 } = existing
-        ? await supabase.from('product_branch_pricing').update(cf).eq('id', existing.id)
+      changes.push({ color_id: c.color_id, existingId: existing?.id, fields: cf, colourName: c.color?.name });
+    }
+
+    setBusy(true);
+    if (viaApproval) {
+      const shown = f => (f.price_per_sqm_inclusive != null ? `${money(f.price_per_sqm_inclusive)} /m²` : f.price_per_unit_inclusive != null ? `${money(f.price_per_unit_inclusive)} each` : 'colour pricing');
+      const summary = `${product.canonical_name} at ${branch.name}: ` + changes.map(ch => `${ch.colourName ? `${ch.colourName} ` : ''}${shown(ch.fields)}`).join(', ')
+        + (row ? ` (was ${shown(row)})` : ' (new price)');
+      const { error: err } = await supabase.rpc('request_change', {
+        p_kind: 'price', p_branch_id: branch.id, p_summary: summary,
+        p_payload: { rows: changes.map(ch => ({ product_id: product.id, color_id: ch.color_id, ...ch.fields })) },
+      });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
+      setSubmitted(true);
+      return;
+    }
+    for (const ch of changes) {
+      const { error: err } = ch.existingId
+        ? await supabase.from('product_branch_pricing').update(ch.fields).eq('id', ch.existingId)
         : await supabase.from('product_branch_pricing').insert({
-            ...cf, organization_id: organization.id, product_id: product.id, branch_id: branch.id, color_id: c.color_id,
+            ...ch.fields, organization_id: organization.id, product_id: product.id, branch_id: branch.id, color_id: ch.color_id,
           });
-      if (e2) { setBusy(false); setError(`${c.color?.name}: ${dbErrorMessage(e2)}`); return; }
+      if (err) { setBusy(false); setError(`${ch.colourName ? `${ch.colourName}: ` : ''}${dbErrorMessage(err)}`); return; }
     }
     setBusy(false);
     onSaved();
+  }
+
+  if (submitted) {
+    return (
+      <Modal title={`${product.canonical_name} — ${branch.name}`} onClose={onClose}
+        footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
+        <p className="text-sm">Sent for an admin's approval. The price changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+      </Modal>
+    );
   }
 
   return (
@@ -388,11 +413,12 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="price-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>
-          {isNew ? 'Add price' : 'Save'}
+          {viaApproval ? 'Submit for approval' : isNew ? 'Add price' : 'Save'}
         </button>
       </>}>
       <form id="price-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {viaApproval && <div className="alert alert-info" role="note">Price changes need an admin's approval: this is sent to the Approvals queue.</div>}
         <p className="text-sm text-muted">Base price{product.unit?.symbol ? ` · stocked in ${product.unit.symbol}` : ''}{otherColours.length ? ". Other colours follow the category's colour pricing unless you set them below." : '.'}</p>
         <label className="text-sm flex items-center gap-8">
           <input type="checkbox" checked={byArea} onChange={e => setByArea(e.target.checked)} />

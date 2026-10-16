@@ -328,6 +328,20 @@ export default function StockImport() {
     }
 
     setBusy(true);
+    // Opening balances are corrections: non-admins send the import for an
+    // admin's approval, which posts it exactly as prepared (migration 033)
+    if (!canManage('inventory.adjust')) {
+      const { error: err } = await supabase.rpc('request_change', {
+        p_kind: 'stock_import', p_branch_id: null,
+        p_payload: { batch: { placeholders: Object.values(placeholders), movements, decisions }, draft_id: draftId || null },
+        p_summary: `Opening stock import${fileName ? ` "${fileName}"` : ''}: ${ready.length} lines at ${warehouseLabel(warehouses.find(w => w.id === warehouseId))}, dated ${date}`,
+      });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err, "We couldn't send the import for approval. Nothing was recorded.")); return; }
+      setResult({ submitted: true, lines: ready.length, movements: 0, decisions: 0 });
+      setStep('done');
+      return;
+    }
     const { data, error: err } = await supabase.rpc('post_inventory_batch', { p: { placeholders: Object.values(placeholders), movements, decisions } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't post the import. Nothing was recorded.")); return; }
@@ -356,7 +370,11 @@ export default function StockImport() {
     <PageShell title="Import stock sheet" subtitle="Inventory">
       {step === 'done' ? (
         <div className="card"><div className="card-body flex flex-col gap-12">
-          <p className="flex items-center gap-8"><CheckCircle2 size={18} className="text-success" /> Posted {result.lines} opening-balance lines in {result.movements} movement{result.movements === 1 ? '' : 's'}.</p>
+          {result.submitted ? (
+            <p className="flex items-center gap-8"><CheckCircle2 size={18} className="text-success" /> Sent {result.lines} opening-balance lines for an admin's approval. Stock is recorded once approved — follow it under Approvals.</p>
+          ) : (
+            <p className="flex items-center gap-8"><CheckCircle2 size={18} className="text-success" /> Posted {result.lines} opening-balance lines in {result.movements} movement{result.movements === 1 ? '' : 's'}.</p>
+          )}
           {result.decisions > 0 && <p className="text-sm text-muted">{result.decisions} name{result.decisions === 1 ? '' : 's'} recorded as decisions — see Review queue → Decisions.</p>}
           <div className="flex gap-8">
             <button type="button" className="btn btn-primary" onClick={() => navigate('/movements')}>See movements</button>
@@ -574,7 +592,7 @@ export default function StockImport() {
                       {skipped.length ? `; ${skipped.length} skipped lines are not recorded` : ''}. All or nothing — and an item that already has stock here is refused.
                     </p>
                     <div className="flex gap-8">
-                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>Post {combined.length} opening balances</button>
+                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>{canManage('inventory.adjust') ? `Post ${combined.length} opening balances` : `Submit ${combined.length} opening balances for approval`}</button>
                       <button type="button" className="btn btn-ghost" onClick={() => setStep('resolve')}>Back</button>
                     </div>
                   </div>

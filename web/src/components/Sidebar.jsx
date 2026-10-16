@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight,
+  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -17,6 +17,8 @@ const NAV = [
     section: 'Overview',
     items: [
       { label: 'Dashboard',     to: '/',          icon: LayoutDashboard },
+      // price changes and stock corrections waiting for an admin (migration 033)
+      { label: 'Approvals',     to: '/approvals', icon: CheckSquare, perm: 'inventory.view' },
     ],
   },
   {

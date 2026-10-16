@@ -23,6 +23,14 @@ export const MOVEMENT_TYPES = {
   reclassification: { label: 'Reclassify',     noun: 'Reclassification', perm: 'products.manage', help: '' },
 };
 
+/**
+ * Corrective stock entries — adjustments, opening balances, reversals, and
+ * anything dated before today — need an org admin's approval unless the
+ * user is one (migration 033). Receive, issue, transfer and counts don't.
+ */
+export const isCorrective = (type, date, today) =>
+  ['adjustment', 'opening_balance', 'reversal'].includes(type) || (!!date && date < today);
+
 /** "Dodoma — Raw Materials Store" */
 export const warehouseLabel = w => (w ? `${w.branch?.name ?? ''} — ${w.name}` : '—');
 

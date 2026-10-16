@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
-import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers } from '../../lib/inventory';
+import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective } from '../../lib/inventory';
 import Modal from '../Modal';
 
 const emptyLine = () => ({ key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
@@ -14,7 +14,7 @@ const emptyLine = () => ({ key: '', colorId: '', quantity: '', unitId: '', unitC
  * offers what the user may do and shows the effect before posting.
  */
 export default function MovementModal({ type, refs, balances, defaultWarehouseId, onClose, onPosted }) {
-  const { canAt, organization } = useAuth();
+  const { canAt, canManage, organization } = useAuth();
   const today = orgToday(organization?.timezone);
   const def = MOVEMENT_TYPES[type];
   const { warehouses, items, unitById, colorById, suppliers } = refs;
@@ -31,6 +31,10 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [lines,     setLines]     = useState([emptyLine()]);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  // Corrections and backdated entries by non-admins go to the Approvals queue
+  const needsApproval = !canManage('inventory.adjust') && isCorrective(type, date, today);
 
   const itemList = useMemo(() => Object.values(items).filter(i => i.status === 'active'), [items]);
   const materials = itemList.filter(i => i.kind === 'material');
@@ -113,10 +117,31 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
       }),
     };
     setBusy(true);
+    if (needsApproval) {
+      const what = filled.map(l => {
+        const sq = stockQty(l);
+        return `${type === 'adjustment' ? (l.direction === 'remove' ? 'remove ' : 'add ') : ''}${qtyText(sq ?? l.quantity)} ${unitById[items[l.key].stockUnitId]?.symbol ?? ''} ${items[l.key].name}${l.colorId ? ` (${colorById[l.colorId]?.name})` : ''}`;
+      }).join(', ');
+      const summary = `${def.noun} at ${warehouseLabel(wh)}${date < today ? `, dated ${date}` : ''}: ${what}${reason.trim() ? ` — ${reason.trim()}` : ''}`;
+      const { error: err } = await supabase.rpc('request_change', { p_kind: 'stock_movement', p_branch_id: null, p_payload: payload, p_summary: summary });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
+      setSubmitted(true);
+      return;
+    }
     const { error: err } = await supabase.rpc('post_inventory_movement', { p: payload });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this movement. Please try again.")); return; }
     onPosted();
+  }
+
+  if (submitted) {
+    return (
+      <Modal title={def.noun} onClose={onPosted}
+        footer={<button type="button" className="btn btn-primary" onClick={onPosted}>Done</button>}>
+        <p className="text-sm">Sent for an admin's approval. Stock changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+      </Modal>
+    );
   }
 
   const withCost = type === 'receipt' || type === 'opening_balance';
@@ -126,12 +151,15 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="movement-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !allowed.length}>
-          Post {def.noun.toLowerCase()}
+          {needsApproval ? 'Submit for approval' : `Post ${def.noun.toLowerCase()}`}
         </button>
       </>}>
       <form id="movement-form" className="modal-form" onSubmit={post}>
         <p className="text-sm text-muted">{def.help} Posted movements can't be edited — a mistake is undone with a reversal.</p>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {needsApproval && allowed.length > 0 && (
+          <div className="alert alert-info" role="note">{date < today ? 'Backdated entries' : 'Corrections'} need an admin's approval: this is sent to the Approvals queue and changes stock once approved.</div>
+        )}
         {!allowed.length ? (
           <p className="text-sm">You don't have permission for this at any store.</p>
         ) : <>

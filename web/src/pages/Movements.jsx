@@ -138,7 +138,7 @@ export default function Movements() {
 }
 
 function MovementDetail({ movement: m, refs, whById, people, original, reversal, onClose, onReversed }) {
-  const { canAt, organization } = useAuth();
+  const { canAt, canManage, organization } = useAuth();
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [busy,  setBusy]  = useState(false);
@@ -149,12 +149,25 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
       .then(({ data }) => setAfter(Object.fromEntries((data || []).map(r => [r.id, r.running_balance]))));
   }, [m.id]);
   const canReverse = m.movement_type !== 'reversal' && !reversal && canAt('inventory.adjust', m.branch_id, m.warehouse_id);
+  // A reversal is a correction: non-admins send it for approval (migration 033)
+  const reverseNeedsApproval = !canManage('inventory.adjust');
+  const [requested, setRequested] = useState(false);
   const unit = id => refs.unitById[id]?.symbol ?? '';
 
   async function reverse() {
     setError('');
     if (!reason.trim()) { setError('Give a reason for the reversal.'); return; }
     setBusy(true);
+    if (reverseNeedsApproval) {
+      const { error: err } = await supabase.rpc('request_change', {
+        p_kind: 'stock_reversal', p_branch_id: null, p_payload: { movement_id: m.id, reason: reason.trim() },
+        p_summary: `Reverse the ${(MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type).toLowerCase()} of ${m.movement_date} at ${warehouseLabel(whById[m.warehouse_id])} — ${reason.trim()}`,
+      });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
+      setRequested(true);
+      return;
+    }
     const { error: err } = await supabase.rpc('reverse_inventory_movement', { p_movement_id: m.id, p_reason: reason.trim() });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't reverse this movement. Please try again.")); return; }
@@ -201,12 +214,14 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
           </table>
         </div>
         {canReverse && (
-          confirm ? (
+          requested ? (
+            <div className="alert alert-info" role="status">Reversal sent for an admin's approval — follow it under Approvals.</div>
+          ) : confirm ? (
             <div className="confirm-box">
-              <p className="text-sm">Reversing posts the exact opposite of this movement today. Both stay on record.</p>
+              <p className="text-sm">Reversing posts the exact opposite of this movement. Both stay on record.{reverseNeedsApproval ? " A reversal needs an admin's approval: it is sent to the Approvals queue." : ''}</p>
               <input className="form-input" placeholder="Reason, e.g. entered twice" aria-label="Reason for reversal" value={reason} onChange={e => setReason(e.target.value)} />
               <div className="flex gap-8">
-                <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={reverse}>Reverse movement</button>
+                <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={reverse}>{reverseNeedsApproval ? 'Submit reversal for approval' : 'Reverse movement'}</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)}>Keep it</button>
               </div>
             </div>
