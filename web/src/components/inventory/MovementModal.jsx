@@ -6,7 +6,9 @@ import { dbErrorMessage } from '../../lib/masterData';
 import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective } from '../../lib/inventory';
 import Modal from '../Modal';
 
-const emptyLine = () => ({ key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
+const emptyLine = (kind = 'material') => ({ kind, key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
+// A new line's type follows the store: products in a finished-goods store, materials elsewhere
+const kindForStore = w => (w?.type === 'finished_goods' ? 'product' : 'material');
 
 /**
  * Record one stock movement. Everything is validated again and posted
@@ -28,7 +30,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [reference, setReference] = useState('');
   const [reason,    setReason]    = useState('');
   const [notes,     setNotes]     = useState('');
-  const [lines,     setLines]     = useState([emptyLine()]);
+  const [lines,     setLines]     = useState(() => [emptyLine(kindForStore(warehouses.find(w => w.id === warehouseId)))]);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -44,6 +46,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   // Earlier dates need stock-adjustment permission at the store (migration 023)
   const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);
   useEffect(() => { if (!canBackdate) setDate(today); }, [canBackdate, today]);
+  // Lines not filled in yet follow the store's usual kind of item
+  useEffect(() => { setLines(ls => ls.map(l => (l.key ? l : { ...l, kind: kindForStore(wh) }))); }, [warehouseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stock as of the chosen date, for the previews; the server re-checks
   // every later date too when posting
@@ -65,6 +69,9 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     setLines(ls => ls.map((l, j) => {
       if (j !== i) return l;
       const next = { ...l, ...patch };
+      if (patch.kind !== undefined && patch.kind !== l.kind) {   // a different type: the item no longer fits
+        next.key = ''; next.unitId = ''; next.colorId = '';
+      }
       if (patch.key !== undefined) {
         next.unitId = items[patch.key]?.stockUnitId ?? '';
         next.colorId = '';
@@ -232,14 +239,15 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                 return (
                   <div key={i} className="movement-line">
                     <div className="movement-line-main">
+                      <select className="form-input" style={{ flex: '0 0 auto', width: 'auto' }} aria-label="Type" value={l.kind} onChange={e => setLine(i, { kind: e.target.value })}>
+                        <option value="material">Material</option>
+                        <option value="product">Product</option>
+                      </select>
                       <select className="form-input" aria-label="Item" value={l.key} onChange={e => setLine(i, { key: e.target.value })}>
-                        <option value="">Item…</option>
-                        <optgroup label="Materials">
-                          {materials.map(m => <option key={m.key} value={m.key} disabled={!m.stockUnitId}>{m.name}{!m.stockUnitId ? ' (set stock unit first)' : ''}</option>)}
-                        </optgroup>
-                        <optgroup label="Products">
-                          {products.map(p => <option key={p.key} value={p.key}>{p.name} · {p.category}</option>)}
-                        </optgroup>
+                        <option value="">{l.kind === 'product' ? 'Product…' : 'Material…'}</option>
+                        {l.kind === 'product'
+                          ? products.map(p => <option key={p.key} value={p.key}>{p.name} · {p.category}</option>)
+                          : materials.map(m => <option key={m.key} value={m.key} disabled={!m.stockUnitId}>{m.name}{!m.stockUnitId ? ' (set stock unit first)' : ''}</option>)}
                       </select>
                       {needsColour && (
                         <select className="form-input" aria-label="Colour" value={l.colorId} onChange={e => setLine(i, { colorId: e.target.value })}>
@@ -262,7 +270,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                         <input type="number" step="any" min="0" className="form-input" aria-label="Cost per unit"
                           placeholder="Cost / unit" value={l.unitCost} onChange={e => setLine(i, { unitCost: e.target.value })} />
                       )}
-                      <button type="button" className="icon-btn" aria-label="Remove line" onClick={() => setLines(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [emptyLine()])}>
+                      <button type="button" className="icon-btn" aria-label="Remove line" onClick={() => setLines(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [emptyLine(l.kind)])}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -271,7 +279,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                 );
               })}
             </div>
-            <button type="button" className="btn btn-ghost btn-sm mt-8" onClick={() => setLines(ls => [...ls, emptyLine()])}>
+            <button type="button" className="btn btn-ghost btn-sm mt-8" onClick={() => setLines(ls => [...ls, emptyLine(ls.at(-1)?.kind ?? kindForStore(wh))])}>
               <Plus size={13} /> Add item
             </button>
             {withCost && <p className="text-xs text-muted mt-8">Cost is optional, per unit as entered (e.g. per bag).</p>}
