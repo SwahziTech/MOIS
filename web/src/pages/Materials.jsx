@@ -15,15 +15,19 @@ const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
 
 /*
- * Materials master (migration 019): a material is defined once for the
- * organization — category, stock unit, unit conversions — and each branch
- * records where it buys it and in which unit. No stock or prices here;
- * those arrive with the inventory ledger (1b).
+ * Materials master (migration 019): category, stock unit, unit conversions.
+ * A material is shared by every branch, or is one branch's own (a local
+ * input only it uses — migration 032): that branch edits and uses it until
+ * an org admin makes it shared. Suppliers are recorded on each purchase,
+ * never fixed on a material (031); old fixed sources show as history.
  */
 export default function Materials() {
-  const { organization, canManage } = useAuth();
-  const { inBranch } = useBranch();
+  const { organization, canManage, canAt } = useAuth();
+  const { branchId, inBranch } = useBranch();
   const canWriteMaterials = canManage('materials.manage');
+  // Shared materials: org-wide admins. A branch's own: that branch's managers.
+  const canEditMaterial = m => (m.branch_id ? canAt('materials.manage', m.branch_id, null) : canWriteMaterials);
+  const canAddMaterial = canWriteMaterials || (!!branchId && canAt('materials.manage', branchId, null));
   const canWriteUnits = canManage('materials.manage') || canManage('products.manage');
 
   const [tab, setTab] = useState('materials');
@@ -47,7 +51,7 @@ export default function Materials() {
     setError('');
     const [matRes, catRes, unitRes, branchRes, itemRes, flagRes, prodRes, supRes] = await Promise.all([
       supabase.from('materials').select(`
-          id, name, material_id_ref, category_id, stock_unit_id, status, notes,
+          id, name, material_id_ref, category_id, stock_unit_id, status, notes, branch_id,
           conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes),
           sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)
         `).order('name'),
@@ -96,13 +100,15 @@ export default function Materials() {
   const unitById = useMemo(() => Object.fromEntries(units.map(u => [u.id, u])), [units]);
   const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c])), [categories]);
   const q = search.trim().toLowerCase();
+  const branchName = id => allBranches.find(b => b.id === id)?.name ?? '—';
   const shown = materials.filter(m =>
+    (!m.branch_id || inBranch(m.branch_id)) &&
     (filter === 'all' || (filter === 'review' ? openFlags[m.id] : m.status === filter)) &&
     (!q || m.name.toLowerCase().includes(q) || (m.material_id_ref || '').toLowerCase().includes(q)));
   const reviewCount = materials.filter(m => openFlags[m.id]).length;
 
   const addLabel = { materials: 'Add material', categories: 'Add category', units: 'Add unit' }[tab];
-  const canAdd = tab === 'units' ? canWriteUnits : canWriteMaterials;
+  const canAdd = tab === 'units' ? canWriteUnits : tab === 'materials' ? canAddMaterial : canWriteMaterials;
   const close = () => setEditing(null);
   const saved = async () => { setEditing(null); await load(); };
 
@@ -151,7 +157,7 @@ export default function Materials() {
             {tab === 'materials' && (
               <table>
                 <thead>
-                  <tr><th>Material</th><th>Category</th><th>Stock unit</th><th>Also counted in</th><th>Sources</th><th>Status</th>{canWriteMaterials && <th aria-label="Actions" />}</tr>
+                  <tr><th>Material</th><th>Category</th><th>Stock unit</th><th>Also counted in</th><th>Used by</th><th>Status</th><th aria-label="Actions" /></tr>
                 </thead>
                 <tbody>
                   {loading ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
@@ -159,7 +165,6 @@ export default function Materials() {
                     <tr><td colSpan={7}><EmptyState icon={Layers} title="No materials in this view" description={search ? `No materials match "${search}".` : ''} /></td></tr>
                   ) : shown.map(m => {
                     const stock = unitById[m.stock_unit_id];
-                    const activeSources = m.sources.filter(s => s.status === 'active');
                     return (
                       <tr key={m.id}>
                         <td>
@@ -176,23 +181,17 @@ export default function Materials() {
                             <div key={c.unit_id}>1 {unitById[c.unit_id]?.symbol} = {+Number(c.factor_to_stock_unit).toPrecision(6)} {stock?.symbol}</div>
                           )) : <span className="text-muted">—</span>}
                         </td>
-                        <td className="text-xs">
-                          {branches.map(b => {
-                            const here = activeSources.filter(s => s.branch_id === b.id);
-                            return (
-                              <div key={b.id}>
-                                <span className="text-muted">{b.name}:</span>{' '}
-                                {here.length ? here.map(s => s.source_name + (s.is_primary && here.length > 1 ? ' (primary)' : '')).join(', ') : <span className="text-muted">—</span>}
-                              </div>
-                            );
-                          })}
+                        <td>
+                          {m.branch_id
+                            ? <span className="badge badge-accent" title="This branch's own material">{branchName(m.branch_id)} only</span>
+                            : <span className="text-muted text-sm">All branches</span>}
                         </td>
                         <td><span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{m.status}</span></td>
-                        {canWriteMaterials && (
-                          <td style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: 'right' }}>
+                          {canEditMaterial(m) && (
                             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>
-                          </td>
-                        )}
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -242,7 +241,8 @@ export default function Materials() {
 
       {editing?.kind === 'material' && (
         <MaterialModal material={materials.find(m => m.id === editing.row.id) ?? editing.row} organizationId={organization.id} materials={materials}
-          categories={categories} units={units} branches={branches} suppliers={suppliers} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
+          categories={categories} units={units} branches={allBranches} suppliers={suppliers} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
+          canShare={canWriteMaterials} ownBranchChoices={allBranches.filter(b => canAt('materials.manage', b.id, null))} defaultBranchId={canWriteMaterials ? '' : branchId}
           onClose={close} onSaved={saved} onChanged={load} />
       )}
       {editing?.kind === 'category' && (
@@ -329,8 +329,10 @@ function uniqueRef(name, taken) {
   return ref;
 }
 
-function MaterialModal({ material, organizationId, materials, categories, units, branches, suppliers, usage, onClose, onSaved, onChanged }) {
+function MaterialModal({ material, organizationId, materials, categories, units, branches, suppliers, usage, canShare, ownBranchChoices, defaultBranchId, onClose, onSaved, onChanged }) {
   const isNew = !material.id;
+  // '' = shared by every branch; otherwise the one branch that uses it
+  const [scope, setScope] = useState(isNew ? (defaultBranchId || (canShare ? '' : ownBranchChoices[0]?.id ?? '')) : material.branch_id ?? '');
   const [name,     setName]     = useState(material.name ?? '');
   const [category, setCategory] = useState(material.category_id ?? '');
   const [stockId,  setStockId]  = useState(material.stock_unit_id ?? '');
@@ -343,6 +345,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
   const sources = material.sources ?? [];
   // 021: the stock unit is fixed once anything is expressed relative to it
   const stockLocked = !!material.stock_unit_id && (conversions.length > 0 || sources.length > 0 || usage.any > 0);
+  const branchName = id => branches.find(b => b.id === id)?.name ?? '—';
   const activeUnits = units.filter(u => u.status === 'active' || u.id === material.stock_unit_id);
   const choosableCategories = categories.filter(c => c.status === 'active' || c.id === material.category_id);
 
@@ -355,10 +358,19 @@ function MaterialModal({ material, organizationId, materials, categories, units,
     setBusy(true);
     const { error: err } = isNew
       ? await supabase.from('materials').insert({
-          ...row, organization_id: organizationId, status: 'active',
+          ...row, organization_id: organizationId, status: 'active', branch_id: scope || null,
           material_id_ref: uniqueRef(row.name, new Set(materials.map(m => m.material_id_ref).filter(Boolean))),
         })
       : await supabase.from('materials').update(row).eq('id', material.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  async function makeShared() {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.from('materials').update({ branch_id: null }).eq('id', material.id);
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
@@ -398,6 +410,22 @@ function MaterialModal({ material, organizationId, materials, categories, units,
             </select>
           </div>
         </div>
+        {isNew ? (
+          <div className="form-group">
+            <label className="form-label" htmlFor="mat-scope">Used by</label>
+            <select id="mat-scope" className="form-input" value={scope} onChange={e => setScope(e.target.value)}>
+              {canShare && <option value="">All branches (shared)</option>}
+              {ownBranchChoices.map(b => <option key={b.id} value={b.id}>{b.name} only</option>)}
+            </select>
+            <span className="form-hint">A branch's own material is for a local input only that branch uses. An org admin can make it shared later.</span>
+          </div>
+        ) : material.branch_id && (
+          <p className="text-sm">
+            <span className="badge badge-accent">{branchName(material.branch_id)} only</span>{' '}
+            <span className="text-muted">Only {branchName(material.branch_id)} edits and uses it.</span>
+            {canShare && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={makeShared}>Make shared with all branches</button>}
+          </p>
+        )}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="mat-stock">Stock unit</label>
@@ -419,7 +447,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
       {!isNew && (
         <div className="modal-form mt-16">
           <ConversionsEditor material={material} organizationId={organizationId} units={activeUnits} unitById={unitById} onChanged={onChanged} />
-          <SourcesEditor material={material} organizationId={organizationId} branches={branches} suppliers={suppliers} unitById={unitById} onChanged={onChanged} />
+          <FormerSources material={material} branches={branches} suppliers={suppliers} unitById={unitById} />
           <section>
             <h3 className="modal-section-title">Status</h3>
             {material.status === 'active' && usage.active > 0 ? (
@@ -524,132 +552,29 @@ function ConversionsEditor({ material, organizationId, units, unitById, onChange
   );
 }
 
-/** Where each branch buys the material, and in which unit */
-function SourcesEditor({ material, organizationId, branches, suppliers, unitById, onChanged }) {
-  const [sources, setSources] = useState(material.sources ?? []);
-  const [adding,  setAdding]  = useState(null);   // { branch_id, source_name, purchase_unit_id, is_primary }
-  const [busy,  setBusy]  = useState(false);
-  const [error, setError] = useState('');
-  // Purchase unit: the stock unit or a listed conversion (enforced by 019)
-  const purchaseUnits = [material.stock_unit_id, ...(material.conversions ?? []).map(c => c.unit_id)].filter(Boolean);
-
-  async function refresh() {
-    const { data } = await supabase.from('material_branch_sources')
-      .select('id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes').eq('material_id', material.id);
-    setSources(data || []);
-    onChanged();
-  }
-
-  async function run(fn) {
-    setError('');
-    setBusy(true);
-    const err = await fn();
-    setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return false; }
-    await refresh();
-    return true;
-  }
-
-  // One active primary per branch: clear the old one first
-  const makePrimary = s => run(async () => {
-    const { error: e1 } = await supabase.from('material_branch_sources').update({ is_primary: false })
-      .eq('material_id', material.id).eq('branch_id', s.branch_id).eq('is_primary', true);
-    if (e1) return e1;
-    const { error: e2 } = await supabase.from('material_branch_sources').update({ is_primary: true }).eq('id', s.id);
-    return e2;
-  });
-
-  const toggle = s => run(async () => (await supabase.from('material_branch_sources')
-    .update({ status: s.status === 'active' ? 'inactive' : 'active', ...(s.status === 'active' ? { is_primary: false } : {}) })
-    .eq('id', s.id)).error);
-
-  const setSupplier = (s, supplierId) => run(async () => (await supabase.from('material_branch_sources')
-    .update({ supplier_id: supplierId || null }).eq('id', s.id)).error);
-
-  const setUnit = (s, unitId) => run(async () => (await supabase.from('material_branch_sources')
-    .update({ purchase_unit_id: unitId || null }).eq('id', s.id)).error);
-
-  async function add() {
-    if (!adding.branch_id || !adding.source_name.trim()) { setError('Choose a branch and name the source.'); return; }
-    const first = !sources.some(s => s.branch_id === adding.branch_id && s.status === 'active');
-    const ok = await run(async () => (await supabase.from('material_branch_sources').insert({
-      organization_id: organizationId, material_id: material.id, branch_id: adding.branch_id,
-      source_name: adding.source_name.trim(), purchase_unit_id: adding.purchase_unit_id || null,
-      supplier_id: adding.supplier_id || null, is_primary: first,
-    })).error);
-    if (ok) setAdding(null);
-  }
-
+/**
+ * Fixed per-branch sources were retired in migration 031: the supplier is
+ * recorded on each purchase (receipt). What was recorded before is kept,
+ * read-only, as history.
+ */
+function FormerSources({ material, branches, suppliers, unitById }) {
+  const sources = material.sources ?? [];
+  if (!sources.length) return null;
+  const branchName = id => branches.find(b => b.id === id)?.name ?? '—';
+  const supplierName = id => suppliers.find(x => x.id === id)?.name;
   return (
-    <section className="entity-panel">
-      <h3 className="modal-section-title">Sources by branch</h3>
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
-      {branches.map(b => {
-        const here = sources.filter(s => s.branch_id === b.id).sort((x, y) => (y.status === 'active') - (x.status === 'active'));
-        return (
-          <div key={b.id} className="mb-8">
-            <div className="text-sm" style={{ fontWeight: 600 }}>{b.name}</div>
-            {here.length === 0 ? <p className="text-xs text-muted">No source recorded.</p> : (
-              <ul className="history-list">
-                {here.map(s => (
-                  <li key={s.id} className="flex items-center gap-8 text-sm" style={{ flexWrap: 'wrap' }}>
-                    <span className={s.status === 'active' ? '' : 'text-muted'}>{s.source_name}</span>
-                    {s.is_primary && s.status === 'active' && <span className="badge badge-accent">primary</span>}
-                    {s.status !== 'active' && <span className="badge badge-neutral">inactive</span>}
-                    <select className="form-input" style={{ width: 'auto', padding: '3px 8px' }} aria-label="Purchase unit"
-                      value={s.purchase_unit_id ?? ''} disabled={busy || s.status !== 'active'} onChange={e => setUnit(s, e.target.value)}>
-                      <option value="">bought in: not set</option>
-                      {purchaseUnits.map(u => <option key={u} value={u}>bought in {unitById[u]?.symbol}</option>)}
-                    </select>
-                    <select className="form-input" style={{ width: 'auto', padding: '3px 8px' }} aria-label="Supplier"
-                      value={s.supplier_id ?? ''} disabled={busy || s.status !== 'active'} onChange={e => setSupplier(s, e.target.value)}>
-                      <option value="">supplier: not linked</option>
-                      {suppliers.filter(x => x.status === 'active' || x.id === s.supplier_id).map(x => <option key={x.id} value={x.id}>supplier: {x.name}</option>)}
-                    </select>
-                    {s.status === 'active' && !s.is_primary && (
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => makePrimary(s)}>Make primary</button>
-                    )}
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => toggle(s)}>
-                      {s.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-      {adding ? (
-        <div className="modal-subform">
-          <div className="form-row">
-            <select className="form-input" aria-label="Branch" value={adding.branch_id} onChange={e => setAdding(a => ({ ...a, branch_id: e.target.value }))}>
-              <option value="" disabled>Branch…</option>
-              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-            <input className="form-input" aria-label="Source name" placeholder="Supplier or place" value={adding.source_name}
-              onChange={e => setAdding(a => ({ ...a, source_name: e.target.value }))} />
-          </div>
-          <select className="form-input" aria-label="Purchase unit" value={adding.purchase_unit_id}
-            onChange={e => setAdding(a => ({ ...a, purchase_unit_id: e.target.value }))}>
-            <option value="">Bought in: not set yet</option>
-            {purchaseUnits.map(u => <option key={u} value={u}>Bought in {unitById[u]?.symbol}</option>)}
-          </select>
-          <select className="form-input" aria-label="Supplier" value={adding.supplier_id ?? ''}
-            onChange={e => setAdding(a => ({ ...a, supplier_id: e.target.value }))}>
-            <option value="">Supplier: not linked</option>
-            {suppliers.filter(x => x.status === 'active').map(x => <option key={x.id} value={x.id}>Supplier: {x.name}</option>)}
-          </select>
-          <div className="flex gap-8">
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={add}>Add source</button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(null)}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <button type="button" className="btn btn-ghost btn-sm"
-          onClick={() => setAdding({ branch_id: '', source_name: '', purchase_unit_id: material.stock_unit_id ?? '' })}>
-          <Plus size={13} /> Add a source
-        </button>
-      )}
+    <section>
+      <h3 className="modal-section-title">Where it was bought (history)</h3>
+      <p className="text-xs text-muted mb-8">Suppliers are now recorded on each receipt, so these are no longer edited.</p>
+      <ul className="history-list">
+        {sources.map(x => (
+          <li key={x.id} className="text-sm">
+            <span className="text-muted">{branchName(x.branch_id)}:</span> {supplierName(x.supplier_id) || x.source_name}
+            {x.purchase_unit_id && <span className="text-muted"> · bought in {unitById[x.purchase_unit_id]?.symbol}</span>}
+            {x.status !== 'active' && <span className="text-muted"> (inactive)</span>}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Package, Search, Plus, Flag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
@@ -16,8 +17,11 @@ const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export default function Products() {
-  const { organization, canManage } = useAuth();
-  const canWrite = canManage('products.manage');
+  const { organization, canManage, canAt } = useAuth();
+  const { branchId, branchName } = useBranch();
+  const canWrite = canManage('products.manage');   // shared product details: org admins
+  // A branch's own catalogue: its managers add and remove products freely (031/032)
+  const canCatalogue = !!branchId && canAt('products.manage', branchId, null);
   const [categories, setCategories] = useState([]);
   const [products,   setProducts]   = useState([]);
   const [units,      setUnits]      = useState([]);
@@ -28,10 +32,15 @@ export default function Products() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [statusFilter,   setStatusFilter]   = useState('active');   // active | inactive | review | all
   const [editing, setEditing] = useState(null);   // product row, or {} for new
+  const [carried, setCarried] = useState({});     // product id → { branch id → branch_products row }
+  const [branchNames, setBranchNames] = useState({});
+  const [catalogueFilter, setCatalogueFilter] = useState('carried');   // carried | not_carried | all (one branch picked)
+  const [toggling, setToggling] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   async function load() {
     setError('');
-    const [catRes, prodRes, unitRes, flagRes] = await Promise.all([
+    const [catRes, prodRes, unitRes, flagRes, bpRes, brRes] = await Promise.all([
       supabase
         .from('product_categories')
         .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id')
@@ -48,8 +57,10 @@ export default function Products() {
         .order('product_id_ref'),
       supabase.from('units').select('id, symbol, name, status').order('symbol'),
       supabase.from('review_flags').select('entity_id').eq('entity_type', 'product').eq('status', 'open'),
+      supabase.from('branch_products').select('id, branch_id, product_id, status'),
+      supabase.from('branches').select('id, name'),
     ]);
-    const err = catRes.error || prodRes.error || unitRes.error || flagRes.error;
+    const err = catRes.error || prodRes.error || unitRes.error || flagRes.error || bpRes.error || brRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     const counts = {};
     for (const f of flagRes.data || []) counts[f.entity_id] = (counts[f.entity_id] || 0) + 1;
@@ -57,7 +68,29 @@ export default function Products() {
     setProducts(prodRes.data || []);
     setUnits(unitRes.data || []);
     setOpenFlags(counts);
+    const bp = {};
+    for (const r of bpRes.data || []) (bp[r.product_id] ||= {})[r.branch_id] = r;
+    setCarried(bp);
+    setBranchNames(Object.fromEntries((brRes.data || []).map(b => [b.id, b.name])));
     setLoading(false);
+  }
+
+  const carriedHere = id => carried[id]?.[branchId]?.status === 'active';
+
+  // Add to / remove from the picked branch's catalogue: a plain switch, kept
+  // as a row either way (removing deactivates it, adding again reactivates)
+  async function toggleCarried(product) {
+    setActionError('');
+    setToggling(product.id);
+    const row = carried[product.id]?.[branchId];
+    const { data, error: err } = row
+      ? await supabase.from('branch_products').update({ status: row.status === 'active' ? 'inactive' : 'active' })
+          .eq('id', row.id).select('id, branch_id, product_id, status').single()
+      : await supabase.from('branch_products').insert({ organization_id: organization.id, branch_id: branchId, product_id: product.id })
+          .select('id, branch_id, product_id, status').single();
+    setToggling(null);
+    if (err) { setActionError(dbErrorMessage(err)); return; }
+    setCarried(c => ({ ...c, [product.id]: { ...c[product.id], [branchId]: data } }));
   }
 
   useEffect(() => { load(); }, []);
@@ -76,6 +109,7 @@ export default function Products() {
   const filtered = products.filter(p => {
     if (activeCategory && p.category_id !== activeCategory) return false;
     if (statusFilter === 'review' ? !openFlags[p.id] : statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (branchId && catalogueFilter !== 'all' && carriedHere(p.id) !== (catalogueFilter === 'carried')) return false;
     return !q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q);
   });
   const reviewCount = products.filter(p => openFlags[p.id]).length;
@@ -84,7 +118,8 @@ export default function Products() {
   // columns only when some product in view actually records them.
   const showCoverage = filtered.some(p => p.pcs_per_sqm != null);
   const showYield    = filtered.some(p => p.wastani_per_bag != null);
-  const cols = 5 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (canWrite ? 1 : 0);
+  const cols = 6 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (canWrite ? 1 : 0);
+  const carriedCount = branchId ? products.filter(p => carriedHere(p.id)).length : 0;
 
   return (
     <PageShell
@@ -103,7 +138,7 @@ export default function Products() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          {canWrite && (
+          {(canWrite || canCatalogue) && (
             <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
               <Plus size={14} /> Add product
             </button>
@@ -123,7 +158,15 @@ export default function Products() {
               </button>
             ))}
           </div>
-          <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Show"
+          {branchId && (
+            <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Catalogue"
+              value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
+              <option value="carried">In {branchName}'s list ({carriedCount})</option>
+              <option value="not_carried">Not in {branchName}'s list</option>
+              <option value="all">All products</option>
+            </select>
+          )}
+          <select className="form-input" style={{ width: 'auto', marginLeft: branchId ? 0 : 'auto' }} aria-label="Show"
             value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="active">Active</option>
             <option value="review">Needs review ({reviewCount})</option>
@@ -133,6 +176,7 @@ export default function Products() {
         </div>
       )}
 
+      {actionError && <div className="alert alert-error mb-16" role="alert">{actionError}</div>}
       <div className="card">
         {error ? (
           <ErrorState message={error} onRetry={load} />
@@ -148,6 +192,7 @@ export default function Products() {
                   {showYield && <th title="Pieces produced per batch of the product's recipe">Yield per batch</th>}
                   <th>Stock Unit</th>
                   <th>Status</th>
+                  <th>{branchId ? `In ${branchName}` : 'Branches'}</th>
                   {canWrite && <th aria-label="Actions" />}
                 </tr>
               </thead>
@@ -187,6 +232,22 @@ export default function Products() {
                       <td>
                         <span className={`badge ${p.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{p.status}</span>
                       </td>
+                      <td>
+                        {branchId ? (
+                          canCatalogue && p.status === 'active' ? (
+                            <label className="flex items-center gap-4 text-sm" style={{ cursor: 'pointer' }}>
+                              <input type="checkbox" checked={carriedHere(p.id)} disabled={toggling === p.id}
+                                onChange={() => toggleCarried(p)} aria-label={`${p.canonical_name} in ${branchName}'s list`} />
+                              {carriedHere(p.id) ? 'Yes' : 'No'}
+                            </label>
+                          ) : carriedHere(p.id) ? 'Yes' : <span className="text-muted">No</span>
+                        ) : (
+                          <span className="text-xs">
+                            {Object.values(carried[p.id] || {}).filter(r => r.status === 'active').map(r => branchNames[r.branch_id]).sort().join(', ')
+                              || <span className="text-muted">None</span>}
+                          </span>
+                        )}
+                      </td>
                       {canWrite && (
                         <td style={{ textAlign: 'right' }}>
                           <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(p)}>Edit</button>
@@ -215,6 +276,7 @@ export default function Products() {
           categories={categories}
           units={units}
           products={products}
+          branchId={branchId} branchName={branchName}
           onClose={() => setEditing(null)}
           onSaved={async (close = true) => { if (close) setEditing(null); await load(); }}
         />
@@ -234,7 +296,7 @@ function nextProductRef(categoryRef, products) {
 
 const numOrNull = v => (String(v).trim() === '' ? null : Number(v));
 
-function ProductModal({ product, organization, categories, units, products, onClose, onSaved }) {
+function ProductModal({ product, organization, categories, units, products, branchId, branchName, onClose, onSaved }) {
   const isNew = !product.id;
   const [name,     setName]     = useState(product.canonical_name ?? '');
   const [category, setCategory] = useState(product.category_id ?? '');
@@ -275,14 +337,20 @@ function ProductModal({ product, organization, categories, units, products, onCl
       notes: notes.trim() || null,
     };
     setBusy(true);
-    const { error: err } = isNew
+    const { data: created, error: err } = isNew
       ? await supabase.from('products').insert({
           ...row, organization_id: organization.id,
           product_id_ref: nextProductRef(categories.find(c => c.id === category).category_id_ref, products),
-        })
-      : await supabase.from('products').update(row).eq('id', product.id);
+        }).select('id').single()
+      : await supabase.from('products').update(row).eq('id', product.id).select('id').single();
+    if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    // A new product goes straight into the picked branch's list
+    if (isNew && branchId) {
+      const { error: bpErr } = await supabase.from('branch_products')
+        .insert({ organization_id: organization.id, branch_id: branchId, product_id: created.id });
+      if (bpErr) { setBusy(false); setError(`Saved, but not added to ${branchName}'s list: ${dbErrorMessage(bpErr)}`); return; }
+    }
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
   }
 
