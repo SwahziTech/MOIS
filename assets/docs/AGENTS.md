@@ -41,19 +41,33 @@ or one free-text note under time pressure:
 
 - **pcs_per_sqm** (coverage): how many pieces are needed to cover one square
   meter. A fixed property of a mold's physical size. Independent of cement.
+  Shared by every product of the same size (and strength, where that
+  varies) — stored once per size in `product_size_specs`, not re-entered
+  per product name (migration 031).
 - **wastani_per_bag** (yield): average pieces produced from one 50kg bag of
-  cement. Depends on the mix ratio, not the mold's footprint.
+  cement. Also set per size + strength, and a branch may override it (its
+  mix can differ). It is an **average used for quality control, with a
+  ± tolerance** (Stumarcot: ±5 pieces) — never an exact output and never a
+  formula: do not compute or auto-post "expected output" from bags used.
+  Actual production output is what gets recorded; a run outside the band
+  is flagged for review (mixing error, miscount, material quality, recipe
+  drift), not silently accepted or rejected.
 - **m2_covered_per_bag**: derived from the two above — never store this as
   if it were a primitive fact if you can compute it instead.
 - **stock_unit** (SQM or PCS): the authoritative unit for a given product.
   Tiles and paving are counted in SQM; everything else (curbstones,
   culverts, trench covers, matofali, posts/bicons) is counted in PCS. This
-  is fixed per product, defined in `product_master.json` — never inferred
-  from context or assumed uniform across a whole category.
-- **Recipes/BOMs are shared per category + color**, not per mold. Molds of
-  the same category and color use the identical cement:sand:chip:dawa:rangi
-  ratio; only their yield (pcs_per_sqm, coverage) differs. Do not create
-  a duplicate recipe per mold when the ratio is identical.
+  is fixed per product (`products.unit_id`, originally from
+  `product_master.json`) — never inferred from context or assumed uniform
+  across a whole category.
+- **Recipes/BOMs belong to a branch, and within a branch are shared per
+  category + color**, not per mold. Molds of the same category and color in
+  a branch use the identical cement:sand:chip:dawa:rangi ratio; only their
+  yield and coverage differ. Do not create a duplicate recipe per mold when
+  the ratio is identical. Another branch may mix the "same" product
+  differently — never assume one recipe per product org-wide. A branch can
+  start from another branch's recipe (copy), but the copy is independent
+  from then on (migration 031).
 - **Production capacity differs by method** — do not apply one formula
   everywhere:
   - Vibro (floor tiles, wall tiles, paving, curbstones, trench covers):
@@ -70,10 +84,25 @@ or one free-text note under time pressure:
 
 ## 4. Product & pricing data
 
-- `product_master.json` is the single source of truth for product names,
+- `product_master.json` was the source for the original product names,
   categories, display format (`colored` = name + one qty column per color;
-  `plain` = name + single qty column), and stock unit. Do not invent,
-  merge, or split products differently than this file does.
+  `plain` = name + single qty column), and stock unit. Since 1a.1 the app
+  is the source of truth for an organization's catalogue (see the 1a.1
+  entry in build-plan.md); later corrections live there and in the
+  identity decision log, not in this file. Do not invent, merge, or split
+  products on your own — that is the tenant's explicit act.
+- **Catalogues are per branch.** A product is one shared identity (name,
+  category, stock unit, size, strength); which products a branch carries is
+  that branch's own catalogue (`branch_products`), not a filtered view of
+  every product. A product in Dodoma need not exist in Mwanza. Recipes and
+  prices are per branch too (migration 031).
+- **Naming convention** (a hint, never a hard rule): the leading number of a
+  product name is its size in cm, square unless stated otherwise ("30
+  Draft" = 30x30; "80 Combo" = 80x40). Sharing a size does not make two
+  products the same: "30 Draft" and "Draft 9" are distinct products.
+- **Supplier is never a fixed attribute** of a product or material. It is
+  recorded on each purchase (receipt) only, when the material is actually
+  bought from a specific supplier.
 - `ratios_and_molds.json` carries recipe/BOM and capacity data, plus a
   `_decisions_log` recording every judgment call already made on this data.
   Read the log before re-deriving a decision that's already there.
@@ -82,7 +111,13 @@ or one free-text note under time pressure:
   products share one price across all three branches; where a product's
   price genuinely differs by branch (confirmed real, e.g. culverts cost
   more in Mwanza due to transport from the Dodoma plant), that is
-  authoritative branch pricing, not an error to normalize away.
+  authoritative branch pricing, not an error to normalize away. Its
+  per-branch availability seeded each branch's catalogue (migration 031).
+- **Target tile pricing** (a default a branch may diverge from, not an
+  enforced invariant): one price per colour tier across branches — White
+  25,500 / Red and Grey 27,500 / Black 31,500 per m² — except Slab 110x50
+  and 80 Combo, which are priced separately, and blocks/matofali, which
+  stay branch-specific indefinitely.
 - Every one of these files marks unresolved gaps with `null` plus a note,
   or with an explicit unmatched/flagged entry. **Never fill a null or
   resolve a flagged mismatch by guessing.** Surface it and ask.
