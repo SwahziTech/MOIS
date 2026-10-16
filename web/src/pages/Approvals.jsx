@@ -16,6 +16,7 @@ const KIND = {
   stock_movement: { label: 'Stock correction', perm: 'inventory.adjust' },
   stock_reversal: { label: 'Reversal',         perm: 'inventory.adjust' },
   stock_import:   { label: 'Opening stock',    perm: 'inventory.adjust' },
+  purchase:       { label: 'Purchase (earlier date)', perm: 'inventory.adjust' },
 };
 const STATUS_BADGE = { pending: 'badge-warning', approved: 'badge-success', rejected: 'badge-neutral', withdrawn: 'badge-neutral' };
 

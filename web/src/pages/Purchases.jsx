@@ -27,7 +27,7 @@ const round2 = n => Math.round(n * 100) / 100;
  * branch's moving average cost per material.
  */
 export default function Purchases() {
-  const { organization, canAt } = useAuth();
+  const { organization, canAt, canManage } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
   const money = v => formatMoney(v, organization?.currency_code);
   const canRecordAt = id => !!id && canAt('procurement.receive', id, null);
@@ -215,14 +215,14 @@ export default function Purchases() {
 
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
-          branchId={branchId} canAt={canAt}
+          branchId={branchId} canAt={canAt} canManage={canManage}
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
       )}
     </PageShell>
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -249,12 +249,19 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [method,    setMethod]    = useState(purchase?.payment_method ?? '');
   const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? today);
   const [notes,     setNotes]     = useState(purchase?.notes ?? '');
+  const [date,      setDate]      = useState(today);
+  const [submitted, setSubmitted] = useState(false);
   const [voiding,   setVoiding]   = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
 
   const wh = refs.warehouses.find(w => w.id === warehouseId);
+  // An earlier date is a correction (033/036): it needs stock-correction
+  // rights at the store; non-admins' backdated purchases go to approval
+  const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);
+  const backdated = isNew && date < today;
+  const needsApproval = backdated && !canManage('inventory.adjust');
   const usable = m => m.status === 'active' && (!m.branch_id || m.branch_id === (wh?.branch_id ?? branchId));
 
   // Lines with their amount as bought, and quantity in the stock unit for the per-unit cost
@@ -292,6 +299,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
       if (new Set(newLines.map(l => l.materialId)).size !== newLines.length) { setError('A material appears twice — combine the lines.'); return; }
     }
     if (num(paid) != null && num(paid) > round2(total)) { setError('Amount paid is more than the total.'); return; }
+    if (isNew && (!date || date > today)) { setError('Choose a date up to today.'); return; }
     const header = {
       ...(supplierId ? { supplier_id: supplierId } : { new_supplier_name: newSupplier.trim() }),
       invoice_reference: invoice.trim() || null, transport_charge: num(transport) ?? 0,
@@ -306,10 +314,23 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
     } else if (mode === 'complete') {
       res = await supabase.rpc('record_purchase', { p: { ...header, movement_id: movementId, lines: lines.map(l => ({ transaction_id: l.txId, unit_price: l.price })) } });
     } else {
-      res = await supabase.rpc('record_purchase', { p: { ...header,
-        receipt: { type: 'receipt', warehouse_id: warehouseId, reference: invoice.trim() || null,
+      const payload = { ...header,
+        receipt: { type: 'receipt', warehouse_id: warehouseId, movement_date: date, reference: invoice.trim() || null,
                    lines: newLines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId })) },
-        lines: newLines.map(l => ({ material_id: l.materialId, unit_price: num(l.price) })) } });
+        lines: newLines.map(l => ({ material_id: l.materialId, unit_price: num(l.price) })) };
+      if (needsApproval) {
+        const supplierLabel = supplierId ? refs.suppliers.find(s => s.id === supplierId)?.name : newSupplier.trim();
+        const goods = lines.map(l => `${qtyText(l.qty)} ${refs.unitById[l.unitId]?.symbol ?? ''} ${l.name ?? ''}`).join(', ');
+        res = await supabase.rpc('request_change', {
+          p_kind: 'purchase', p_branch_id: null, p_payload: payload,
+          p_summary: `Purchase dated ${date} at ${warehouseLabel(wh)}: ${goods} from ${supplierLabel} — ${money(round2(total))}`,
+        });
+        setBusy(false);
+        if (res.error) { setError(dbErrorMessage(res.error, "We couldn't send this for approval. Nothing was recorded.")); return; }
+        setSubmitted(true);
+        return;
+      }
+      res = await supabase.rpc('record_purchase', { p: payload });
     }
     setBusy(false);
     if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save the purchase. Nothing was recorded.")); return; }
@@ -326,6 +347,15 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
     onSaved();
   }
 
+  if (submitted) {
+    return (
+      <Modal title="Record goods + purchase" onClose={onSaved}
+        footer={<button type="button" className="btn btn-primary" onClick={onSaved}>Done</button>}>
+        <p className="text-sm">Sent for an admin's approval. The goods and the purchase are recorded, dated {date}, once it is approved — follow it under <strong>Approvals</strong>.</p>
+      </Modal>
+    );
+  }
+
   const setNewLine = (i, patch) => setNewLines(ls => ls.map((l, j) => {
     if (j !== i) return l;
     const next = { ...l, ...patch };
@@ -338,7 +368,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="purchase-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>
-          {mode === 'edit' ? 'Save changes' : 'Record purchase'}
+          {mode === 'edit' ? 'Save changes' : needsApproval ? 'Submit for approval' : 'Record purchase'}
         </button>
       </>}>
       <form id="purchase-form" className="modal-form" onSubmit={save}>
@@ -353,8 +383,14 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
                 </select>
               </div>
               <div className="form-group">
-                <span className="form-label">Date</span>
-                <p className="text-sm">{today} <span className="text-xs text-muted">— for an earlier date, receive the goods under Stock (it needs approval), then add the purchase here.</span></p>
+                <label className="form-label" htmlFor="pu-date">Date received</label>
+                <input id="pu-date" type="date" className="form-input" max={today} value={date} disabled={!canBackdate}
+                  onChange={e => setDate(e.target.value)} />
+                <span className="form-hint">
+                  {!canBackdate ? 'Today only — earlier dates need stock-adjustment permission (ask the branch manager).'
+                    : needsApproval ? 'Earlier date: this goes to an admin for approval and is recorded once approved.'
+                    : date < today ? 'Earlier date: recorded as of then.' : 'Today, or an earlier date if the goods came before.'}
+                </span>
               </div>
             </div>
             <section>
