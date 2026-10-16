@@ -212,6 +212,9 @@ function rank(text, candidates, nameOf, limit = 4, threshold = 0.45) {
  *            colors:[{id,name}], units:[{id,symbol,name}],
  *            decisions:[{id,subject_type,context_normalized,term_normalized,decision,product_id,color_id,category_id,decided_by_label}] }
  *   decisions = the active rows of identity_decisions (migration 026)
+ *   carriedIds = optional Set of product ids in the store's branch catalogue (031): those win
+ *     when a name fits several products and come first in suggestions; others stay matchable
+ *     (posting opening stock adds them to the branch's list) and are marked notCarried
  * Each result: { status: 'exact'|'suggested'|'none'|'not_tracked', id, via, decision, suggestions:[{id,score}] }
  * - exact: a recorded decision, or the same name (ignoring case/spacing/punctuation)
  * - suggested: close matches for the admin to confirm (never ones a decision says it is NOT)
@@ -221,6 +224,8 @@ function rank(text, candidates, nameOf, limit = 4, threshold = 0.45) {
 export function matchSheet(parsed, catalog) {
   const activeProducts = catalog.products.filter(p => p.status === 'active');
   const decisions = catalog.decisions || [];
+  const carried = catalog.carriedIds || null;
+  const isCarried = id => !carried || carried.has(id);
   // The standing answer for a term: one recorded for this context, else one for anywhere
   const answer = (type, context, text) => {
     const t = normalize(text), c = normalize(context);
@@ -255,21 +260,28 @@ export function matchSheet(parsed, catalog) {
     let product;
     const pa = answer('product', t.category, l.typeText);
     const excluded = notThese('product', t.category, l.typeText);
-    const sameName = activeProducts.filter(p => normalize(p.name) === normalize(l.typeText) && !excluded.has(p.id)
+    let sameName = activeProducts.filter(p => normalize(p.name) === normalize(l.typeText) && !excluded.has(p.id)
       && (!catIds.length || catIds.includes(p.categoryId)));
+    // Several products by that name: the one this branch carries
+    if (sameName.length > 1 && carried) {
+      const here = sameName.filter(p => carried.has(p.id));
+      if (here.length) sameName = here;
+    }
     if (pa?.decision === 'not_tracked') product = { status: 'not_tracked', id: null, via: via(pa), decision: pa.id, suggestions: [] };
-    else if (pa?.product_id) product = { status: 'exact', id: pa.product_id, via: via(pa), decision: pa.id, suggestions: [] };
-    else if (sameName.length === 1) product = { status: 'exact', id: sameName[0].id, via: 'same name', suggestions: [] };
+    else if (pa?.product_id) product = { status: 'exact', id: pa.product_id, via: via(pa), decision: pa.id, notCarried: !isCarried(pa.product_id), suggestions: [] };
+    else if (sameName.length === 1) product = { status: 'exact', id: sameName[0].id, via: 'same name', notCarried: !isCarried(sameName[0].id), suggestions: [] };
     else {
       const candidates = activeProducts.filter(p => !excluded.has(p.id));
       const inCats = candidates.filter(p => catIds.includes(p.categoryId));
       let sug = rank(l.typeText, inCats.length ? inCats : candidates, p => p.name);
       if (!sug.length && inCats.length) sug = rank(l.typeText, candidates, p => p.name, 3, 0.6);   // elsewhere in the catalogue
+      sug = [...sug].sort((a, b) => isCarried(b.item.id) - isCarried(a.item.id));                // the branch's own first
       // strong: every word accounted for AND in the heading's category — still the admin's call
       product = { status: sug.length ? 'suggested' : 'none', id: null, suggestions: sug.map(s => ({
         id: s.item.id, score: Number(s.score.toFixed(2)),
         otherCategory: !catIds.includes(s.item.categoryId),
         strong: catIds.includes(s.item.categoryId) && fullMatch(l.typeText, s.item.name),
+        notCarried: !isCarried(s.item.id),
       })) };
     }
 

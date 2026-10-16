@@ -48,7 +48,7 @@ export default function StockImport() {
 
   async function loadCatalog() {
     setLoadError('');
-    const [cats, pcc, prods, colors, units, decisions, wh] = await Promise.all([
+    const [cats, pcc, prods, colors, units, decisions, wh, bp] = await Promise.all([
       supabase.from('product_categories').select('id, name, status, sort_order, default_unit_id').order('sort_order'),
       supabase.from('product_category_colors').select('category_id, color_id, display_order'),
       supabase.from('products').select('id, canonical_name, category_id, unit_id, pcs_per_sqm, status').order('canonical_name'),
@@ -58,8 +58,9 @@ export default function StockImport() {
         .select('id, subject_type, context_normalized, term_normalized, decision, product_id, color_id, category_id, decided_by_label')
         .eq('status', 'active'),
       supabase.from('warehouses').select('id, name, status, branch_id, branch:branches(id, name, status)').order('name'),
+      supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
     ]);
-    const err = [cats, pcc, prods, colors, units, decisions, wh].find(r => r.error)?.error;
+    const err = [cats, pcc, prods, colors, units, decisions, wh, bp].find(r => r.error)?.error;
     if (err) { console.error(err); setLoadError(LOAD_ERROR); return null; }
     const c = {
       categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id,
@@ -68,6 +69,9 @@ export default function StockImport() {
       colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active, display_order: x.display_order })),
       units: units.data.map(u => ({ id: u.id, symbol: u.symbol, name: u.name })),
       decisions: decisions.data,
+      // each branch's own catalogue (031), for matching against the chosen store's branch
+      carriedByBranch: bp.data.reduce((m, r) => { (m[r.branch_id] ||= new Set()).add(r.product_id); return m; }, {}),
+      branchOfWarehouse: Object.fromEntries(wh.data.map(w => [w.id, w.branch_id])),
     };
     setCatalog(c);
     setWarehouses(wh.data.filter(w => w.status === 'active' && canAt('inventory.adjust', w.branch_id, w.id)));
@@ -104,8 +108,14 @@ export default function StockImport() {
   const colById  = useMemo(() => Object.fromEntries((catalog?.colors || []).map(c => [c.id, c])), [catalog]);
   const unitById = useMemo(() => Object.fromEntries((catalog?.units || []).map(u => [u.id, u])), [catalog]);
 
-  function analyse(text, cat = catalog, saved = null) {
+  // The catalogue as the chosen store's branch sees it
+  const forStore = (cat, whId = warehouseId) => ({
+    ...cat, carriedIds: whId ? cat.carriedByBranch[cat.branchOfWarehouse[whId]] ?? new Set() : null,
+  });
+
+  function analyse(text, cat = catalog, saved = null, whId = warehouseId) {
     const p = parseStockSheet(text);
+    cat = forStore(cat, whId);
     const first = matchSheet(p, cat);
     const tables = Object.fromEntries(first.tables.map(t => [t.index, saved?.tables?.[t.index] ?? {
       categoryId: t.cat.id ?? '',
@@ -135,7 +145,7 @@ export default function StockImport() {
     setFileText(data.file_text);
     setWarehouseId(data.warehouse_id || '');
     setDate(data.as_of_date || today);
-    analyse(data.file_text, catalog, { tables: data.table_choices, lines: data.line_choices });
+    analyse(data.file_text, catalog, { tables: data.table_choices, lines: data.line_choices }, data.warehouse_id || '');
     setSaveState('saved');
   }
 
@@ -175,10 +185,23 @@ export default function StockImport() {
       .map(([i, v]) => ({ t: matched.tables[i], v }))
       .filter(({ t: tt, v }) => tt.category && v.categoryId && v.categoryId !== tt.cat.id)
       .map(({ t: tt, v }) => ({ id: null, subject_type: 'category', context_normalized: '', term_normalized: normalize(tt.category), decision: 'same_as', category_id: v.categoryId, decided_by_label: 'this import' }));
-    const m = matchSheet(parsed, { ...catalog, decisions: [...catalog.decisions, ...extra] });
+    const m = matchSheet(parsed, { ...forStore(catalog), decisions: [...catalog.decisions, ...extra] });
     setMatched({ tables: matched.tables, lines: m.lines });   // keep each table's original match labels
     setChoices(cs => Object.fromEntries(m.lines.map(l => [l.id, cs[l.id]?.productId ? cs[l.id] : { ...cs[l.id], productId: l.product.id ?? '' }])));
   }
+
+  // Choosing (or changing) the store re-ranks matches for its branch;
+  // products already chosen stay chosen
+  useEffect(() => {
+    if (!parsed || !matched || !catalog) return;
+    const extra = Object.entries(tableChoice)
+      .map(([i, v]) => ({ t: matched.tables[i], v }))
+      .filter(({ t: tt, v }) => tt?.category && v.categoryId && v.categoryId !== tt.cat.id)
+      .map(({ t: tt, v }) => ({ id: null, subject_type: 'category', context_normalized: '', term_normalized: normalize(tt.category), decision: 'same_as', category_id: v.categoryId, decided_by_label: 'this import' }));
+    const m = matchSheet(parsed, { ...forStore(catalog), decisions: [...catalog.decisions, ...extra] });
+    setMatched(prev => ({ tables: prev.tables, lines: m.lines }));
+    setChoices(cs => Object.fromEntries(m.lines.map(l => [l.id, cs[l.id]?.productId ? cs[l.id] : { ...cs[l.id], productId: l.product.id ?? '' }])));
+  }, [warehouseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setChoice = (id, patch) => setChoices(cs => ({ ...cs, [id]: { ...cs[id], ...patch } }));
 
@@ -489,7 +512,7 @@ export default function StockImport() {
                                     onChange={ev => setChoice(l.id, { productId: ev.target.value, colorId: l.colour?.id ?? '' })}>
                                     <option value="">{l.product.status === 'none' ? 'No match — choose…' : 'Choose…'}</option>
                                     {opts.sug.length > 0 && <optgroup label="Suggested">
-                                      {opts.sug.map(s => <option key={s.id} value={s.id}>{prodById[s.id]?.name}{s.otherCategory ? ` — ${catById[prodById[s.id]?.categoryId]?.name}` : ''}{s.strong ? ' (good match)' : ''}</option>)}
+                                      {opts.sug.map(s => <option key={s.id} value={s.id}>{prodById[s.id]?.name}{s.otherCategory ? ` — ${catById[prodById[s.id]?.categoryId]?.name}` : ''}{s.strong ? ' (good match)' : ''}{s.notCarried ? " (not in this branch's list yet)" : ''}</option>)}
                                     </optgroup>}
                                     <optgroup label="This category">{opts.inCat.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
                                     <optgroup label="Other categories">{opts.rest.map(p => <option key={p.id} value={p.id}>{p.name} — {catById[p.categoryId]?.name}</option>)}</optgroup>

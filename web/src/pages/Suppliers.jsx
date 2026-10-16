@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Truck, Plus, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -17,15 +18,18 @@ const FIELDS = [
 ];
 
 /*
- * Supplier master data (migration 022). Which materials a supplier provides
- * comes from the materials' branch sources; purchase history and balances
- * arrive with procurement (1c).
+ * Supplier master data (migration 022). What a supplier provides is never
+ * fixed on a material (031): it comes from the receipts that name them —
+ * what was actually bought, where and when. Balances arrive with
+ * procurement (1c).
  */
 export default function Suppliers() {
   const { organization, canManage } = useAuth();
+  const { branchId, branchName, inBranch } = useBranch();
   const canWrite = canManage('materials.manage');
   const [suppliers, setSuppliers] = useState([]);
-  const [supplies,  setSupplies]  = useState({});   // supplier id → ['Cement (Dodoma)', ...]
+  const [receipts,  setReceipts]  = useState([]);   // receipts naming a supplier
+  const [itemNames, setItemNames] = useState({});   // 'm:<id>' / 'p:<id>' → name
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
@@ -34,19 +38,36 @@ export default function Suppliers() {
 
   async function load() {
     setError('');
-    const [supRes, srcRes] = await Promise.all([
+    const [supRes, recRes, matRes, prodRes] = await Promise.all([
       supabase.from('suppliers').select('id, name, contact_person, phone, email, address, tax_id, notes, status').order('name'),
-      supabase.from('material_branch_sources').select('supplier_id, status, material:materials(name), branch:branches(name)').not('supplier_id', 'is', null),
+      supabase.from('inventory_movements')
+        .select('id, supplier_id, branch_id, movement_date, lines:inventory_transactions(material_id, product_id)')
+        .eq('movement_type', 'receipt').not('supplier_id', 'is', null),
+      supabase.from('materials').select('id, name'),
+      supabase.from('products').select('id, canonical_name'),
     ]);
-    if (supRes.error || srcRes.error) { console.error(supRes.error || srcRes.error); setError(LOAD_ERROR); setLoading(false); return; }
-    const map = {};
-    for (const s of srcRes.data || []) if (s.status === 'active') (map[s.supplier_id] ??= []).push(`${s.material?.name} (${s.branch?.name})`);
+    const err = supRes.error || recRes.error || matRes.error || prodRes.error;
+    if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setSuppliers(supRes.data || []);
-    setSupplies(map);
+    setReceipts(recRes.data || []);
+    setItemNames({
+      ...Object.fromEntries((matRes.data || []).map(m => [`m:${m.id}`, m.name])),
+      ...Object.fromEntries((prodRes.data || []).map(p => [`p:${p.id}`, p.canonical_name])),
+    });
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+
+  // Per supplier, from the receipts in view (the sidebar's branch, or all)
+  const bought = {};
+  for (const r of receipts) {
+    if (!inBranch(r.branch_id)) continue;
+    const b = (bought[r.supplier_id] ??= { count: 0, last: '', items: new Set() });
+    b.count++;
+    if (r.movement_date > b.last) b.last = r.movement_date;
+    for (const l of r.lines) b.items.add(itemNames[l.material_id ? `m:${l.material_id}` : `p:${l.product_id}`] ?? '—');
+  }
 
   const q = search.trim().toLowerCase();
   const shown = suppliers.filter(s => (showInactive || s.status === 'active')
@@ -75,17 +96,18 @@ export default function Suppliers() {
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
-              <thead><tr><th>Supplier</th><th>Contact</th><th>Supplies</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
+              <thead><tr><th>Supplier</th><th>Contact</th><th>Bought from them{branchId ? ` (${branchName})` : ''}</th><th>Receipts</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
               <tbody>
-                {loading ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                {loading ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
                 : shown.length === 0 ? (
-                  <tr><td colSpan={5}><EmptyState icon={Truck} title="No suppliers yet"
-                    description="Add the people and companies you buy materials from, then link them to materials' sources." /></td></tr>
+                  <tr><td colSpan={6}><EmptyState icon={Truck} title="No suppliers yet"
+                    description="Add the people and companies you buy from — or name a new one when recording a receipt." /></td></tr>
                 ) : shown.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td className="text-sm">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' · ') || <span className="text-muted">—</span>}</td>
-                    <td className="text-sm text-muted">{supplies[s.id]?.join(', ') || '—'}</td>
+                    <td className="text-sm text-muted">{bought[s.id] ? [...bought[s.id].items].sort().join(', ') : '—'}</td>
+                    <td className="text-sm">{bought[s.id] ? <>{bought[s.id].count} <span className="text-muted">· last {bought[s.id].last}</span></> : <span className="text-muted">none yet</span>}</td>
                     <td><span className={`badge ${s.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{s.status}</span></td>
                     {canWrite && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(s)}>Edit</button></td>}
                   </tr>

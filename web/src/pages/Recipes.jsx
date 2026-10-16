@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -14,19 +15,26 @@ const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
 /** A recipe is either for a palette colour or a named variant (e.g. a press mix). */
 const variantName = r => r.color?.name ?? r.variant_label ?? '—';
-/** Versions of the same recipe share category + colour/variant */
-const recipeKey = r => `${r.category_id}|${r.color_id ?? ''}|${r.variant_label ?? ''}`;
+/** Versions of the same recipe share branch + category + colour/variant (031) */
+const recipeKey = r => `${r.branch_id}|${r.category_id}|${r.color_id ?? ''}|${r.variant_label ?? ''}`;
 const today = () => new Date().toISOString().slice(0, 10);
 
 /*
- * Recipes are shared per category + colour or variant (migrations 011, 016).
+ * Recipes belong to a branch, and within it are shared per category +
+ * colour or variant (migrations 011, 016, 031). A branch can start from
+ * another branch's recipe (copy_recipe_to_branch); the copy is its own.
  * A saved version is never edited: changing ingredients saves a new version
  * and archives the old one (create_recipe_version, migration 020). Which
  * products use the recipe can change in place.
  */
 export default function Recipes() {
-  const { organization, canManage } = useAuth();
-  const canWrite = canManage('products.manage');
+  const { organization, canAt } = useAuth();
+  const { branchId, branchName, inBranch } = useBranch();
+  // A branch's recipes: its managers and org admins (031)
+  const canWriteAt = id => !!id && canAt('products.manage', id, null);
+  const canWrite = canWriteAt(branchId);
+  const [branchNames, setBranchNames] = useState({});
+  const [carried,     setCarried]     = useState([]);   // branch_products rows
   const [recipes,    setRecipes]    = useState([]);
   const [categories, setCategories] = useState([]);
   const [materials,  setMaterials]  = useState([]);
@@ -41,11 +49,11 @@ export default function Recipes() {
 
   async function load() {
     setError('');
-    const [rvRes, catRes, matRes, unitRes, prodRes] = await Promise.all([
+    const [rvRes, catRes, matRes, unitRes, prodRes, brRes, bpRes] = await Promise.all([
       supabase
         .from('recipe_versions')
         .select(`
-          id, category_id, color_id, variant_label, version_number, effective_date, status, notes, created_by, created_at,
+          id, branch_id, copied_from_version_id, category_id, color_id, variant_label, version_number, effective_date, status, notes, created_by, created_at,
           color:color_palette(name, display_order),
           category:product_categories(name, sort_order),
           items:recipe_items(
@@ -60,12 +68,14 @@ export default function Recipes() {
         .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
         .order('sort_order'),
       supabase.from('materials')
-        .select('id, name, status, stock_unit_id, conversions:material_unit_conversions(unit_id)')
+        .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id)')
         .order('name'),
       supabase.from('units').select('id, symbol, name'),
       supabase.from('products').select('id, canonical_name, product_id_ref, size_cm, category_id, status').order('canonical_name'),
+      supabase.from('branches').select('id, name'),
+      supabase.from('branch_products').select('branch_id, product_id, status'),
     ]);
-    const err = rvRes.error || catRes.error || matRes.error || unitRes.error || prodRes.error;
+    const err = rvRes.error || catRes.error || matRes.error || unitRes.error || prodRes.error || brRes.error || bpRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
 
     const sorted = (rvRes.data || []).sort((a, b) =>
@@ -85,6 +95,8 @@ export default function Recipes() {
     setMaterials(matRes.data || []);
     setUnits(unitRes.data || []);
     setProducts(prodRes.data || []);
+    setBranchNames(Object.fromEntries((brRes.data || []).map(b => [b.id, b.name])));
+    setCarried(bpRes.data || []);
     setLoading(false);
   }
 
@@ -93,14 +105,15 @@ export default function Recipes() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return recipes.filter(r =>
+      inBranch(r.branch_id) &&
       (status === 'all' || r.status === status) &&
       (!q ||
         (r.category?.name || '').toLowerCase().includes(q) ||
         variantName(r).toLowerCase().includes(q))
     );
-  }, [recipes, search, status]);
+  }, [recipes, search, status, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cols = canWrite ? 8 : 7;
+  const cols = 8 + (branchId ? 0 : 1);
 
   return (
     <PageShell
@@ -131,10 +144,12 @@ export default function Recipes() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          {canWrite && (
+          {canWrite ? (
             <button type="button" className="btn btn-primary" onClick={() => setEditing({ recipe: null })}>
               <Plus size={14} /> Add recipe
             </button>
+          ) : !branchId && (
+            <span className="text-xs text-muted">Pick a branch in the sidebar to add a recipe</span>
           )}
         </>
       }
@@ -147,6 +162,7 @@ export default function Recipes() {
             <table>
               <thead>
                 <tr>
+                  {!branchId && <th>Branch</th>}
                   <th>Category</th>
                   <th>Colour / variant</th>
                   <th>Version</th>
@@ -154,7 +170,7 @@ export default function Recipes() {
                   <th>Products</th>
                   <th>Effective</th>
                   <th>Status</th>
-                  {canWrite && <th aria-label="Actions" />}
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -173,6 +189,7 @@ export default function Recipes() {
                 ) : (
                   filtered.map(r => (
                     <tr key={r.id}>
+                      {!branchId && <td className="text-muted">{branchNames[r.branch_id] ?? '—'}</td>}
                       <td style={{ fontWeight: 500 }}>{r.category?.name || '—'}</td>
                       <td><span className="badge badge-accent">{variantName(r)}</span></td>
                       <td>v{r.version_number}</td>
@@ -186,13 +203,13 @@ export default function Recipes() {
                           {r.status}
                         </span>
                       </td>
-                      {canWrite && (
-                        <td style={{ textAlign: 'right' }}>
+                      <td style={{ textAlign: 'right' }}>
+                        {canWriteAt(r.branch_id) && (
                           <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ recipe: r })}>
                             {r.status === 'active' ? 'Change' : 'View'}
                           </button>
-                        </td>
-                      )}
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -218,6 +235,10 @@ export default function Recipes() {
           products={products}
           people={people}
           organizationId={organization.id}
+          branchId={editing.recipe?.branch_id ?? branchId}
+          branchName={branchNames[editing.recipe?.branch_id ?? branchId] ?? branchName}
+          branchNames={branchNames}
+          carriedIds={new Set(carried.filter(c => c.branch_id === (editing.recipe?.branch_id ?? branchId) && c.status === 'active').map(c => c.product_id))}
           onClose={() => setEditing(null)}
           onSaved={async () => { setEditing(null); await load(); }}
         />
@@ -249,7 +270,7 @@ const sameItems = (rows, items) => {
   return norm(rows) === norm(toRows(items));
 };
 
-function RecipeModal({ recipe, versions, allRecipes, categories, materials, units, products, people, onClose, onSaved }) {
+function RecipeModal({ recipe, versions, allRecipes, categories, materials, units, products, people, branchId, branchName, branchNames, carriedIds, onClose, onSaved }) {
   const isNew = !recipe;
   const active = versions.find(v => v.status === 'active') ?? null;
   const readOnly = !isNew && !active;          // every version archived: recipe retired
@@ -269,10 +290,17 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
   const unitSymbol = useMemo(() => Object.fromEntries(units.map(u => [u.id, u.symbol])), [units]);
   const materialById = useMemo(() => Object.fromEntries(materials.map(m => [m.id, m])), [materials]);
   const category = categories.find(c => c.id === categoryId);
-  const categoryProducts = products.filter(p => p.category_id === categoryId && (p.status === 'active' || linked.has(p.id)));
+  // Products this branch carries (031), plus any already linked
+  const categoryProducts = products.filter(p => p.category_id === categoryId
+    && ((p.status === 'active' && carriedIds.has(p.id)) || linked.has(p.id)));
+  // Materials: shared ones and this branch's own (032)
+  const usableMaterial = m => !m.branch_id || m.branch_id === branchId;
 
-  // New recipe: colours of the category that have no active recipe yet
-  const takenColours = new Set(allRecipes.filter(r => r.category_id === categoryId && r.status === 'active' && r.color_id).map(r => r.color_id));
+  // New recipe: colours of the category with no active recipe in this branch yet
+  const takenColours = new Set(allRecipes.filter(r => r.branch_id === branchId && r.category_id === categoryId && r.status === 'active' && r.color_id).map(r => r.color_id));
+  // Other branches' current recipes for the same category + colour/variant: a starting point
+  const otherBranches = isNew ? allRecipes.filter(r => r.branch_id !== branchId && r.status === 'active' && r.category_id === categoryId
+    && (kind === 'color' ? colorId && r.color_id === colorId : variant.trim() && (r.variant_label || '').toLowerCase() === variant.trim().toLowerCase())) : [];
   const freeColours = (category?.colors || [])
     .filter(c => c.color?.is_active && !takenColours.has(c.color_id))
     .sort((a, b) => a.display_order - b.display_order);
@@ -340,6 +368,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
     }
 
     const { error: err } = await supabase.rpc('create_recipe_version', {
+      p_branch_id:      isNew ? branchId : null,
       p_replaces:       active?.id ?? null,
       p_category_id:    isNew ? categoryId : null,
       p_color_id:       isNew && kind === 'color' ? colorId : null,
@@ -348,6 +377,18 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
       p_product_ids:    productIds,
       p_effective_date: effective || null,
       p_notes:          notes.trim() || null,
+    });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+
+  // Start this branch's recipe as an independent copy of another branch's
+  async function copyFrom(src) {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.rpc('copy_recipe_to_branch', {
+      p_version_id: src.id, p_branch_id: branchId, p_notes: `Started from ${branchNames[src.branch_id] ?? 'another branch'}'s recipe`,
     });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
@@ -363,7 +404,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
     onSaved();
   }
 
-  const title = isNew ? 'Add recipe' : `${recipe.category?.name} — ${variantName(recipe)}`;
+  const title = `${isNew ? 'Add recipe' : `${recipe.category?.name} — ${variantName(recipe)}`}${branchName ? ` · ${branchName}` : ''}`;
   const willVersion = !isNew && active && !sameItems(rows, active.items);
 
   return (
@@ -409,6 +450,20 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
           </div>
         )}
 
+        {otherBranches.length > 0 && (
+          <div className="alert alert-info" role="note">
+            {otherBranches.map(o => (
+              <div key={o.id} className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                {branchNames[o.branch_id]} already has this recipe (v{o.version_number}).
+                <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => copyFrom(o)}>
+                  Copy it to {branchName}
+                </button>
+              </div>
+            ))}
+            <div className="text-xs mt-4">The copy becomes {branchName}'s own: later changes in either branch don't carry over.</div>
+          </div>
+        )}
+
         {readOnly ? (
           <p className="text-sm text-muted">This recipe is retired — all its versions are archived. Version history is below.</p>
         ) : (
@@ -421,7 +476,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                     <select className="form-input" aria-label="Material" value={r.material_id}
                       onChange={e => setRow(i, { material_id: e.target.value })}>
                       <option value="" disabled>Material…</option>
-                      {materials.filter(m => m.status === 'active' || m.id === r.material_id).map(m => (
+                      {materials.filter(m => (m.status === 'active' && usableMaterial(m)) || m.id === r.material_id).map(m => (
                         <option key={m.id} value={m.id}>{m.name}{m.status !== 'active' ? ' (inactive)' : ''}</option>
                       ))}
                     </select>
@@ -469,7 +524,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
               <section>
                 <h3 className="modal-section-title">Products using this recipe ({linked.size})</h3>
                 {categoryProducts.length === 0 ? (
-                  <p className="text-sm text-muted">No active products in this category.</p>
+                  <p className="text-sm text-muted">No products of this category in {branchName}'s list — add them on the Products page first.</p>
                 ) : (
                   <div className="choice-chips">
                     {categoryProducts.map(p => (
@@ -524,6 +579,10 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                     )}
                   </div>
                   {v.notes && <p className="text-xs text-muted">{v.notes}</p>}
+                  {v.copied_from_version_id && (() => {
+                    const src = allRecipes.find(x => x.id === v.copied_from_version_id);
+                    return src ? <p className="text-xs text-muted">Started from {branchNames[src.branch_id] ?? 'another branch'}'s v{src.version_number}</p> : null;
+                  })()}
                   {(viewing === v.id || (readOnly && v === versions.at(-1))) && <div className="mt-8 text-xs"><IngredientBadges items={v.items} /></div>}
                 </li>
               ))}
