@@ -28,7 +28,8 @@ const TABLES = ['organizations','branches','warehouses','profiles','roles','role
   'color_palette','product_category_colors','category_color_price_items',
   'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log',
   'suppliers','inventory_movements','inventory_transactions','stock_balances','identity_decisions','stock_import_drafts',
-  'branch_products','product_size_specs','branch_yield_overrides','pending_changes'];
+  'branch_products','product_size_specs','branch_yield_overrides','pending_changes',
+  'purchases','purchase_lines'];
 
 const readBlock = (who, claims) => `
 DO $$
@@ -81,6 +82,7 @@ BEGIN
   ${attempt('WRITE update other tenant catalogue', `UPDATE public.branch_products SET status = 'inactive' WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update other tenant materials', `UPDATE public.materials SET notes = 'hacked' WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE request approval at other tenant store', `PERFORM public.request_change('stock_movement', NULL, jsonb_build_object('type','adjustment','warehouse_id','${ids.stumarcotWarehouse}','lines','[]'::jsonb), 'probe')`)}
+  ${attempt('WRITE record purchase at other tenant store', `PERFORM public.record_purchase(jsonb_build_object('receipt', jsonb_build_object('type','receipt','warehouse_id','${ids.stumarcotWarehouse}','lines','[]'::jsonb), 'new_supplier_name','probe','lines','[]'::jsonb))`)}
   ${attempt('WRITE update other tenant pricing', `UPDATE public.product_branch_pricing SET price_per_unit_inclusive = 1 WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update permissions catalog', `UPDATE public.permissions SET description = 'x'`, true)}
   ${attempt('WRITE post stock into other tenant warehouse', `PERFORM public.post_inventory_movement(jsonb_build_object('type','opening_balance','warehouse_id','${ids.stumarcotWarehouse}','lines',jsonb_build_array(jsonb_build_object('product_id','${ids.testProduct}','quantity',1,'unit_id','${ids.testProductUnit}'))))`)}

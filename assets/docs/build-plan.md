@@ -112,7 +112,23 @@ seed-only approach deliberately skipped.
   new kinds of data (suppliers/customers still arrive in 1b/1e as planned)
 
 ## 1b — Inventory Engine
-**Status: CURRENT**
+**Status: done (2026-10-16)**
+
+Verified, not just claimed: migrations 022-034 applied live, each after a
+PGlite dry run on a live snapshot; live isolation checks 123/123. Built:
+append-only stock ledger (receipts, issues, transfers, adjustments, counts,
+opening balances, reversals, reclassification), dated movements and the
+org's own timezone, stock-sheet import with drafts and never-blocking
+placeholders, the identity decision log and Review-queue choices, Dodoma's
+opening stock posted (2026-09-30). Mid-phase decisions with SwahziTech
+(2026-10-16), all live: branch-scoped catalogues, recipes and branch-owned
+materials (031/032 — product identity shared, membership per branch);
+yield per bag as a ±5 QC band, never an output formula; supplier recorded
+per purchase only; an approval queue for branch managers' price changes and
+corrective stock entries (033); roles — Technical admin, Director, branch
+manager, secretary, storekeeper, with storekeepers' count differences going
+to approval (034). Known gaps carried forward: prices hidden from
+storekeepers on screen only; Zigzag/H-Paver still lack recipe data.
 
 PRD section: 4.6 (Inventory)
 
@@ -121,7 +137,16 @@ PRD section: 4.6 (Inventory)
 - Suppliers added to master data here, since procurement/receiving needs them
 
 ## 1c — Procurement
-**Status: not started**
+**Status: CURRENT**
+
+Scope decided with SwahziTech (2026-10-16): the purchase record and its
+payment status only — supplier, prices, transport (part of landed cost),
+optional VAT (excluded from cost when shown separately), paid / part-paid /
+unpaid. The storekeeper receives the goods; the secretary or branch manager
+completes the purchase. Moving average material cost per branch, from
+purchases only (no retroactive cost for opening stock). Purchase requests,
+approval and purchase orders, and a running supplier balance, are deferred
+until Stumarcot actually needs them (it buys informally today).
 
 PRD section: 4.5 (Procurement)
 

@@ -113,7 +113,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
           ...(l.colorId ? { color_id: l.colorId } : {}),
           quantity: type === 'adjustment' && l.direction === 'remove' ? -q : q,
           unit_id: l.unitId,
-          ...((type === 'receipt' || type === 'opening_balance') && l.unitCost !== '' ? { unit_cost: Number(l.unitCost) } : {}),
+          ...(type === 'opening_balance' && l.unitCost !== '' ? { unit_cost: Number(l.unitCost) } : {}),
         };
       }),
     };
@@ -145,7 +145,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     );
   }
 
-  const withCost = type === 'receipt' || type === 'opening_balance';
+  // Receipts carry no cost: what goods cost is recorded on the purchase (035)
+  const withCost = type === 'opening_balance';
 
   return (
     <Modal title={def.noun} onClose={onClose} size="lg"
@@ -273,7 +274,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
             <button type="button" className="btn btn-ghost btn-sm mt-8" onClick={() => setLines(ls => [...ls, emptyLine()])}>
               <Plus size={13} /> Add item
             </button>
-            {withCost && <p className="text-xs text-muted mt-8">Cost is optional, per unit as entered (e.g. per bag). It is recorded for costing later.</p>}
+            {withCost && <p className="text-xs text-muted mt-8">Cost is optional, per unit as entered (e.g. per bag).</p>}
+            {type === 'receipt' && <p className="text-xs text-muted mt-8">What it cost, and the supplier's invoice and payment, are recorded on the purchase (Purchases page) — by the secretary or branch manager.</p>}
           </section>
 
           <div className="form-group">

@@ -3,6 +3,7 @@ import { Truck, Plus, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
+import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -19,16 +20,15 @@ const FIELDS = [
 
 /*
  * Supplier master data (migration 022). What a supplier provides is never
- * fixed on a material (031): it comes from the receipts that name them —
- * what was actually bought, where and when. Balances arrive with
- * procurement (1c).
+ * fixed on a material (031): it comes from the purchases recorded with
+ * them (035) — what was bought, where, when, and what is still to pay.
  */
 export default function Suppliers() {
   const { organization, canManage } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
   const canWrite = canManage('materials.manage');
   const [suppliers, setSuppliers] = useState([]);
-  const [receipts,  setReceipts]  = useState([]);   // receipts naming a supplier
+  const [purchases, setPurchases] = useState([]);   // recorded purchases (035)
   const [itemNames, setItemNames] = useState({});   // 'm:<id>' / 'p:<id>' → name
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -38,18 +38,20 @@ export default function Suppliers() {
 
   async function load() {
     setError('');
-    const [supRes, recRes, matRes, prodRes] = await Promise.all([
+    const [supRes, recRes, matRes, prodRes, totRes] = await Promise.all([
       supabase.from('suppliers').select('id, name, contact_person, phone, email, address, tax_id, notes, status').order('name'),
-      supabase.from('inventory_movements')
-        .select('id, supplier_id, branch_id, movement_date, lines:inventory_transactions(material_id, product_id)')
-        .eq('movement_type', 'receipt').not('supplier_id', 'is', null),
+      supabase.from('purchases')
+        .select('id, supplier_id, branch_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material_id, product_id))')
+        .eq('status', 'recorded'),
       supabase.from('materials').select('id, name'),
       supabase.from('products').select('id, canonical_name'),
+      supabase.from('purchase_totals').select('purchase_id, balance'),
     ]);
-    const err = supRes.error || recRes.error || matRes.error || prodRes.error;
+    const err = supRes.error || recRes.error || matRes.error || prodRes.error || totRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setSuppliers(supRes.data || []);
-    setReceipts(recRes.data || []);
+    const balance = Object.fromEntries((totRes.data || []).map(t => [t.purchase_id, Number(t.balance)]));
+    setPurchases((recRes.data || []).map(r => ({ ...r, balance: balance[r.id] ?? 0 })));
     setItemNames({
       ...Object.fromEntries((matRes.data || []).map(m => [`m:${m.id}`, m.name])),
       ...Object.fromEntries((prodRes.data || []).map(p => [`p:${p.id}`, p.canonical_name])),
@@ -59,15 +61,17 @@ export default function Suppliers() {
 
   useEffect(() => { load(); }, []);
 
-  // Per supplier, from the receipts in view (the sidebar's branch, or all)
+  // Per supplier, from the purchases in view (the sidebar's branch, or all)
   const bought = {};
-  for (const r of receipts) {
+  for (const r of purchases) {
     if (!inBranch(r.branch_id)) continue;
-    const b = (bought[r.supplier_id] ??= { count: 0, last: '', items: new Set() });
+    const b = (bought[r.supplier_id] ??= { count: 0, last: '', items: new Set(), owed: 0 });
     b.count++;
-    if (r.movement_date > b.last) b.last = r.movement_date;
-    for (const l of r.lines) b.items.add(itemNames[l.material_id ? `m:${l.material_id}` : `p:${l.product_id}`] ?? '—');
+    if (r.purchase_date > b.last) b.last = r.purchase_date;
+    b.owed += Math.max(r.balance, 0);
+    for (const l of r.lines) b.items.add(itemNames[l.tx?.material_id ? `m:${l.tx.material_id}` : `p:${l.tx?.product_id}`] ?? '—');
   }
+  const money = v => formatMoney(v, organization?.currency_code);
 
   const q = search.trim().toLowerCase();
   const shown = suppliers.filter(s => (showInactive || s.status === 'active')
@@ -96,7 +100,7 @@ export default function Suppliers() {
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
-              <thead><tr><th>Supplier</th><th>Contact</th><th>Bought from them{branchId ? ` (${branchName})` : ''}</th><th>Receipts</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
+              <thead><tr><th>Supplier</th><th>Contact</th><th>Bought from them{branchId ? ` (${branchName})` : ''}</th><th>Purchases</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
               <tbody>
                 {loading ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
                 : shown.length === 0 ? (
@@ -107,7 +111,7 @@ export default function Suppliers() {
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td className="text-sm">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' · ') || <span className="text-muted">—</span>}</td>
                     <td className="text-sm text-muted">{bought[s.id] ? [...bought[s.id].items].sort().join(', ') : '—'}</td>
-                    <td className="text-sm">{bought[s.id] ? <>{bought[s.id].count} <span className="text-muted">· last {bought[s.id].last}</span></> : <span className="text-muted">none yet</span>}</td>
+                    <td className="text-sm">{bought[s.id] ? <>{bought[s.id].count} <span className="text-muted">· last {bought[s.id].last}</span>{bought[s.id].owed > 0 && <div className="text-xs">{money(Math.round(bought[s.id].owed * 100) / 100)} to pay</div>}</> : <span className="text-muted">none yet</span>}</td>
                     <td><span className={`badge ${s.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{s.status}</span></td>
                     {canWrite && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(s)}>Edit</button></td>}
                   </tr>

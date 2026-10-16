@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare,
+  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -40,6 +40,7 @@ const NAV = [
     items: [
       { label: 'Stock',         to: '/stock',     icon: Boxes,          perm: 'inventory.view' },
       { label: 'Movements',     to: '/movements', icon: ArrowLeftRight, perm: 'inventory.view' },
+      { label: 'Purchases',     to: '/purchases', icon: ShoppingCart,   perm: 'procurement.view' },
     ],
   },
   {

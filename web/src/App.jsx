@@ -21,6 +21,7 @@ import Stock        from './pages/Stock';
 import Movements    from './pages/Movements';
 import StockImport  from './pages/StockImport';
 import Approvals    from './pages/Approvals';
+import Purchases    from './pages/Purchases';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/suppliers"   element={<Suppliers />} />
             <Route path="/stock"       element={<Stock />} />
             <Route path="/movements"   element={<Movements />} />
+            <Route path="/purchases"   element={<Purchases />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />
