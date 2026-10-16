@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import { browserTimeZone } from '../lib/format';
+import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -32,6 +33,7 @@ export default function Settings() {
             <Row label="Currency">{org?.currency_code}</Row>
             <Row label="Time zone"><TimeZone org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Default branch"><DefaultBranch org={org} canEdit={canManage('org.manage')} /></Row>
+            <Row label="Yield tolerance"><YieldTolerance org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Status">
               {org?.status && <span className="badge badge-success">{org.status}</span>}
             </Row>
@@ -47,7 +49,7 @@ export default function Settings() {
             <Row label="Email">{session?.user?.email}</Row>
             <Row label="Roles">
               {roles.length
-                ? roles.map(r => <span key={r} className="badge badge-accent" style={{ marginRight: 4 }}>{r}</span>)
+                ? roles.map(r => <span key={r} className="badge badge-accent" style={{ marginRight: 4 }}>{roleLabel(r)}</span>)
                 : null}
             </Row>
           </div>
@@ -65,6 +67,53 @@ export default function Settings() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+/**
+ * ± pieces around the average yield per bag (migration 031): production
+ * output outside the band gets flagged for review — never corrected.
+ */
+function YieldTolerance({ org, canEdit }) {
+  const { reloadProfile } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [value,   setValue]   = useState(org?.yield_tolerance ?? '');
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+
+  async function save() {
+    setError('');
+    const n = String(value).trim() === '' ? null : Number(value);
+    if (n != null && !(n >= 0)) { setError('Enter zero or more pieces, or leave blank for no check.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.from('organizations').update({ yield_tolerance: n }).eq('id', org.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setEditing(false);
+    reloadProfile();
+  }
+
+  if (!editing) {
+    return (
+      <span className="flex items-center gap-8">
+        {org?.yield_tolerance != null ? `± ${org.yield_tolerance} pieces per bag` : 'Not set'}
+        {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Change</button>}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-4">
+      <span className="flex items-center gap-8">
+        ± <input type="number" min="0" step="any" className="form-input" style={{ width: 90 }} aria-label="Yield tolerance"
+            value={value} onChange={e => setValue(e.target.value)} /> pieces per bag
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+      </span>
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>
+        Production output outside the average yield ± this many pieces is flagged for review. A size or a branch can set its own.
+      </span>
+      {error && <span className="text-xs text-error">{error}</span>}
+    </span>
   );
 }
 

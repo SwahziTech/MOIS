@@ -6,9 +6,11 @@
 // client cannot choose which org it acts on.
 //
 // POST { action: 'invite', email, first_name?, last_name?, role_id,
-//        branch_id?, warehouse_id?, redirect_to? }          needs users.invite
+//        branch_id?, warehouse_id?, redirect_to? }          needs users.invite (org-wide)
 // POST { action: 'set_status', user_id, status: 'active'|'inactive' }
-//                                                            needs users.manage
+//                                                            needs users.manage (org-wide)
+// Only a Technical admin (system role 'owner') grants that role or changes
+// a Technical admin's status (migration 034).
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -53,17 +55,21 @@ async function getCaller(req: Request) {
 
   const { data: grants, error: gErr } = await admin
     .from('user_roles')
-    .select('role:roles(name, role_permissions(permission:permissions(code)))')
+    .select('branch_id, warehouse_id, role:roles(name, role_permissions(permission:permissions(code)))')
     .eq('user_id', user.id)
     .eq('organization_id', orgId);
   if (gErr) throw gErr;
 
+  // Staffing is an org-wide right: a branch- or store-scoped grant of
+  // users.invite / users.manage does not count here
   const permissions = new Set<string>();
   let isOwner = false;
   for (const g of grants ?? []) {
     // deno-lint-ignore no-explicit-any
     const role = (g as any).role;
     if (role?.name === 'owner') isOwner = true;
+    // deno-lint-ignore no-explicit-any
+    if ((g as any).branch_id || (g as any).warehouse_id) continue;
     for (const rp of role?.role_permissions ?? []) if (rp.permission?.code) permissions.add(rp.permission.code);
   }
   return { userId: user.id, orgId, permissions, isOwner };
@@ -91,7 +97,7 @@ async function invite(caller: Caller, body: Record<string, unknown>) {
   const { data: role } = await admin
     .from('roles').select('id, name').eq('id', roleId).eq('organization_id', caller.orgId).maybeSingle();
   if (!role) throw new HttpError(400, 'That role does not exist in your organization.');
-  if (role.name === 'owner' && !caller.isOwner) throw new HttpError(403, 'Only an owner can grant the owner role.');
+  if (role.name === 'owner' && !caller.isOwner) throw new HttpError(403, 'Only the Technical admin can grant the Technical admin role.');
   if (branchId) {
     const { data } = await admin.from('branches').select('id').eq('id', branchId).eq('organization_id', caller.orgId).maybeSingle();
     if (!data) throw new HttpError(400, 'That branch does not exist in your organization.');
@@ -156,12 +162,12 @@ async function setStatus(caller: Caller, body: Record<string, unknown>) {
     .from('profiles').select('id').eq('id', userId).eq('organization_id', caller.orgId).maybeSingle();
   if (!target) throw new HttpError(404, 'User not found in your organization.');
 
-  // Owners can only be deactivated by another owner
+  // A Technical admin can only be deactivated by another Technical admin
   const { data: targetRoles } = await admin
     .from('user_roles').select('role:roles(name)').eq('user_id', userId).eq('organization_id', caller.orgId);
   // deno-lint-ignore no-explicit-any
   if ((targetRoles ?? []).some((r: any) => r.role?.name === 'owner') && !caller.isOwner) {
-    throw new HttpError(403, 'Only an owner can change another owner\'s status.');
+    throw new HttpError(403, 'Only the Technical admin can change a Technical admin\'s status.');
   }
 
   const { error: pErr } = await admin.from('profiles').update({ status }).eq('id', userId);

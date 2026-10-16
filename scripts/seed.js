@@ -228,34 +228,48 @@ async function seedWithOrg(org) {
   // 4. SYSTEM ROLES + PERMISSION ASSIGNMENTS
   // =========================================================================
   console.log('\n4. Creating system roles...');
-  const systemRoles = [
-    {
-      name: 'owner',
-      description: 'Organization owner — full access to all modules and settings',
-      permissions: ['org.manage','users.invite','users.manage','branches.manage','warehouses.manage',
+  // Same role set as migration 034 (keep in step with it)
+  const businessPermissions = ['org.manage','users.invite','users.manage','branches.manage','warehouses.manage',
                     'products.view','products.manage','materials.view','materials.manage',
                     'inventory.view','inventory.receive','inventory.issue','inventory.transfer',
                     'inventory.adjust','inventory.count',
                     'procurement.view','procurement.request','procurement.approve','procurement.order','procurement.receive',
                     'production.view','production.create','production.execute','production.complete',
                     'sales.view','sales.create','invoices.create','payments.record',
-                    'reports.view','reports.financial'],
+                    'reports.view','reports.financial'];
+  const systemRoles = [
+    {
+      // Stored as 'owner' (the owner checks rely on the name); shown as "Technical admin"
+      name: 'owner',
+      description: 'Technical admin — everything, plus technical/system configuration; the only role that can grant Technical admin',
+      permissions: [...businessPermissions, 'system.manage'],
+    },
+    {
+      name: 'director',
+      description: 'Director — full business access across all branches: approvals, business settings, staffing; no technical configuration',
+      permissions: businessPermissions,
     },
     {
       name: 'branch_manager',
-      description: 'Branch / factory manager — branch-scoped operational access',
-      // No master-data management: build-plan 1a.1 makes that org-admin only
-      permissions: ['products.view','materials.view',
+      description: 'Branch manager — the branch\'s catalogue, recipes and own materials; proposes prices and submits corrections; plus everything a secretary and storekeeper do',
+      // Given per branch: products/materials.manage reach that branch only (031/032)
+      permissions: ['products.view','products.manage','materials.view','materials.manage',
                     'inventory.view','inventory.receive','inventory.issue','inventory.transfer','inventory.adjust','inventory.count',
-                    'procurement.view','procurement.request','procurement.approve',
+                    'procurement.view','procurement.request','procurement.approve','procurement.order','procurement.receive',
                     'production.view','production.create','production.execute','production.complete',
-                    'sales.view','sales.create','reports.view'],
+                    'sales.view','sales.create','invoices.create','payments.record','reports.view'],
+    },
+    {
+      name: 'secretary',
+      description: 'Secretary — sales and purchasing: receives goods, records sales, invoices and payments; views prices',
+      permissions: ['products.view','inventory.view','inventory.receive',
+                    'sales.view','sales.create','invoices.create','payments.record',
+                    'procurement.view','procurement.request','procurement.order','procurement.receive','reports.view'],
     },
     {
       name: 'storekeeper',
-      description: 'Storekeeper / inventory user — warehouse-scoped inventory transactions',
-      permissions: ['products.view','materials.view',
-                    'inventory.view','inventory.receive','inventory.issue','inventory.transfer','inventory.count'],
+      description: 'Storekeeper — receives, issues, transfers and counts stock; corrections and count differences go to approval',
+      permissions: ['inventory.view','inventory.receive','inventory.issue','inventory.transfer','inventory.count'],
     },
     {
       name: 'production_user',

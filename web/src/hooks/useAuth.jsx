@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
       const [orgRes, rolesRes] = await Promise.all([
         supabase
           .from('organizations')
-          .select('id, name, legal_name, logo_url, brand_config, status, currency_code, timezone, default_branch_id')
+          .select('id, name, legal_name, logo_url, brand_config, status, currency_code, timezone, default_branch_id, yield_tolerance')
           .eq('id', profileData.organization_id)
           .maybeSingle(),
         supabase

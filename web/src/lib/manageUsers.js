@@ -19,9 +19,14 @@ export async function manageUsers(body) {
   return data;
 }
 
-/** 'branch_manager' → 'Branch manager' */
+// Display names where the stored role name isn't the label (migration 034:
+// the system role 'owner' is the Technical admin)
+const ROLE_LABELS = { owner: 'Technical admin' };
+
+/** 'branch_manager' → 'Branch manager'; 'owner' → 'Technical admin' */
 export function roleLabel(name) {
   if (!name) return '';
+  if (ROLE_LABELS[name]) return ROLE_LABELS[name];
   const s = name.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

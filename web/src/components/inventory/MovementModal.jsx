@@ -34,7 +34,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [submitted, setSubmitted] = useState(false);
 
   // Corrections and backdated entries by non-admins go to the Approvals queue
-  const needsApproval = !canManage('inventory.adjust') && isCorrective(type, date, today);
+  const needsApproval = !canManage('inventory.adjust') && (isCorrective(type, date, today)
+    || (type === 'count' && !!wh && !canAt('inventory.adjust', wh.branch_id, wh.id)));
 
   const itemList = useMemo(() => Object.values(items).filter(i => i.status === 'active'), [items]);
   const materials = itemList.filter(i => i.kind === 'material');
@@ -158,7 +159,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         <p className="text-sm text-muted">{def.help} Posted movements can't be edited — a mistake is undone with a reversal.</p>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {needsApproval && allowed.length > 0 && (
-          <div className="alert alert-info" role="note">{date < today ? 'Backdated entries' : 'Corrections'} need an admin's approval: this is sent to the Approvals queue and changes stock once approved.</div>
+          <div className="alert alert-info" role="note">{date < today ? 'Backdated entries' : type === 'count' ? "Count differences" : 'Corrections'} need an admin's approval: this is sent to the Approvals queue and changes stock once approved.</div>
         )}
         {!allowed.length ? (
           <p className="text-sm">You don't have permission for this at any store.</p>

@@ -5,6 +5,7 @@ import {
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
+import { roleLabel as labelOf } from '../lib/manageUsers';
 
 /*
  * Navigation tabs. An item with `perm` is shown only to users holding that
@@ -69,7 +70,7 @@ export default function Sidebar() {
     .toUpperCase();
 
   const roleLabel = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))]
-    .map(r => r.replace(/_/g, ' '))
+    .map(labelOf)
     .join(', ');
 
   const sections = NAV
