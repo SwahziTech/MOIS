@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderTree, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { categoryTools } from '../lib/categories';
 import { dbErrorMessage, slugify } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -33,7 +34,7 @@ export default function Categories() {
     const [catRes, palRes, unitRes] = await Promise.all([
       supabase
         .from('product_categories')
-        .select(`id, category_id_ref, name, display_format, sort_order, status, default_unit_id, default_yield_tolerance,
+        .select(`id, category_id_ref, name, display_format, sort_order, status, default_unit_id, default_yield_tolerance, parent_category_id,
                  unit:units(symbol, name),
                  colors:product_category_colors(color_id, display_order),
                  products(count)`)
@@ -53,6 +54,8 @@ export default function Categories() {
   useEffect(() => { load(); }, []);
 
   const colourName = useMemo(() => Object.fromEntries(palette.map(c => [c.id, c.name])), [palette]);
+  // Groups (038): each group followed by the categories under it
+  const cats = useMemo(() => categoryTools(categories), [categories]);
   const cols = canWrite ? 7 : 6;
 
   return (
@@ -81,9 +84,12 @@ export default function Categories() {
                   <tr><td colSpan={cols}>
                     <EmptyState icon={FolderTree} title="No categories yet" description="Group your products into categories." />
                   </td></tr>
-                ) : categories.map(c => (
+                ) : cats.ordered.map(c => (
                   <tr key={c.id}>
-                    <td style={{ fontWeight: 500 }}>{c.name}</td>
+                    <td style={{ fontWeight: 500, paddingLeft: c.parent_category_id ? 32 : undefined }}>
+                      {c.parent_category_id && <span className="text-muted">↳ </span>}{c.name}
+                      {cats.isGroup(c.id) && <span className="badge badge-neutral" style={{ marginLeft: 8 }}>group</span>}
+                    </td>
                     <td className="text-muted">{LAYOUTS[c.display_format] || c.display_format}</td>
                     <td className="text-muted">{c.unit?.symbol || '—'}</td>
                     <td className="text-muted">
@@ -111,6 +117,7 @@ export default function Categories() {
           organizationId={organization.id}
           palette={palette}
           units={units}
+          cats={cats}
           takenRefs={new Set(categories.map(c => c.category_id_ref))}
           nextOrder={Math.max(0, ...categories.map(c => c.sort_order)) + 1}
           onClose={() => setEditing(null)}
@@ -128,7 +135,7 @@ function uniqueRef(name, taken) {
   return ref;
 }
 
-function CategoryModal({ category, organizationId, palette, units, takenRefs, nextOrder, onClose, onSaved }) {
+function CategoryModal({ category, organizationId, palette, units, cats, takenRefs, nextOrder, onClose, onSaved }) {
   const isNew = !category.id;
   const initialColours = useMemo(() => new Set((category.colors || []).map(x => x.color_id)), [category]);
   const [name,    setName]    = useState(category.name ?? '');
@@ -136,6 +143,11 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
   const [layout,  setLayout]  = useState(category.display_format ?? 'colored');
   const [unitId,  setUnitId]  = useState(category.default_unit_id ?? '');
   const [tolerance, setTolerance] = useState(category.default_yield_tolerance ?? '');
+  const [parentId,  setParentId]  = useState(category.parent_category_id ?? '');
+  const isGroup = !!category.id && cats.isGroup(category.id);
+  // A category can go under any ungrouped category except itself; the database
+  // refuses groups that already hold products, colours, recipes or prices
+  const groupChoices = cats.ordered.filter(c => !c.parent_category_id && c.id !== category.id);
   const [colours, setColours] = useState(initialColours);
   const [usedColours, setUsedColours] = useState(new Set());   // colours with recipes/prices in this category
   const [busy,  setBusy]  = useState(false);
@@ -176,11 +188,11 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
     setError('');
     if (layout === 'colored' && colours.size === 0) { setError('Choose at least one colour, or use the single-price layout.'); return; }
     if (layout === 'plain' && colours.size > 0) { setError('A single-price category has no colours — remove them first.'); return; }
-    setBusy(true);
-
     const tol = String(tolerance).trim() === '' ? null : Number(tolerance);
     if (tol !== null && !(tol >= 0)) { setError('Default yield tolerance must be zero or more, or blank for the organization default.'); return; }
-    const row = { name: name.trim(), sort_order: Number(order) || 0, display_format: layout, default_unit_id: unitId || null, default_yield_tolerance: tol };
+    setBusy(true);
+    const row = { name: name.trim(), sort_order: Number(order) || 0, display_format: layout, default_unit_id: unitId || null,
+                  default_yield_tolerance: tol, parent_category_id: parentId || null };
     let categoryId = category.id;
     if (isNew) {
       const { data, error: err } = await supabase.from('product_categories')
@@ -255,6 +267,18 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
           </div>
         </div>
         <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="cat-parent">Group under</label>
+            {isGroup ? (
+              <p className="text-sm text-muted">This is a group — {cats.childrenOf(category.id).map(c => c.name).join(', ')} sit under it. Groups go one level deep.</p>
+            ) : (
+              <select id="cat-parent" className="form-input" value={parentId} onChange={e => setParentId(e.target.value)}>
+                <option value="">No group</option>
+                {groupChoices.map(c => <option key={c.id} value={c.id}>{c.name}{cats.isGroup(c.id) ? '' : ' (becomes a group)'}</option>)}
+              </select>
+            )}
+            <span className="form-hint">{parentId ? 'Display order sets its place inside the group.' : 'A group is only a heading: its products, colours, recipes and prices live on the categories under it.'}</span>
+          </div>
           <div className="form-group">
             <label className="form-label" htmlFor="cat-tol">Default yield tolerance (± pieces per bag)</label>
             <input id="cat-tol" type="number" step="any" min="0" className="form-input" placeholder="Organization default"

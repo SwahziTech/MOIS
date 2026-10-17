@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
+import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -65,7 +66,7 @@ export default function Recipes() {
         `)
         .order('version_number'),
       supabase.from('product_categories')
-        .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
+        .select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
         .order('sort_order'),
       supabase.from('materials')
         .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id)')
@@ -114,6 +115,7 @@ export default function Recipes() {
   }, [recipes, search, status, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cols = 8 + (branchId ? 0 : 1);
+  const catTools = useMemo(() => categoryTools(categories), [categories]);
 
   return (
     <PageShell
@@ -190,7 +192,7 @@ export default function Recipes() {
                   filtered.map(r => (
                     <tr key={r.id}>
                       {!branchId && <td className="text-muted">{branchNames[r.branch_id] ?? '—'}</td>}
-                      <td style={{ fontWeight: 500 }}>{r.category?.name || '—'}</td>
+                      <td style={{ fontWeight: 500 }}>{catTools.label(r.category_id)}</td>
                       <td><span className="badge badge-accent">{variantName(r)}</span></td>
                       <td>v{r.version_number}</td>
                       <td style={{ fontSize: 'var(--text-xs)' }}>
@@ -404,7 +406,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
     onSaved();
   }
 
-  const title = `${isNew ? 'Add recipe' : `${recipe.category?.name} — ${variantName(recipe)}`}${branchName ? ` · ${branchName}` : ''}`;
+  const title = `${isNew ? 'Add recipe' : `${categoryTools(categories).label(recipe.category_id)} — ${variantName(recipe)}`}${branchName ? ` · ${branchName}` : ''}`;
   const willVersion = !isNew && active && !sameItems(rows, active.items);
 
   return (
@@ -427,7 +429,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
               <select id="rec-cat" className="form-input" required value={categoryId}
                 onChange={e => { setCategoryId(e.target.value); setColorId(''); setLinked(new Set()); }}>
                 <option value="" disabled>Choose…</option>
-                {categories.filter(c => c.status === 'active').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categoryTools(categories).leaves.filter(c => c.status === 'active').map(c => <option key={c.id} value={c.id}>{categoryTools(categories).label(c)}</option>)}
               </select>
             </div>
             <div className="form-group">

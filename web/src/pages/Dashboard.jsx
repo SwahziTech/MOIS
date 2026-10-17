@@ -44,13 +44,14 @@ export default function Dashboard() {
       setLoading(true);
       setError('');
       try {
-        const [results, flags] = await Promise.all([
+        const [results, flags, catRows] = await Promise.all([
           Promise.all(STATS.map(s => {
             let q = supabase.from(s.table(branchId)).select('*', { count: 'exact', head: true });
             if (s.filter) q = s.filter(q, branchId);
             return q;
           })),
           supabase.from('review_flags').select('entity_type, entity_id').eq('status', 'open'),
+          supabase.from('product_categories').select('id, parent_category_id').eq('status', 'active'),
         ]);
         if (cancelled) return;
         // open flags: the branch's own plus those on shared records
@@ -63,6 +64,11 @@ export default function Dashboard() {
           if (res.error) { failed = true; console.error(STATS[i].table, res.error); return; }
           next[STATS[i].key] = res.count ?? 0;
         });
+        // categories that hold products — a group (038) is only a heading
+        if (!catRows.error) {
+          const groups = new Set((catRows.data || []).map(c => c.parent_category_id).filter(Boolean));
+          next.categories = (catRows.data || []).filter(c => !groups.has(c.id)).length;
+        }
         if (flags.error) { failed = true; console.error(flags.error); }
         else next.review = (flags.data || []).filter(f => { const b = of(f); return b == null || inBranch(b); }).length;
         setCounts(next);

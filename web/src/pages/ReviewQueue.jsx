@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { ENTITY_LABELS, dbErrorMessage } from '../lib/masterData';
 import { useBranch } from '../hooks/useBranch';
+import { categoryTools } from '../lib/categories';
 import { loadFlagBranches } from '../lib/flagBranch';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -88,7 +89,7 @@ export default function ReviewQueue() {
   async function loadRefs() {
     const [pr, ca, co, un, wh, tx] = await Promise.all([
       supabase.from('products').select('id, canonical_name, category_id, status').order('canonical_name'),
-      supabase.from('product_categories').select('id, name, status').order('sort_order'),
+      supabase.from('product_categories').select('id, name, status, sort_order, parent_category_id').order('sort_order'),
       supabase.from('color_palette').select('id, name'),
       supabase.from('units').select('id, symbol'),
       supabase.from('warehouses').select('id, name, branch:branches(name)'),
@@ -98,8 +99,9 @@ export default function ReviewQueue() {
     for (const t of tx.data || []) if (!first[t.product_id] || t.transaction_date < first[t.product_id]) first[t.product_id] = t.transaction_date;
     setRefs({
       products: (pr.data || []).map(x => ({ id: x.id, name: x.canonical_name, categoryId: x.category_id, status: x.status })),
-      categories: (ca.data || []).filter(c => c.status === 'active'),
-      categoryName: Object.fromEntries((ca.data || []).map(c => [c.id, c.name])),
+      // groups (038) hold no products, so they aren't offered; names show the group
+      categories: categoryTools(ca.data || []).leaves.filter(c => c.status === 'active').map(c => ({ ...c, name: categoryTools(ca.data || []).label(c) })),
+      categoryName: Object.fromEntries((ca.data || []).map(c => [c.id, categoryTools(ca.data || []).label(c)])),
       colorName: Object.fromEntries((co.data || []).map(c => [c.id, c.name])),
       unitSymbol: Object.fromEntries((un.data || []).map(u => [u.id, u.symbol])),
       storeName: Object.fromEntries((wh.data || []).map(w => [w.id, `${w.branch?.name} — ${w.name}`])),

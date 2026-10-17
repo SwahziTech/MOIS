@@ -238,6 +238,10 @@ export function matchSheet(parsed, catalog) {
       && (d.context_normalized === normalize(context) || d.context_normalized === ''))
     .map(d => d.product_id ?? d.color_id ?? d.category_id));
   const via = d => `decided: ${d.decided_by_label}`;
+  // categories grouped under another (parentId, migration 038)
+  const childrenOf = {};
+  for (const c of catalog.categories) if (c.parentId) (childrenOf[c.parentId] ||= []).push(c.id);
+  const expandGroups = ids => ids.flatMap(id => childrenOf[id] ?? [id]);
 
   // Categories per table
   const tables = parsed.tables.map(t => {
@@ -254,7 +258,8 @@ export function matchSheet(parsed, catalog) {
   const lines = parsed.lines.map(l => {
     const t = tables[l.table];
     // Categories the heading points at (exact, or all suggested ones)
-    const catIds = t.cat.status === 'exact' ? [t.cat.id] : t.cat.suggestions.map(s => s.id);
+    // A group (038) stands for all of its subcategories
+    const catIds = expandGroups(t.cat.status === 'exact' ? [t.cat.id] : t.cat.suggestions.map(s => s.id));
 
     // Product
     let product;

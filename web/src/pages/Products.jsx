@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
+import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -67,7 +68,7 @@ export default function Products() {
     const [catRes, prodRes, unitRes, flagRes, bpRes, brRes, specRes, stockRes, whRes] = await Promise.all([
       supabase
         .from('product_categories')
-        .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id, default_yield_tolerance')
+        .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id, default_yield_tolerance, parent_category_id')
         .order('sort_order'),
       supabase
         .from('products')
@@ -126,16 +127,18 @@ export default function Products() {
 
   // Category order is the organization's own (Categories → order), then
   // size smallest to largest, then name
+  // Groups (038): a group and its subcategories sit together, in the group's place
+  const cats = useMemo(() => categoryTools(categories), [categories]);
   const sorted = useMemo(() => [...products].sort((a, b) =>
-    (a.category?.sort_order ?? 999) - (b.category?.sort_order ?? 999)
-    || (a.category?.name || '').localeCompare(b.category?.name || '')
+    (cats.byId[a.category_id] && cats.byId[b.category_id] ? cats.compare(cats.byId[a.category_id], cats.byId[b.category_id]) : 0)
+    || cats.label(a.category_id).localeCompare(cats.label(b.category_id))
     || compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
-    || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true })), [products]);
+    || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true })), [products, cats]);
 
   const q = search.trim().toLowerCase();
   const passesCatalogue = p => !branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried');
   const filtered = sorted.filter(p => {
-    if (categoryId && p.category_id !== categoryId) return false;
+    if (categoryId && p.category_id !== categoryId && cats.byId[p.category_id]?.parent_category_id !== categoryId) return false;
     if (statusFilter === 'review' ? !openFlags[p.id] : statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (!passesCatalogue(p)) return false;
     if (stockFilter && (Number(onHand[p.id] ?? 0) !== 0) !== (stockFilter === 'in_stock')) return false;
@@ -173,7 +176,11 @@ export default function Products() {
         <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
           <select className="form-input" style={{ width: 'auto' }} aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
             <option value="">All categories</option>
-            {categories.filter(c => c.status === 'active' || products.some(p => p.category_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {cats.ordered.filter(c => c.status === 'active' || products.some(p => p.category_id === c.id)).map(c => (
+              <option key={c.id} value={c.id}>
+                {cats.isGroup(c.id) ? `${c.name} (all)` : c.parent_category_id ? `\u2003${c.name}` : c.name}
+              </option>
+            ))}
           </select>
           {branchId && (
             <select className="form-input" style={{ width: 'auto' }} aria-label="Catalogue" value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
@@ -237,7 +244,7 @@ export default function Products() {
                             <span className="badge badge-warning" style={{ marginLeft: 8 }} title="Open review flags"><Flag size={11} /> needs review</span>
                           )}
                         </div>
-                        <div className="text-xs text-muted">{p.category?.name || '—'}</div>
+                        <div className="text-xs text-muted">{cats.label(p.category_id, ' · ')}</div>
                       </td>
                       <td>{p.size_cm || <span className="text-muted">—</span>}</td>
                       {showCoverage && <td>{sp?.pcs_per_sqm != null ? +Number(sp.pcs_per_sqm).toPrecision(6) : <span className="text-muted" title="Not recorded yet">—</span>}</td>}
@@ -274,6 +281,7 @@ export default function Products() {
           branchId={branchId} branchName={branchName} branchNames={branchNames}
           canWrite={canWrite} canCatalogue={canCatalogue} organization={organization} openFlagCount={openFlags[viewing.id] || 0}
           category={categories.find(c => c.id === (products.find(x => x.id === viewing.id) ?? viewing).category_id)}
+          categoryLabel={cats.label((products.find(x => x.id === viewing.id) ?? viewing).category_id, ' · ')}
           onEdit={() => { setEditing(products.find(x => x.id === viewing.id)); setViewing(null); }}
           onClose={() => setViewing(null)}
           onChanged={load}
@@ -302,7 +310,7 @@ export default function Products() {
  * removing it from the branch's list always asks first — a stray click
  * shouldn't change a catalogue.
  */
-function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, category, onEdit, onClose, onChanged }) {
+function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, category, categoryLabel, onEdit, onClose, onChanged }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const [prices,  setPrices]  = useState(null);
   const [recipes, setRecipes] = useState(null);
@@ -378,7 +386,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
       <div className="modal-form">
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         <p className="text-sm text-muted">
-          {p.category?.name}{p.strength_class ? ` · ${p.strength_class}` : ''} ·{' '}
+          {categoryLabel}{p.strength_class ? ` · ${p.strength_class}` : ''} ·{' '}
           <span className={`badge ${p.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{p.status}</span>
           {openFlagCount > 0 && <span className="badge badge-warning" style={{ marginLeft: 6 }}><Flag size={11} /> {openFlagCount} to review</span>}
         </p>
@@ -494,7 +502,9 @@ function ProductModal({ product, organization, categories, units, products, bran
   const [error, setError] = useState('');
   const recipeLinks = product.recipes?.[0]?.count ?? 0;
 
-  const choosableCategories = categories.filter(c => c.status === 'active' || c.id === product.category_id);
+  // Products go in a category, never in a group (038)
+  const catTools = categoryTools(categories);
+  const choosableCategories = catTools.leaves.filter(c => c.status === 'active' || c.id === product.category_id);
   const choosableUnits = units.filter(u => u.status === 'active' || u.id === product.unit_id);
 
   function chooseCategory(id) {
@@ -570,7 +580,7 @@ function ProductModal({ product, organization, categories, units, products, bran
             <select id="prod-cat" className="form-input" required value={category}
               disabled={!isNew && recipeLinks > 0} onChange={e => chooseCategory(e.target.value)}>
               <option value="" disabled>Choose…</option>
-              {choosableCategories.map(c => <option key={c.id} value={c.id}>{c.name}{c.status !== 'active' ? ' (inactive)' : ''}</option>)}
+              {choosableCategories.map(c => <option key={c.id} value={c.id}>{catTools.label(c)}{c.status !== 'active' ? ' (inactive)' : ''}</option>)}
             </select>
             {!isNew && recipeLinks > 0 && (
               <span className="form-hint">Linked to {recipeLinks} recipe{recipeLinks === 1 ? '' : 's'} of this category — unlink them under Recipes to move it.</span>

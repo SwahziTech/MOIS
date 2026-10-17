@@ -42,7 +42,7 @@ export const stockKey = row => `${itemKey(row)}${row.color_id ? `|c:${row.color_
 
 /** Reference data every inventory screen needs, in one round trip */
 export async function loadInventoryRefs() {
-  const [wh, mat, prod, units, sup, cats, colors, bp] = await Promise.all([
+  const [wh, mat, prod, units, sup, cats, catRows, colors, bp] = await Promise.all([
     supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
     supabase.from('materials')
       .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
@@ -51,10 +51,11 @@ export async function loadInventoryRefs() {
     supabase.from('units').select('id, symbol, name'),
     supabase.from('suppliers').select('id, name, status').order('name'),
     supabase.from('product_category_colors').select('category_id, color_id, display_order'),
+    supabase.from('product_categories').select('id, name, parent_category_id'),
     supabase.from('color_palette').select('id, name, display_order, is_active'),
     supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
   ]);
-  const error = wh.error || mat.error || prod.error || units.error || sup.error || cats.error || colors.error || bp.error;
+  const error = wh.error || mat.error || prod.error || units.error || sup.error || cats.error || catRows.error || colors.error || bp.error;
   if (error) throw error;
   const warehouses = (wh.data || []).sort((a, b) =>
     (a.branch?.name || '').localeCompare(b.branch?.name || '') || a.name.localeCompare(b.name));
@@ -65,9 +66,12 @@ export async function loadInventoryRefs() {
       stockUnitId: m.stock_unit_id,
       units: m.stock_unit_id ? [{ id: m.stock_unit_id, factor: 1 }, ...m.conversions.map(c => ({ id: c.unit_id, factor: Number(c.factor_to_stock_unit) }))] : [] };
   }
+  // "Paving Blocks › Vibro" for a category under a group (038)
+  const catById = Object.fromEntries((catRows.data || []).map(c => [c.id, c]));
+  const catLabel = id => { const c = catById[id]; const g = c?.parent_category_id && catById[c.parent_category_id]; return c ? (g ? `${g.name} › ${c.name}` : c.name) : null; };
   for (const p of prod.data || []) {
     items[`p:${p.id}`] = { key: `p:${p.id}`, kind: 'product', id: p.id, name: p.canonical_name, ref: p.product_id_ref,
-      category: p.category?.name, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
+      category: catLabel(p.category_id) ?? p.category?.name, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
       // coloured categories are stocked per colour
       colorIds: (cats.data || []).filter(c => c.category_id === p.category_id).sort((a, b) => a.display_order - b.display_order).map(c => c.color_id) };
   }

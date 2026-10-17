@@ -7,6 +7,7 @@ import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import { warehouseLabel, qtyText, orgToday } from '../lib/inventory';
 import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/stockImport';
+import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
 
@@ -49,7 +50,7 @@ export default function StockImport() {
   async function loadCatalog() {
     setLoadError('');
     const [cats, pcc, prods, colors, units, decisions, wh, bp] = await Promise.all([
-      supabase.from('product_categories').select('id, name, status, sort_order, default_unit_id').order('sort_order'),
+      supabase.from('product_categories').select('id, name, status, sort_order, default_unit_id, parent_category_id').order('sort_order'),
       supabase.from('product_category_colors').select('category_id, color_id, display_order'),
       supabase.from('products').select('id, canonical_name, category_id, unit_id, pcs_per_sqm, status').order('canonical_name'),
       supabase.from('color_palette').select('id, name, display_order, is_active').order('display_order'),
@@ -63,7 +64,9 @@ export default function StockImport() {
     const err = [cats, pcc, prods, colors, units, decisions, wh, bp].find(r => r.error)?.error;
     if (err) { console.error(err); setLoadError(LOAD_ERROR); return null; }
     const c = {
-      categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id,
+      // parentId: the group a category sits under (038); the matcher reads a group as all its categories
+      categoryRows: cats.data,
+      categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id, parentId: x.parent_category_id,
         colorIds: pcc.data.filter(p => p.category_id === x.id).sort((a, b) => a.display_order - b.display_order).map(p => p.color_id) })),
       products: prods.data.map(p => ({ id: p.id, name: p.canonical_name, categoryId: p.category_id, unitId: p.unit_id, pcsPerSqm: p.pcs_per_sqm, status: p.status })),
       colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active, display_order: x.display_order })),
@@ -105,6 +108,7 @@ export default function StockImport() {
 
   const prodById = useMemo(() => Object.fromEntries((catalog?.products || []).map(p => [p.id, p])), [catalog]);
   const catById  = useMemo(() => Object.fromEntries((catalog?.categories || []).map(c => [c.id, c])), [catalog]);
+  const catTools = useMemo(() => categoryTools(catalog?.categoryRows || []), [catalog]);
   const colById  = useMemo(() => Object.fromEntries((catalog?.colors || []).map(c => [c.id, c])), [catalog]);
   const unitById = useMemo(() => Object.fromEntries((catalog?.units || []).map(u => [u.id, u])), [catalog]);
 
@@ -230,8 +234,14 @@ export default function StockImport() {
     const t = matched.tables[l.table];
     const sug = l.product.suggestions.slice(0, 3);
     const sugCats = [...new Set(sug.map(x => prodById[x.id]?.categoryId))];
-    const categoryId = tableChoice[l.table]?.categoryId || t.cat.id || (sugCats.length === 1 ? sugCats[0] : '') || '';
-    return { key: `${categoryId}|${normalize(l.typeText)}`, name: l.typeText, categoryId, context: t.category,
+    const tableCat = tableChoice[l.table]?.categoryId || t.cat.id || '';
+    // Under a group heading the new product goes in one of the group's
+    // categories: chosen on the line, or the one all its likely matches share
+    const groupKids = catTools.isGroup(tableCat) ? catTools.childrenOf(tableCat).map(x => x.id) : null;
+    const categoryId = groupKids
+      ? (c.categoryId && groupKids.includes(c.categoryId) ? c.categoryId : sugCats.length === 1 && groupKids.includes(sugCats[0]) ? sugCats[0] : '')
+      : tableCat || (sugCats.length === 1 ? sugCats[0] : '') || '';
+    return { key: `${categoryId}|${normalize(l.typeText)}`, name: l.typeText, categoryId, context: t.category, group: groupKids ? tableCat : null,
              candidates: sug.filter(x => prodById[x.id]?.categoryId === categoryId).map(x => x.id) };
   };
   const problemsOf = l => {
@@ -241,7 +251,7 @@ export default function StockImport() {
     const e = effective(l);
     const cat = catById[ph.categoryId];
     const out = [];
-    if (!cat) out.push('Choose this table\'s category above, so the new product can be filed');
+    if (!cat) out.push(ph.group ? `Choose which ${catTools.label(ph.group)} category the new product goes in` : 'Choose this table\'s category above, so the new product can be filed');
     if (!e.unitId) out.push(l.unitText ? `Unknown unit "${l.unitText}"` : 'No unit — the table heading has none');
     if (cat?.colorIds.length && !(e.colorId || l.colour?.id)) out.push(l.colourText ? `Colour "${l.colourText}" isn't set up` : 'Choose the colour');
     return out;
@@ -478,8 +488,8 @@ export default function StockImport() {
                         <select className="form-input" style={{ width: 'auto' }} aria-label="Category" value={tc.categoryId}
                           onChange={e => chooseTableCategory(t, e.target.value)}>
                           <option value="">{t.cat.status === 'none' ? 'Category: no match — choose' : 'Category…'}</option>
-                          {catalog.categories.filter(c => c.status === 'active').map(c => (
-                            <option key={c.id} value={c.id}>{c.name}{t.cat.suggestions.some(s => s.id === c.id) ? ' (suggested)' : ''}</option>
+                          {catTools.ordered.filter(c => c.status === 'active').map(c => (
+                            <option key={c.id} value={c.id}>{catTools.isGroup(c.id) ? `${c.name} (any of its categories)` : catTools.label(c)}{t.cat.suggestions.some(s => s.id === c.id) ? ' (suggested)' : ''}</option>
                           ))}
                         </select>
                         <select className="form-input" style={{ width: 'auto' }} aria-label="Table unit" value={tc.unitId}
@@ -556,9 +566,18 @@ export default function StockImport() {
                                 </td>
                                 <td className="text-xs">
                                   {c.skip ? <span className="text-muted">skipped</span>
-                                    : problems.length ? <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {problems.join('; ')}</span>
+                                    : problems.length ? <>
+                                        <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {problems.join('; ')}</span>
+                                        {placeholderFor(l)?.group && (
+                                          <select className="form-input mt-4" style={{ width: 'auto' }} aria-label="Category for the new product"
+                                            value={c.categoryId || ''} onChange={ev => setChoice(l.id, { categoryId: ev.target.value })}>
+                                            <option value="">Category…</option>
+                                            {catTools.childrenOf(placeholderFor(l).group).map(x => <option key={x.id} value={x.id}>{catTools.label(x)}</option>)}
+                                          </select>
+                                        )}
+                                      </>
                                     : placeholderFor(l) ? <span className="text-warning">
-                                        New product "{l.typeText}" will be added to {catById[placeholderFor(l).categoryId]?.name} and flagged in the Review queue
+                                        New product "{l.typeText}" will be added to {catTools.label(placeholderFor(l).categoryId)} and flagged in the Review queue
                                         {placeholderFor(l).candidates.length ? ` — it may be ${placeholderFor(l).candidates.map(id => prodById[id]?.name).join(' or ')}` : ''}
                                       </span>
                                     : dupes.has(l.id) ? <span className="text-success">ready · added to the other {prodById[e.productId]?.name}{e.colorId ? ' ' + colById[e.colorId]?.name : ''} line</span>

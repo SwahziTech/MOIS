@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
+import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -72,7 +73,7 @@ export default function Pricing() {
         .select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol), category:product_categories(name)')
         .order('canonical_name'),
       supabase.from('product_categories')
-        .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
+        .select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
         .order('sort_order'),
       supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
     ]);
@@ -118,17 +119,20 @@ export default function Pricing() {
   }, [prices]);
 
   const q = search.trim().toLowerCase();
+  // Groups (038): picking a group shows all of its categories
+  const catTools = categoryTools(categories);
+  const inPickedCategory = id => !categoryId || id === categoryId || catTools.byId[id]?.parent_category_id === categoryId;
   // With a branch picked: its own list — products it carries or has a price for
   const inList = p => !branchId || carried.has(`${branchId}|${p.id}`) || !!basePrice[`${p.id}|${branchId}`];
   const shownProducts = products.filter(p => inList(p) &&
     (p.status === 'active' || branches.some(b => basePrice[`${p.id}|${b.id}`])) &&
-    (!categoryId || p.category_id === categoryId) &&
+    inPickedCategory(p.category_id) &&
     (!q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q)) &&
     (!unpricedOnly || (p.status === 'active' && branches.some(b => !basePrice[`${p.id}|${b.id}`])))
   );
   const unpricedCount = products.filter(p => inList(p) && p.status === 'active' && branches.every(b => !basePrice[`${p.id}|${b.id}`])).length;
 
-  const colouredCategories = categories.filter(c => c.colors.length > 0 && (categoryId == null || c.id === categoryId));
+  const colouredCategories = catTools.ordered.filter(c => c.colors.length > 0 && inPickedCategory(c.id));
   const colourName = Object.fromEntries(categories.flatMap(c => c.colors.map(x => [x.color_id, x.color?.name])));
 
   return (
@@ -155,7 +159,9 @@ export default function Pricing() {
         <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Category"
           value={categoryId ?? ''} onChange={e => setCategoryId(e.target.value || null)}>
           <option value="">All categories</option>
-          {categories.filter(c => c.status === 'active').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {catTools.ordered.filter(c => c.status === 'active').map(c => (
+            <option key={c.id} value={c.id}>{catTools.isGroup(c.id) ? `${c.name} (all)` : c.parent_category_id ? `\u2003${c.name}` : c.name}</option>
+          ))}
         </select>
         {tab === 'prices' && (
           <label className="text-sm flex items-center gap-4">
@@ -186,7 +192,7 @@ export default function Pricing() {
                   <tr key={p.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{p.canonical_name}{p.status !== 'active' && <span className="text-muted"> (inactive)</span>}</div>
-                      <div className="text-xs text-muted">{p.category?.name}</div>
+                      <div className="text-xs text-muted">{catTools.label(p.category_id)}</div>
                     </td>
                     {branches.map(b => {
                       const row = basePrice[`${p.id}|${b.id}`];
@@ -233,7 +239,7 @@ export default function Pricing() {
             <div className="card"><EmptyState icon={Palette} title="No coloured categories" description="Give a category colours under Categories to price colours." /></div>
           ) : colouredCategories.map(cat => (
             <div key={cat.id} className="card">
-              <div className="card-header"><h2 className="card-title">{cat.name}</h2></div>
+              <div className="card-header"><h2 className="card-title">{catTools.label(cat)}</h2></div>
               <div className="table-container">
                 <table>
                   <thead><tr><th>Branch</th><th>Base colour</th><th>Rule</th><th>Other colours</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
