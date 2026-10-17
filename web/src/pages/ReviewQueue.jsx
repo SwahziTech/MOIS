@@ -7,6 +7,7 @@ import { useBranch } from '../hooks/useBranch';
 import { categoryTools } from '../lib/categories';
 import { loadFlagBranches } from '../lib/flagBranch';
 import PageShell from '../components/PageShell';
+import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
@@ -133,11 +134,10 @@ export default function ReviewQueue() {
   const cols = canResolve ? 3 : 2;
 
   return (
-    <PageShell title="Review queue" subtitle="Master Data">
-      <div className="filter-chips mb-16">
-        <button type="button" className={`filter-chip${tab === 'flags' ? ' is-on' : ''}`} onClick={() => setParams({})}>Open flags ({flags.length})</button>
-        <button type="button" className={`filter-chip${tab === 'decisions' ? ' is-on' : ''}`} onClick={() => setParams({ tab: 'decisions' })}>Decisions</button>
-      </div>
+    <PageShell title="Review queue" subtitle="Master Data"
+      description="Records with missing or uncertain data, and the standing name decisions imports follow.">
+      <PageTabs value={tab} onChange={k => setParams(k === 'decisions' ? { tab: 'decisions' } : {})}
+        tabs={[['flags', `Open flags (${inView.length})`], ['decisions', 'Decisions']]} />
       {tab === 'decisions' ? <Decisions /> : <>
       {types.length > 1 && (
         <div className="flex items-center gap-8 mb-16">

@@ -8,6 +8,7 @@ import { formatMoney } from '../lib/format';
 import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -58,7 +59,7 @@ export default function Products() {
   const [catalogueFilter, setCatalogueFilter] = useState('carried');   // carried | not_carried | all (one branch picked)
   const [stockFilter,     setStockFilter]     = useState('');          // '' | in_stock | none
   const [sizeFilter,      setSizeFilter]      = useState('');          // a size_cm value
-  const [sortBy,          setSortBy]          = useState('default');   // default | name | size | stock
+  const [sortBy,          setSortBy]          = useState('size_asc');  // size_asc | size_desc | name_asc | name_desc | stock_desc | stock_asc
   const [editing,  setEditing]  = useState(null);   // product row, or {} for new
   const [viewing,  setViewing]  = useState(null);   // product row in the details window
   const [selected, setSelected] = useState(null);   // highlighted row
@@ -137,14 +138,21 @@ export default function Products() {
     || compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
     || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true })), [products, cats]);
 
-  // Other orders on request; the default stays category → size → name
+  // Sort orders. "Size" keeps each category together (category order, then
+  // size, then name); the others run across categories.
   const ordered = useMemo(() => {
-    if (sortBy === 'name') return [...sorted].sort((a, b) => a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true }));
-    if (sortBy === 'size') return [...sorted].sort((a, b) => compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
-      || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true }));
-    if (sortBy === 'stock') return [...sorted].sort((a, b) => Number(onHand[b.id] ?? 0) - Number(onHand[a.id] ?? 0));
-    return sorted;
-  }, [sorted, sortBy, onHand]);
+    const byName = (x, y) => x.canonical_name.localeCompare(y.canonical_name, undefined, { numeric: true });
+    const byCat = (x, y) => (cats.byId[x.category_id] && cats.byId[y.category_id] ? cats.compare(cats.byId[x.category_id], cats.byId[y.category_id]) : 0);
+    const qty = x => Number(onHand[x.id] ?? 0);
+    switch (sortBy) {
+      case 'size_desc':  return [...sorted].sort((x, y) => byCat(x, y) || compareKeys(sizeKey(y.size_cm), sizeKey(x.size_cm)) || byName(x, y));
+      case 'name_asc':   return [...sorted].sort(byName);
+      case 'name_desc':  return [...sorted].sort((x, y) => byName(y, x));
+      case 'stock_desc': return [...sorted].sort((x, y) => qty(y) - qty(x) || byName(x, y));
+      case 'stock_asc':  return [...sorted].sort((x, y) => qty(x) - qty(y) || byName(x, y));
+      default:           return sorted;
+    }
+  }, [sorted, sortBy, onHand, cats]);
 
   const q = search.trim().toLowerCase();
   const passesCatalogue = p => !branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried');
@@ -158,11 +166,7 @@ export default function Products() {
   });
   const reviewCount = products.filter(p => openFlags[p.id] && passesCatalogue(p)).length;
   const carriedCount = branchId ? products.filter(p => carriedHere(p.id)).length : 0;
-  // Category chips (as before the refactor): top-level categories; a group
-  // (038) opens a second row with its own categories
   const inCategory = p => !categoryId || p.category_id === categoryId || cats.byId[p.category_id]?.parent_category_id === categoryId;
-  const chipCats = cats.ordered.filter(c => !c.parent_category_id && (c.status === 'active' || products.some(p => p.category_id === c.id || cats.byId[p.category_id]?.parent_category_id === c.id)));
-  const openGroup = cats.isGroup(categoryId) ? categoryId : cats.byId[categoryId]?.parent_category_id ?? null;
   // Sizes among the products in the picked category, smallest first
   const sizes = [...new Set(products.filter(p => inCategory(p) && p.size_cm).map(p => p.size_cm))]
     .sort((a, b) => compareKeys(sizeKey(a), sizeKey(b)));
@@ -177,75 +181,35 @@ export default function Products() {
     <PageShell
       title="Products"
       subtitle="Master Data"
-      actions={
-        <div className="flex items-center gap-8">
-          <div className="search-wrapper">
-            <Search size={14} className="search-icon" />
-            <input id="products-search" type="search" className="search-input" placeholder="Search products…"
-              value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          {(canWrite || canCatalogue) && (
-            <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
-              <Plus size={14} /> Add product
-            </button>
-          )}
-        </div>
-      }
+      description="Every product, its size and coverage, yield per bag and the stock on hand."
+      primaryAction={(canWrite || canCatalogue) && (
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
+          <Plus size={14} /> New Product
+        </button>
+      )}
     >
+      <ListToolbar id="products-search" search={search} onSearch={setSearch} placeholder="Search products…"
+        sort={{ value: sortBy, onChange: setSortBy, options: [
+          { value: 'size_asc',   label: 'Size: smallest → largest (default)' },
+          { value: 'size_desc',  label: 'Size: largest → smallest' },
+          { value: 'name_asc',   label: 'Name: A → Z' },
+          { value: 'name_desc',  label: 'Name: Z → A' },
+          { value: 'stock_desc', label: 'Stock qty: highest → lowest' },
+          { value: 'stock_asc',  label: 'Stock qty: lowest → highest' },
+        ] }}
+        filters={[
+          { key: 'size', label: 'Size', value: sizeFilter, onChange: setSizeFilter,
+            options: [{ value: '', label: 'Any size' }, ...sizes.map(z => ({ value: z, label: z }))] },
+          ...(branchId ? [{ key: 'list', label: `${branchName}'s list`, value: catalogueFilter, onChange: setCatalogueFilter,
+            options: [{ value: 'carried', label: `In the list (${carriedCount})` }, { value: 'not_carried', label: 'Not in the list' }, { value: 'all', label: 'All products' }] }] : []),
+          { key: 'stock', label: 'Stock', value: stockFilter, onChange: setStockFilter,
+            options: [{ value: '', label: 'Any stock' }, { value: 'in_stock', label: 'In stock' }, { value: 'none', label: 'Out of stock' }] },
+          { key: 'status', label: 'Status', value: statusFilter, onChange: setStatusFilter,
+            options: [{ value: 'active', label: 'Active' }, { value: 'review', label: `Needs review (${reviewCount})` }, { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All' }] },
+        ]} />
       {!loading && !error && (
-        <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-          <div className="filter-chips" style={{ flexBasis: '100%' }}>
-            <button type="button" className={`filter-chip${!categoryId ? ' is-on' : ''}`} onClick={() => { setCategoryId(''); setSizeFilter(''); }}>All</button>
-            {chipCats.map(c => (
-              <button type="button" key={c.id}
-                className={`filter-chip${categoryId === c.id || openGroup === c.id ? ' is-on' : ''}`}
-                onClick={() => { setCategoryId(categoryId === c.id ? '' : c.id); setSizeFilter(''); }}>
-                {c.name}
-              </button>
-            ))}
-          </div>
-          {openGroup && (
-            <div className="filter-chips" style={{ flexBasis: '100%' }}>
-              <button type="button" className={`filter-chip${categoryId === openGroup ? ' is-on' : ''}`} onClick={() => { setCategoryId(openGroup); setSizeFilter(''); }}>
-                All {cats.byId[openGroup]?.name}
-              </button>
-              {cats.childrenOf(openGroup).map(c => (
-                <button type="button" key={c.id} className={`filter-chip${categoryId === c.id ? ' is-on' : ''}`}
-                  onClick={() => { setCategoryId(c.id); setSizeFilter(''); }}>
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-          <select className="form-input" style={{ width: 'auto' }} aria-label="Size" value={sizeFilter} onChange={e => setSizeFilter(e.target.value)}>
-            <option value="">Any size</option>
-            {sizes.map(z => <option key={z} value={z}>{z}</option>)}
-          </select>
-          {branchId && (
-            <select className="form-input" style={{ width: 'auto' }} aria-label="Catalogue" value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
-              <option value="carried">In {branchName}'s list ({carriedCount})</option>
-              <option value="not_carried">Not in {branchName}'s list</option>
-              <option value="all">All products</option>
-            </select>
-          )}
-          <select className="form-input" style={{ width: 'auto' }} aria-label="Stock" value={stockFilter} onChange={e => setStockFilter(e.target.value)}>
-            <option value="">Any stock</option>
-            <option value="in_stock">In stock</option>
-            <option value="none">Out of stock</option>
-          </select>
-          <select className="form-input" style={{ width: 'auto' }} aria-label="Sort" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="default">Sort: category, size, name</option>
-            <option value="name">Sort: name A–Z</option>
-            <option value="size">Sort: size, smallest first</option>
-            <option value="stock">Sort: most stock first</option>
-          </select>
-          <select className="form-input" style={{ width: 'auto' }} aria-label="Show" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="active">Active</option>
-            <option value="review">Needs review ({reviewCount})</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </select>
-        </div>
+        <ChipRow value={categoryId} onChange={v => { setCategoryId(v); setSizeFilter(''); }}
+          items={categoryChipItems(cats, c => c.status === 'active' || products.some(p => p.category_id === c.id || cats.byId[p.category_id]?.parent_category_id === c.id))} />
       )}
 
       <div className="card">
@@ -324,7 +288,8 @@ export default function Products() {
           stock={stock.filter(s => s.product_id === viewing.id && inBranch(whBranch[s.warehouse_id]))}
           carried={carried[viewing.id] || {}}
           branchId={branchId} branchName={branchName} branchNames={branchNames}
-          canWrite={canWrite} canCatalogue={canCatalogue} organization={organization} openFlagCount={openFlags[viewing.id] || 0}
+          canWrite={canWrite} canCatalogue={canCatalogue} canBranchYield={!!branchId && canAt('products.manage', branchId, null)}
+          organization={organization} openFlagCount={openFlags[viewing.id] || 0}
           category={categories.find(c => c.id === (products.find(x => x.id === viewing.id) ?? viewing).category_id)}
           categoryLabel={cats.label((products.find(x => x.id === viewing.id) ?? viewing).category_id, ' · ')}
           onEdit={() => { setEditing(products.find(x => x.id === viewing.id)); setViewing(null); }}
@@ -355,13 +320,16 @@ export default function Products() {
  * removing it from the branch's list always asks first — a stray click
  * shouldn't change a catalogue.
  */
-function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, category, categoryLabel, onEdit, onClose, onChanged }) {
+function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, canBranchYield, organization, openFlagCount, category, categoryLabel, onEdit, onClose, onChanged }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const [prices,  setPrices]  = useState(null);
   const [recipes, setRecipes] = useState(null);
   const [names,   setNames]   = useState({ wh: {}, color: {} });
   const [confirm, setConfirm] = useState(false);
   const [band,    setBand]    = useState(null);   // { average, tolerance, min, max, from }
+  const [own,     setOwn]     = useState(null);   // this branch's figure for the size (branch_yield_overrides)
+  const [ownEdit, setOwnEdit] = useState(null);   // { average, tolerance } while editing
+  const [reload,  setReload]  = useState(0);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const row = branchId ? carried[branchId] : null;
@@ -381,8 +349,14 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
         supabase.from('warehouses').select('id, name, branch:branches(name)'),
         supabase.from('color_palette').select('id, name'),
         branchId ? supabase.rpc('product_yield_band', { p_product_id: p.id, p_branch_id: branchId }) : Promise.resolve({ data: null }),
-        spec?.spec_id ? supabase.from('product_size_specs').select('yield_tolerance').eq('id', spec.spec_id).maybeSingle() : Promise.resolve({ data: null }),
+        spec?.spec_id ? supabase.from('product_size_specs').select('yield_tolerance, size_cm, strength_class').eq('id', spec.spec_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
+      if (branchId && spec?.spec_id) {
+        const { data: o } = await supabase.from('branch_yield_overrides').select('id, average_yield_per_bag, yield_tolerance')
+          .eq('spec_id', spec.spec_id).eq('branch_id', branchId).maybeSingle();
+        if (!live) return;
+        setOwn(o ? { ...o, size: ss.data?.size_cm, strength: ss.data?.strength_class } : { size: ss.data?.size_cm, strength: ss.data?.strength_class });
+      }
       if (!live) return;
       // The QC band (037): branch figure → product → size → category → organization
       const b = yb.data?.[0];
@@ -402,7 +376,33 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
       });
     })();
     return () => { live = false; };
-  }, [p.id, branchId]);
+  }, [p.id, branchId, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The branch's own average yield per bag for this size (031): its mix can
+  // differ. Applies to every product of the same size (and strength) here.
+  async function saveOwn() {
+    setError('');
+    const avg = Number(ownEdit.average);
+    const tol = String(ownEdit.tolerance ?? '').trim() === '' ? null : Number(ownEdit.tolerance);
+    if (!(avg > 0)) { setError('Enter an average yield above zero.'); return; }
+    if (tol !== null && !(tol >= 0)) { setError('Tolerance must be zero or more, or blank.'); return; }
+    setBusy(true);
+    const { error: err } = own?.id
+      ? await supabase.from('branch_yield_overrides').update({ average_yield_per_bag: avg, yield_tolerance: tol }).eq('id', own.id)
+      : await supabase.from('branch_yield_overrides').insert({ organization_id: organization.id, spec_id: spec.spec_id, branch_id: branchId, average_yield_per_bag: avg, yield_tolerance: tol });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setOwnEdit(null);
+    setReload(r => r + 1);
+  }
+  async function removeOwn() {
+    setError('');
+    setBusy(true);
+    const { error: err } = await supabase.from('branch_yield_overrides').delete().eq('id', own.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setReload(r => r + 1);
+  }
 
   async function setCarried(on) {
     setError('');
@@ -446,6 +446,47 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
             : <>{+band.average.toPrecision(6)} ± {+band.tolerance} → <strong>{band.tolerance === 0 ? `exactly ${+band.average.toPrecision(6)}` : `${+(band.average - band.tolerance).toPrecision(6)}–${+(band.average + band.tolerance).toPrecision(6)}`}</strong> per bag <span className="text-muted">(tolerance: {band.from})</span></>}</dd>
           {p.notes && <><dt>Notes</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{p.notes}</dd></>}
         </dl>
+
+        {branchId && spec?.spec_id && (own?.id || canBranchYield) && (
+          <section>
+            <h3 className="modal-section-title">{branchName}'s own yield per bag</h3>
+            {ownEdit ? (
+              <div className="confirm-box">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="own-avg">Average pieces per bag</label>
+                    <input id="own-avg" type="number" step="any" min="0" className="form-input" value={ownEdit.average}
+                      onChange={e => setOwnEdit(o => ({ ...o, average: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="own-tol">Tolerance (±)</label>
+                    <input id="own-tol" type="number" step="any" min="0" className="form-input" placeholder="Same as shared" value={ownEdit.tolerance}
+                      onChange={e => setOwnEdit(o => ({ ...o, tolerance: e.target.value }))} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted">Applies to every {categoryLabel} product of size {own?.size}{own?.strength ? ` ${own.strength}` : ''} at {branchName} — the size's yield is shared, {branchName}'s mix may differ.</p>
+                <div className="flex gap-8">
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveOwn}>Save</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOwnEdit(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                {own?.id ? <>{+Number(own.average_yield_per_bag).toPrecision(6)} per bag{own.yield_tolerance != null ? ` ± ${+own.yield_tolerance}` : ''} <span className="text-muted">(instead of the shared figure, for size {own.size})</span></>
+                  : <span className="text-muted">Uses the shared figure for size {own?.size ?? p.size_cm}.</span>}
+                {canBranchYield && (
+                  <>
+                    <button type="button" className="btn btn-ghost btn-sm"
+                      onClick={() => setOwnEdit({ average: own?.average_yield_per_bag ?? spec?.average_yield_per_bag ?? '', tolerance: own?.yield_tolerance ?? '' })}>
+                      {own?.id ? 'Change…' : `Set ${branchName}'s own…`}
+                    </button>
+                    {own?.id && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={removeOwn}>Use the shared figure again</button>}
+                  </>
+                )}
+              </p>
+            )}
+          </section>
+        )}
 
         <section>
           <h3 className="modal-section-title">{branchId ? `${branchName}'s product list` : 'Carried by'}</h3>

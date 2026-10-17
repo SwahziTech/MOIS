@@ -6,6 +6,7 @@ import { formatMoney } from '../lib/format';
 import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { ListToolbar, ChipRow, PageTabs, categoryChipItems } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -52,6 +53,7 @@ export default function Pricing() {
   const [search,   setSearch]   = useState('');
   const [categoryId, setCategoryId] = useState(null);
   const [unpricedOnly, setUnpricedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('category');   // category | name | price_desc | price_asc
   const [editingPrice, setEditingPrice] = useState(null);   // { product, branch, row }
   const [editingRule,  setEditingRule]  = useState(null);   // { category, branch, rule }
 
@@ -130,6 +132,20 @@ export default function Pricing() {
     (!q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q)) &&
     (!unpricedOnly || (p.status === 'active' && branches.some(b => !basePrice[`${p.id}|${b.id}`])))
   );
+  // Price sorts use the one branch in view (a price per m² and a price each
+  // are compared as shown)
+  const shownPrice = p => { const r = branches.length === 1 ? basePrice[`${p.id}|${branches[0].id}`] : null; return r ? Number(r.price_per_sqm_inclusive ?? r.price_per_unit_inclusive ?? 0) : null; };
+  const orderedProducts = [...shownProducts].sort((a, b) => {
+    const byName = a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true });
+    if (sortBy === 'name') return byName;
+    if (sortBy === 'price_desc' || sortBy === 'price_asc') {
+      const x = shownPrice(a), y = shownPrice(b);
+      if (x == null || y == null) return (x == null) - (y == null) || byName;
+      return (sortBy === 'price_desc' ? y - x : x - y) || byName;
+    }
+    const ca = catTools.byId[a.category_id], cb = catTools.byId[b.category_id];
+    return (ca && cb ? catTools.compare(ca, cb) : 0) || byName;
+  });
   const unpricedCount = products.filter(p => inList(p) && p.status === 'active' && branches.every(b => !basePrice[`${p.id}|${b.id}`])).length;
 
   const colouredCategories = catTools.ordered.filter(c => c.colors.length > 0 && inPickedCategory(c.id));
@@ -139,37 +155,26 @@ export default function Pricing() {
     <PageShell
       title="Pricing"
       subtitle="Master Data"
-      actions={tab === 'prices' && (
-        <div className="search-wrapper">
-          <Search size={14} className="search-icon" />
-          <input id="pricing-search" type="search" className="search-input" placeholder="Search products…"
-            value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      )}
+      description="Each branch's prices incl. VAT, and how other colours are priced per category."
     >
-      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-        <div className="filter-chips">
-          <button type="button" className={`filter-chip${tab === 'prices' ? ' is-on' : ''}`} onClick={() => setTab('prices')}>
-            Product prices
-          </button>
-          <button type="button" className={`filter-chip${tab === 'colours' ? ' is-on' : ''}`} onClick={() => setTab('colours')}>
-            Colour pricing
-          </button>
-        </div>
-        <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Category"
-          value={categoryId ?? ''} onChange={e => setCategoryId(e.target.value || null)}>
-          <option value="">All categories</option>
-          {catTools.ordered.filter(c => c.status === 'active').map(c => (
-            <option key={c.id} value={c.id}>{catTools.isGroup(c.id) ? `${c.name} (all)` : c.parent_category_id ? `\u2003${c.name}` : c.name}</option>
-          ))}
-        </select>
-        {tab === 'prices' && (
-          <label className="text-sm flex items-center gap-4">
-            <input type="checkbox" checked={unpricedOnly} onChange={e => setUnpricedOnly(e.target.checked)} />
-            Missing a price ({unpricedCount} with none)
-          </label>
-        )}
-      </div>
+      <PageTabs value={tab} onChange={setTab} tabs={[['prices', 'Product prices'], ['colours', 'Colour pricing']]} />
+      {tab === 'prices' && (
+        <ListToolbar id="pricing-search" search={search} onSearch={setSearch} placeholder="Search products…"
+          sort={{ value: sortBy, onChange: setSortBy, options: [
+            { value: 'category', label: 'By category (default)' },
+            { value: 'name',     label: 'Name: A → Z' },
+            ...(branches.length === 1 ? [
+              { value: 'price_desc', label: `Price at ${branches[0].name}: highest → lowest` },
+              { value: 'price_asc',  label: `Price at ${branches[0].name}: lowest → highest` },
+            ] : []),
+          ] }}
+          filters={[{ key: 'priced', label: 'Prices', value: unpricedOnly ? 'missing' : '', onChange: v => setUnpricedOnly(v === 'missing'),
+            options: [{ value: '', label: 'All products' }, { value: 'missing', label: `Missing a price (${unpricedCount} with none)` }] }]} />
+      )}
+      {!loading && (
+        <ChipRow value={categoryId ?? ''} onChange={v => setCategoryId(v || null)}
+          items={categoryChipItems(catTools, c => c.status === 'active')} />
+      )}
 
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : tab === 'prices' ? (
@@ -188,7 +193,7 @@ export default function Pricing() {
                   <tr><td colSpan={branches.length + 1}>
                     <EmptyState icon={DollarSign} title="No products in this view" description={search ? `No products match "${search}".` : ''} />
                   </td></tr>
-                ) : shownProducts.map(p => (
+                ) : orderedProducts.map(p => (
                   <tr key={p.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{p.canonical_name}{p.status !== 'active' && <span className="text-muted"> (inactive)</span>}</div>
@@ -265,7 +270,7 @@ export default function Pricing() {
                               </div>
                             </td>
                           </> : <td colSpan={3} className="text-muted">No colour pricing — colours other than the base have no price here.</td>}
-                          {canWrite && (
+                          {(canWrite || canProposeAt(b)) && (
                             <td style={{ textAlign: 'right' }}>
                               <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingRule({ category: cat, branch: b, rule })}>
                                 {rule ? 'Edit' : 'Add'}
@@ -292,7 +297,7 @@ export default function Pricing() {
           onClose={() => setEditingPrice(null)} onSaved={async () => { setEditingPrice(null); await load(); }} />
       )}
       {editingRule && (
-        <RuleModal {...editingRule} organization={organization}
+        <RuleModal {...editingRule} organization={organization} viaApproval={!canWrite} colourName={colourName} catLabel={catTools.label(editingRule.category)}
           onClose={() => setEditingRule(null)} onSaved={async () => { setEditingRule(null); await load(); }} />
       )}
     </PageShell>
@@ -501,7 +506,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
   );
 }
 
-function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
+function RuleModal({ category, branch, rule, organization, viaApproval, colourName, catLabel, onClose, onSaved }) {
   const isNew = !rule;
   const colours = [...category.colors].sort((a, b) => a.display_order - b.display_order);
   const [baseId, setBaseId] = useState(rule?.base_color_id ?? colours[0]?.color_id ?? '');
@@ -509,6 +514,7 @@ function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
   const [amounts, setAmounts] = useState(Object.fromEntries((rule?.items || []).map(i => [i.color_id, String(i.amount)])));
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   const money = v => formatMoney(v, organization?.currency_code);
   const others = colours.filter(c => c.color_id !== baseId);
 
@@ -520,6 +526,21 @@ function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
       if (v != null && !(v >= 0)) { setError(`${c.color?.name}: enter zero or more, or leave blank.`); return; }
     }
     setBusy(true);
+    // A branch manager's change waits for an org admin (039)
+    if (viaApproval) {
+      const items = others.filter(c => numOrNull(amounts[c.color_id]) != null)
+        .map(c => ({ color_id: c.color_id, amount: numOrNull(amounts[c.color_id]) }));
+      const what = items.map(i => `${colourName[i.color_id]} ${type === 'delta_over_base_color' ? '+' : ''}${money(i.amount)}`).join(', ') || 'no other colours priced';
+      const { error: err } = await supabase.rpc('request_change', {
+        p_kind: 'color_rule', p_branch_id: branch.id,
+        p_payload: { category_id: category.id, base_color_id: baseId, pricing_type: type, items },
+        p_summary: `Colour pricing for ${catLabel} at ${branch.name}: base ${colourName[baseId] ?? ''}; ${what}`,
+      });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
+      setSubmitted(true);
+      return;
+    }
     let ruleId = rule?.id;
     if (isNew) {
       const { data, error: err } = await supabase.from('category_color_pricing_rules')
@@ -552,15 +573,22 @@ function RuleModal({ category, branch, rule, organization, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={`${category.name} — ${branch.name} colour pricing`} onClose={onClose}
+    submitted ? (
+      <Modal title={`${catLabel} — ${branch.name} colour pricing`} onClose={onClose}
+        footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
+        <p className="text-sm">Sent for an admin's approval. The colour pricing changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+      </Modal>
+    ) :
+    <Modal title={`${catLabel} — ${branch.name} colour pricing`} onClose={onClose}
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="rule-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !baseId}>
-          {isNew ? 'Add colour pricing' : 'Save'}
+          {viaApproval ? 'Submit for approval' : isNew ? 'Add colour pricing' : 'Save'}
         </button>
       </>}>
       <form id="rule-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {viaApproval && <div className="alert alert-info" role="note">Colour pricing changes need an admin's approval: this is sent to the Approvals queue.</div>}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rule-base">Base colour</label>

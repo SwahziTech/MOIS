@@ -251,6 +251,7 @@ ul, ol { list-style: none; }
   flex-shrink: 0;
 }
 
+.sidebar-logo-toggle { margin-left: auto; flex-shrink: 0; }
 .sidebar-logo-text {
   display: flex;
   flex-direction: column;
@@ -419,50 +420,55 @@ ul, ol { list-style: none; }
 .main-wrapper {
   margin-left: var(--sidebar-width);
   flex: 1;
+  min-width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.topbar {
-  height: var(--topbar-height);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  gap: 16px;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.topbar-title {
-  font-size: var(--text-md);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.topbar-breadcrumb {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .page-content {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   padding: 24px;
   max-width: var(--content-max);
   width: 100%;
 }
 
 .page-header { margin-bottom: 20px; }
+.page-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-header-text { flex: 1 1 240px; min-width: 0; }
+.page-description { font-size: var(--text-sm); color: var(--text-muted); margin-top: 4px; }
+.page-primary-action { flex-shrink: 0; display: flex; gap: 8px; align-items: center; padding-top: 2px; }
+
+/* Standard list controls (ListControls.jsx) */
+.list-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.list-search { flex: 1; min-width: 0; }
+.list-search .search-input, .list-search .search-input:focus { width: 100%; height: 38px; }
+.sortfilter { position: relative; flex-shrink: 0; }
+.list-search { flex-basis: 120px; }
+.list-toolbar .btn { white-space: nowrap; height: 38px; }
+.action-menu { min-width: 220px; }
+.action-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.sortfilter-option:disabled { opacity: .5; cursor: not-allowed; }
+/* narrow toolbar: its buttons show only their icons, so the row stays one line */
+.list-toolbar { container-type: inline-size; }
+@container (max-width: 440px) { .btn-label { display: none; } }
+.sortfilter-button { height: 38px; display: inline-flex; align-items: center; gap: 6px; position: relative; }
+.sortfilter-button.is-narrowed::after { content: ""; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--color-khaki); }
+.sortfilter-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 280px; max-width: 92vw; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.sortfilter-heading { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); padding: 6px 10px 4px; }
+.sortfilter-option { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-primary); text-align: left; background: none; border: 0; cursor: pointer; }
+.sortfilter-option:hover { background: var(--bg-canvas); }
+.sortfilter-option.is-on { background: var(--bg-sidebar-active); font-weight: 600; color: var(--accent-text); }
+.sortfilter-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 10px; }
+.sortfilter-filter-label { font-size: var(--text-sm); color: var(--text-secondary); }
+.sortfilter-filter .form-input { width: auto; max-width: 180px; padding-top: 5px; padding-bottom: 5px; }
+.chip-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.page-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
+.page-tab { padding: 8px 14px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; font-size: var(--text-sm); color: var(--text-muted); cursor: pointer; }
+.page-tab:hover { color: var(--text-primary); }
+.page-tab.is-on { border-bottom-color: var(--color-khaki); color: var(--text-primary); font-weight: 600; }
 
 .page-breadcrumb {
   display: flex;
@@ -1459,6 +1465,8 @@ a.stat-card:focus-visible {
   .sidebar { width: var(--sidebar-width-sm); }
   .sidebar-logo-text, .sidebar-section-label, .sidebar-item span,
   .sidebar-user-info, .sidebar-branch { display: none; }
+  .sidebar-logo { flex-direction: column; gap: 8px; padding-left: 8px; padding-right: 8px; }
+  .sidebar-logo-toggle { margin-left: 0; }
   .main-wrapper { margin-left: var(--sidebar-width-sm); }
   .page-content { padding: 16px; }
 }
@@ -1526,3 +1534,14 @@ td .flag-actions { margin-top: 0; }
 .row-muted td { opacity: 0.55; }
 .flag-choices { min-width: 260px; max-width: 420px; }
 .flag-choices .btn { justify-content: flex-start; }
+
+/* ── Double entries (2026-10-17) ─────────────────────────── */
+.double-entry-list { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.double-entry-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.double-entry-entries { margin: 6px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.double-entry-options { display: flex; flex-direction: column; gap: 6px; }
+.double-entry-option { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-sm); }
+.double-entry-option input[type=radio] { margin-top: 3px; }
+.double-entry-option.is-on { border-color: var(--text-primary); }
+.double-entry-custom { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; flex-wrap: wrap; }
+.double-entry-custom .form-input { width: auto; max-width: 160px; height: 30px; padding: 2px 8px; }

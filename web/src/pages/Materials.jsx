@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage, slugify } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { ListToolbar, ChipRow, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -45,6 +46,8 @@ export default function Materials() {
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('active');
+  const [categoryId, setCategoryId] = useState('');
+  const [sortBy,     setSortBy]     = useState('name_asc');   // name_asc | name_desc | category
   const [editing, setEditing] = useState(null);       // { kind: 'material'|'category'|'unit', row }
 
   async function load() {
@@ -103,13 +106,22 @@ export default function Materials() {
   const branchName = id => allBranches.find(b => b.id === id)?.name ?? '—';
   const shown = materials.filter(m =>
     (!m.branch_id || inBranch(m.branch_id)) &&
+    (!categoryId || (categoryId === 'none' ? !m.category_id : m.category_id === categoryId)) &&
     (filter === 'all' || (filter === 'review' ? openFlags[m.id] : m.status === filter)) &&
     (!q || m.name.toLowerCase().includes(q) || (m.material_id_ref || '').toLowerCase().includes(q)));
   // Counts from the materials in view: shared + the picked branch's own (032)
   const inViewMaterials = materials.filter(m => !m.branch_id || inBranch(m.branch_id));
+  const catOrder = Object.fromEntries(categories.map(c => [c.id, [c.display_order, c.name]]));
+  const sortedShown = [...shown].sort((a, b) => {
+    if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
+    if (sortBy === 'category') {
+      const x = catOrder[a.category_id] ?? [1e9, ''], y = catOrder[b.category_id] ?? [1e9, ''];
+      return x[0] - y[0] || x[1].localeCompare(y[1]) || a.name.localeCompare(b.name);
+    }
+    return a.name.localeCompare(b.name);
+  });
   const reviewCount = inViewMaterials.filter(m => openFlags[m.id]).length;
 
-  const addLabel = { materials: 'Add material', categories: 'Add category', units: 'Add unit' }[tab];
   const canAdd = tab === 'units' ? canWriteUnits : tab === 'materials' ? canAddMaterial : canWriteMaterials;
   const close = () => setEditing(null);
   const saved = async () => { setEditing(null); await load(); };
@@ -118,40 +130,34 @@ export default function Materials() {
     <PageShell
       title="Materials"
       subtitle="Master Data"
-      actions={
-        <div className="flex items-center gap-8">
-          {tab === 'materials' && (
-            <div className="search-wrapper">
-              <Search size={14} className="search-icon" />
-              <input id="materials-search" type="search" className="search-input" placeholder="Search materials…"
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          )}
-          {canAdd && (
-            <button type="button" className="btn btn-primary"
-              onClick={() => setEditing({ kind: { materials: 'material', categories: 'category', units: 'unit' }[tab], row: {} })}>
-              <Plus size={14} /> {addLabel}
-            </button>
-          )}
-        </div>
-      }
+      description="Raw materials, the units they're counted and bought in, and which branch uses them."
+      primaryAction={canAdd && (
+        <button type="button" className="btn btn-primary"
+          onClick={() => setEditing({ kind: { materials: 'material', categories: 'category', units: 'unit' }[tab], row: {} })}>
+          <Plus size={14} /> {{ materials: 'New Material', categories: 'New Category', units: 'New Unit' }[tab]}
+        </button>
+      )}
     >
-      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-        <div className="filter-chips">
-          {[['materials', 'Materials'], ['categories', 'Material categories'], ['units', 'Units']].map(([k, l]) => (
-            <button key={k} type="button" className={`filter-chip${tab === k ? ' is-on' : ''}`} onClick={() => setTab(k)}>{l}</button>
-          ))}
-        </div>
-        {tab === 'materials' && (
-          <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Show"
-            value={filter} onChange={e => setFilter(e.target.value)}>
-            <option value="active">Active</option>
-            <option value="review">Needs review ({reviewCount})</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </select>
-        )}
-      </div>
+      <PageTabs value={tab} onChange={setTab}
+        tabs={[['materials', 'Materials'], ['categories', 'Material categories'], ['units', 'Units']]} />
+      {tab === 'materials' && (
+        <>
+          <ListToolbar id="materials-search" search={search} onSearch={setSearch} placeholder="Search materials…"
+            sort={{ value: sortBy, onChange: setSortBy, options: [
+              { value: 'name_asc',  label: 'Name: A → Z (default)' },
+              { value: 'name_desc', label: 'Name: Z → A' },
+              { value: 'category',  label: 'By category' },
+            ] }}
+            filters={[{ key: 'status', label: 'Status', value: filter, onChange: setFilter, options: [
+              { value: 'active', label: 'Active' }, { value: 'review', label: `Needs review (${reviewCount})` },
+              { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All' }] }]} />
+          {!loading && (
+            <ChipRow value={categoryId} onChange={setCategoryId}
+              items={[...categories.filter(c => c.status === 'active' || inViewMaterials.some(m => m.category_id === c.id)).map(c => ({ id: c.id, label: c.name })),
+                      ...(inViewMaterials.some(m => !m.category_id) ? [{ id: 'none', label: 'No category' }] : [])]} />
+          )}
+        </>
+      )}
 
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
@@ -165,7 +171,7 @@ export default function Materials() {
                   {loading ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
                   : shown.length === 0 ? (
                     <tr><td colSpan={7}><EmptyState icon={Layers} title="No materials in this view" description={search ? `No materials match "${search}".` : ''} /></td></tr>
-                  ) : shown.map(m => {
+                  ) : sortedShown.map(m => {
                     const stock = unitById[m.stock_unit_id];
                     return (
                       <tr key={m.id}>

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
+import { ListToolbar } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import InviteUserModal from '../components/InviteUserModal';
@@ -87,29 +88,15 @@ export default function UsersPage() {
   return (
     <PageShell
       title="Users"
-      subtitle="Organisation"
-      actions={
-        <div className="flex items-center gap-8">
-          <div className="search-wrapper">
-            <Search size={14} className="search-icon" />
-            <input
-              id="users-search"
-              type="search"
-              className="search-input"
-              placeholder="Search name or email…"
-              aria-label="Search users"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          {canInvite && (
-            <button type="button" className="btn btn-primary" onClick={() => { setNotice(''); setInviting(true); }}>
-              <UserPlus size={14} /> Invite user
-            </button>
-          )}
-        </div>
-      }
+      subtitle="Organization"
+      description="Who can sign in, their role and which branch or store it covers."
+      primaryAction={canInvite && (
+        <button type="button" className="btn btn-primary" onClick={() => { setNotice(''); setInviting(true); }}>
+          <UserPlus size={14} /> Invite User
+        </button>
+      )}
     >
+      <ListToolbar id="users-search" search={search} onSearch={setSearch} placeholder="Search name or email…" />
       {notice && <div className="alert alert-success mb-16" role="status">{notice}</div>}
 
       <div className="card">

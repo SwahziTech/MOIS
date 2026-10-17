@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
@@ -13,6 +14,7 @@ const LOAD_ERROR = "We couldn't load approvals. Please try again.";
 
 const KIND = {
   price:          { label: 'Price change',     perm: 'products.manage' },
+  color_rule:     { label: 'Colour pricing',   perm: 'products.manage' },
   stock_movement: { label: 'Stock correction', perm: 'inventory.adjust' },
   stock_reversal: { label: 'Reversal',         perm: 'inventory.adjust' },
   stock_import:   { label: 'Opening stock',    perm: 'inventory.adjust' },
@@ -86,13 +88,9 @@ export default function Approvals() {
   const when = ts => new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <PageShell title="Approvals" subtitle="Overview">
-      <div className="flex items-center gap-8 mb-16">
-        <div className="filter-chips">
-          <button type="button" className={`filter-chip${tab === 'pending' ? ' is-on' : ''}`} onClick={() => setTab('pending')}>Waiting ({waiting})</button>
-          <button type="button" className={`filter-chip${tab === 'settled' ? ' is-on' : ''}`} onClick={() => setTab('settled')}>Settled</button>
-        </div>
-      </div>
+    <PageShell title="Approvals" subtitle="Overview"
+      description="Price changes and stock corrections waiting for an admin, and those already settled.">
+      <PageTabs value={tab} onChange={setTab} tabs={[['pending', `Waiting (${waiting})`], ['settled', 'Settled']]} />
 
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (

@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Boxes, Search } from 'lucide-react';
+import { Boxes, Search, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, stockKey, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
+import { ListToolbar, ChipRow, ActionMenu, categoryChipItems } from '../components/ListControls';
+import { categoryTools } from '../lib/categories';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import MovementModal from '../components/inventory/MovementModal';
+import { DoubleEntryAlert } from '../components/inventory/DoubleEntry';
 
 const LOAD_ERROR = "We couldn't load stock. Please try again.";
 const ACTIONS = ['receipt', 'issue', 'transfer', 'adjustment', 'count', 'opening_balance'];
@@ -33,6 +36,8 @@ export default function Stock() {
   const [warehouseId, setWarehouseId] = useState('');
   const [kind,        setKind]        = useState('');
   const [showZero,    setShowZero]    = useState(false);
+  const [chip,        setChip]        = useState('');          // '' | 'materials' | a product category (or group)
+  const [sortBy,      setSortBy]      = useState('name');      // name | qty_desc | qty_asc | recent
   const [posting,     setPosting]     = useState(null);   // movement type
 
   async function load(date = asOfDate) {
@@ -64,6 +69,12 @@ export default function Stock() {
   const allowedActions = ACTIONS.filter(t => activeWarehouses.some(w => canAt(MOVEMENT_TYPES[t].perm, w.branch_id, w.id)));
 
   const q = search.trim().toLowerCase();
+  const cats = useMemo(() => categoryTools(refs?.categoryRows || []), [refs]);
+  // Chips: materials, or a product category (a group stands for its categories)
+  const inChip = item => !chip || (chip === 'materials' ? item.kind === 'material'
+    : item.kind === 'product' && (item.categoryId === chip || cats.byId[item.categoryId]?.parent_category_id === chip));
+  const byName = (a, b) => a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh))
+    || (refs.colorById[a.color_id]?.display_order ?? 0) - (refs.colorById[b.color_id]?.display_order ?? 0);
   const rows = balances
     .map(b => ({ ...b, item: refs?.items[itemKey(b)], wh: whById[b.warehouse_id] }))
     .filter(b => b.item && b.wh
@@ -71,57 +82,55 @@ export default function Stock() {
       && (!branchId || b.wh.branch_id === branchId)
       && (!warehouseId || b.warehouse_id === warehouseId)
       && (!kind || b.item.kind === kind)
+      && inChip(b.item)
       && (!q || b.item.name.toLowerCase().includes(q)))
-    .sort((a, b) => a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh))
-      || (refs.colorById[a.color_id]?.display_order ?? 0) - (refs.colorById[b.color_id]?.display_order ?? 0));
+    .sort((a, b) => sortBy === 'qty_desc' ? Number(b.quantity) - Number(a.quantity) || byName(a, b)
+      : sortBy === 'qty_asc' ? Number(a.quantity) - Number(b.quantity) || byName(a, b)
+      : sortBy === 'recent' ? String(b.last_movement_date).localeCompare(String(a.last_movement_date)) || byName(a, b)
+      : byName(a, b));
 
   return (
     <PageShell
       title="Stock"
       subtitle="Inventory"
+      description="What's on hand in each store, worked out from every recorded movement."
       actions={
-        <div className="search-wrapper">
-          <Search size={14} className="search-icon" />
-          <input id="stock-search" type="search" className="search-input" placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      }
-    >
-      {allowedActions.length > 0 && (
-        <div className="flex gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-          {allowedActions.includes('opening_balance') && (
-            <button type="button" className="btn btn-ghost" onClick={() => navigate('/stock/import')}>Import stock sheet</button>
-          )}
-          {allowedActions.map(t => (
-            <button key={t} type="button" className={`btn ${t === 'receipt' ? 'btn-primary' : 'btn-outline'}`} disabled={!refs} onClick={() => setPosting(t)}>
-              {MOVEMENT_TYPES[t].label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Branch" value={branchId} onChange={e => setBranchId(e.target.value)}>
-          {allowAll && <option value="">All branches</option>}
-          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Store" value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
-          <option value="">All stores</option>
-          {activeWarehouses.filter(w => !branchId || w.branch_id === branchId).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
-        </select>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Item type" value={kind} onChange={e => setKind(e.target.value)}>
-          <option value="">Materials and products</option>
-          <option value="material">Materials</option>
-          <option value="product">Products</option>
-        </select>
-        <label className="text-sm flex items-center gap-4">
-          As of
+        <label className="text-sm flex items-center gap-8" style={{ whiteSpace: 'nowrap' }}>
+          Stock as of
           <input type="date" className="form-input" style={{ width: 'auto' }} max={today} value={asOfDate || today}
             onChange={e => { const d = e.target.value === today ? '' : e.target.value; setAsOfDate(d); setLoading(true); load(d); }} />
         </label>
-        <label className="text-sm flex items-center gap-4">
-          <input type="checkbox" checked={showZero} onChange={e => setShowZero(e.target.checked)} /> Show zero stock
-        </label>
-      </div>
+      }
+    >
+
+      <ListToolbar id="stock-search" search={search} onSearch={setSearch} placeholder="Search items…"
+        sort={{ value: sortBy, onChange: setSortBy, options: [
+          { value: 'name',     label: 'Name: A → Z (default)' },
+          { value: 'qty_desc', label: 'Quantity: highest → lowest' },
+          { value: 'qty_asc',  label: 'Quantity: lowest → highest' },
+          { value: 'recent',   label: 'Last movement: newest first' },
+        ] }}
+        filters={[
+          { key: 'store', label: 'Store', value: warehouseId, onChange: setWarehouseId,
+            options: [{ value: '', label: 'All stores' }, ...activeWarehouses.filter(w => !branchId || w.branch_id === branchId).map(w => ({ value: w.id, label: warehouseLabel(w) }))] },
+          { key: 'zero', label: 'Zero stock', value: showZero ? 'show' : '', onChange: v => setShowZero(v === 'show'),
+            options: [{ value: '', label: 'Hide' }, { value: 'show', label: 'Show' }] },
+        ]}>
+        {allowedActions.length > 0 && (
+          <ActionMenu label="Stock actions" icon={Plus}
+            items={[
+              ...allowedActions.map(t => ({ key: t, label: MOVEMENT_TYPES[t].label, disabled: !refs, onClick: () => setPosting(t) })),
+              ...(allowedActions.includes('opening_balance')
+                ? [{ key: 'div', divider: true }, { key: 'import', label: 'Import stock sheet', onClick: () => navigate('/stock/import') }]
+                : []),
+            ]} />
+        )}
+      </ListToolbar>
+      {refs && <DoubleEntryAlert refs={refs} reloadKey={balances} onFixed={() => load()} />}
+      {refs && (
+        <ChipRow value={chip} onChange={setChip}
+          items={[{ id: 'materials', label: 'Materials' }, ...categoryChipItems(cats, c => c.status === 'active')]} />
+      )}
 
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (

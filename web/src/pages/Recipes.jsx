@@ -5,6 +5,7 @@ import { useBranch } from '../hooks/useBranch';
 import { categoryTools } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -46,6 +47,8 @@ export default function Recipes() {
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
   const [status,  setStatus]  = useState('active');
+  const [categoryId, setCategoryId] = useState('');
+  const [sortBy,     setSortBy]     = useState('category');   // category | newest | effective
   const [editing, setEditing] = useState(null);   // { recipe } to change, or { recipe: null } to add
 
   async function load() {
@@ -116,46 +119,36 @@ export default function Recipes() {
 
   const cols = 8 + (branchId ? 0 : 1);
   const catTools = useMemo(() => categoryTools(categories), [categories]);
+  // Category chips (a group stands for its categories), then the chosen order
+  const view = filtered
+    .filter(r => !categoryId || r.category_id === categoryId || catTools.byId[r.category_id]?.parent_category_id === categoryId)
+    .sort((a, b) => sortBy === 'newest' ? String(b.created_at).localeCompare(String(a.created_at))
+      : sortBy === 'effective' ? String(b.effective_date).localeCompare(String(a.effective_date))
+      : 0);
 
   return (
     <PageShell
       title="Recipes / BOM"
       subtitle="Master Data"
-      actions={
-        <>
-          <select
-            id="recipes-status"
-            className="form-input"
-            style={{ width: 130, height: 34 }}
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-            aria-label="Filter by status"
-          >
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-            <option value="all">All versions</option>
-          </select>
-          <div className="search-wrapper">
-            <Search size={14} className="search-icon" />
-            <input
-              id="recipes-search"
-              type="search"
-              className="search-input"
-              placeholder="Search category or colour…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          {canWrite ? (
-            <button type="button" className="btn btn-primary" onClick={() => setEditing({ recipe: null })}>
-              <Plus size={14} /> Add recipe
-            </button>
-          ) : !branchId && (
-            <span className="text-xs text-muted">Pick a branch in the sidebar to add a recipe</span>
-          )}
-        </>
-      }
+      description="Each branch's mix per category and colour — saved versions are kept, never edited."
+      primaryAction={canWrite ? (
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({ recipe: null })}>
+          <Plus size={14} /> New Recipe
+        </button>
+      ) : !branchId && (
+        <span className="text-xs text-muted">Pick a branch in the sidebar to add a recipe</span>
+      )}
     >
+      <ListToolbar id="recipes-search" search={search} onSearch={setSearch} placeholder="Search category or colour…"
+        sort={{ value: sortBy, onChange: setSortBy, options: [
+          { value: 'category',  label: 'By category and colour (default)' },
+          { value: 'newest',    label: 'Newest version first' },
+          { value: 'effective', label: 'Effective date: newest first' },
+        ] }}
+        filters={[{ key: 'status', label: 'Status', value: status, onChange: setStatus, options: [
+          { value: 'active', label: 'Active' }, { value: 'archived', label: 'Archived' }, { value: 'all', label: 'All versions' }] }]} />
+      {!loading && <ChipRow value={categoryId} onChange={setCategoryId} items={categoryChipItems(catTools, c => c.status === 'active')} />}
+
       <div className="card">
         {error ? (
           <ErrorState message={error} onRetry={load} />
@@ -178,7 +171,7 @@ export default function Recipes() {
               <tbody>
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
-                ) : filtered.length === 0 ? (
+                ) : view.length === 0 ? (
                   <tr>
                     <td colSpan={cols}>
                       <EmptyState
@@ -189,7 +182,7 @@ export default function Recipes() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map(r => (
+                  view.map(r => (
                     <tr key={r.id}>
                       {!branchId && <td className="text-muted">{branchNames[r.branch_id] ?? '—'}</td>}
                       <td style={{ fontWeight: 500 }}>{catTools.label(r.category_id)}</td>
@@ -217,9 +210,9 @@ export default function Recipes() {
                 )}
               </tbody>
             </table>
-            {!loading && filtered.length > 0 && (
+            {!loading && view.length > 0 && (
               <div className="table-footer-note">
-                {filtered.length} recipe version{filtered.length !== 1 ? 's' : ''} · * quantity not yet confirmed
+                {view.length} recipe version{view.length !== 1 ? 's' : ''} · * quantity not yet confirmed
               </div>
             )}
           </div>

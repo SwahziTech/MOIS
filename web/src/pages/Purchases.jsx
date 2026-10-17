@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -7,6 +8,7 @@ import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
+import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -32,7 +34,8 @@ export default function Purchases() {
   const money = v => formatMoney(v, organization?.currency_code);
   const canRecordAt = id => !!id && canAt('procurement.receive', id, null);
 
-  const [tab,       setTab]       = useState('waiting');
+  const [tab,       setTab]       = useState(null);   // null until loaded: opens on "Waiting" only when something waits
+  const [pendingReq, setPendingReq] = useState([]);   // purchases sent for approval, not yet decided
   const [refs,      setRefs]      = useState(null);
   const [materials, setMaterials] = useState([]);   // with branch_id (032)
   const [purchases, setPurchases] = useState([]);
@@ -50,7 +53,7 @@ export default function Purchases() {
     // With a branch picked, only its records are fetched (before any row limit)
     const byBranch = q => (branchId ? q.eq('branch_id', branchId) : q);
     try {
-      const [r, mat, pu, tot, aw] = await Promise.all([
+      const [r, mat, pu, tot, aw, pr] = await Promise.all([
         loadInventoryRefs(),
         supabase.from('materials').select('id, name, status, branch_id').order('name'),
         byBranch(supabase.from('purchases').select(`id, branch_id, movement_id, supplier_id, purchase_date, invoice_reference, transport_charge,
@@ -58,8 +61,10 @@ export default function Purchases() {
           lines:purchase_lines(id, transaction_id, unit_price, line_amount)`)).order('purchase_date', { ascending: false }).limit(300),
         byBranch(supabase.from('purchase_totals').select('*')),
         byBranch(supabase.from('receipts_awaiting_purchase').select('*')).order('movement_date', { ascending: false }),
+        byBranch(supabase.from('pending_changes').select('id, branch_id, summary, payload, requested_by, requested_at')
+          .eq('kind', 'purchase').eq('status', 'pending')).order('requested_at', { ascending: false }),
       ]);
-      const err = mat.error || pu.error || tot.error || aw.error;
+      const err = mat.error || pu.error || tot.error || aw.error || pr.error;
       if (err) throw err;
       const moveIds = [...new Set([...(pu.data || []).map(p => p.movement_id), ...(aw.data || []).map(a => a.movement_id)])];
       const tx = moveIds.length
@@ -70,7 +75,7 @@ export default function Purchases() {
       if (tx.error) throw tx.error;
       const byMove = {};
       for (const t of tx.data) (byMove[t.movement_id] ||= []).push(t);
-      const ids = [...new Set([...(aw.data || []).map(a => a.created_by), ...(pu.data || []).map(p => p.created_by)].filter(Boolean))];
+      const ids = [...new Set([...(aw.data || []).map(a => a.created_by), ...(pu.data || []).map(p => p.created_by), ...(pr.data || []).map(p => p.requested_by)].filter(Boolean))];
       if (ids.length) {
         const { data: ppl } = await supabase.from('profiles').select('id, first_name, last_name, email').in('id', ids);
         setPeople(Object.fromEntries((ppl || []).map(p => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email])));
@@ -80,7 +85,9 @@ export default function Purchases() {
       setPurchases(pu.data || []);
       setTotals(Object.fromEntries((tot.data || []).map(t => [t.purchase_id, t])));
       setAwaiting(aw.data || []);
+      setPendingReq(pr.data || []);
       setTxByMove(byMove);
+      setTab(t => t ?? ((aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'purchases'));
     } catch (e) {
       console.error(e);
       setError(LOAD_ERROR);
@@ -104,6 +111,7 @@ export default function Purchases() {
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const waitingHere = awaiting.filter(a => inBranch(a.branch_id));
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
+  const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
   const owed = purchasesHere.filter(p => p.status === 'recorded').reduce((s, p) => s + Math.max(Number(totals[p.id]?.balance ?? 0), 0), 0);
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const describeLines = lines => (lines || []).filter(t => t.material_id)
@@ -111,19 +119,15 @@ export default function Purchases() {
 
   return (
     <PageShell title="Purchases" subtitle="Inventory"
-      actions={canRecordAt(branchId) && (
+      description="The money side of materials received: supplier, cost, payment — and each branch's material costs."
+      primaryAction={canRecordAt(branchId) && (
         <button type="button" className="btn btn-primary" disabled={!refs} onClick={() => setEditing({ mode: 'new' })}>
-          <Plus size={14} /> Record goods + purchase
+          <Plus size={14} /> Record Goods + Purchase
         </button>
       )}>
-      <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-        <div className="filter-chips">
-          <button type="button" className={`filter-chip${tab === 'waiting' ? ' is-on' : ''}`} onClick={() => setTab('waiting')}>Waiting for details ({waitingHere.length})</button>
-          <button type="button" className={`filter-chip${tab === 'purchases' ? ' is-on' : ''}`} onClick={() => setTab('purchases')}>Purchases</button>
-          <button type="button" className={`filter-chip${tab === 'costs' ? ' is-on' : ''}`} onClick={() => setTab('costs')}>Material costs</button>
-        </div>
-        {tab === 'purchases' && owed > 0 && <span className="text-sm text-muted" style={{ marginLeft: 'auto' }}>Still to pay: <strong>{money(round2(owed))}</strong></span>}
-      </div>
+      <PageTabs value={tab} onChange={setTab}
+        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['costs', 'Material costs']]} />
+      {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
@@ -156,8 +160,20 @@ export default function Purchases() {
               <table>
                 <thead><tr><th>Date</th><th>Supplier</th><th>Goods</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
                 <tbody>
+                  {/* Sent for approval (backdated or by a branch manager): shown until an admin decides */}
+                  {!loading && pendingHere.map(p => (
+                    <tr key={p.id} className="text-muted">
+                      <td>{p.payload?.receipt?.movement_date ?? p.payload?.purchase_date ?? '—'}</td>
+                      <td style={{ fontWeight: 500 }}>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
+                      <td className="text-sm">{p.summary}</td>
+                      <td />
+                      <td><span className="badge badge-warning">Waiting for approval</span>
+                        <div className="text-xs">{people[p.requested_by] ?? ''} · {p.requested_at.slice(0, 10)}</div></td>
+                      <td style={{ textAlign: 'right' }}><Link to="/approvals" className="btn btn-ghost btn-sm">Approvals</Link></td>
+                    </tr>
+                  ))}
                   {loading ? <SkeletonRow cols={6} /> : purchasesHere.length === 0 ? (
-                    <tr><td colSpan={6}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
+                    pendingHere.length ? null : <tr><td colSpan={6}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
                   ) : purchasesHere.map(p => {
                     const t = totals[p.id];
                     return (

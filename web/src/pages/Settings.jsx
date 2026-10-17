@@ -23,7 +23,7 @@ export default function Settings() {
   const roles = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))];
 
   return (
-    <PageShell title="Settings" subtitle="Organization">
+    <PageShell title="Settings" subtitle="Organization" description="Organization settings, your account and how the app looks.">
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
         <section className="card">
           <div className="card-header"><h2 className="card-title">Organization</h2></div>

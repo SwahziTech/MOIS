@@ -62,9 +62,10 @@ export default function Categories() {
     <PageShell
       title="Categories"
       subtitle="Master Data"
-      actions={canWrite && (
+      description="Product categories and groups — their order, colours, default unit and yield tolerance."
+      primaryAction={canWrite && (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
-          <Plus size={14} /> Add category
+          <Plus size={14} /> New Category
         </button>
       )}
     >

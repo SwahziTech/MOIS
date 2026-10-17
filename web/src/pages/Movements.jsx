@@ -90,7 +90,7 @@ export default function Movements() {
   };
 
   return (
-    <PageShell title="Movements" subtitle="Inventory">
+    <PageShell title="Movements" subtitle="Inventory" description="Every stock movement as posted — corrected by reversing, never edited.">
       <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Type" value={type} onChange={e => setType(e.target.value)}>
           <option value="">All types</option>

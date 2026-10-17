@@ -88,7 +88,7 @@ export default function Dashboard() {
   const cards = [...STATS, { key: 'review', label: 'Needs Review', sub: () => (branchId ? `${branchName}'s and shared` : 'Open review flags'), to: '/review' }];
 
   return (
-    <PageShell title="Dashboard">
+    <PageShell title="Dashboard" description={branchId ? `An overview of ${branchName}.` : 'An overview of every branch.'}>
       {error && (
         <div className="alert alert-error mb-16" role="alert">{error}</div>
       )}

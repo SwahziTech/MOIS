@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
 import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective } from '../../lib/inventory';
 import Modal from '../Modal';
+import { findRepeats, planOpeningFix, runSteps } from '../../lib/doubleEntry';
+import { fitsStore } from './DoubleEntry';
 
 const emptyLine = (kind = 'material') => ({ kind, key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
 // A new line's type follows the store: products in a finished-goods store, materials elsewhere
@@ -38,6 +40,8 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [repeats, setRepeats] = useState(null);     // possible double entries found before posting
+  const [choices, setChoices] = useState({});       // line index → what to do about its repeat
 
   // Corrections and backdated entries by non-admins go to the Approvals queue
   const needsApproval = !canManage('inventory.adjust') && (isCorrective(type, date, today)
@@ -89,6 +93,23 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     }));
   }
 
+  // The same item twice in this form: offer to merge the lines
+  const twice = Object.values(lines.reduce((g, l, i) => {
+    if (l.key) (g[`${l.key}|${l.colorId}`] ||= []).push(i);
+    return g;
+  }, {})).filter(g => g.length > 1);
+  function mergeLines(group) {
+    const ls = group.map(i => lines[i]);
+    const item = items[ls[0].key];
+    const sameUnit = ls.every(l => l.unitId === ls[0].unitId);
+    const signed = l => (type === 'adjustment' && l.direction === 'remove' ? -1 : 1) * (sameUnit ? Number(l.quantity || 0) : (stockQty(l) ?? 0));
+    const sum = ls.reduce((s, l) => s + signed(l), 0);
+    const merged = { ...ls[0], quantity: String(+Math.abs(sum).toPrecision(12)), unitId: sameUnit ? ls[0].unitId : item.stockUnitId,
+      direction: type === 'adjustment' ? (sum < 0 ? 'remove' : 'add') : ls[0].direction,
+      unitCost: ls.find(l => l.unitCost !== '')?.unitCost ?? '' };
+    setLines(all => all.map((l, i) => (i === group[0] ? merged : l)).filter((_, i) => !group.slice(1).includes(i)));
+  }
+
   // Quantity in the item's stock unit, for previews
   function stockQty(l) {
     const item = items[l.key];
@@ -102,7 +123,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     setError('');
     const filled = lines.filter(l => l.key);
     if (!filled.length) { setError('Add at least one item.'); return; }
-    if (new Set(filled.map(l => `${l.key}|${l.colorId}`)).size !== filled.length) { setError('An item appears twice — combine the lines.'); return; }
+    if (twice.length) { setError('An item is entered twice — merge the lines, or remove one.'); return; }
     const noColour = filled.find(l => items[l.key].colorIds?.length && !l.colorId);
     if (noColour) { setError(`${items[noColour.key].name}: choose the colour.`); return; }
     for (const l of filled) {
@@ -115,6 +136,23 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     if (type === 'adjustment' && !reason.trim()) { setError('Give a reason for the adjustment.'); return; }
     if (supplier?.pendingConfirm) { setError('Choose one of the suggested suppliers, or confirm the new one.'); return; }
 
+    // Possible double entry? Ask before posting (the check helps; it never blocks)
+    setBusy(true);
+    let found = [];
+    try {
+      found = await findRepeats({ type, warehouse: wh, date, lines: filled.map((l, idx) => ({
+        idx, [items[l.key].kind === 'material' ? 'material_id' : 'product_id']: items[l.key].id, color_id: l.colorId || null,
+        qty: (type === 'adjustment' && l.direction === 'remove' ? -1 : type === 'issue' || type === 'transfer' ? -1 : 1) * (stockQty(l) ?? 0),
+      })) });
+    } catch (err) { console.error(err); }
+    setBusy(false);
+    if (found.length) { setRepeats({ found, filled }); setChoices({}); return; }
+    await send(filled, []);
+  }
+
+  // Post (or send for approval) the movement, plus any corrections chosen for repeats
+  async function send(filled, steps) {
+    setError('');
     const payload = {
       type, warehouse_id: warehouseId, movement_date: date,
       reference: reference.trim() || null, reason: reason.trim() || null, notes: notes.trim() || null,
@@ -134,22 +172,64 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
       }),
     };
     setBusy(true);
-    if (needsApproval) {
+    let sentAny = false;
+    if (filled.length && needsApproval) {
       const what = filled.map(l => {
         const sq = stockQty(l);
         return `${type === 'adjustment' ? (l.direction === 'remove' ? 'remove ' : 'add ') : ''}${qtyText(sq ?? l.quantity)} ${unitById[items[l.key].stockUnitId]?.symbol ?? ''} ${items[l.key].name}${l.colorId ? ` (${colorById[l.colorId]?.name})` : ''}`;
       }).join(', ');
       const summary = `${def.noun} at ${warehouseLabel(wh)}${date < today ? `, dated ${date}` : ''}: ${what}${reason.trim() ? ` — ${reason.trim()}` : ''}`;
       const { error: err } = await supabase.rpc('request_change', { p_kind: 'stock_movement', p_branch_id: null, p_payload: payload, p_summary: summary });
-      setBusy(false);
-      if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
-      setSubmitted(true);
-      return;
+      if (err) { setBusy(false); setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
+      sentAny = true;
+    } else if (filled.length) {
+      const { error: err } = await supabase.rpc('post_inventory_movement', { p: payload });
+      if (err) { setBusy(false); setError(dbErrorMessage(err, "We couldn't record this movement. Please try again.")); return; }
     }
-    const { error: err } = await supabase.rpc('post_inventory_movement', { p: payload });
+    if (steps.length) {
+      try {
+        const res = await runSteps(steps, !canManage('inventory.adjust'));
+        if (res.sent) sentAny = true;
+      } catch (err) {
+        setBusy(false);
+        setError(`${filled.length ? 'The entry was recorded, but a correction failed: ' : ''}${dbErrorMessage(err, "We couldn't make the correction. Please try again.")}`);
+        return;
+      }
+    }
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err, "We couldn't record this movement. Please try again.")); return; }
-    onPosted();
+    if (sentAny) setSubmitted(true); else onPosted();
+  }
+
+  // After choosing what to do about each possible double entry
+  async function continueWithChoices() {
+    const { found, filled } = repeats;
+    if (found.some(f => !choices[f.idx])) { setError('Choose what to do for each item.'); return; }
+    const leaveOut = new Set();
+    const steps = [];
+    for (const f of found) {
+      const c = choices[f.idx];
+      const l = filled[f.idx];
+      const item = items[l.key];
+      const sym = unitById[item.stockUnitId]?.symbol ?? '';
+      const qty = stockQty(l);
+      const first = f.existing[0];
+      if (c === 'skip' || c === 'keep_existing') leaveOut.add(f.idx);
+      if (c === 'correct') {
+        leaveOut.add(f.idx);
+        const reason = `Opening balance entered again (${qtyText(qty)} ${sym}) — corrected to that figure`;
+        steps.push(...planOpeningFix({ entries: f.existing, item, colorId: l.colorId || null, whById: Object.fromEntries(warehouses.map(w => [w.id, w])),
+          target: { qty, warehouseId: first.warehouse_id, unitSymbol: sym }, reason }));
+      }
+      if (c === 'merge') {
+        leaveOut.add(f.idx);
+        const reason = `Opening balance entered again — ${qtyText(qty)} ${sym} merged into the existing entry`;
+        steps.push({ kind: 'movement',
+          payload: { type: 'adjustment', warehouse_id: first.warehouse_id, movement_date: first.transaction_date, reason,
+            lines: [{ [item.kind === 'material' ? 'material_id' : 'product_id']: item.id, ...(l.colorId ? { color_id: l.colorId } : {}), quantity: qty, unit_id: item.stockUnitId }] },
+          summary: `Adjustment at ${warehouseLabel(warehouses.find(w => w.id === first.warehouse_id))}, dated ${first.transaction_date}: add ${qtyText(qty)} ${sym} ${item.name} — ${reason}` });
+      }
+    }
+    await send(filled.filter((_, i) => !leaveOut.has(i)), steps);
   }
 
   if (submitted) {
@@ -165,16 +245,25 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const withCost = type === 'opening_balance';
 
   return (
-    <Modal title={def.noun} onClose={onClose} size="lg"
-      footer={<>
+    <Modal title={repeats ? 'Possible double entry' : def.noun} onClose={onClose} size="lg"
+      footer={repeats ? <>
+        <button type="button" className="btn btn-outline" onClick={() => { setRepeats(null); setError(''); }}>Back</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || repeats.found.some(f => !choices[f.idx])} onClick={continueWithChoices}>
+          Continue
+        </button>
+      </> : <>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="movement-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !allowed.length}>
           {needsApproval ? 'Submit for approval' : `Post ${def.noun.toLowerCase()}`}
         </button>
       </>}>
-      <form id="movement-form" className="modal-form" onSubmit={post}>
+      {repeats && (
+        <RepeatChoices repeats={repeats} type={type} def={def} wh={wh} items={items} unitById={unitById} colorById={colorById}
+          warehouses={warehouses} stockQty={stockQty} choices={choices} setChoices={setChoices} error={error} />
+      )}
+      <form id="movement-form" className="modal-form" onSubmit={post} hidden={!!repeats}>
         <p className="text-sm text-muted">{def.help} Posted movements can't be edited — a mistake is undone with a reversal.</p>
-        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {error && !repeats && <div className="alert alert-error" role="alert">{error}</div>}
         {needsApproval && allowed.length > 0 && (
           <div className="alert alert-info" role="note">{date < today ? 'Backdated entries' : type === 'count' ? "Count differences" : 'Corrections'} need an admin's approval: this is sent to the Approvals queue and changes stock once approved.</div>
         )}
@@ -231,6 +320,14 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
 
           <section>
             <h3 className="modal-section-title">Items</h3>
+            {twice.map(g => (
+              <div key={g.join()} className="alert alert-warning mb-8 flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                <AlertTriangle size={14} />
+                <span><strong>{items[lines[g[0]].key].name}{lines[g[0]].colorId ? ` (${colorById[lines[g[0]].colorId]?.name})` : ''}</strong> is entered {g.length === 2 ? 'twice' : `${g.length} times`}.</span>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => mergeLines(g)}>Merge into one line</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => ls.filter((_, i) => !g.slice(1).includes(i)))}>Keep the first only</button>
+              </div>
+            ))}
             <div className="ingredient-list">
               {lines.map((l, i) => {
                 const item = items[l.key];
@@ -284,6 +381,9 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                       </button>
                     </div>
                     {preview && <div className={`text-xs ${preview.includes('not enough') ? 'text-error' : 'text-muted'}`}>{preview}</div>}
+                    {item && wh && !fitsStore(item, wh) && (type === 'opening_balance' || type === 'receipt') && (
+                      <div className="text-xs text-warning">{item.kind === 'material' ? `${item.name} is a material — ${wh.name} is a finished-goods store.` : `${item.name} is a product — ${wh.name} is not the finished-goods store.`}</div>
+                    )}
                   </div>
                 );
               })}
@@ -357,6 +457,63 @@ function SupplierField({ suppliers, value, onChange }) {
           </div>
         ) : <span className="form-hint">New supplier — added when this receipt is posted.</span>
       )}
+    </div>
+  );
+}
+
+/**
+ * What to do about each line that may repeat an entry already posted
+ * (2026-10-17): leave it out, merge it into the existing entry, correct
+ * the existing entry, or post it anyway.
+ */
+function RepeatChoices({ repeats, type, def, wh, items, unitById, colorById, warehouses, stockQty, choices, setChoices, error }) {
+  const store = id => warehouses.find(w => w.id === id)?.name ?? 'a store';
+  return (
+    <div className="modal-form">
+      <div className="alert alert-warning" role="note">
+        {repeats.found.length === 1 ? 'This entry may repeat one already recorded.' : `${repeats.found.length} items may repeat entries already recorded.`} Choose what is right before anything is posted.
+      </div>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {repeats.found.map(f => {
+        const l = repeats.filled[f.idx];
+        const item = items[l.key];
+        const name = `${item.name}${l.colorId ? ` (${colorById[l.colorId]?.name})` : ''}`;
+        const sym = unitById[item.stockUnitId]?.symbol ?? '';
+        const qty = stockQty(l);
+        const first = f.existing[0];
+        const opts = type === 'opening_balance' ? [
+          ['keep_existing', <>Keep what is already recorded — leave {item.name} out of this entry</>],
+          ['merge', <>Merge: add <strong>{qtyText(qty)} {sym}</strong> to the {store(first.warehouse_id)} entry (total {qtyText(Number(first.quantity) + qty)} {sym})</>],
+          ['correct', <>Correct it: the opening stock is <strong>{qtyText(qty)} {sym}</strong>, in {store(first.warehouse_id)}{f.existing.length > 1 ? ' (the other entries are undone)' : ''}</>],
+          // separate stock only makes sense in a store that has no entry yet
+          ...(f.existing.some(e => e.warehouse_id === wh.id) ? [] : [['post', <>Both are right — {qtyText(qty)} {sym} is separate stock in {wh.name}</>]]),
+        ] : [
+          ['skip', <>It's the same one — leave {item.name} out</>],
+          ['post', <>It's a different {def.noun.toLowerCase()} — post it too</>],
+        ];
+        return (
+          <div key={f.idx} className="confirm-box text-sm">
+            <div>
+              <strong>{name}</strong>{type === 'opening_balance' ? ` already has ${f.existing.length === 1 ? 'an opening balance' : `${f.existing.length} opening balances`} at ${wh.branch?.name ?? 'this branch'}:` : ` — the same ${def.noun.toLowerCase()} is already recorded:`}
+              <ul className="double-entry-entries">
+                {f.existing.map(e => (
+                  <li key={e.id}>{qtyText(Math.abs(Number(e.quantity)))} {sym} in {store(e.warehouse_id)}, dated {e.transaction_date} <span className="text-muted">· entered {e.created_at.slice(0, 10)}</span></li>
+                ))}
+              </ul>
+              <div>This entry: <strong>{qtyText(qty)} {sym}</strong> in {wh.name}{!fitsStore(item, wh) ? <span className="text-warning"> — {item.kind === 'material' ? 'a material in a finished-goods store' : 'a product outside the finished-goods store'}</span> : ''}</div>
+            </div>
+            <div className="double-entry-options">
+              {opts.map(([v, label]) => (
+                <label key={v} className={`double-entry-option${choices[f.idx] === v ? ' is-on' : ''}`}>
+                  <input type="radio" name={`rep-${f.idx}`} checked={choices[f.idx] === v} onChange={() => setChoices(c => ({ ...c, [f.idx]: v }))} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-xs text-muted">Corrections are posted as adjustments or reversals — nothing is deleted from the history.</p>
     </div>
   );
 }

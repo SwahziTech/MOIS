@@ -51,7 +51,7 @@ export async function loadInventoryRefs() {
     supabase.from('units').select('id, symbol, name'),
     supabase.from('suppliers').select('id, name, status').order('name'),
     supabase.from('product_category_colors').select('category_id, color_id, display_order'),
-    supabase.from('product_categories').select('id, name, parent_category_id'),
+    supabase.from('product_categories').select('id, name, parent_category_id, sort_order, status'),
     supabase.from('color_palette').select('id, name, display_order, is_active'),
     supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
   ]);
@@ -71,7 +71,7 @@ export async function loadInventoryRefs() {
   const catLabel = id => { const c = catById[id]; const g = c?.parent_category_id && catById[c.parent_category_id]; return c ? (g ? `${g.name} › ${c.name}` : c.name) : null; };
   for (const p of prod.data || []) {
     items[`p:${p.id}`] = { key: `p:${p.id}`, kind: 'product', id: p.id, name: p.canonical_name, ref: p.product_id_ref,
-      category: catLabel(p.category_id) ?? p.category?.name, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
+      category: catLabel(p.category_id) ?? p.category?.name, categoryId: p.category_id, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
       // coloured categories are stocked per colour
       colorIds: (cats.data || []).filter(c => c.category_id === p.category_id).sort((a, b) => a.display_order - b.display_order).map(c => c.color_id) };
   }
@@ -79,7 +79,7 @@ export async function loadInventoryRefs() {
   // each branch's own catalogue (031): product ids it carries
   const carriedByBranch = {};
   for (const r of bp.data || []) (carriedByBranch[r.branch_id] ||= new Set()).add(r.product_id);
-  return { warehouses, items, unitById, colorById, suppliers: sup.data || [], carriedByBranch };
+  return { warehouses, items, unitById, colorById, suppliers: sup.data || [], carriedByBranch, categoryRows: catRows.data || [] };
 }
 
 /** Trim a numeric for display: 2.5000 → 2.5 */

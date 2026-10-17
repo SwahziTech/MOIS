@@ -6,6 +6,7 @@ import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
+import { ListToolbar } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -34,6 +35,7 @@ export default function Suppliers() {
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const [sortBy, setSortBy] = useState('name');   // name | purchases | owed
   const [editing, setEditing] = useState(null);
 
   async function load() {
@@ -76,26 +78,28 @@ export default function Suppliers() {
   const q = search.trim().toLowerCase();
   const shown = suppliers.filter(s => (showInactive || s.status === 'active')
     && (!q || s.name.toLowerCase().includes(q) || (s.contact_person || '').toLowerCase().includes(q)));
+  const sortedShown = [...shown].sort((a, b) =>
+    sortBy === 'purchases' ? (bought[b.id]?.count ?? 0) - (bought[a.id]?.count ?? 0) || a.name.localeCompare(b.name)
+    : sortBy === 'owed' ? (bought[b.id]?.owed ?? 0) - (bought[a.id]?.owed ?? 0) || a.name.localeCompare(b.name)
+    : a.name.localeCompare(b.name));
 
   return (
     <PageShell
       title="Suppliers"
       subtitle="Master Data"
-      actions={
-        <div className="flex items-center gap-8">
-          <div className="search-wrapper">
-            <Search size={14} className="search-icon" />
-            <input id="suppliers-search" type="search" className="search-input" placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          {canWrite && (
-            <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={14} /> Add supplier</button>
-          )}
-        </div>
-      }
+      description="Who you buy from — what you bought, how often, and what's still to pay."
+      primaryAction={canWrite && (
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={14} /> New Supplier</button>
+      )}
     >
-      <label className="text-sm flex items-center gap-4 mb-16">
-        <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Show inactive
-      </label>
+      <ListToolbar id="suppliers-search" search={search} onSearch={setSearch} placeholder="Search suppliers…"
+        sort={{ value: sortBy, onChange: setSortBy, options: [
+          { value: 'name',      label: 'Name: A → Z (default)' },
+          { value: 'purchases', label: 'Most purchases first' },
+          { value: 'owed',      label: 'Most still to pay first' },
+        ] }}
+        filters={[{ key: 'status', label: 'Status', value: showInactive ? 'all' : 'active', onChange: v => setShowInactive(v === 'all'),
+          options: [{ value: 'active', label: 'Active' }, { value: 'all', label: 'Active and inactive' }] }]} />
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
@@ -103,10 +107,10 @@ export default function Suppliers() {
               <thead><tr><th>Supplier</th><th>Contact</th><th>Bought from them{branchId ? ` (${branchName})` : ''}</th><th>Purchases</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr></thead>
               <tbody>
                 {loading ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-                : shown.length === 0 ? (
+                : sortedShown.length === 0 ? (
                   <tr><td colSpan={6}><EmptyState icon={Truck} title="No suppliers yet"
                     description="Add the people and companies you buy from — or name a new one when recording a receipt." /></td></tr>
-                ) : shown.map(s => (
+                ) : sortedShown.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td className="text-sm">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' · ') || <span className="text-muted">—</span>}</td>
