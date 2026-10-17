@@ -57,6 +57,8 @@ export default function Products() {
   const [statusFilter,    setStatusFilter]    = useState('active');    // active | inactive | review | all
   const [catalogueFilter, setCatalogueFilter] = useState('carried');   // carried | not_carried | all (one branch picked)
   const [stockFilter,     setStockFilter]     = useState('');          // '' | in_stock | none
+  const [sizeFilter,      setSizeFilter]      = useState('');          // a size_cm value
+  const [sortBy,          setSortBy]          = useState('default');   // default | name | size | stock
   const [editing,  setEditing]  = useState(null);   // product row, or {} for new
   const [viewing,  setViewing]  = useState(null);   // product row in the details window
   const [selected, setSelected] = useState(null);   // highlighted row
@@ -135,17 +137,35 @@ export default function Products() {
     || compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
     || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true })), [products, cats]);
 
+  // Other orders on request; the default stays category → size → name
+  const ordered = useMemo(() => {
+    if (sortBy === 'name') return [...sorted].sort((a, b) => a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true }));
+    if (sortBy === 'size') return [...sorted].sort((a, b) => compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
+      || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true }));
+    if (sortBy === 'stock') return [...sorted].sort((a, b) => Number(onHand[b.id] ?? 0) - Number(onHand[a.id] ?? 0));
+    return sorted;
+  }, [sorted, sortBy, onHand]);
+
   const q = search.trim().toLowerCase();
   const passesCatalogue = p => !branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried');
-  const filtered = sorted.filter(p => {
+  const filtered = ordered.filter(p => {
     if (categoryId && p.category_id !== categoryId && cats.byId[p.category_id]?.parent_category_id !== categoryId) return false;
     if (statusFilter === 'review' ? !openFlags[p.id] : statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (!passesCatalogue(p)) return false;
     if (stockFilter && (Number(onHand[p.id] ?? 0) !== 0) !== (stockFilter === 'in_stock')) return false;
+    if (sizeFilter && (p.size_cm || '') !== sizeFilter) return false;
     return !q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q);
   });
   const reviewCount = products.filter(p => openFlags[p.id] && passesCatalogue(p)).length;
   const carriedCount = branchId ? products.filter(p => carriedHere(p.id)).length : 0;
+  // Category chips (as before the refactor): top-level categories; a group
+  // (038) opens a second row with its own categories
+  const inCategory = p => !categoryId || p.category_id === categoryId || cats.byId[p.category_id]?.parent_category_id === categoryId;
+  const chipCats = cats.ordered.filter(c => !c.parent_category_id && (c.status === 'active' || products.some(p => p.category_id === c.id || cats.byId[p.category_id]?.parent_category_id === c.id)));
+  const openGroup = cats.isGroup(categoryId) ? categoryId : cats.byId[categoryId]?.parent_category_id ?? null;
+  // Sizes among the products in the picked category, smallest first
+  const sizes = [...new Set(products.filter(p => inCategory(p) && p.size_cm).map(p => p.size_cm))]
+    .sort((a, b) => compareKeys(sizeKey(a), sizeKey(b)));
 
   // Coverage and yield are optional, industry-specific measures: show their
   // columns only when some product in view has one
@@ -174,13 +194,32 @@ export default function Products() {
     >
       {!loading && !error && (
         <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-          <select className="form-input" style={{ width: 'auto' }} aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-            <option value="">All categories</option>
-            {cats.ordered.filter(c => c.status === 'active' || products.some(p => p.category_id === c.id)).map(c => (
-              <option key={c.id} value={c.id}>
-                {cats.isGroup(c.id) ? `${c.name} (all)` : c.parent_category_id ? `\u2003${c.name}` : c.name}
-              </option>
+          <div className="filter-chips" style={{ flexBasis: '100%' }}>
+            <button type="button" className={`filter-chip${!categoryId ? ' is-on' : ''}`} onClick={() => { setCategoryId(''); setSizeFilter(''); }}>All</button>
+            {chipCats.map(c => (
+              <button type="button" key={c.id}
+                className={`filter-chip${categoryId === c.id || openGroup === c.id ? ' is-on' : ''}`}
+                onClick={() => { setCategoryId(categoryId === c.id ? '' : c.id); setSizeFilter(''); }}>
+                {c.name}
+              </button>
             ))}
+          </div>
+          {openGroup && (
+            <div className="filter-chips" style={{ flexBasis: '100%' }}>
+              <button type="button" className={`filter-chip${categoryId === openGroup ? ' is-on' : ''}`} onClick={() => { setCategoryId(openGroup); setSizeFilter(''); }}>
+                All {cats.byId[openGroup]?.name}
+              </button>
+              {cats.childrenOf(openGroup).map(c => (
+                <button type="button" key={c.id} className={`filter-chip${categoryId === c.id ? ' is-on' : ''}`}
+                  onClick={() => { setCategoryId(c.id); setSizeFilter(''); }}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <select className="form-input" style={{ width: 'auto' }} aria-label="Size" value={sizeFilter} onChange={e => setSizeFilter(e.target.value)}>
+            <option value="">Any size</option>
+            {sizes.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
           {branchId && (
             <select className="form-input" style={{ width: 'auto' }} aria-label="Catalogue" value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
@@ -192,7 +231,13 @@ export default function Products() {
           <select className="form-input" style={{ width: 'auto' }} aria-label="Stock" value={stockFilter} onChange={e => setStockFilter(e.target.value)}>
             <option value="">Any stock</option>
             <option value="in_stock">In stock</option>
-            <option value="none">No stock</option>
+            <option value="none">Out of stock</option>
+          </select>
+          <select className="form-input" style={{ width: 'auto' }} aria-label="Sort" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="default">Sort: category, size, name</option>
+            <option value="name">Sort: name A–Z</option>
+            <option value="size">Sort: size, smallest first</option>
+            <option value="stock">Sort: most stock first</option>
           </select>
           <select className="form-input" style={{ width: 'auto' }} aria-label="Show" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="active">Active</option>
