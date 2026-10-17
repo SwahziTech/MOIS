@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
 import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective } from '../../lib/inventory';
 import Modal from '../Modal';
@@ -17,11 +18,14 @@ const kindForStore = w => (w?.type === 'finished_goods' ? 'product' : 'material'
  */
 export default function MovementModal({ type, refs, balances, defaultWarehouseId, onClose, onPosted }) {
   const { canAt, canManage, organization } = useAuth();
+  const { inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const def = MOVEMENT_TYPES[type];
   const { warehouses, items, unitById, colorById, suppliers } = refs;
 
-  const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && canAt(def.perm, w.branch_id, w.id));
+  // Stores of the branch picked in the sidebar (all of them on "All branches")
+  const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && inBranch(w.branch_id)
+    && canAt(def.perm, w.branch_id, w.id));
   const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === defaultWarehouseId) ? defaultWarehouseId : (allowed[0]?.id ?? ''));
   const [toWarehouseId, setToWarehouseId] = useState('');
   const [supplier,  setSupplier]  = useState(null);   // { id } | { newName } | null
@@ -40,8 +44,13 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     || (type === 'count' && !!wh && !canAt('inventory.adjust', wh.branch_id, wh.id)));
 
   const itemList = useMemo(() => Object.values(items).filter(i => i.status === 'active'), [items]);
-  const materials = itemList.filter(i => i.kind === 'material');
-  const products = itemList.filter(i => i.kind === 'product');
+  // Only what the chosen store's branch uses: shared materials and its own
+  // (032); products in its catalogue (031), or already in stock in this store
+  const inThisStore = key => Object.entries(balances || {}).some(([k, q]) => Number(q) !== 0 && (k === `${warehouseId}|${key}` || k.startsWith(`${warehouseId}|${key}|`)));
+  const whBranchId = warehouses.find(w => w.id === warehouseId)?.branch_id;
+  const materials = itemList.filter(i => i.kind === 'material' && (!i.branchId || i.branchId === whBranchId));
+  const products = itemList.filter(i => i.kind === 'product'
+    && (refs.carriedByBranch?.[whBranchId]?.has(i.id) || inThisStore(i.key)));
   const wh = warehouses.find(w => w.id === warehouseId);
   // Earlier dates need stock-adjustment permission at the store (migration 023)
   const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);

@@ -44,5 +44,5 @@ export const EMPTY_ACCESS = { role_id: '', branch_id: '', warehouse_id: '' };
 export function scopeLabel(grant) {
   if (grant.warehouse?.name) return `${grant.branch?.name ?? ''} · ${grant.warehouse.name}`;
   if (grant.branch?.name) return grant.branch.name;
-  return 'All branches';
+  return 'Org-wide';
 }

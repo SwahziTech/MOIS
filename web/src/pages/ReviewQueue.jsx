@@ -3,6 +3,8 @@ import { Flag, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { ENTITY_LABELS, dbErrorMessage } from '../lib/masterData';
+import { useBranch } from '../hooks/useBranch';
+import { loadFlagBranches } from '../lib/flagBranch';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -53,6 +55,8 @@ export default function ReviewQueue() {
   const [error,   setError]   = useState('');
   const [actionError, setActionError] = useState('');
   const [refs, setRefs] = useState(null);
+  const { inBranch } = useBranch();
+  const [branchOf, setBranchOf] = useState(() => () => null);   // flag → its branch, null = shared
 
   async function load() {
     setError('');
@@ -73,6 +77,8 @@ export default function ReviewQueue() {
         return (rows || []).map(r => [`${type}:${r.id}`, r[col]]);
       }));
     setNames(Object.fromEntries(lookups.flat()));
+    const of = await loadFlagBranches(data || []);
+    setBranchOf(() => of);
     setFlags(data || []);
     setLoading(false);
     loadRefs();
@@ -118,8 +124,10 @@ export default function ReviewQueue() {
     setFlags(fs => fs.filter(f => f.id !== flag.id));
   }
 
-  const types = useMemo(() => [...new Set(flags.map(f => f.entity_type))], [flags]);
-  const shown = filter === 'all' ? flags : flags.filter(f => f.entity_type === filter);
+  // The picked branch's flags plus flags on shared records
+  const inView = flags.filter(f => { const b = branchOf(f); return b == null || inBranch(b); });
+  const types = useMemo(() => [...new Set(inView.map(f => f.entity_type))], [inView]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = filter === 'all' ? inView : inView.filter(f => f.entity_type === filter);
   const cols = canResolve ? 3 : 2;
 
   return (
@@ -135,7 +143,7 @@ export default function ReviewQueue() {
           <select id="rq-filter" className="form-input" style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}>
             <option value="all">All ({flags.length})</option>
             {types.map(t => (
-              <option key={t} value={t}>{ENTITY_LABELS[t] || t} ({flags.filter(f => f.entity_type === t).length})</option>
+              <option key={t} value={t}>{ENTITY_LABELS[t] || t} ({inView.filter(f => f.entity_type === t).length})</option>
             ))}
           </select>
         </div>

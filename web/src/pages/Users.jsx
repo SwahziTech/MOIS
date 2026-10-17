@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -15,6 +16,7 @@ const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
 export default function UsersPage() {
   const { organization, session, can, hasRole } = useAuth();
+  const { branchId, inBranch } = useBranch();
   const [users,      setUsers]      = useState([]);
   const [roles,      setRoles]      = useState([]);
   const [branches,   setBranches]   = useState([]);
@@ -63,9 +65,14 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, []);
 
+  // With a branch picked: people with a role there, plus org-wide people
+  // (Directors, Technical admin), who can act on every branch
+  const whBranch = Object.fromEntries(warehouses.map(w => [w.id, w.branch_id]));
+  const reaches = g => (!g.branch_id && !g.warehouse_id) || inBranch(g.branch_id || whBranch[g.warehouse_id]);
+  const inView = branchId ? users.filter(u => (u.user_roles || []).some(reaches)) : users;
   const filtered = !search
-    ? users
-    : users.filter(u => {
+    ? inView
+    : inView.filter(u => {
         const q = search.toLowerCase();
         return `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
                (u.email || '').toLowerCase().includes(q);

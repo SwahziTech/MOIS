@@ -426,10 +426,10 @@ export default function StockImport() {
                 <span className="form-hint">Applies to every line unless you change a line's own date below.</span>
               </div>
             </div>
-            {!matched && drafts.length > 0 && (
+            {!matched && drafts.some(d => !d.warehouse_id || inBranch(catalog?.branchOfWarehouse?.[d.warehouse_id])) && (
               <div className="flex flex-col gap-4">
                 <span className="text-sm" style={{ fontWeight: 600 }}>Continue a saved import</span>
-                {drafts.map(d => (
+                {drafts.filter(d => !d.warehouse_id || inBranch(catalog?.branchOfWarehouse?.[d.warehouse_id])).map(d => (
                   <div key={d.id} className="flex items-center gap-8 text-sm" style={{ flexWrap: 'wrap' }}>
                     <span>{d.file_name || 'Untitled sheet'}</span>
                     <span className="text-muted">

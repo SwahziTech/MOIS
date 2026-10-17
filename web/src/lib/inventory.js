@@ -42,25 +42,26 @@ export const stockKey = row => `${itemKey(row)}${row.color_id ? `|c:${row.color_
 
 /** Reference data every inventory screen needs, in one round trip */
 export async function loadInventoryRefs() {
-  const [wh, mat, prod, units, sup, cats, colors] = await Promise.all([
+  const [wh, mat, prod, units, sup, cats, colors, bp] = await Promise.all([
     supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
     supabase.from('materials')
-      .select('id, name, status, stock_unit_id, conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
+      .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
       .order('name'),
     supabase.from('products').select('id, canonical_name, product_id_ref, status, unit_id, category_id, category:product_categories(name)').order('canonical_name'),
     supabase.from('units').select('id, symbol, name'),
     supabase.from('suppliers').select('id, name, status').order('name'),
     supabase.from('product_category_colors').select('category_id, color_id, display_order'),
     supabase.from('color_palette').select('id, name, display_order, is_active'),
+    supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
   ]);
-  const error = wh.error || mat.error || prod.error || units.error || sup.error || cats.error || colors.error;
+  const error = wh.error || mat.error || prod.error || units.error || sup.error || cats.error || colors.error || bp.error;
   if (error) throw error;
   const warehouses = (wh.data || []).sort((a, b) =>
     (a.branch?.name || '').localeCompare(b.branch?.name || '') || a.name.localeCompare(b.name));
   const unitById = Object.fromEntries((units.data || []).map(u => [u.id, u]));
   const items = {};
   for (const m of mat.data || []) {
-    items[`m:${m.id}`] = { key: `m:${m.id}`, kind: 'material', id: m.id, name: m.name, status: m.status,
+    items[`m:${m.id}`] = { key: `m:${m.id}`, kind: 'material', id: m.id, name: m.name, status: m.status, branchId: m.branch_id,
       stockUnitId: m.stock_unit_id,
       units: m.stock_unit_id ? [{ id: m.stock_unit_id, factor: 1 }, ...m.conversions.map(c => ({ id: c.unit_id, factor: Number(c.factor_to_stock_unit) }))] : [] };
   }
@@ -71,7 +72,10 @@ export async function loadInventoryRefs() {
       colorIds: (cats.data || []).filter(c => c.category_id === p.category_id).sort((a, b) => a.display_order - b.display_order).map(c => c.color_id) };
   }
   const colorById = Object.fromEntries((colors.data || []).map(c => [c.id, c]));
-  return { warehouses, items, unitById, colorById, suppliers: sup.data || [] };
+  // each branch's own catalogue (031): product ids it carries
+  const carriedByBranch = {};
+  for (const r of bp.data || []) (carriedByBranch[r.branch_id] ||= new Set()).add(r.product_id);
+  return { warehouses, items, unitById, colorById, suppliers: sup.data || [], carriedByBranch };
 }
 
 /** Trim a numeric for display: 2.5000 → 2.5 */

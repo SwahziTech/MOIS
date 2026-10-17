@@ -105,7 +105,9 @@ export default function Materials() {
     (!m.branch_id || inBranch(m.branch_id)) &&
     (filter === 'all' || (filter === 'review' ? openFlags[m.id] : m.status === filter)) &&
     (!q || m.name.toLowerCase().includes(q) || (m.material_id_ref || '').toLowerCase().includes(q)));
-  const reviewCount = materials.filter(m => openFlags[m.id]).length;
+  // Counts from the materials in view: shared + the picked branch's own (032)
+  const inViewMaterials = materials.filter(m => !m.branch_id || inBranch(m.branch_id));
+  const reviewCount = inViewMaterials.filter(m => openFlags[m.id]).length;
 
   const addLabel = { materials: 'Add material', categories: 'Add category', units: 'Add unit' }[tab];
   const canAdd = tab === 'units' ? canWriteUnits : tab === 'materials' ? canAddMaterial : canWriteMaterials;
@@ -209,7 +211,7 @@ export default function Materials() {
                     <tr key={c.id}>
                       <td style={{ fontWeight: 500 }}>{c.name}</td>
                       <td className="text-muted">{c.display_order}</td>
-                      <td className="text-muted">{materials.filter(m => m.category_id === c.id && m.status === 'active').length}</td>
+                      <td className="text-muted">{inViewMaterials.filter(m => m.category_id === c.id && m.status === 'active').length}</td>
                       <td><span className={`badge ${c.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{c.status}</span></td>
                       {canWriteMaterials && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'category', row: c })}>Edit</button></td>}
                     </tr>
@@ -220,7 +222,7 @@ export default function Materials() {
 
             {tab === 'units' && (
               <table>
-                <thead><tr><th>Symbol</th><th>Name</th><th>Notes</th><th>In use</th><th>Status</th>{canWriteUnits && <th aria-label="Actions" />}</tr></thead>
+                <thead><tr><th>Symbol</th><th>Name</th><th>Notes</th><th title="Units are shared by every branch">In use (all branches)</th><th>Status</th>{canWriteUnits && <th aria-label="Actions" />}</tr></thead>
                 <tbody>
                   {loading ? <SkeletonRow cols={6} /> : units.map(u => (
                     <tr key={u.id}>

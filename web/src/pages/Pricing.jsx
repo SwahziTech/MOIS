@@ -33,7 +33,8 @@ const impliedVatRate = r => (r?.price_per_unit_exclusive > 0 && r?.price_per_uni
  */
 export default function Pricing() {
   const { organization, canManage, canAt } = useAuth();
-  const { inBranch } = useBranch();
+  const { branchId, inBranch } = useBranch();
+  const [carried, setCarried] = useState(new Set());   // 'branch|product' the branch carries (031)
   const canWrite = canManage('products.manage');
   // A branch's managers may propose its prices; an org admin approves (033)
   const canProposeAt = b => !canWrite && canAt('products.manage', b.id, null);
@@ -55,7 +56,7 @@ export default function Pricing() {
 
   async function load() {
     setError('');
-    const [priceRes, branchRes, ruleRes, prodRes, catRes] = await Promise.all([
+    const [priceRes, branchRes, ruleRes, prodRes, catRes, bpRes] = await Promise.all([
       supabase
         .from('product_branch_pricing')
         .select(`
@@ -73,14 +74,16 @@ export default function Pricing() {
       supabase.from('product_categories')
         .select('id, name, sort_order, status, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
         .order('sort_order'),
+      supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
     ]);
-    const err = priceRes.error || branchRes.error || ruleRes.error || prodRes.error || catRes.error;
+    const err = priceRes.error || branchRes.error || ruleRes.error || prodRes.error || catRes.error || bpRes.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     setPrices(priceRes.data || []);
     setBranches((branchRes.data || []).filter(b => b.status === 'active'));
     setRules(ruleRes.data || []);
     setProducts(prodRes.data || []);
     setCategories(catRes.data || []);
+    setCarried(new Set((bpRes.data || []).map(r => `${r.branch_id}|${r.product_id}`)));
     setLoading(false);
   }
 
@@ -115,13 +118,15 @@ export default function Pricing() {
   }, [prices]);
 
   const q = search.trim().toLowerCase();
-  const shownProducts = products.filter(p =>
+  // With a branch picked: its own list — products it carries or has a price for
+  const inList = p => !branchId || carried.has(`${branchId}|${p.id}`) || !!basePrice[`${p.id}|${branchId}`];
+  const shownProducts = products.filter(p => inList(p) &&
     (p.status === 'active' || branches.some(b => basePrice[`${p.id}|${b.id}`])) &&
     (!categoryId || p.category_id === categoryId) &&
     (!q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q)) &&
     (!unpricedOnly || (p.status === 'active' && branches.some(b => !basePrice[`${p.id}|${b.id}`])))
   );
-  const unpricedCount = products.filter(p => p.status === 'active' && branches.every(b => !basePrice[`${p.id}|${b.id}`])).length;
+  const unpricedCount = products.filter(p => inList(p) && p.status === 'active' && branches.every(b => !basePrice[`${p.id}|${b.id}`])).length;
 
   const colouredCategories = categories.filter(c => c.colors.length > 0 && (categoryId == null || c.id === categoryId));
   const colourName = Object.fromEntries(categories.flatMap(c => c.colors.map(x => [x.color_id, x.color?.name])));

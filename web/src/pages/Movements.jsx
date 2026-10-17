@@ -38,14 +38,23 @@ export default function Movements() {
   async function load() {
     setError('');
     try {
+      // With a branch picked, only its movements are fetched (incl. transfers
+      // into it) — so the row limit never hides them behind other branches'
+      let scope = q => q;
+      if (branchId) {
+        const { data: whs, error: whErr } = await supabase.from('warehouses').select('id').eq('branch_id', branchId);
+        if (whErr) throw whErr;
+        const ids = (whs || []).map(w => w.id);
+        scope = q => q.or(ids.length ? `branch_id.eq.${branchId},to_warehouse_id.in.(${ids.join(',')})` : `branch_id.eq.${branchId}`);
+      }
       const [r, mv] = await Promise.all([
         loadInventoryRefs(),
-        supabase.from('inventory_movements')
+        scope(supabase.from('inventory_movements')
           .select(`id, movement_type, movement_date, created_at, created_by, branch_id, warehouse_id, to_warehouse_id,
                    reference, reason, notes, reverses_movement_id, supplier:suppliers(name),
                    lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, color_id, quantity, stock_unit_id,
                                                 entered_quantity, entered_unit_id, counted_quantity, unit_cost)`)
-          .order('movement_date', { ascending: false }).order('created_at', { ascending: false })
+          .order('movement_date', { ascending: false }).order('created_at', { ascending: false }))
           .limit(PAGE),
       ]);
       if (mv.error) throw mv.error;
@@ -63,8 +72,7 @@ export default function Movements() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { setWarehouseId(''); }, [branchId]);
+  useEffect(() => { setWarehouseId(''); setLoading(true); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const reversedBy = useMemo(() => Object.fromEntries(movements.filter(m => m.reverses_movement_id).map(m => [m.reverses_movement_id, m])), [movements]);

@@ -112,7 +112,8 @@ export default function Products() {
     if (branchId && catalogueFilter !== 'all' && carriedHere(p.id) !== (catalogueFilter === 'carried')) return false;
     return !q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q);
   });
-  const reviewCount = products.filter(p => openFlags[p.id]).length;
+  const reviewCount = products.filter(p => openFlags[p.id]
+    && (!branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried'))).length;
 
   // Coverage and yield are optional, industry-specific measures: show their
   // columns only when some product in view actually records them.

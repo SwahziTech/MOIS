@@ -47,15 +47,17 @@ export default function Purchases() {
 
   async function load() {
     setError('');
+    // With a branch picked, only its records are fetched (before any row limit)
+    const byBranch = q => (branchId ? q.eq('branch_id', branchId) : q);
     try {
       const [r, mat, pu, tot, aw] = await Promise.all([
         loadInventoryRefs(),
         supabase.from('materials').select('id, name, status, branch_id').order('name'),
-        supabase.from('purchases').select(`id, branch_id, movement_id, supplier_id, purchase_date, invoice_reference, transport_charge,
+        byBranch(supabase.from('purchases').select(`id, branch_id, movement_id, supplier_id, purchase_date, invoice_reference, transport_charge,
           vat_amount, prices_include_vat, amount_paid, payment_method, paid_on, status, void_reason, notes, created_by,
-          lines:purchase_lines(id, transaction_id, unit_price, line_amount)`).order('purchase_date', { ascending: false }).limit(300),
-        supabase.from('purchase_totals').select('*'),
-        supabase.from('receipts_awaiting_purchase').select('*').order('movement_date', { ascending: false }),
+          lines:purchase_lines(id, transaction_id, unit_price, line_amount)`)).order('purchase_date', { ascending: false }).limit(300),
+        byBranch(supabase.from('purchase_totals').select('*')),
+        byBranch(supabase.from('receipts_awaiting_purchase').select('*')).order('movement_date', { ascending: false }),
       ]);
       const err = mat.error || pu.error || tot.error || aw.error;
       if (err) throw err;
@@ -86,7 +88,7 @@ export default function Purchases() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { setLoading(true); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Moving average cost per material at the picked branch
   useEffect(() => {
