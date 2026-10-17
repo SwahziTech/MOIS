@@ -47,6 +47,7 @@ export default function Purchases() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [editing, setEditing] = useState(null);     // { mode: 'complete'|'new'|'edit', receipt?, purchase? }
+  const [deleting, setDeleting] = useState(null);   // a void purchase the technical admin is deleting
 
   async function load() {
     setError('');
@@ -110,6 +111,8 @@ export default function Purchases() {
 
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const waitingHere = awaiting.filter(a => inBranch(a.branch_id));
+  // Technical admin (system.manage): may delete a purchase entered wrongly (040)
+  const isTechAdmin = canManage('system.manage');
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
   const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
   const owed = purchasesHere.filter(p => p.status === 'recorded').reduce((s, p) => s + Math.max(Number(totals[p.id]?.balance ?? 0), 0), 0);
@@ -191,6 +194,9 @@ export default function Purchases() {
                           {p.status === 'recorded' && canRecordAt(p.branch_id) && (
                             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ mode: 'edit', purchase: p })}>Open</button>
                           )}
+                          {p.status === 'void' && isTechAdmin && (
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleting(p)}>Delete…</button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -234,13 +240,20 @@ export default function Purchases() {
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
           branchId={branchId} canAt={canAt} canManage={canManage}
+          goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''}
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
+      )}
+      {deleting && (
+        <Modal title={`Delete the purchase of ${deleting.purchase_date}`} onClose={() => setDeleting(null)}>
+          <DeletePurchase purchase={deleting} goods={describeLines(txByMove[deleting.movement_id])}
+            onCancel={() => setDeleting(null)} onDeleted={async () => { setDeleting(null); await load(); }} />
+        </Modal>
       )}
     </PageShell>
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -270,6 +283,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [date,      setDate]      = useState(today);
   const [submitted, setSubmitted] = useState(false);
   const [voiding,   setVoiding]   = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
@@ -543,12 +557,60 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(false)}>Keep it</button>
                 </div>
               </div>
+            ) : deleting ? (
+              <DeletePurchase purchase={purchase} goods={goods} onCancel={() => setDeleting(false)} onDeleted={onSaved} />
             ) : (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(true)}>Void this purchase…</button>
+              <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(true)}>Void this purchase…</button>
+                {canManage('system.manage') && (
+                  <button type="button" className="btn btn-ghost btn-sm text-error" onClick={() => setDeleting(true)}>Delete this purchase…</button>
+                )}
+              </div>
             )}
           </section>
         )}
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Technical admin only (040): delete a purchase entered with wrong
+ * details. The receipt stays (back under "Waiting for details") unless the
+ * goods are undone too, which reverses it. audit_log keeps every value.
+ */
+function DeletePurchase({ purchase, goods, onCancel, onDeleted }) {
+  const [reason, setReason] = useState('');
+  const [undo, setUndo] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function remove() {
+    setError('');
+    if (!reason.trim()) { setError('Give a reason.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.rpc('delete_purchase', { p_id: purchase.id, p_reason: reason.trim(), p_undo_receipt: undo });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err, "We couldn't delete this purchase. Please try again.")); return; }
+    onDeleted();
+  }
+
+  return (
+    <div className="confirm-box">
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      <p className="text-sm">Deleting removes this purchase{purchase.status === 'void' ? ' (void)' : ''} from the list for good — supplier, prices and payment. The audit log keeps a copy of every value.</p>
+      <label className="text-sm flex items-center gap-8">
+        <input type="checkbox" checked={undo} onChange={e => setUndo(e.target.checked)} />
+        <span>Also undo the goods received{goods ? ` (${goods})` : ''} — they never arrived, or the quantity was wrong</span>
+      </label>
+      <p className="text-xs text-muted">{undo
+        ? 'The receipt is reversed, dated as the original. This is refused if the stock has since been used.'
+        : 'The goods stay in stock and the receipt goes back under "Waiting for details", to be completed again with the right details.'}</p>
+      <input className="form-input" placeholder="Reason (required)" aria-label="Reason for deleting" value={reason} onChange={e => setReason(e.target.value)} />
+      <div className="flex gap-8">
+        <button type="button" className={`btn btn-danger-outline btn-sm${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={remove}>Delete purchase</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Keep it</button>
+      </div>
+    </div>
   );
 }
