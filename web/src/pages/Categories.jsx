@@ -33,7 +33,7 @@ export default function Categories() {
     const [catRes, palRes, unitRes] = await Promise.all([
       supabase
         .from('product_categories')
-        .select(`id, category_id_ref, name, display_format, sort_order, status, default_unit_id,
+        .select(`id, category_id_ref, name, display_format, sort_order, status, default_unit_id, default_yield_tolerance,
                  unit:units(symbol, name),
                  colors:product_category_colors(color_id, display_order),
                  products(count)`)
@@ -135,6 +135,7 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
   const [order,   setOrder]   = useState(category.sort_order ?? nextOrder);
   const [layout,  setLayout]  = useState(category.display_format ?? 'colored');
   const [unitId,  setUnitId]  = useState(category.default_unit_id ?? '');
+  const [tolerance, setTolerance] = useState(category.default_yield_tolerance ?? '');
   const [colours, setColours] = useState(initialColours);
   const [usedColours, setUsedColours] = useState(new Set());   // colours with recipes/prices in this category
   const [busy,  setBusy]  = useState(false);
@@ -177,7 +178,9 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
     if (layout === 'plain' && colours.size > 0) { setError('A single-price category has no colours — remove them first.'); return; }
     setBusy(true);
 
-    const row = { name: name.trim(), sort_order: Number(order) || 0, display_format: layout, default_unit_id: unitId || null };
+    const tol = String(tolerance).trim() === '' ? null : Number(tolerance);
+    if (tol !== null && !(tol >= 0)) { setError('Default yield tolerance must be zero or more, or blank for the organization default.'); return; }
+    const row = { name: name.trim(), sort_order: Number(order) || 0, display_format: layout, default_unit_id: unitId || null, default_yield_tolerance: tol };
     let categoryId = category.id;
     if (isNew) {
       const { data, error: err } = await supabase.from('product_categories')
@@ -249,6 +252,14 @@ function CategoryModal({ category, organizationId, palette, units, takenRefs, ne
               <option value="">None</option>
               {choosableUnits.map(u => <option key={u.id} value={u.id}>{u.symbol} — {u.name}</option>)}
             </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="cat-tol">Default yield tolerance (± pieces per bag)</label>
+            <input id="cat-tol" type="number" step="any" min="0" className="form-input" placeholder="Organization default"
+              value={tolerance} onChange={e => setTolerance(e.target.value)} />
+            <span className="form-hint">For this category's products unless a product sets its own. 0 means exactly the average yield.</span>
           </div>
         </div>
 

@@ -67,13 +67,13 @@ export default function Products() {
     const [catRes, prodRes, unitRes, flagRes, bpRes, brRes, specRes, stockRes, whRes] = await Promise.all([
       supabase
         .from('product_categories')
-        .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id')
+        .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id, default_yield_tolerance')
         .order('sort_order'),
       supabase
         .from('products')
         .select(`
           id, product_id_ref, canonical_name, size_cm, category_id, unit_id,
-          pcs_per_sqm, wastani_per_bag, status, notes, strength_class,
+          pcs_per_sqm, wastani_per_bag, status, notes, strength_class, yield_tolerance,
           category:product_categories(id, name, display_format, sort_order),
           unit:units(symbol, name),
           recipes:recipe_version_products(count)
@@ -82,7 +82,7 @@ export default function Products() {
       supabase.from('review_flags').select('entity_id').eq('entity_type', 'product').eq('status', 'open'),
       supabase.from('branch_products').select('id, branch_id, product_id, status'),
       supabase.from('branches').select('id, name'),
-      supabase.from('product_specs').select('product_id, pcs_per_sqm, pcs_source, average_yield_per_bag, yield_source, yield_tolerance'),
+      supabase.from('product_specs').select('product_id, spec_id, pcs_per_sqm, pcs_source, average_yield_per_bag, yield_source, yield_tolerance'),
       supabase.from('stock_balances').select('warehouse_id, product_id, color_id, quantity').not('product_id', 'is', null),
       supabase.from('warehouses').select('id, name, branch_id'),
     ]);
@@ -273,6 +273,7 @@ export default function Products() {
           carried={carried[viewing.id] || {}}
           branchId={branchId} branchName={branchName} branchNames={branchNames}
           canWrite={canWrite} canCatalogue={canCatalogue} organization={organization} openFlagCount={openFlags[viewing.id] || 0}
+          category={categories.find(c => c.id === (products.find(x => x.id === viewing.id) ?? viewing).category_id)}
           onEdit={() => { setEditing(products.find(x => x.id === viewing.id)); setViewing(null); }}
           onClose={() => setViewing(null)}
           onChanged={load}
@@ -301,12 +302,13 @@ export default function Products() {
  * removing it from the branch's list always asks first — a stray click
  * shouldn't change a catalogue.
  */
-function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, onEdit, onClose, onChanged }) {
+function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, category, onEdit, onClose, onChanged }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const [prices,  setPrices]  = useState(null);
   const [recipes, setRecipes] = useState(null);
   const [names,   setNames]   = useState({ wh: {}, color: {} });
   const [confirm, setConfirm] = useState(false);
+  const [band,    setBand]    = useState(null);   // { average, tolerance, min, max, from }
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const row = branchId ? carried[branchId] : null;
@@ -316,7 +318,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
     let live = true;
     (async () => {
       const byBranch = q => (branchId ? q.eq('branch_id', branchId) : q);
-      const [pr, rv, wh, co] = await Promise.all([
+      const [pr, rv, wh, co, yb, ss] = await Promise.all([
         byBranch(supabase.from('product_branch_pricing')
           .select('branch_id, color_id, price_per_sqm_inclusive, price_per_unit_inclusive, pcs_per_sqm_at_pricing, is_available')
           .eq('product_id', p.id)),
@@ -325,8 +327,20 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
           .eq('product_id', p.id),
         supabase.from('warehouses').select('id, name, branch:branches(name)'),
         supabase.from('color_palette').select('id, name'),
+        branchId ? supabase.rpc('product_yield_band', { p_product_id: p.id, p_branch_id: branchId }) : Promise.resolve({ data: null }),
+        spec?.spec_id ? supabase.from('product_size_specs').select('yield_tolerance').eq('id', spec.spec_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
       if (!live) return;
+      // The QC band (037): branch figure → product → size → category → organization
+      const b = yb.data?.[0];
+      const avg = b?.average_yield_per_bag ?? spec?.average_yield_per_bag;
+      const tol = b?.yield_tolerance ?? spec?.yield_tolerance;
+      const from = b?.source === 'branch' ? `${branchName}'s own figure`
+        : p.yield_tolerance != null ? "this product's own"
+        : ss.data?.yield_tolerance != null ? 'its size'
+        : category?.default_yield_tolerance != null ? `${category.name} default`
+        : "the organization's";
+      setBand(avg != null ? { average: Number(avg), tolerance: tol != null ? Number(tol) : null, from } : null);
       setPrices(pr.data || []);
       setRecipes((rv.data || []).map(r => r.recipe).filter(r => r && r.status === 'active' && (!branchId || r.branch_id === branchId)));
       setNames({
@@ -373,7 +387,10 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
           <dt>Size</dt><dd>{p.size_cm || '—'}</dd>
           <dt>Stock unit</dt><dd>{unit || '—'}</dd>
           <dt>Pieces per m²</dt><dd>{spec?.pcs_per_sqm != null ? <>{+Number(spec.pcs_per_sqm).toPrecision(6)} <span className="text-muted">({sourceText(spec.pcs_source)})</span></> : '—'}</dd>
-          <dt>Yield per bag</dt><dd>{spec?.average_yield_per_bag != null ? <>{+Number(spec.average_yield_per_bag).toPrecision(6)}{spec.yield_tolerance != null ? ` ± ${+spec.yield_tolerance}` : ''} <span className="text-muted">({sourceText(spec.yield_source)})</span></> : '—'}</dd>
+          <dt>Yield per bag</dt><dd>{spec?.average_yield_per_bag != null ? <>{+Number(spec.average_yield_per_bag).toPrecision(6)} average <span className="text-muted">({sourceText(spec.yield_source)})</span></> : '—'}</dd>
+          <dt>Quality check</dt><dd>{band == null ? <span className="text-muted">— (no average yield yet)</span>
+            : band.tolerance == null ? <span className="text-muted">no tolerance set</span>
+            : <>{+band.average.toPrecision(6)} ± {+band.tolerance} → <strong>{band.tolerance === 0 ? `exactly ${+band.average.toPrecision(6)}` : `${+(band.average - band.tolerance).toPrecision(6)}–${+(band.average + band.tolerance).toPrecision(6)}`}</strong> per bag <span className="text-muted">(tolerance: {band.from})</span></>}</dd>
           {p.notes && <><dt>Notes</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{p.notes}</dd></>}
         </dl>
 
@@ -470,6 +487,7 @@ function ProductModal({ product, organization, categories, units, products, bran
   const [size,     setSize]     = useState(product.size_cm ?? '');
   const [coverage, setCoverage] = useState(product.pcs_per_sqm ?? '');
   const [yieldPer, setYieldPer] = useState(product.wastani_per_bag ?? '');
+  const [tolerance, setTolerance] = useState(product.yield_tolerance ?? '');
   const [notes,    setNotes]    = useState(product.notes ?? '');
   const [merging,  setMerging]  = useState(false);
   const [busy,  setBusy]  = useState(false);
@@ -492,7 +510,9 @@ function ProductModal({ product, organization, categories, units, products, bran
     const clash = products.find(p => p.id !== product.id && p.status === 'active'
       && p.category_id === category && sameName(p.canonical_name, name));
     if (clash) { setError(`"${clash.canonical_name}" already exists in this category.`); return; }
-    for (const [label, v] of [['Pieces per m²', coverage], ['Yield per batch', yieldPer]]) {
+    const tol = numOrNull(tolerance);
+    if (tol !== null && !(tol >= 0)) { setError('Yield tolerance must be zero or more, or blank to use the category default.'); return; }
+    for (const [label, v] of [['Pieces per m²', coverage], ['Yield per bag', yieldPer]]) {
       const n = numOrNull(v);
       if (n !== null && !(n > 0)) { setError(`${label} must be a positive number, or blank if not recorded.`); return; }
     }
@@ -500,6 +520,7 @@ function ProductModal({ product, organization, categories, units, products, bran
     const row = {
       canonical_name: name.trim(), category_id: category, unit_id: unitId,
       size_cm: size.trim() || null, pcs_per_sqm: numOrNull(coverage), wastani_per_bag: numOrNull(yieldPer),
+      yield_tolerance: numOrNull(tolerance),
       notes: notes.trim() || null,
     };
     setBusy(true);
@@ -576,11 +597,20 @@ function ProductModal({ product, organization, categories, units, products, bran
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="prod-yield">Yield per batch</label>
+            <label className="form-label" htmlFor="prod-yield">Yield per bag</label>
             <input id="prod-yield" type="number" step="any" min="0" className="form-input" placeholder="Not recorded"
               value={yieldPer} onChange={e => setYieldPer(e.target.value)} />
-            <span className="form-hint">Pieces from one batch of the recipe. Leave blank if unknown — never estimate.</span>
+            <span className="form-hint">Average pieces from one 50 kg bag of cement. Leave blank if unknown — never estimate.</span>
           </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="prod-tol">Yield tolerance (± pieces per bag)</label>
+            <input id="prod-tol" type="number" step="any" min="0" className="form-input"
+              placeholder={(() => { const d = categories.find(c => c.id === category)?.default_yield_tolerance; return d != null ? `Category default: ±${+d}` : 'Organization default'; })()}
+              value={tolerance} onChange={e => setTolerance(e.target.value)} />
+            <span className="form-hint">Production outside average ± this is flagged for review. Blank uses the category default; 0 means exactly the average.</span>
+          </div>
+        </div>
+        <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="prod-notes">Notes</label>
             <textarea id="prod-notes" className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
