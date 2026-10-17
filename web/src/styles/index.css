@@ -703,6 +703,9 @@ tbody td {
 
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--bg-canvas); }
+/* Rows that open details on double-click; one click selects */
+tr.clickable-row { cursor: pointer; user-select: none; }
+tr.clickable-row.is-selected td { background: var(--bg-sidebar-active); }
 
 /* ----------------------------------------------------------------
    BADGES & STATUS

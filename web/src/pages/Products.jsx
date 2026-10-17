@@ -16,31 +16,55 @@ import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
 
+/**
+ * Sort key for a size like "40x40", "20x10x8", "200x13.3x80mm", "40x40x2in":
+ * footprint first (first two dimensions, mm → cm), then each dimension.
+ * No size sorts last.
+ */
+function sizeKey(size) {
+  if (!size) return [Infinity];
+  const mm = /mm/i.test(size);
+  const nums = (String(size).match(/\d+(?:\.\d+)?/g) || []).map(Number).map(n => (mm ? n / 10 : n));
+  if (!nums.length) return [Infinity];
+  return [nums.length >= 2 ? nums[0] * nums[1] : nums[0], ...nums];
+}
+const compareKeys = (a, b) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? -1, y = b[i] ?? -1;
+    if (x !== y) return x - y;
+  }
+  return 0;
+};
+
 export default function Products() {
   const { organization, canManage, canAt } = useAuth();
-  const { branchId, branchName } = useBranch();
+  const { branchId, branchName, inBranch } = useBranch();
   const canWrite = canManage('products.manage');   // shared product details: org admins
-  // A branch's own catalogue: its managers add and remove products freely (031/032)
+  // A branch's own catalogue: its managers add and remove products (031/032)
   const canCatalogue = !!branchId && canAt('products.manage', branchId, null);
   const [categories, setCategories] = useState([]);
   const [products,   setProducts]   = useState([]);
   const [units,      setUnits]      = useState([]);
   const [openFlags,  setOpenFlags]  = useState({});   // product id → open flag count
+  const [specs,      setSpecs]      = useState({});   // product id → effective pcs/m² and yield (031)
+  const [stock,      setStock]      = useState([]);   // stock_balances rows for products
+  const [whBranch,   setWhBranch]   = useState({});   // warehouse id → branch id
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [statusFilter,   setStatusFilter]   = useState('active');   // active | inactive | review | all
-  const [editing, setEditing] = useState(null);   // product row, or {} for new
-  const [carried, setCarried] = useState({});     // product id → { branch id → branch_products row }
-  const [branchNames, setBranchNames] = useState({});
+  const [categoryId,      setCategoryId]      = useState('');
+  const [statusFilter,    setStatusFilter]    = useState('active');    // active | inactive | review | all
   const [catalogueFilter, setCatalogueFilter] = useState('carried');   // carried | not_carried | all (one branch picked)
-  const [toggling, setToggling] = useState(null);
-  const [actionError, setActionError] = useState('');
+  const [stockFilter,     setStockFilter]     = useState('');          // '' | in_stock | none
+  const [editing,  setEditing]  = useState(null);   // product row, or {} for new
+  const [viewing,  setViewing]  = useState(null);   // product row in the details window
+  const [selected, setSelected] = useState(null);   // highlighted row
+  const [carried, setCarried] = useState({});       // product id → { branch id → branch_products row }
+  const [branchNames, setBranchNames] = useState({});
 
   async function load() {
     setError('');
-    const [catRes, prodRes, unitRes, flagRes, bpRes, brRes] = await Promise.all([
+    const [catRes, prodRes, unitRes, flagRes, bpRes, brRes, specRes, stockRes, whRes] = await Promise.all([
       supabase
         .from('product_categories')
         .select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id')
@@ -49,18 +73,20 @@ export default function Products() {
         .from('products')
         .select(`
           id, product_id_ref, canonical_name, size_cm, category_id, unit_id,
-          pcs_per_sqm, wastani_per_bag, status, notes,
-          category:product_categories(id, name, display_format),
+          pcs_per_sqm, wastani_per_bag, status, notes, strength_class,
+          category:product_categories(id, name, display_format, sort_order),
           unit:units(symbol, name),
           recipes:recipe_version_products(count)
-        `)
-        .order('product_id_ref'),
+        `),
       supabase.from('units').select('id, symbol, name, status').order('symbol'),
       supabase.from('review_flags').select('entity_id').eq('entity_type', 'product').eq('status', 'open'),
       supabase.from('branch_products').select('id, branch_id, product_id, status'),
       supabase.from('branches').select('id, name'),
+      supabase.from('product_specs').select('product_id, pcs_per_sqm, pcs_source, average_yield_per_bag, yield_source, yield_tolerance'),
+      supabase.from('stock_balances').select('warehouse_id, product_id, color_id, quantity').not('product_id', 'is', null),
+      supabase.from('warehouses').select('id, name, branch_id'),
     ]);
-    const err = catRes.error || prodRes.error || unitRes.error || flagRes.error || bpRes.error || brRes.error;
+    const err = [catRes, prodRes, unitRes, flagRes, bpRes, brRes, specRes, stockRes, whRes].find(r => r.error)?.error;
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
     const counts = {};
     for (const f of flagRes.data || []) counts[f.entity_id] = (counts[f.entity_id] || 0) + 1;
@@ -72,28 +98,21 @@ export default function Products() {
     for (const r of bpRes.data || []) (bp[r.product_id] ||= {})[r.branch_id] = r;
     setCarried(bp);
     setBranchNames(Object.fromEntries((brRes.data || []).map(b => [b.id, b.name])));
+    setSpecs(Object.fromEntries((specRes.data || []).map(s => [s.product_id, s])));
+    setStock(stockRes.data || []);
+    setWhBranch(Object.fromEntries((whRes.data || []).map(w => [w.id, w.branch_id])));
     setLoading(false);
   }
 
-  const carriedHere = id => carried[id]?.[branchId]?.status === 'active';
-
-  // Add to / remove from the picked branch's catalogue: a plain switch, kept
-  // as a row either way (removing deactivates it, adding again reactivates)
-  async function toggleCarried(product) {
-    setActionError('');
-    setToggling(product.id);
-    const row = carried[product.id]?.[branchId];
-    const { data, error: err } = row
-      ? await supabase.from('branch_products').update({ status: row.status === 'active' ? 'inactive' : 'active' })
-          .eq('id', row.id).select('id, branch_id, product_id, status').single()
-      : await supabase.from('branch_products').insert({ organization_id: organization.id, branch_id: branchId, product_id: product.id })
-          .select('id, branch_id, product_id, status').single();
-    setToggling(null);
-    if (err) { setActionError(dbErrorMessage(err)); return; }
-    setCarried(c => ({ ...c, [product.id]: { ...c[product.id], [branchId]: data } }));
-  }
-
   useEffect(() => { load(); }, []);
+
+  const carriedHere = id => carried[id]?.[branchId]?.status === 'active';
+  // On hand for the picked branch (all branches on "All branches")
+  const onHand = useMemo(() => {
+    const m = {};
+    for (const s of stock) if (inBranch(whBranch[s.warehouse_id])) m[s.product_id] = (m[s.product_id] || 0) + Number(s.quantity);
+    return m;
+  }, [stock, whBranch, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Links from the Review queue open a product directly (?edit=<id>)
   const [params, setParams] = useSearchParams();
@@ -105,22 +124,31 @@ export default function Products() {
     setParams({}, { replace: true });
   }, [params, products]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Category order is the organization's own (Categories → order), then
+  // size smallest to largest, then name
+  const sorted = useMemo(() => [...products].sort((a, b) =>
+    (a.category?.sort_order ?? 999) - (b.category?.sort_order ?? 999)
+    || (a.category?.name || '').localeCompare(b.category?.name || '')
+    || compareKeys(sizeKey(a.size_cm), sizeKey(b.size_cm))
+    || a.canonical_name.localeCompare(b.canonical_name, undefined, { numeric: true })), [products]);
+
   const q = search.trim().toLowerCase();
-  const filtered = products.filter(p => {
-    if (activeCategory && p.category_id !== activeCategory) return false;
+  const passesCatalogue = p => !branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried');
+  const filtered = sorted.filter(p => {
+    if (categoryId && p.category_id !== categoryId) return false;
     if (statusFilter === 'review' ? !openFlags[p.id] : statusFilter !== 'all' && p.status !== statusFilter) return false;
-    if (branchId && catalogueFilter !== 'all' && carriedHere(p.id) !== (catalogueFilter === 'carried')) return false;
+    if (!passesCatalogue(p)) return false;
+    if (stockFilter && (Number(onHand[p.id] ?? 0) !== 0) !== (stockFilter === 'in_stock')) return false;
     return !q || p.canonical_name.toLowerCase().includes(q) || p.product_id_ref.toLowerCase().includes(q);
   });
-  const reviewCount = products.filter(p => openFlags[p.id]
-    && (!branchId || catalogueFilter === 'all' || carriedHere(p.id) === (catalogueFilter === 'carried'))).length;
+  const reviewCount = products.filter(p => openFlags[p.id] && passesCatalogue(p)).length;
+  const carriedCount = branchId ? products.filter(p => carriedHere(p.id)).length : 0;
 
   // Coverage and yield are optional, industry-specific measures: show their
-  // columns only when some product in view actually records them.
-  const showCoverage = filtered.some(p => p.pcs_per_sqm != null);
-  const showYield    = filtered.some(p => p.wastani_per_bag != null);
-  const cols = 6 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (canWrite ? 1 : 0);
-  const carriedCount = branchId ? products.filter(p => carriedHere(p.id)).length : 0;
+  // columns only when some product in view has one
+  const showCoverage = filtered.some(p => specs[p.id]?.pcs_per_sqm != null);
+  const showYield    = filtered.some(p => specs[p.id]?.average_yield_per_bag != null);
+  const cols = 5 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0);
 
   return (
     <PageShell
@@ -130,14 +158,8 @@ export default function Products() {
         <div className="flex items-center gap-8">
           <div className="search-wrapper">
             <Search size={14} className="search-icon" />
-            <input
-              id="products-search"
-              type="search"
-              className="search-input"
-              placeholder="Search products…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <input id="products-search" type="search" className="search-input" placeholder="Search products…"
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           {(canWrite || canCatalogue) && (
             <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
@@ -149,26 +171,23 @@ export default function Products() {
     >
       {!loading && !error && (
         <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
-          <div className="filter-chips">
-            <button type="button" className={`filter-chip${!activeCategory ? ' is-on' : ''}`} onClick={() => setActiveCategory(null)}>All</button>
-            {categories.filter(c => c.status === 'active' || products.some(p => p.category_id === c.id)).map(cat => (
-              <button type="button" key={cat.id}
-                className={`filter-chip${activeCategory === cat.id ? ' is-on' : ''}`}
-                onClick={() => setActiveCategory(cat.id === activeCategory ? null : cat.id)}>
-                {cat.name}
-              </button>
-            ))}
-          </div>
+          <select className="form-input" style={{ width: 'auto' }} aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+            <option value="">All categories</option>
+            {categories.filter(c => c.status === 'active' || products.some(p => p.category_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
           {branchId && (
-            <select className="form-input" style={{ width: 'auto', marginLeft: 'auto' }} aria-label="Catalogue"
-              value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
+            <select className="form-input" style={{ width: 'auto' }} aria-label="Catalogue" value={catalogueFilter} onChange={e => setCatalogueFilter(e.target.value)}>
               <option value="carried">In {branchName}'s list ({carriedCount})</option>
               <option value="not_carried">Not in {branchName}'s list</option>
               <option value="all">All products</option>
             </select>
           )}
-          <select className="form-input" style={{ width: 'auto', marginLeft: branchId ? 0 : 'auto' }} aria-label="Show"
-            value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <select className="form-input" style={{ width: 'auto' }} aria-label="Stock" value={stockFilter} onChange={e => setStockFilter(e.target.value)}>
+            <option value="">Any stock</option>
+            <option value="in_stock">In stock</option>
+            <option value="none">No stock</option>
+          </select>
+          <select className="form-input" style={{ width: 'auto' }} aria-label="Show" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="active">Active</option>
             <option value="review">Needs review ({reviewCount})</option>
             <option value="inactive">Inactive</option>
@@ -177,7 +196,6 @@ export default function Products() {
         </div>
       )}
 
-      {actionError && <div className="alert alert-error mb-16" role="alert">{actionError}</div>}
       <div className="card">
         {error ? (
           <ErrorState message={error} onRetry={load} />
@@ -186,89 +204,80 @@ export default function Products() {
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Category</th>
+                  <th>Product</th>
                   <th>Size</th>
                   {showCoverage && <th title="Pieces needed to cover one square metre">Pieces per m²</th>}
-                  {showYield && <th title="Pieces produced per batch of the product's recipe">Yield per batch</th>}
-                  <th>Stock Unit</th>
-                  <th>Status</th>
-                  <th>{branchId ? `In ${branchName}` : 'Branches'}</th>
-                  {canWrite && <th aria-label="Actions" />}
+                  {showYield && <th title="Average pieces from one 50 kg bag of cement">Yield per bag</th>}
+                  <th>Stock unit</th>
+                  <th style={{ textAlign: 'right' }} title={branchId ? `On hand at ${branchName}` : 'On hand across all branches'}>
+                    Stock qty{branchId ? '' : ' (all)'}
+                  </th>
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} cols={cols} />)
                 ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={cols}>
-                      <EmptyState
-                        icon={Package}
-                        title="No products found"
-                        description={search ? `No products match "${search}".` : 'No products in this view.'}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map(p => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: 500 }}>
-                        {p.canonical_name}
-                        {openFlags[p.id] > 0 && (
-                          <span className="badge badge-warning" style={{ marginLeft: 8 }} title="Open review flags">
-                            <Flag size={11} /> needs review
-                          </span>
-                        )}
+                  <tr><td colSpan={cols}>
+                    <EmptyState icon={Package} title="No products found"
+                      description={search ? `No products match "${search}".` : 'No products in this view.'} />
+                  </td></tr>
+                ) : filtered.map(p => {
+                  const sp = specs[p.id];
+                  const qty = onHand[p.id];
+                  return (
+                    <tr key={p.id} className={`clickable-row${selected === p.id ? ' is-selected' : ''}`}
+                      onClick={() => setSelected(p.id)} onDoubleClick={() => setViewing(p)} title="Double-click for details">
+                      <td>
+                        <div style={{ fontWeight: 500 }}>
+                          {p.canonical_name}
+                          {p.status !== 'active' && <span className="text-muted"> (inactive)</span>}
+                          {openFlags[p.id] > 0 && (
+                            <span className="badge badge-warning" style={{ marginLeft: 8 }} title="Open review flags"><Flag size={11} /> needs review</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted">{p.category?.name || '—'}</div>
                       </td>
-                      <td><span className="badge badge-neutral">{p.category?.name || '—'}</span></td>
                       <td>{p.size_cm || <span className="text-muted">—</span>}</td>
-                      {showCoverage && (
-                        <td>{p.pcs_per_sqm ?? <span className="text-muted" title="Not recorded yet">—</span>}</td>
-                      )}
-                      {showYield && (
-                        <td>{p.wastani_per_bag ?? <span className="text-muted" title="Not recorded yet">—</span>}</td>
-                      )}
+                      {showCoverage && <td>{sp?.pcs_per_sqm != null ? +Number(sp.pcs_per_sqm).toPrecision(6) : <span className="text-muted" title="Not recorded yet">—</span>}</td>}
+                      {showYield && <td>{sp?.average_yield_per_bag != null ? +Number(sp.average_yield_per_bag).toPrecision(6) : <span className="text-muted" title="Not recorded yet">—</span>}</td>}
                       <td><span className="badge badge-neutral" title={p.unit?.name}>{p.unit?.symbol || '—'}</span></td>
-                      <td>
-                        <span className={`badge ${p.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{p.status}</span>
+                      <td style={{ textAlign: 'right', fontWeight: qty ? 600 : 400 }} className={qty ? '' : 'text-muted'}>
+                        {qty ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(qty) : '—'}
                       </td>
-                      <td>
-                        {branchId ? (
-                          canCatalogue && p.status === 'active' ? (
-                            <label className="flex items-center gap-4 text-sm" style={{ cursor: 'pointer' }}>
-                              <input type="checkbox" checked={carriedHere(p.id)} disabled={toggling === p.id}
-                                onChange={() => toggleCarried(p)} aria-label={`${p.canonical_name} in ${branchName}'s list`} />
-                              {carriedHere(p.id) ? 'Yes' : 'No'}
-                            </label>
-                          ) : carriedHere(p.id) ? 'Yes' : <span className="text-muted">No</span>
-                        ) : (
-                          <span className="text-xs">
-                            {Object.values(carried[p.id] || {}).filter(r => r.status === 'active').map(r => branchNames[r.branch_id]).sort().join(', ')
-                              || <span className="text-muted">None</span>}
-                          </span>
-                        )}
+                      <td style={{ textAlign: 'right' }}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setViewing(p); }}>Open</button>
                       </td>
-                      {canWrite && (
-                        <td style={{ textAlign: 'right' }}>
-                          <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(p)}>Edit</button>
-                        </td>
-                      )}
                     </tr>
-                  ))
-                )}
+                  );
+                })}
               </tbody>
             </table>
 
             {!loading && filtered.length > 0 && (
               <div className="table-footer-note">
                 {filtered.length} product{filtered.length !== 1 ? 's' : ''}
-                {filtered.length !== products.length ? ` (of ${products.length})` : ''}
+                {filtered.length !== products.length ? ` (of ${products.length})` : ''} · double-click a row (or Open) for its details
               </div>
             )}
           </div>
         )}
       </div>
+
+      {viewing && (
+        <ProductDetail
+          product={products.find(x => x.id === viewing.id) ?? viewing}
+          spec={specs[viewing.id]}
+          stock={stock.filter(s => s.product_id === viewing.id && inBranch(whBranch[s.warehouse_id]))}
+          carried={carried[viewing.id] || {}}
+          branchId={branchId} branchName={branchName} branchNames={branchNames}
+          canWrite={canWrite} canCatalogue={canCatalogue} organization={organization} openFlagCount={openFlags[viewing.id] || 0}
+          onEdit={() => { setEditing(products.find(x => x.id === viewing.id)); setViewing(null); }}
+          onClose={() => setViewing(null)}
+          onChanged={load}
+        />
+      )}
 
       {editing && (
         <ProductModal
@@ -283,6 +292,162 @@ export default function Products() {
         />
       )}
     </PageShell>
+  );
+}
+
+/**
+ * Everything about a product in one place: its details, this branch's
+ * stock, prices and recipes, and whether the branch carries it. Adding or
+ * removing it from the branch's list always asks first — a stray click
+ * shouldn't change a catalogue.
+ */
+function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, organization, openFlagCount, onEdit, onClose, onChanged }) {
+  const money = v => formatMoney(v, organization?.currency_code);
+  const [prices,  setPrices]  = useState(null);
+  const [recipes, setRecipes] = useState(null);
+  const [names,   setNames]   = useState({ wh: {}, color: {} });
+  const [confirm, setConfirm] = useState(false);
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+  const row = branchId ? carried[branchId] : null;
+  const isCarried = row?.status === 'active';
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const byBranch = q => (branchId ? q.eq('branch_id', branchId) : q);
+      const [pr, rv, wh, co] = await Promise.all([
+        byBranch(supabase.from('product_branch_pricing')
+          .select('branch_id, color_id, price_per_sqm_inclusive, price_per_unit_inclusive, pcs_per_sqm_at_pricing, is_available')
+          .eq('product_id', p.id)),
+        supabase.from('recipe_version_products')
+          .select('recipe:recipe_versions(id, branch_id, status, version_number, variant_label, color:color_palette(name), category:product_categories(name))')
+          .eq('product_id', p.id),
+        supabase.from('warehouses').select('id, name, branch:branches(name)'),
+        supabase.from('color_palette').select('id, name'),
+      ]);
+      if (!live) return;
+      setPrices(pr.data || []);
+      setRecipes((rv.data || []).map(r => r.recipe).filter(r => r && r.status === 'active' && (!branchId || r.branch_id === branchId)));
+      setNames({
+        wh: Object.fromEntries((wh.data || []).map(w => [w.id, `${w.branch?.name} — ${w.name}`])),
+        color: Object.fromEntries((co.data || []).map(c => [c.id, c.name])),
+      });
+    })();
+    return () => { live = false; };
+  }, [p.id, branchId]);
+
+  async function setCarried(on) {
+    setError('');
+    setBusy(true);
+    const { error: err } = row
+      ? await supabase.from('branch_products').update({ status: on ? 'active' : 'inactive' }).eq('id', row.id)
+      : await supabase.from('branch_products').insert({ organization_id: organization.id, branch_id: branchId, product_id: p.id });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setConfirm(false);
+    onChanged();
+  }
+
+  const unit = p.unit?.symbol ?? '';
+  const total = stock.reduce((s, r) => s + Number(r.quantity), 0);
+  const fmt = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n);
+  const priceText = r => (r.price_per_sqm_inclusive != null ? `${money(r.price_per_sqm_inclusive)} /m²` : r.price_per_unit_inclusive != null ? `${money(r.price_per_unit_inclusive)} each` : 'category colour pricing');
+  const sourceText = s => (s === 'size' ? 'from its size' : s === 'product' ? "this product's own figure" : '');
+
+  return (
+    <Modal title={p.canonical_name} onClose={onClose} size="lg"
+      footer={<>
+        {canWrite && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit details</button>}
+        <button type="button" className="btn btn-primary" onClick={onClose}>Close</button>
+      </>}>
+      <div className="modal-form">
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
+        <p className="text-sm text-muted">
+          {p.category?.name}{p.strength_class ? ` · ${p.strength_class}` : ''} ·{' '}
+          <span className={`badge ${p.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{p.status}</span>
+          {openFlagCount > 0 && <span className="badge badge-warning" style={{ marginLeft: 6 }}><Flag size={11} /> {openFlagCount} to review</span>}
+        </p>
+
+        <dl className="detail-list text-sm">
+          <dt>Size</dt><dd>{p.size_cm || '—'}</dd>
+          <dt>Stock unit</dt><dd>{unit || '—'}</dd>
+          <dt>Pieces per m²</dt><dd>{spec?.pcs_per_sqm != null ? <>{+Number(spec.pcs_per_sqm).toPrecision(6)} <span className="text-muted">({sourceText(spec.pcs_source)})</span></> : '—'}</dd>
+          <dt>Yield per bag</dt><dd>{spec?.average_yield_per_bag != null ? <>{+Number(spec.average_yield_per_bag).toPrecision(6)}{spec.yield_tolerance != null ? ` ± ${+spec.yield_tolerance}` : ''} <span className="text-muted">({sourceText(spec.yield_source)})</span></> : '—'}</dd>
+          {p.notes && <><dt>Notes</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{p.notes}</dd></>}
+        </dl>
+
+        <section>
+          <h3 className="modal-section-title">{branchId ? `${branchName}'s product list` : 'Carried by'}</h3>
+          {branchId ? (
+            confirm ? (
+              <div className="confirm-box">
+                <p className="text-sm">{isCarried ? `Remove ${p.canonical_name} from ${branchName}'s catalogue?` : `Add ${p.canonical_name} to ${branchName}'s catalogue?`}</p>
+                {isCarried && total !== 0 && <p className="text-xs text-muted">{branchName} still holds {fmt(total)} {unit}. Removing it only hides it from {branchName}'s list; the stock stays.</p>}
+                <div className="flex gap-8">
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => setCarried(!isCarried)}>{isCarried ? 'Yes, remove it' : 'Yes, add it'}</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                {isCarried ? <span className="badge badge-success">In {branchName}'s list</span> : <span className="badge badge-neutral">Not in {branchName}'s list</span>}
+                {canCatalogue && p.status === 'active' && (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(true)}>
+                    {isCarried ? `Remove from ${branchName}'s list…` : `Add to ${branchName}'s list…`}
+                  </button>
+                )}
+              </p>
+            )
+          ) : (
+            <p className="text-sm">{Object.values(carried).filter(r => r.status === 'active').map(r => branchNames[r.branch_id]).sort().join(', ') || 'No branch'}</p>
+          )}
+        </section>
+
+        <section>
+          <h3 className="modal-section-title">Stock on hand{branchId ? ` at ${branchName}` : ''}</h3>
+          {stock.filter(s => Number(s.quantity) !== 0).length === 0 ? <p className="text-sm text-muted">None.</p> : (
+            <ul className="history-list">
+              {stock.filter(s => Number(s.quantity) !== 0).map(s => (
+                <li key={`${s.warehouse_id}|${s.color_id}`} className="text-sm">
+                  {names.wh[s.warehouse_id] ?? '…'}{s.color_id ? ` · ${names.color[s.color_id] ?? ''}` : ''}: <strong>{fmt(s.quantity)}</strong> {unit}
+                </li>
+              ))}
+              <li className="text-sm text-muted">Total {fmt(total)} {unit}</li>
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h3 className="modal-section-title">Prices{branchId ? ` at ${branchName}` : ''}</h3>
+          {prices == null ? <p className="text-sm text-muted">Loading…</p> : prices.length === 0 ? <p className="text-sm text-muted">No price yet.</p> : (
+            <ul className="history-list">
+              {[...prices].sort((a, b) => (a.color_id ? 1 : 0) - (b.color_id ? 1 : 0)).map((r, i) => (
+                <li key={i} className="text-sm">
+                  {!branchId && <span className="text-muted">{branchNames[r.branch_id]}: </span>}
+                  {r.color_id ? `${names.color[r.color_id] ?? 'Colour'}: ` : 'Base: '}{priceText(r)}
+                  {!r.is_available && <span className="text-muted"> (not sold here)</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h3 className="modal-section-title">Recipes using it{branchId ? ` at ${branchName}` : ''}</h3>
+          {recipes == null ? <p className="text-sm text-muted">Loading…</p> : recipes.length === 0 ? <p className="text-sm text-muted">None linked.</p> : (
+            <ul className="history-list">
+              {recipes.map(r => (
+                <li key={r.id} className="text-sm">
+                  {!branchId && <span className="text-muted">{branchNames[r.branch_id]}: </span>}
+                  {r.category?.name} — {r.color?.name ?? r.variant_label} (v{r.version_number})
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </Modal>
   );
 }
 
