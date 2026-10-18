@@ -53,7 +53,7 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   const { data: stumaRole } = await sb.from('roles').select('id').eq('organization_id', stuma.id).eq('name', 'owner').single();
   const { data: stumaCat } = await sb.from('product_categories').select('id').eq('organization_id', stuma.id).limit(1).single();
   const { data: stumaUnit } = await sb.from('units').select('id').eq('organization_id', stuma.id).limit(1).single();
-  const { data: stumaWh } = await sb.from('warehouses').select('id').eq('organization_id', stuma.id).limit(1).single();
+  const { data: stumaWh } = await sb.from('warehouses').select('id, branch_id').eq('organization_id', stuma.id).limit(1).single();
   const { data: testWh } = await sb.from('warehouses').select('id').eq('organization_id', org.id).limit(1).single();
   const { data: testProduct } = await sb.from('products').select('id, unit_id').eq('organization_id', org.id).eq('product_id_ref', 'test_secret_product').single();
   // Inventory data in the test org, so other tenants' reads are tested against real rows
@@ -69,6 +69,6 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
       branch_id: twh.branch_id, warehouse_id: twh.id, product_id: tp.id, quantity: 7, stock_unit_id: tp.unit_id,
       entered_quantity: 7, entered_unit_id: tp.unit_id, transaction_date: '2026-10-12', created_by: userId }), 'ledger row');
   }
-  console.log(JSON.stringify({ stumarcotWarehouse: stumaWh.id, testWarehouse: testWh.id, testProduct: testProduct.id, testProductUnit: testProduct.unit_id,
+  console.log(JSON.stringify({ stumarcotWarehouse: stumaWh.id, stumarcotBranch: stumaWh.branch_id, testWarehouse: testWh.id, testProduct: testProduct.id, testProductUnit: testProduct.unit_id,
     testOrg: org.id, testUser: userId, stumarcotOrg: stuma.id, stumarcotAdmin: admin.id, stumarcotOwnerRole: stumaRole.id, stumarcotCategory: stumaCat.id, stumarcotUnit: stumaUnit.id }));
 })().catch(e => { console.error('FIXTURE FAILED:', e.message); process.exit(1); });

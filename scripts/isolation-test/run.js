@@ -29,7 +29,7 @@ const TABLES = ['organizations','branches','warehouses','profiles','roles','role
   'material_categories','material_unit_conversions','material_branch_sources','review_flags','audit_log',
   'suppliers','inventory_movements','inventory_transactions','stock_balances','identity_decisions','stock_import_drafts',
   'branch_products','product_size_specs','branch_yield_overrides','pending_changes',
-  'purchases','purchase_lines'];
+  'purchases','purchase_lines','expense_categories','expenses'];
 
 const readBlock = (who, claims) => `
 DO $$
@@ -83,6 +83,10 @@ BEGIN
   ${attempt('WRITE update other tenant materials', `UPDATE public.materials SET notes = 'hacked' WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE request approval at other tenant store', `PERFORM public.request_change('stock_movement', NULL, jsonb_build_object('type','adjustment','warehouse_id','${ids.stumarcotWarehouse}','lines','[]'::jsonb), 'probe')`)}
   ${attempt('WRITE record purchase at other tenant store', `PERFORM public.record_purchase(jsonb_build_object('receipt', jsonb_build_object('type','receipt','warehouse_id','${ids.stumarcotWarehouse}','lines','[]'::jsonb), 'new_supplier_name','probe','lines','[]'::jsonb))`)}
+  ${attempt('WRITE record expense at other tenant branch', `PERFORM public.record_expense(jsonb_build_object('branch_id','${ids.stumarcotBranch}','expense_date','2026-10-18','category_id',(SELECT id FROM public.expense_categories WHERE organization_id = '${T}' LIMIT 1),'description','probe','amount',1))`)}
+  ${attempt('WRITE set other tenant branch VAT', `PERFORM public.set_branch_vat_rate('${ids.stumarcotBranch}', 0)`)}
+  ${attempt('WRITE insert expense category into other tenant', `INSERT INTO public.expense_categories (organization_id, name) VALUES ('${S}', 'iso_probe')`)}
+  ${attempt('WRITE update other tenant expense categories', `UPDATE public.expense_categories SET name = name || 'x' WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update other tenant pricing', `UPDATE public.product_branch_pricing SET price_per_unit_inclusive = 1 WHERE organization_id = '${S}'`, true)}
   ${attempt('WRITE update permissions catalog', `UPDATE public.permissions SET description = 'x'`, true)}
   ${attempt('WRITE post stock into other tenant warehouse', `PERFORM public.post_inventory_movement(jsonb_build_object('type','opening_balance','warehouse_id','${ids.stumarcotWarehouse}','lines',jsonb_build_array(jsonb_build_object('product_id','${ids.testProduct}','quantity',1,'unit_id','${ids.testProductUnit}'))))`)}
