@@ -66,6 +66,7 @@ export default function Approvals() {
     setRowError(e => ({ ...e, [r.id]: '' }));
     setBusy(r.id);
     const { data, error: err } = await supabase.rpc('decide_change', { p_id: r.id, p_approve: approve, p_note: notes[r.id] || null });
+    window.dispatchEvent(new Event('mois:approvals-changed'));
     setBusy(null);
     if (err) { setRowError(e => ({ ...e, [r.id]: dbErrorMessage(err) })); return; }
     if (data?.status === 'pending') {
@@ -77,6 +78,7 @@ export default function Approvals() {
   async function withdraw(r) {
     setBusy(r.id);
     const { error: err } = await supabase.rpc('withdraw_change', { p_id: r.id });
+    window.dispatchEvent(new Event('mois:approvals-changed'));
     setBusy(null);
     if (err) { setRowError(e => ({ ...e, [r.id]: dbErrorMessage(err) })); return; }
     await load();

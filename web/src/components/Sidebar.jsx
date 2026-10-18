@@ -2,7 +2,9 @@ import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart,
 } from 'lucide-react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { roleLabel as labelOf } from '../lib/manageUsers';
@@ -20,7 +22,7 @@ const NAV = [
     items: [
       { label: 'Dashboard',     to: '/',          icon: LayoutDashboard },
       // price changes and stock corrections waiting for an admin (migration 033)
-      { label: 'Approvals',     to: '/approvals', icon: CheckSquare, perm: 'inventory.view' },
+      { label: 'Approvals',     to: '/approvals', icon: CheckSquare, perm: 'inventory.view', badge: 'approvals' },
     ],
   },
   {
@@ -58,6 +60,8 @@ export default function Sidebar() {
   const { profile, session, organization, userRoles, can, signOut } = useAuth();
   const { branchId, setBranchId, branches, allowAll } = useBranch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const pending = usePendingApprovals(branchId, location.pathname, !!session);
 
   const fullName =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
@@ -129,6 +133,9 @@ export default function Sidebar() {
               >
                 <item.icon size={16} strokeWidth={1.8} />
                 <span>{item.label}</span>
+                {item.badge === 'approvals' && pending > 0 && (
+                  <b className="sidebar-badge" aria-label={`${pending} pending`}>{pending > 99 ? '99+' : pending}</b>
+                )}
               </NavLink>
             ))}
           </div>
@@ -151,4 +158,28 @@ export default function Sidebar() {
       </div>
     </aside>
   );
+}
+
+/**
+ * How many changes wait in the Approvals queue (033) for the branch picked
+ * in the sidebar (all on "All branches"). Re-counted on every page change,
+ * every minute, and when the Approvals page decides one.
+ */
+function usePendingApprovals(branchId, path, signedIn) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    let live = true;
+    const load = async () => {
+      let q = supabase.from('pending_changes').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+      if (branchId) q = q.eq('branch_id', branchId);
+      const { count: n, error } = await q;
+      if (live && !error) setCount(n ?? 0);
+    };
+    load();
+    const timer = setInterval(load, 60000);
+    window.addEventListener('mois:approvals-changed', load);
+    return () => { live = false; clearInterval(timer); window.removeEventListener('mois:approvals-changed', load); };
+  }, [branchId, path, signedIn]);
+  return count;
 }

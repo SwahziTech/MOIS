@@ -1551,3 +1551,11 @@ td .flag-actions { margin-top: 0; }
 
 /* A form's error beside its buttons, where the user is looking (2026-10-18) */
 .modal-footer-error { margin-right: auto; color: var(--color-error); font-size: var(--text-sm); font-weight: 500; }
+
+/* Pending approvals count on the sidebar item (2026-10-18) */
+.sidebar-item { position: relative; }
+.sidebar-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-error); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+@media (max-width: 768px) {
+  .sidebar-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+}
