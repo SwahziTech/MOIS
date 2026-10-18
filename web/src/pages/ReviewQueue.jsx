@@ -36,6 +36,7 @@ const OPEN_LINK = {
   color:             () => '/colours',
   supplier:          () => '/suppliers',
   identity_decision: (f, name) => `/review?tab=decisions&q=${encodeURIComponent(name ?? '')}`,
+  production_batch:  () => '/production',
 };
 
 /**

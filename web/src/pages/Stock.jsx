@@ -151,7 +151,7 @@ export default function Stock() {
                       <div style={{ fontWeight: 500 }}>{b.item.name}{b.color_id && <span className="badge badge-neutral" style={{ marginLeft: 6 }}>{refs.colorById[b.color_id]?.name}</span>}</div>
                       <div className="text-xs text-muted">{b.item.kind === 'material' ? 'Material' : `Product · ${b.item.category ?? ''}`}</div>
                     </td>
-                    <td className="text-muted">{warehouseLabel(b.wh)}</td>
+                    <td className="text-muted">{warehouseLabel(b.wh)}{b.wh.type === 'wip' && <div><span className="badge badge-accent">Curing — not sellable</span></div>}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }} className={Number(b.quantity) < 0 ? 'text-error' : ''}>
                       {qtyText(b.quantity)} <span className="text-muted" style={{ fontWeight: 400 }}>{refs.unitById[b.stock_unit_id]?.symbol}</span>
                     </td>

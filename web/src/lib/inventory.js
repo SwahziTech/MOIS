@@ -21,6 +21,10 @@ export const MOVEMENT_TYPES = {
   reversal:        { label: 'Reversal',        noun: 'Reversal',        perm: 'inventory.adjust', help: '' },
   // stock moved from one product to another when a name is resolved (migration 028)
   reclassification: { label: 'Reclassify',     noun: 'Reclassification', perm: 'products.manage', help: '' },
+  // posted by production batches (migration 042), never from the stock forms
+  production_use:    { label: 'Production use',    noun: 'Production use',      perm: 'production.create',   help: '' },
+  production_output: { label: 'Into curing',       noun: 'Production — curing', perm: 'production.create',   help: '' },
+  curing_release:    { label: 'Quality release',   noun: 'Quality release',     perm: 'production.complete', help: '' },
 };
 
 /**

@@ -137,7 +137,7 @@ PRD section: 4.6 (Inventory)
 - Suppliers added to master data here, since procurement/receiving needs them
 
 ## 1c — Procurement
-**Status: CURRENT**
+**Status: CURRENT** (about 95% done; finishing alongside 1d — SwahziTech, 2026-10-18)
 
 Scope decided with SwahziTech (2026-10-16): the purchase record and its
 payment status only — supplier, prices, transport (part of landed cost),
@@ -154,7 +154,14 @@ PRD section: 4.5 (Procurement)
 - Depends on 1b's inventory transaction model (receiving writes a transaction)
 
 ## 1d — Production Engine
-**Status: not started**
+**Status: CURRENT** (started 2026-10-18 on SwahziTech's instruction, while 1c finishes)
+
+Spec decided with SwahziTech from Stumarcot's answers (2026-10-18): a batch is one
+mix/session (one product, one colour), many per day; cement bags counted, other
+materials from the recipe × bags unless counted, with material variance against
+stock counts; curing 14 days org-wide in a Curing store (not sellable); quality
+release with reject reasons (Broken, Cracked, Colour wrong, Size wrong); secretary
+and branch manager record batches, the storekeeper issues materials (migration 042).
 
 PRD sections: 4.7 (Production), 4.8 (Recipes/BOMs — activation),
 4.9 (WIP/Curing/Finished Goods), 4.10 (Quality)

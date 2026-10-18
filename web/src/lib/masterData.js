@@ -28,6 +28,7 @@ export const ENTITY_LABELS = {
   supplier: 'Supplier',
   import_alias: 'Import name match',
   identity_decision: 'Name match',
+  production_batch: 'Production batch',
 };
 
 /** A message safe to show the user, for an error from a master-data write. */

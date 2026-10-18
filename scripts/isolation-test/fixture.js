@@ -32,7 +32,7 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   // Minimal tenant data so the reverse direction (Stumarcot reading this org) is testable too
   let branch = await must(sb.from('branches').select('id').eq('organization_id', org.id).eq('name', 'Test Branch').maybeSingle(), 'branch lookup');
   if (!branch) branch = await must(sb.from('branches').insert({ organization_id: org.id, name: 'Test Branch' }).select('id').single(), 'branch');
-  const wh = await must(sb.from('warehouses').select('id').eq('branch_id', branch.id).maybeSingle(), 'wh lookup');
+  const wh = await must(sb.from('warehouses').select('id').eq('branch_id', branch.id).neq('type', 'wip').maybeSingle(), 'wh lookup');
   if (!wh) await must(sb.from('warehouses').insert({ organization_id: org.id, branch_id: branch.id, name: 'Test Store' }), 'warehouse');
   let unit = await must(sb.from('units').select('id').eq('organization_id', org.id).eq('symbol', 'PCS').maybeSingle(), 'unit lookup');
   if (!unit) unit = await must(sb.from('units').insert({ organization_id: org.id, symbol: 'PCS', name: 'Pieces' }).select('id').single(), 'unit');
@@ -54,7 +54,7 @@ async function must(p, what) { const r = await p; if (r.error) throw new Error(`
   const { data: stumaCat } = await sb.from('product_categories').select('id').eq('organization_id', stuma.id).limit(1).single();
   const { data: stumaUnit } = await sb.from('units').select('id').eq('organization_id', stuma.id).limit(1).single();
   const { data: stumaWh } = await sb.from('warehouses').select('id, branch_id').eq('organization_id', stuma.id).limit(1).single();
-  const { data: testWh } = await sb.from('warehouses').select('id').eq('organization_id', org.id).limit(1).single();
+  const { data: testWh } = await sb.from('warehouses').select('id').eq('organization_id', org.id).neq('type', 'wip').limit(1).single();
   const { data: testProduct } = await sb.from('products').select('id, unit_id').eq('organization_id', org.id).eq('product_id_ref', 'test_secret_product').single();
   // Inventory data in the test org, so other tenants' reads are tested against real rows
   // (service role: the ledger takes inserts only from server side or the posting function)

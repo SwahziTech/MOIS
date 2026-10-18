@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart,
+  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -44,6 +44,13 @@ const NAV = [
       { label: 'Stock',         to: '/stock',     icon: Boxes,          perm: 'inventory.view' },
       { label: 'Movements',     to: '/movements', icon: ArrowLeftRight, perm: 'inventory.view' },
       { label: 'Purchases',     to: '/purchases', icon: ShoppingCart,   perm: 'procurement.view' },
+    ],
+  },
+  {
+    section: 'Production',
+    items: [
+      // batches, curing and quality release (migration 042)
+      { label: 'Production',    to: '/production', icon: Factory,       perm: 'production.view' },
     ],
   },
   {

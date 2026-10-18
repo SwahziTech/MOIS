@@ -9,6 +9,7 @@ const BRANCH_TABLES = {
   material:           'materials',               // a branch's own material (032); NULL = shared
   product_price:      'product_branch_pricing',
   color_pricing_rule: 'category_color_pricing_rules',
+  production_batch:   'production_batches',
 };
 
 /** Resolves to f => branch id of the flag's record, or null for a shared record */
