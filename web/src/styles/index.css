@@ -1548,3 +1548,6 @@ td .flag-actions { margin-top: 0; }
 
 /* Purchase autofill hint (2026-10-18) */
 .purchase-hint { margin-top: 4px; }
+
+/* A form's error beside its buttons, where the user is looking (2026-10-18) */
+.modal-footer-error { margin-right: auto; color: var(--color-error); font-size: var(--text-sm); font-weight: 500; }

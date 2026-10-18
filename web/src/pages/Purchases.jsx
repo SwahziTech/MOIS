@@ -23,6 +23,9 @@ const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 // From the third purchase of a material at a branch, a new entry starts
 // from the latest one's details (decided 2026-10-18); the user changes what differs
 const AUTOFILL_AFTER = 2;
+// VAT on a purchase (decided 2026-10-18): ticked = the prices include VAT at
+// this rate, and the VAT is always worked out as goods × 18/118
+const VAT_RATE = 18;
 const round2 = n => Math.round(n * 100) / 100;
 
 /*
@@ -298,8 +301,6 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [invoice,   setInvoice]   = useState(purchase?.invoice_reference ?? receipt?.reference ?? '');
   const [transport, setTransport] = useState(purchase?.transport_charge ? String(purchase.transport_charge) : '');
   const [vatShown,  setVatShown]  = useState(purchase?.vat_amount != null);
-  const [vatAmount, setVatAmount] = useState(purchase?.vat_amount != null ? String(purchase.vat_amount) : '');
-  const [inclVat,   setInclVat]   = useState(purchase?.prices_include_vat ?? false);
   const [paid,      setPaid]      = useState(purchase ? String(purchase.amount_paid) : '');
   const [method,    setMethod]    = useState(purchase?.payment_method ?? firstPast?.[0].method ?? '');
   const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? today);
@@ -332,17 +333,12 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
         stockQty: Number(t.quantity), stockUnitId: t.stock_unit_id, price: num(prices[t.id]) }));
   const amount = l => (l.price != null && l.qty != null ? round2(l.price * l.qty) : null);
   const subtotal = lines.reduce((s, l) => s + (amount(l) ?? 0), 0);
-  const vat = vatShown ? (num(vatAmount) ?? 0) : 0;
-  const total = subtotal + (num(transport) ?? 0) + (vatShown && !inclVat ? vat : 0);
-  const vatFactor = vatShown && inclVat && subtotal > 0 ? (subtotal - vat) / subtotal : 1;
+  const vat = vatShown ? round2(subtotal * VAT_RATE / (100 + VAT_RATE)) : 0;   // included in the goods amount
+  const total = subtotal + (num(transport) ?? 0);
+  const vatFactor = vatShown && subtotal > 0 ? (subtotal - vat) / subtotal : 1;
   const landedPerUnit = l => (amount(l) != null && l.stockQty > 0 && subtotal > 0
     ? (amount(l) * vatFactor + (num(transport) ?? 0) * amount(l) / subtotal) / l.stockQty : null);
 
-  function vatFromRate(rate) {
-    const r = num(rate);
-    if (r == null || !(r >= 0)) return;
-    setVatAmount(String(round2(inclVat ? subtotal * r / (100 + r) : subtotal * r / 100)));
-  }
 
   async function save(e) {
     e.preventDefault();
@@ -359,7 +355,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
     const header = {
       ...(supplierId ? { supplier_id: supplierId } : { new_supplier_name: newSupplier.trim() }),
       invoice_reference: invoice.trim() || null, transport_charge: num(transport) ?? 0,
-      vat_amount: vatShown ? num(vatAmount) : null, prices_include_vat: vatShown && inclVat,
+      vat_amount: vatShown ? vat : null, prices_include_vat: vatShown,
       amount_paid: num(paid) ?? 0, payment_method: method.trim() || null, paid_on: num(paid) > 0 ? paidOn || null : null,
       notes: notes.trim() || null,
     };
@@ -452,13 +448,13 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   return (
     <Modal title={mode === 'edit' ? 'Purchase' : mode === 'complete' ? 'Add purchase details' : 'Record goods + purchase'} onClose={onClose} size="lg"
       footer={<>
+        {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="purchase-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>
           {mode === 'edit' ? 'Save changes' : needsApproval ? 'Submit for approval' : 'Record purchase'}
         </button>
       </>}>
       <form id="purchase-form" className="modal-form" onSubmit={save}>
-        {error && <div className="alert alert-error" role="alert">{error}</div>}
         {isNew ? (
           <>
             <div className="form-row">
@@ -549,25 +545,19 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
           </div>
           <div className="form-group">
             <label className="text-sm flex items-center gap-8">
-              <input type="checkbox" checked={vatShown} onChange={e => setVatShown(e.target.checked)} /> The receipt shows VAT separately
+              <input type="checkbox" checked={vatShown} onChange={e => setVatShown(e.target.checked)} /> VAT ({VAT_RATE}%) is included in the prices
             </label>
             {vatShown && (
               <div className="flex flex-col gap-4 mt-4">
-                <div className="flex gap-8">
-                  <NumberInput step="any" min="0" className="form-input" aria-label="VAT amount" placeholder="VAT amount" value={vatAmount} onChange={e => setVatAmount(e.target.value)} />
-                  <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} aria-label="or VAT rate %" placeholder="or rate %" onBlur={e => vatFromRate(e.target.value)} />
-                </div>
-                <label className="text-xs flex items-center gap-4">
-                  <input type="checkbox" checked={inclVat} onChange={e => setInclVat(e.target.checked)} /> The prices above already include this VAT
-                </label>
-                <span className="form-hint">VAT is not part of the materials' cost.</span>
+                <div className="text-sm">VAT: <strong>{money(vat)}</strong> <span className="text-muted">= {money(round2(subtotal))} × {VAT_RATE}/{100 + VAT_RATE}</span></div>
+                <span className="form-hint">Worked out from the goods amount. VAT is not part of the materials' cost.</span>
               </div>
             )}
           </div>
         </div>
 
         <div className="detail-list text-sm">
-          <div>Goods: <strong>{money(round2(subtotal))}</strong>{num(transport) ? <> · transport {money(num(transport))}</> : null}{vatShown && vat ? <> · VAT {money(vat)}{inclVat ? ' (included)' : ''}</> : null}</div>
+          <div>Goods: <strong>{money(round2(subtotal))}</strong>{num(transport) ? <> · transport {money(num(transport))}</> : null}{vatShown && vat ? <> · VAT {money(vat)} (included)</> : null}</div>
           <div>Total to pay: <strong>{money(round2(total))}</strong></div>
           {lines.some(l => landedPerUnit(l) != null) && (
             <div className="text-xs text-muted">Cost: {lines.filter(l => landedPerUnit(l) != null).map(l => `${l.name} ${money(round2(landedPerUnit(l)))} per ${refs.unitById[l.stockUnitId]?.symbol ?? 'unit'}`).join(' · ')}</div>
