@@ -8,7 +8,8 @@ import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
-import { PageTabs } from '../components/ListControls';
+import { PageTabs, ChipRow } from '../components/ListControls';
+import ExpenseModal from '../components/purchases/ExpenseModal';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -24,8 +25,9 @@ const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 // from the latest one's details (decided 2026-10-18); the user changes what differs
 const AUTOFILL_AFTER = 2;
 // VAT on a purchase (decided 2026-10-18): ticked = the prices include VAT at
-// this rate, and the VAT is always worked out as goods × 18/118
-const VAT_RATE = 18;
+// the branch's rate (041, set by the branch manager), worked out as
+// goods × r/(100 + r) — 18/118 at 18%. 18% until a branch has its own.
+const DEFAULT_VAT = 18;
 const round2 = n => Math.round(n * 100) / 100;
 
 /*
@@ -55,6 +57,12 @@ export default function Purchases() {
   const [error,   setError]   = useState('');
   const [editing, setEditing] = useState(null);     // { mode: 'complete'|'new'|'edit', receipt?, purchase? }
   const [deleting, setDeleting] = useState(null);   // a void purchase the technical admin is deleting
+  const [vatRates,  setVatRates]  = useState({});     // branch id → VAT rate (041)
+  const [expCats,   setExpCats]   = useState([]);
+  const [expenses,  setExpenses]  = useState([]);
+  const [expReady,  setExpReady]  = useState(false);  // false until migration 041 is live
+  const [expChip,   setExpChip]   = useState('');
+  const [editingExpense, setEditingExpense] = useState(null);   // 'new' | an expense
 
   async function load() {
     setError('');
@@ -96,6 +104,16 @@ export default function Purchases() {
       setPendingReq(pr.data || []);
       setTxByMove(byMove);
       setTab(t => t ?? ((aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'purchases'));
+      // Branch VAT rates and expenses (041): the page still works without them
+      const [vr, ec, ex] = await Promise.all([
+        supabase.from('branches').select('id, vat_rate'),
+        supabase.from('expense_categories').select('id, name, status, display_order').order('display_order').order('name'),
+        byBranch(supabase.from('expenses').select('*')).order('expense_date', { ascending: false }).order('created_at', { ascending: false }).limit(500),
+      ]);
+      setVatRates(vr.error ? {} : Object.fromEntries((vr.data || []).map(b => [b.id, Number(b.vat_rate)])));
+      setExpReady(!ec.error && !ex.error);
+      setExpCats(ec.data || []);
+      setExpenses(ex.data || []);
     } catch (e) {
       console.error(e);
       setError(LOAD_ERROR);
@@ -136,6 +154,10 @@ export default function Purchases() {
   // Technical admin (system.manage): may delete a purchase entered wrongly (040)
   const isTechAdmin = canManage('system.manage');
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
+  const vatRateOf = b => vatRates[b] ?? DEFAULT_VAT;
+  const catName = id => expCats.find(c => c.id === id)?.name ?? '—';
+  const expensesHere = expenses.filter(e => inBranch(e.branch_id) && (!expChip || e.category_id === expChip));
+  const expensePay = e => (e.status === 'void' ? 'void' : Number(e.amount_paid) >= Number(e.amount) ? 'paid' : Number(e.amount_paid) > 0 ? 'part_paid' : 'unpaid');
   const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
   const owed = purchasesHere.filter(p => p.status === 'recorded').reduce((s, p) => s + Math.max(Number(totals[p.id]?.balance ?? 0), 0), 0);
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
@@ -145,13 +167,18 @@ export default function Purchases() {
   return (
     <PageShell title="Purchases" subtitle="Inventory"
       description="The money side of materials received: supplier, cost, payment — and each branch's material costs."
+      actions={expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
+        <button type="button" className="btn btn-outline" onClick={() => setEditingExpense('new')}>
+          <Plus size={14} /> Record expense
+        </button>
+      )}
       primaryAction={canRecordAt(branchId) && (
         <button type="button" className="btn btn-primary" disabled={!refs} onClick={() => setEditing({ mode: 'new' })}>
           <Plus size={14} /> Record Goods + Purchase
         </button>
       )}>
       <PageTabs value={tab} onChange={setTab}
-        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['costs', 'Material costs']]} />
+        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses']] : []), ['costs', 'Material costs']]} />
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
       <div className="card">
@@ -183,29 +210,43 @@ export default function Purchases() {
 
             {tab === 'purchases' && (
               <table>
-                <thead><tr><th>Date</th><th>Supplier</th><th>Goods</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
+                <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
                 <tbody>
                   {/* Sent for approval (backdated or by a branch manager): shown until an admin decides */}
-                  {!loading && pendingHere.map(p => (
+                  {!loading && pendingHere.map(p => {
+                    // the same short columns, read from what was sent for approval
+                    const rl = p.payload?.receipt?.lines || [];
+                    const priceOf = m => (p.payload?.lines || []).find(l => l.material_id === m)?.unit_price;
+                    const goods = rl.reduce((sum, l) => sum + Number(l.quantity) * Number(priceOf(l.material_id) ?? 0), 0);
+                    return (
                     <tr key={p.id} className="text-muted">
                       <td>{p.payload?.receipt?.movement_date ?? p.payload?.purchase_date ?? '—'}</td>
-                      <td style={{ fontWeight: 500 }}>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
-                      <td className="text-sm">{p.summary}</td>
-                      <td />
+                      {rl.length ? <>
+                        <td style={{ fontWeight: 500 }}>{rl.map((l, i) => <div key={i}>{refs?.items[`m:${l.material_id}`]?.name ?? '—'}</div>)}</td>
+                        <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{qtyText(l.quantity)} <span className="text-xs">{refs?.unitById[l.unit_id]?.symbol}</span></div>)}</td>
+                        <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{priceOf(l.material_id) != null ? money(priceOf(l.material_id)) : '—'}</div>)}</td>
+                      </> : <td className="text-sm" colSpan={3}>{p.summary}</td>}
+                      <td>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{rl.length ? money(round2(goods + Number(p.payload?.transport_charge ?? 0))) : ''}</td>
                       <td><span className="badge badge-warning">Waiting for approval</span>
                         <div className="text-xs">{people[p.requested_by] ?? ''} · {p.requested_at.slice(0, 10)}</div></td>
                       <td style={{ textAlign: 'right' }}><Link to="/approvals" className="btn btn-ghost btn-sm">Approvals</Link></td>
                     </tr>
-                  ))}
-                  {loading ? <SkeletonRow cols={6} /> : purchasesHere.length === 0 ? (
-                    pendingHere.length ? null : <tr><td colSpan={6}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
+                    );
+                  })}
+                  {loading ? <SkeletonRow cols={8} /> : purchasesHere.length === 0 ? (
+                    pendingHere.length ? null : <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
                   ) : purchasesHere.map(p => {
                     const t = totals[p.id];
+                    const priceOfTx = Object.fromEntries((p.lines || []).map(l => [l.transaction_id, l.unit_price]));
+                    const ls = (txByMove[p.movement_id] || []).filter(x => x.material_id);
                     return (
                       <tr key={p.id} className={p.status === 'void' ? 'text-muted' : ''}>
                         <td>{p.purchase_date}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
-                        <td style={{ fontWeight: 500 }}>{supplierName(p.supplier_id)}</td>
-                        <td className="text-sm">{describeLines(txByMove[p.movement_id])}</td>
+                        <td style={{ fontWeight: 500 }}>{ls.map(x => <div key={x.id}>{refs?.items[`m:${x.material_id}`]?.name ?? '—'}</div>)}</td>
+                        <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{qtyText(x.entered_quantity)} <span className="text-muted text-xs">{refs?.unitById[x.entered_unit_id]?.symbol}</span></div>)}</td>
+                        <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{priceOfTx[x.id] != null ? money(priceOfTx[x.id]) : '—'}</div>)}</td>
+                        <td>{supplierName(p.supplier_id)}</td>
                         <td style={{ textAlign: 'right' }}>{t ? money(t.total) : '—'}</td>
                         <td>
                           <span className={`badge ${PAYMENT_BADGE[t?.payment_status] ?? 'badge-neutral'}`}>{PAYMENT_LABEL[t?.payment_status] ?? '—'}</span>
@@ -225,6 +266,46 @@ export default function Purchases() {
                   })}
                 </tbody>
               </table>
+            )}
+
+            {tab === 'expenses' && (
+              <>
+                {expCats.length > 0 && (
+                  <div className="card-body" style={{ paddingBottom: 0 }}>
+                    <ChipRow value={expChip} onChange={setExpChip} items={expCats.filter(c => c.status === 'active').map(c => ({ id: c.id, label: c.name }))} />
+                  </div>
+                )}
+                <table>
+                  <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
+                  <tbody>
+                    {loading ? <SkeletonRow cols={8} /> : expensesHere.length === 0 ? (
+                      <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No expenses yet" description="Electricity (LUKU), water, office tools, equipment… — use Record expense." /></td></tr>
+                    ) : expensesHere.map(e => {
+                      const pay = expensePay(e);
+                      return (
+                        <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>
+                          <td>{e.expense_date}</td>
+                          <td><span style={{ fontWeight: 500 }}>{e.description}</span><div className="text-xs text-muted">{catName(e.category_id)}</div></td>
+                          <td style={{ textAlign: 'right' }}>{e.quantity != null ? qtyText(e.quantity) : '—'}</td>
+                          <td style={{ textAlign: 'right' }}>{e.unit_price != null ? money(e.unit_price) : '—'}</td>
+                          <td>{e.supplier_id ? supplierName(e.supplier_id) : '—'}</td>
+                          <td style={{ textAlign: 'right' }}>{money(e.amount)}{e.vat_amount != null && <div className="text-xs text-muted">VAT {money(e.vat_amount)}</div>}</td>
+                          <td>
+                            <span className={`badge ${PAYMENT_BADGE[pay] ?? 'badge-neutral'}`}>{PAYMENT_LABEL[pay]}</span>
+                            {pay === 'part_paid' && <div className="text-xs text-muted">{money(round2(e.amount - e.amount_paid))} to pay</div>}
+                            {e.status === 'void' && <div className="text-xs text-muted">{e.void_reason}</div>}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {e.status === 'recorded' && canRecordAt(e.branch_id) && (
+                              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingExpense(e)}>Open</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </>
             )}
 
             {tab === 'costs' && (!branchId ? (
@@ -262,8 +343,14 @@ export default function Purchases() {
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
           branchId={branchId} canAt={canAt} canManage={canManage}
-          goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''} history={history}
+          goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''} history={history} vatRateOf={vatRateOf}
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
+      )}
+      {editingExpense && refs && (
+        <ExpenseModal expense={editingExpense === 'new' ? null : editingExpense} branchId={branchId} categories={expCats}
+          suppliers={refs.suppliers} vatRateOf={vatRateOf} organization={organization} canRecordAt={canRecordAt}
+          onClose={() => setEditingExpense(null)}
+          onSaved={async () => { setEditingExpense(null); setTab('expenses'); await load(); }} />
       )}
       {deleting && (
         <Modal title={`Delete the purchase of ${deleting.purchase_date}`} onClose={() => setDeleting(null)}>
@@ -275,7 +362,7 @@ export default function Purchases() {
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, vatRateOf = () => DEFAULT_VAT, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -303,7 +390,8 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [vatShown,  setVatShown]  = useState(purchase?.vat_amount != null);
   const [paid,      setPaid]      = useState(purchase ? String(purchase.amount_paid) : '');
   const [method,    setMethod]    = useState(purchase?.payment_method ?? firstPast?.[0].method ?? '');
-  const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? today);
+  const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? receipt?.movement_date ?? today);
+  const [paidOnSet, setPaidOnSet] = useState(!!purchase?.paid_on);   // until set by hand, it follows the purchase date
   const [notes,     setNotes]     = useState(purchase?.notes ?? '');
   const [date,      setDate]      = useState(today);
   const [submitted, setSubmitted] = useState(false);
@@ -314,6 +402,8 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [error, setError] = useState('');
 
   const wh = refs.warehouses.find(w => w.id === warehouseId);
+  useEffect(() => { if (isNew && !paidOnSet) setPaidOn(date); }, [date, isNew, paidOnSet]);
+  const vatRate = vatRateOf(isNew ? wh?.branch_id ?? branchId : receipt?.branch_id ?? purchase?.branch_id ?? branchId);
   // An earlier date is a correction (033/036): it needs stock-correction
   // rights at the store; non-admins' backdated purchases go to approval
   const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);
@@ -333,7 +423,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
         stockQty: Number(t.quantity), stockUnitId: t.stock_unit_id, price: num(prices[t.id]) }));
   const amount = l => (l.price != null && l.qty != null ? round2(l.price * l.qty) : null);
   const subtotal = lines.reduce((s, l) => s + (amount(l) ?? 0), 0);
-  const vat = vatShown ? round2(subtotal * VAT_RATE / (100 + VAT_RATE)) : 0;   // included in the goods amount
+  const vat = vatShown ? round2(subtotal * vatRate / (100 + vatRate)) : 0;   // included in the goods amount
   const total = subtotal + (num(transport) ?? 0);
   const vatFactor = vatShown && subtotal > 0 ? (subtotal - vat) / subtotal : 1;
   const landedPerUnit = l => (amount(l) != null && l.stockQty > 0 && subtotal > 0
@@ -544,12 +634,15 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
             <span className="form-hint">Added to the materials' cost.</span>
           </div>
           <div className="form-group">
+            {/* a branch that is not VAT-registered (rate 0) has no VAT to tick */}
+            {(vatRate > 0 || vatShown) && (
             <label className="text-sm flex items-center gap-8">
-              <input type="checkbox" checked={vatShown} onChange={e => setVatShown(e.target.checked)} /> VAT ({VAT_RATE}%) is included in the prices
+              <input type="checkbox" checked={vatShown} onChange={e => setVatShown(e.target.checked)} /> VAT ({vatRate}%) is included in the prices
             </label>
+            )}
             {vatShown && (
               <div className="flex flex-col gap-4 mt-4">
-                <div className="text-sm">VAT: <strong>{money(vat)}</strong> <span className="text-muted">= {money(round2(subtotal))} × {VAT_RATE}/{100 + VAT_RATE}</span></div>
+                <div className="text-sm">VAT: <strong>{money(vat)}</strong> <span className="text-muted">= {money(round2(subtotal))} × {vatRate}/{100 + vatRate}</span></div>
                 <span className="form-hint">Worked out from the goods amount. VAT is not part of the materials' cost.</span>
               </div>
             )}
@@ -582,7 +675,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
             {num(paid) > 0 && (
               <div className="form-group">
                 <label className="form-label" htmlFor="pu-paidon">Paid on</label>
-                <input id="pu-paidon" type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} />
+                <input id="pu-paidon" type="date" className="form-input" max={today} value={paidOn} onChange={e => { setPaidOn(e.target.value); setPaidOnSet(true); }} />
               </div>
             )}
           </div>
