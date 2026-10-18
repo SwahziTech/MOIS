@@ -6,6 +6,7 @@ import { dbErrorMessage } from '../../lib/masterData';
 import { warehouseLabel, qtyText, itemKey } from '../../lib/inventory';
 import { findOpeningDuplicates, planOpeningFix, runSteps, closeDoubleEntry } from '../../lib/doubleEntry';
 import Modal from '../Modal';
+import NumberInput from '../NumberInput';
 
 // The store an item usually belongs in: products in a finished-goods store, materials elsewhere
 export const fitsStore = (item, w) => !!item && !!w && (item.kind === 'product') === (w.type === 'finished_goods');
@@ -156,7 +157,7 @@ function FixOpeningModal({ dup, refs, whById, onClose, onFixed }) {
           {option('custom', <>
             Another figure:
             <span className="double-entry-custom" onClick={() => setChoice('custom')}>
-              <input type="number" step="any" min="0" className="form-input" aria-label="Correct quantity" placeholder="Qty" value={customQty} onChange={e => setCustomQty(e.target.value)} />
+              <NumberInput step="any" min="0" className="form-input" aria-label="Correct quantity" placeholder="Qty" value={customQty} onChange={e => setCustomQty(e.target.value)} />
               <span>{sym} in</span>
               <select className="form-input" aria-label="Store" value={customWh} onChange={e => setCustomWh(e.target.value)}>
                 {stores.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}

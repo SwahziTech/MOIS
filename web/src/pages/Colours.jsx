@@ -9,6 +9,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -138,7 +139,7 @@ function ColourModal({ colour, organizationId, nextOrder, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="colour-order">Display order</label>
-            <input id="colour-order" type="number" className="form-input" value={order} onChange={e => setOrder(e.target.value)} />
+            <NumberInput id="colour-order" className="form-input" value={order} onChange={e => setOrder(e.target.value)} />
           </div>
         </div>
         {!isNew && (

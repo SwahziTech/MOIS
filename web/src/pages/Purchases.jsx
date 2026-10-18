@@ -13,12 +13,16 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load purchases. Please try again.";
 const PAYMENT_LABEL = { paid: 'Paid', part_paid: 'Part-paid', unpaid: 'Unpaid', void: 'Void' };
 const PAYMENT_BADGE = { paid: 'badge-success', part_paid: 'badge-warning', unpaid: 'badge-neutral', void: 'badge-neutral' };
 const METHODS = ['Cash', 'Mobile money', 'Bank transfer', 'Cheque'];
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
+// From the third purchase of a material at a branch, a new entry starts
+// from the latest one's details (decided 2026-10-18); the user changes what differs
+const AUTOFILL_AFTER = 2;
 const round2 = n => Math.round(n * 100) / 100;
 
 /*
@@ -111,6 +115,21 @@ export default function Purchases() {
 
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const waitingHere = awaiting.filter(a => inBranch(a.branch_id));
+  // Each material's recorded purchases per branch, newest first (purchases load newest first)
+  const history = useMemo(() => {
+    const h = {};
+    for (const p of purchases) {
+      if (p.status !== 'recorded') continue;
+      for (const l of p.lines || []) {
+        const t = (txByMove[p.movement_id] || []).find(x => x.id === l.transaction_id);
+        if (!t?.material_id) continue;
+        (h[`${p.branch_id}|${t.material_id}`] ||= []).push({ date: p.purchase_date, supplierId: p.supplier_id, unitId: t.entered_unit_id,
+          qty: Number(t.entered_quantity), price: Number(l.unit_price), method: p.payment_method });
+      }
+    }
+    return h;
+  }, [purchases, txByMove]);
+
   // Technical admin (system.manage): may delete a purchase entered wrongly (040)
   const isTechAdmin = canManage('system.manage');
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
@@ -240,7 +259,7 @@ export default function Purchases() {
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
           branchId={branchId} canAt={canAt} canManage={canManage}
-          goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''}
+          goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''} history={history}
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
       )}
       {deleting && (
@@ -253,7 +272,7 @@ export default function Purchases() {
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -266,10 +285,15 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
     && canAt('inventory.receive', w.branch_id, w.id) && canAt('procurement.receive', w.branch_id, w.id));
   const [warehouseId, setWarehouseId] = useState(stores.find(w => w.type === 'raw_materials')?.id ?? stores[0]?.id ?? '');
   const [newLines, setNewLines] = useState([{ materialId: '', quantity: '', unitId: '', price: '' }]);
-  const [prices, setPrices] = useState(Object.fromEntries(receiptLines.map(t => [t.id, priceOf[t.id] ?? ''])));
+  const recBranch = receipt?.branch_id ?? branchId;
+  const pastOf = (b, materialId) => history[`${b}|${materialId}`] || [];
+  // the latest purchase's price, when it was bought in the same unit
+  const filledPrice = t => { const p = pastOf(recBranch, t.material_id); return p.length >= AUTOFILL_AFTER && p[0].unitId === t.entered_unit_id ? String(p[0].price) : ''; };
+  const firstPast = mode === 'complete' ? receiptLines.map(t => pastOf(recBranch, t.material_id)).find(p => p.length >= AUTOFILL_AFTER) : null;
+  const [prices, setPrices] = useState(Object.fromEntries(receiptLines.map(t => [t.id, priceOf[t.id] ?? (mode === 'complete' ? filledPrice(t) : '')])));
 
   const activeSuppliers = refs.suppliers.filter(s => s.status === 'active' || s.id === purchase?.supplier_id);
-  const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? '');
+  const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? firstPast?.[0].supplierId ?? '');
   const [newSupplier, setNewSupplier] = useState('');
   const [invoice,   setInvoice]   = useState(purchase?.invoice_reference ?? receipt?.reference ?? '');
   const [transport, setTransport] = useState(purchase?.transport_charge ? String(purchase.transport_charge) : '');
@@ -277,7 +301,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const [vatAmount, setVatAmount] = useState(purchase?.vat_amount != null ? String(purchase.vat_amount) : '');
   const [inclVat,   setInclVat]   = useState(purchase?.prices_include_vat ?? false);
   const [paid,      setPaid]      = useState(purchase ? String(purchase.amount_paid) : '');
-  const [method,    setMethod]    = useState(purchase?.payment_method ?? '');
+  const [method,    setMethod]    = useState(purchase?.payment_method ?? firstPast?.[0].method ?? '');
   const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? today);
   const [notes,     setNotes]     = useState(purchase?.notes ?? '');
   const [date,      setDate]      = useState(today);
@@ -391,9 +415,39 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
   const setNewLine = (i, patch) => setNewLines(ls => ls.map((l, j) => {
     if (j !== i) return l;
     const next = { ...l, ...patch };
-    if (patch.materialId !== undefined) next.unitId = refs.items[`m:${patch.materialId}`]?.stockUnitId ?? '';
+    if (patch.materialId !== undefined) {
+      const item = refs.items[`m:${patch.materialId}`];
+      const past = pastOf(wh?.branch_id ?? branchId, patch.materialId);
+      if (past.length >= AUTOFILL_AFTER && item?.units.some(u => u.id === past[0].unitId)) {
+        next.unitId = past[0].unitId;
+        next.price = String(past[0].price);
+      } else {
+        next.unitId = item?.stockUnitId ?? '';
+      }
+    }
     return next;
   }));
+  function pickMaterial(i, materialId) {
+    setNewLine(i, { materialId });
+    const past = pastOf(wh?.branch_id ?? branchId, materialId);
+    if (past.length < AUTOFILL_AFTER) return;
+    if (!supplierId && !newSupplier.trim() && past[0].supplierId) setSupplierId(past[0].supplierId);
+    if (!method && past[0].method) setMethod(past[0].method);
+  }
+
+  // "From the last 2 purchases: …" under a line, once a material has been bought twice here
+  const supplierName = id => refs.suppliers.find(s => s.id === id)?.name ?? '—';
+  function pastHint(b, materialId) {
+    const past = pastOf(b, materialId);
+    if (past.length < AUTOFILL_AFTER) return null;
+    const [a, z] = past;
+    const one = p => `${p.date} · ${supplierName(p.supplierId)} · ${qtyText(p.qty)} ${refs.unitById[p.unitId]?.symbol ?? ''} at ${money(p.price)}`;
+    return (
+      <div className="text-xs text-muted purchase-hint">
+        Filled from the last {z ? '2 purchases' : 'purchase'}: {[a, z].filter(Boolean).map(one).join('; ')}.{z && a.price !== z.price && a.unitId === z.unitId ? ` The price changed from ${money(z.price)} to ${money(a.price)}.` : ''} Change anything that is different this time.
+      </div>
+    );
+  }
 
   return (
     <Modal title={mode === 'edit' ? 'Purchase' : mode === 'complete' ? 'Add purchase details' : 'Record goods + purchase'} onClose={onClose} size="lg"
@@ -431,18 +485,21 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
                 {newLines.map((l, i) => {
                   const item = refs.items[`m:${l.materialId}`];
                   return (
-                    <div key={i} className="ingredient-row">
-                      <select className="form-input" aria-label="Material" value={l.materialId} onChange={e => setNewLine(i, { materialId: e.target.value })}>
+                    <div key={i}>
+                    <div className="ingredient-row">
+                      <select className="form-input" aria-label="Material" value={l.materialId} onChange={e => pickMaterial(i, e.target.value)}>
                         <option value="" disabled>Material…</option>
                         {materials.filter(usable).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <input type="number" step="any" min="0" className="form-input" aria-label="Quantity" placeholder="Qty" value={l.quantity} onChange={e => setNewLine(i, { quantity: e.target.value })} />
+                      <NumberInput step="any" min="0" className="form-input" aria-label="Quantity" placeholder="Qty" value={l.quantity} onChange={e => setNewLine(i, { quantity: e.target.value })} />
                       <select className="form-input" aria-label="Unit" value={l.unitId} onChange={e => setNewLine(i, { unitId: e.target.value })}>
                         <option value="" disabled>Unit…</option>
                         {(item?.units || []).map(u => <option key={u.id} value={u.id}>{refs.unitById[u.id]?.symbol}</option>)}
                       </select>
-                      <input type="number" step="any" min="0" className="form-input" aria-label="Price per unit" placeholder="Price / unit" value={l.price} onChange={e => setNewLine(i, { price: e.target.value })} />
+                      <NumberInput step="any" min="0" className="form-input" aria-label="Price per unit" placeholder="Price / unit" value={l.price} onChange={e => setNewLine(i, { price: e.target.value })} />
                       <button type="button" className="icon-btn" aria-label="Remove line" disabled={newLines.length === 1} onClick={() => setNewLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
+                    </div>
+                    {l.materialId && pastHint(wh?.branch_id ?? branchId, l.materialId)}
                     </div>
                   );
                 })}
@@ -457,9 +514,10 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
               {lines.map(l => (
                 <div key={l.key} className="form-row" style={{ alignItems: 'center' }}>
                   <span className="text-sm">{qtyText(l.qty)} {refs.unitById[l.unitId]?.symbol} {l.name}</span>
-                  <input type="number" step="any" min="0" className="form-input" aria-label={`${l.name} price per ${refs.unitById[l.unitId]?.symbol}`}
+                  <NumberInput step="any" min="0" className="form-input" aria-label={`${l.name} price per ${refs.unitById[l.unitId]?.symbol}`}
                     placeholder={`Price per ${refs.unitById[l.unitId]?.symbol ?? 'unit'}`} value={prices[l.txId] ?? ''}
                     onChange={e => setPrices(p => ({ ...p, [l.txId]: e.target.value }))} />
+                  {mode === 'complete' && <div style={{ flexBasis: '100%' }}>{pastHint(recBranch, receiptLines.find(t => t.id === l.txId)?.material_id)}</div>}
                 </div>
               ))}
             </div>
@@ -486,7 +544,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="pu-transport">Transport / other charges</label>
-            <input id="pu-transport" type="number" step="any" min="0" className="form-input" placeholder="0" value={transport} onChange={e => setTransport(e.target.value)} />
+            <NumberInput id="pu-transport" step="any" min="0" className="form-input" placeholder="0" value={transport} onChange={e => setTransport(e.target.value)} />
             <span className="form-hint">Added to the materials' cost.</span>
           </div>
           <div className="form-group">
@@ -496,8 +554,8 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
             {vatShown && (
               <div className="flex flex-col gap-4 mt-4">
                 <div className="flex gap-8">
-                  <input type="number" step="any" min="0" className="form-input" aria-label="VAT amount" placeholder="VAT amount" value={vatAmount} onChange={e => setVatAmount(e.target.value)} />
-                  <input type="number" step="any" min="0" className="form-input" style={{ width: 110 }} aria-label="or VAT rate %" placeholder="or rate %" onBlur={e => vatFromRate(e.target.value)} />
+                  <NumberInput step="any" min="0" className="form-input" aria-label="VAT amount" placeholder="VAT amount" value={vatAmount} onChange={e => setVatAmount(e.target.value)} />
+                  <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} aria-label="or VAT rate %" placeholder="or rate %" onBlur={e => vatFromRate(e.target.value)} />
                 </div>
                 <label className="text-xs flex items-center gap-4">
                   <input type="checkbox" checked={inclVat} onChange={e => setInclVat(e.target.checked)} /> The prices above already include this VAT
@@ -522,7 +580,7 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
             <div className="form-group">
               <label className="form-label" htmlFor="pu-paid">Amount paid</label>
               <div className="flex gap-8">
-                <input id="pu-paid" type="number" step="any" min="0" className="form-input" placeholder="0 = not paid yet" value={paid} onChange={e => setPaid(e.target.value)} />
+                <NumberInput id="pu-paid" step="any" min="0" className="form-input" placeholder="0 = not paid yet" value={paid} onChange={e => setPaid(e.target.value)} />
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPaid(String(round2(total)))}>Paid in full</button>
               </div>
             </div>

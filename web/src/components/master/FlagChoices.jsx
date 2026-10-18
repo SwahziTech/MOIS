@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
 import { qtyText } from '../../lib/inventory';
+import NumberInput from '../NumberInput';
 
 // Flags that ask "which product is this really?"
 const IDENTITY_FLAGS = new Set(['import_placeholder', 'unresolved_identity', 'possible_duplicate']);
@@ -183,7 +184,7 @@ function IdentityChoice({ choice, productId, name, refs, busy, run, onBack }) {
               <div key={i} className="flex gap-4">
                 <ProductPick refs={refs} value={x.productId} onChange={v => setRow(r, i, { productId: v })} excludeId={productId}
                   sameCategoryAs={product?.categoryId} label="Product" />
-                <input type="number" step="any" min="0" className="form-input" style={{ width: 90 }} aria-label="Quantity" placeholder={unit(r)}
+                <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} aria-label="Quantity" placeholder={unit(r)}
                   value={x.qty} onChange={e => setRow(r, i, { qty: e.target.value })} />
               </div>
             ))}
@@ -267,7 +268,7 @@ function CorrectMatch({ decisionId, flag, refs, busy, run, onBack }) {
         {stock.map(r => (
           <div key={key(r)} className="flex items-center gap-8 text-xs">
             <span style={{ minWidth: 200 }}>{where(refs, r)} — has {qtyText(r.quantity)} {unit(r)}</span>
-            <input type="number" step="any" min="0" className="form-input" style={{ width: 90 }} aria-label="Quantity to move"
+            <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} aria-label="Quantity to move"
               value={move[key(r)] ?? ''} placeholder="0" onChange={e => setMove(m => ({ ...m, [key(r)]: e.target.value }))} />
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMove(m => ({ ...m, [key(r)]: String(r.quantity) }))}>all</button>
           </div>

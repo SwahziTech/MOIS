@@ -12,6 +12,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityHistory } from '../components/master/EntityPanels';
 import { ScrollText, Search, Plus, Trash2 } from 'lucide-react';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -475,7 +476,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                         <option key={m.id} value={m.id}>{m.name}{m.status !== 'active' ? ' (inactive)' : ''}</option>
                       ))}
                     </select>
-                    <input type="number" step="any" min="0" className="form-input" aria-label="Quantity"
+                    <NumberInput step="any" min="0" className="form-input" aria-label="Quantity"
                       value={r.quantity} onChange={e => setRow(i, { quantity: e.target.value })} />
                     <select className="form-input" aria-label="Unit" value={r.unit_id} onChange={e => setRow(i, { unit_id: e.target.value })}>
                       <option value="" disabled>Unit…</option>

@@ -1545,3 +1545,6 @@ td .flag-actions { margin-top: 0; }
 .double-entry-option.is-on { border-color: var(--text-primary); }
 .double-entry-custom { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; flex-wrap: wrap; }
 .double-entry-custom .form-input { width: auto; max-width: 160px; height: 30px; padding: 2px 8px; }
+
+/* Purchase autofill hint (2026-10-18) */
+.purchase-hint { margin-top: 4px; }

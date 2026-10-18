@@ -8,6 +8,7 @@ import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppl
 import Modal from '../Modal';
 import { findRepeats, planOpeningFix, runSteps } from '../../lib/doubleEntry';
 import { fitsStore } from './DoubleEntry';
+import NumberInput from '../NumberInput';
 
 const emptyLine = (kind = 'material') => ({ kind, key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
 // A new line's type follows the store: products in a finished-goods store, materials elsewhere
@@ -367,13 +368,13 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                           <option value="add">Add</option>
                         </select>
                       )}
-                      <input type="number" step="any" min="0" className="form-input" aria-label={type === 'count' ? 'Quantity found' : 'Quantity'}
+                      <NumberInput step="any" min="0" className="form-input" aria-label={type === 'count' ? 'Quantity found' : 'Quantity'}
                         placeholder={type === 'count' ? 'Found' : 'Qty'} value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value })} />
                       <select className="form-input" aria-label="Unit" value={l.unitId} onChange={e => setLine(i, { unitId: e.target.value })} disabled={!item}>
                         {(item?.units || []).map(u => <option key={u.id} value={u.id}>{unitById[u.id]?.symbol}</option>)}
                       </select>
                       {withCost && (
-                        <input type="number" step="any" min="0" className="form-input" aria-label="Cost per unit"
+                        <NumberInput step="any" min="0" className="form-input" aria-label="Cost per unit"
                           placeholder="Cost / unit" value={l.unitCost} onChange={e => setLine(i, { unitCost: e.target.value })} />
                       )}
                       <button type="button" className="icon-btn" aria-label="Remove line" onClick={() => setLines(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [emptyLine(l.kind)])}>

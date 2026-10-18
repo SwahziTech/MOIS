@@ -7,6 +7,7 @@ import { browserTimeZone } from '../lib/format';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
+import NumberInput from '../components/NumberInput';
 
 function Row({ label, children }) {
   return (
@@ -104,7 +105,7 @@ function YieldTolerance({ org, canEdit }) {
   return (
     <span className="flex flex-col gap-4">
       <span className="flex items-center gap-8">
-        ± <input type="number" min="0" step="any" className="form-input" style={{ width: 90 }} aria-label="Yield tolerance"
+        ± <NumberInput min="0" step="any" className="form-input" style={{ width: 90 }} aria-label="Yield tolerance"
             value={value} onChange={e => setValue(e.target.value)} /> pieces per bag
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>

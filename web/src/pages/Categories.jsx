@@ -10,6 +10,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const LAYOUTS = { colored: 'By colour', plain: 'Single price' };
@@ -249,7 +250,7 @@ function CategoryModal({ category, organizationId, palette, units, cats, takenRe
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="cat-order">Display order</label>
-            <input id="cat-order" type="number" className="form-input" value={order} onChange={e => setOrder(e.target.value)} />
+            <NumberInput id="cat-order" className="form-input" value={order} onChange={e => setOrder(e.target.value)} />
           </div>
         </div>
         <div className="form-row">
@@ -282,7 +283,7 @@ function CategoryModal({ category, organizationId, palette, units, cats, takenRe
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="cat-tol">Default yield tolerance (± pieces per bag)</label>
-            <input id="cat-tol" type="number" step="any" min="0" className="form-input" placeholder="Organization default"
+            <NumberInput id="cat-tol" step="any" min="0" className="form-input" placeholder="Organization default"
               value={tolerance} onChange={e => setTolerance(e.target.value)} />
             <span className="form-hint">For this category's products unless a product sets its own. 0 means exactly the average yield.</span>
           </div>

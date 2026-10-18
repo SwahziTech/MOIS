@@ -14,6 +14,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -455,12 +456,12 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label" htmlFor="own-avg">Average pieces per bag</label>
-                    <input id="own-avg" type="number" step="any" min="0" className="form-input" value={ownEdit.average}
+                    <NumberInput id="own-avg" step="any" min="0" className="form-input" value={ownEdit.average}
                       onChange={e => setOwnEdit(o => ({ ...o, average: e.target.value }))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="own-tol">Tolerance (±)</label>
-                    <input id="own-tol" type="number" step="any" min="0" className="form-input" placeholder="Same as shared" value={ownEdit.tolerance}
+                    <NumberInput id="own-tol" step="any" min="0" className="form-input" placeholder="Same as shared" value={ownEdit.tolerance}
                       onChange={e => setOwnEdit(o => ({ ...o, tolerance: e.target.value }))} />
                   </div>
                 </div>
@@ -687,20 +688,20 @@ function ProductModal({ product, organization, categories, units, products, bran
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="prod-cov">Pieces per m²</label>
-            <input id="prod-cov" type="number" step="any" min="0" className="form-input" placeholder="Not recorded"
+            <NumberInput id="prod-cov" step="any" min="0" className="form-input" placeholder="Not recorded"
               value={coverage} onChange={e => setCoverage(e.target.value)} />
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="prod-yield">Yield per bag</label>
-            <input id="prod-yield" type="number" step="any" min="0" className="form-input" placeholder="Not recorded"
+            <NumberInput id="prod-yield" step="any" min="0" className="form-input" placeholder="Not recorded"
               value={yieldPer} onChange={e => setYieldPer(e.target.value)} />
             <span className="form-hint">Average pieces from one 50 kg bag of cement. Leave blank if unknown — never estimate.</span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="prod-tol">Yield tolerance (± pieces per bag)</label>
-            <input id="prod-tol" type="number" step="any" min="0" className="form-input"
+            <NumberInput id="prod-tol" step="any" min="0" className="form-input"
               placeholder={(() => { const d = categories.find(c => c.id === category)?.default_yield_tolerance; return d != null ? `Category default: ±${+d}` : 'Organization default'; })()}
               value={tolerance} onChange={e => setTolerance(e.target.value)} />
             <span className="form-hint">Production outside average ± this is flagged for review. Blank uses the category default; 0 means exactly the average.</span>

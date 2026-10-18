@@ -11,6 +11,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -537,7 +538,7 @@ function ConversionsEditor({ material, organizationId, units, unitById, onChange
                       .map(u => <option key={u.id} value={u.id}>{u.symbol}</option>)}
                   </select>
                   <span className="text-sm">=</span>
-                  <input type="number" step="any" min="0" className="form-input" aria-label="Factor" value={r.factor}
+                  <NumberInput step="any" min="0" className="form-input" aria-label="Factor" value={r.factor}
                     onChange={e => setRows(rs => rs.map((x, j) => (j === i ? { ...x, factor: e.target.value } : x)))} />
                   <span className="text-sm">{stock.symbol}</span>
                   {dirty

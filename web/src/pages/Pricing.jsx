@@ -13,6 +13,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 import { DollarSign, Search, Palette, Plus } from 'lucide-react';
+import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -445,24 +446,24 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
           <div className="form-row">
             <div className="form-group">
               <label className="form-label" htmlFor="pr-sqm">Price per m² (incl. VAT)</label>
-              <input id="pr-sqm" type="number" step="any" min="0" className="form-input" autoFocus value={perSqm} onChange={e => setPerSqm(e.target.value)} />
+              <NumberInput id="pr-sqm" step="any" min="0" className="form-input" autoFocus value={perSqm} onChange={e => setPerSqm(e.target.value)} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="pr-pcs">Pieces per m² <span className="text-muted">(optional)</span></label>
-              <input id="pr-pcs" type="number" step="1" min="1" className="form-input" placeholder="Not known" value={pcs} onChange={e => setPcs(e.target.value)} />
+              <NumberInput id="pr-pcs" step="1" min="1" className="form-input" placeholder="Not known" value={pcs} onChange={e => setPcs(e.target.value)} />
               <span className="form-hint">Only needed to work out a price per piece.</span>
             </div>
           </div>
         ) : (
           <div className="form-group">
             <label className="form-label" htmlFor="pr-unit">Price each (incl. VAT)</label>
-            <input id="pr-unit" type="number" step="any" min="0" className="form-input" autoFocus value={perUnit} onChange={e => setPerUnit(e.target.value)} />
+            <NumberInput id="pr-unit" step="any" min="0" className="form-input" autoFocus value={perUnit} onChange={e => setPerUnit(e.target.value)} />
           </div>
         )}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="pr-vat">VAT rate (%)</label>
-            <input id="pr-vat" type="number" step="any" min="0" className="form-input" placeholder="Not recorded" value={vatRate} onChange={e => setVatRate(e.target.value)} />
+            <NumberInput id="pr-vat" step="any" min="0" className="form-input" placeholder="Not recorded" value={vatRate} onChange={e => setVatRate(e.target.value)} />
             <span className="form-hint">{row ? 'As implied by this price\'s current figures.' : 'Suggested from your other prices — check it.'}</span>
           </div>
           <div className="form-group">
@@ -488,7 +489,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
               {otherColours.map(c => (
                 <div key={c.color_id} className="form-row" style={{ alignItems: 'center' }}>
                   <label className="text-sm" htmlFor={`pc-${c.color_id}`}>{c.color?.name}{c.color?.is_active === false ? ' (discontinued)' : ''}</label>
-                  <input id={`pc-${c.color_id}`} type="number" step="any" min="0" className="form-input" placeholder="Category pricing"
+                  <NumberInput id={`pc-${c.color_id}`} step="any" min="0" className="form-input" placeholder="Category pricing"
                     value={colourAmounts[c.color_id] ?? ''} onChange={e => setColourAmounts(a => ({ ...a, [c.color_id]: e.target.value }))} />
                 </div>
               ))}
@@ -610,7 +611,7 @@ function RuleModal({ category, branch, rule, organization, viaApproval, colourNa
             {others.map(c => (
               <div key={c.color_id} className="form-row" style={{ alignItems: 'center' }}>
                 <label className="text-sm" htmlFor={`amt-${c.color_id}`}>{c.color?.name}{c.color?.is_active === false ? ' (discontinued)' : ''}</label>
-                <input id={`amt-${c.color_id}`} type="number" step="any" min="0" className="form-input" placeholder="No price"
+                <NumberInput id={`amt-${c.color_id}`} step="any" min="0" className="form-input" placeholder="No price"
                   value={amounts[c.color_id] ?? ''} onChange={e => setAmounts(a => ({ ...a, [c.color_id]: e.target.value }))} />
               </div>
             ))}
