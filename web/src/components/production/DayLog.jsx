@@ -23,7 +23,7 @@ const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', lef
  * stays on this device and comes back when the page is opened again.
  */
 export default function DayLog({ refs, recipes, branchId, branchName, today, curingDays, usage = {}, onSaved }) {
-  const { organization, canAt } = useAuth();
+  const { organization, canAt, canManage } = useAuth();
   const stores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId);
   const rawStores = stores.filter(w => w.type === 'raw_materials' || w.type === 'general');
   const curingStore = stores.find(w => w.type === 'wip');
@@ -48,6 +48,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [addError, setAddError] = useState('');
+  const [sentNote, setSentNote] = useState('');
 
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify({ date, rawId, form, staged, at: new Date().toISOString() })); } catch { /* per-device convenience only */ }
@@ -179,15 +180,30 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     setForm(emptyForm());   // "allow other products" goes back to the default too
   }
 
+  // An earlier date is a stock correction: someone who isn't an org admin sends the day for approval (044)
+  const viaApproval = date < today && !canManage('inventory.adjust');
+
   async function saveDay() {
     setError('');
+    setSentNote('');
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_production_batches', { p: { batches: staged.map(s => ({ ...s.payload, batch_date: date })) } });
+    const batches = staged.map(s => ({ ...s.payload, batch_date: date }));
+    const pcs = staged.reduce((n, s) => n + s.pieces, 0);
+    const bagsTotal = round(staged.reduce((n, s) => n + s.bags, 0));
+    const { error: err } = viaApproval
+      ? await supabase.rpc('request_change', { p_kind: 'production_day', p_branch_id: null, p_payload: { batches },
+          p_summary: `Production of ${date} at ${branchName}: ${staged.length} batch${staged.length === 1 ? '' : 'es'} — ${staged.map(s => s.label).join(', ')} · ${qtyText(pcs)} pcs, ${qtyText(bagsTotal)} bags` })
+      : await supabase.rpc('record_production_batches', { p: { batches } });
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err, "We couldn't save today's batches. Please try again.")); loadStock(); return; }
+    if (err) { setError(dbErrorMessage(err, "We couldn't save these batches. Please try again.")); loadStock(); return; }
     setStaged([]);
     try { localStorage.removeItem(key); } catch { /* ignore */ }
     loadStock();
+    if (viaApproval) {
+      window.dispatchEvent(new Event('mois:approvals-changed'));
+      setSentNote(`Sent for approval — ${date}'s batches are recorded once an admin approves (Approvals).`);
+      return;
+    }
     onSaved();
   }
 
@@ -447,8 +463,10 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       </section>
 
       {error && <p className="text-sm text-error" role="alert">{error}</p>}
+      {sentNote && <p className="text-sm text-success" role="status">{sentNote}</p>}
+      {viaApproval && staged.length > 0 && <p className="pl-help">An earlier date needs an admin's approval.</p>}
       <button type="button" className={`btn btn-primary pl-wide pl-save${busy ? ' btn-loading' : ''}`} disabled={busy || staged.length === 0} onClick={saveDay}>
-        Save daily productions ({staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedPieces)} pcs)
+        {viaApproval ? 'Submit for approval' : 'Save daily productions'} ({staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedPieces)} pcs)
       </button>
     </div>
   );
