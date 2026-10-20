@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
-import { loadInventoryRefs, warehouseLabel, qtyText, orgToday } from '../lib/inventory';
+import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
@@ -71,7 +71,7 @@ export default function Purchases() {
     try {
       const [r, mat, pu, tot, aw, pr] = await Promise.all([
         loadInventoryRefs(),
-        supabase.from('materials').select('id, name, status, branch_id').order('name'),
+        supabase.from('materials').select('id, name, status, branch_id, category:material_categories(display_order)').order('name'),
         byBranch(supabase.from('purchases').select(`id, branch_id, movement_id, supplier_id, purchase_date, invoice_reference, transport_charge,
           vat_amount, prices_include_vat, amount_paid, payment_method, paid_on, status, void_reason, notes, created_by,
           lines:purchase_lines(id, transaction_id, unit_price, line_amount)`)).order('purchase_date', { ascending: false }).limit(300),
@@ -97,7 +97,8 @@ export default function Purchases() {
         setPeople(Object.fromEntries((ppl || []).map(p => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email])));
       }
       setRefs(r);
-      setMaterials(mat.data || []);
+      // the agreed material order (category order, then name)
+      setMaterials((mat.data || []).map(m => ({ ...m, rank: m.category?.display_order ?? 999 })).sort(byMaterialOrder));
       setPurchases(pu.data || []);
       setTotals(Object.fromEntries((tot.data || []).map(t => [t.purchase_id, t])));
       setAwaiting(aw.data || []);

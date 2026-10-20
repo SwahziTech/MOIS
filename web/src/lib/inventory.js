@@ -49,9 +49,9 @@ export async function loadInventoryRefs() {
   const [wh, mat, prod, units, sup, cats, catRows, colors, bp] = await Promise.all([
     supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
     supabase.from('materials')
-      .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
+      .select('id, name, code, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
       .order('name'),
-    supabase.from('products').select('id, canonical_name, product_id_ref, status, unit_id, category_id, category:product_categories(name)').order('canonical_name'),
+    supabase.from('products').select('id, canonical_name, product_id_ref, status, unit_id, category_id, size_cm, category:product_categories(name)').order('canonical_name'),
     supabase.from('units').select('id, symbol, name'),
     supabase.from('suppliers').select('id, name, status').order('name'),
     supabase.from('product_category_colors').select('category_id, color_id, display_order'),
@@ -66,7 +66,9 @@ export async function loadInventoryRefs() {
   const unitById = Object.fromEntries((units.data || []).map(u => [u.id, u]));
   const items = {};
   for (const m of mat.data || []) {
-    items[`m:${m.id}`] = { key: `m:${m.id}`, kind: 'material', id: m.id, name: m.name, status: m.status, branchId: m.branch_id,
+    items[`m:${m.id}`] = { key: `m:${m.id}`, kind: 'material', id: m.id, name: m.name, code: m.code, status: m.status, branchId: m.branch_id,
+      rank: m.category?.display_order ?? 999, materialCategory: m.category?.name ?? null,
+      inRecipes: m.category?.used_in_recipes !== false,
       stockUnitId: m.stock_unit_id,
       units: m.stock_unit_id ? [{ id: m.stock_unit_id, factor: 1 }, ...m.conversions.map(c => ({ id: c.unit_id, factor: Number(c.factor_to_stock_unit) }))] : [] };
   }
@@ -74,7 +76,7 @@ export async function loadInventoryRefs() {
   const catById = Object.fromEntries((catRows.data || []).map(c => [c.id, c]));
   const catLabel = id => { const c = catById[id]; const g = c?.parent_category_id && catById[c.parent_category_id]; return c ? (g ? `${g.name} › ${c.name}` : c.name) : null; };
   for (const p of prod.data || []) {
-    items[`p:${p.id}`] = { key: `p:${p.id}`, kind: 'product', id: p.id, name: p.canonical_name, ref: p.product_id_ref,
+    items[`p:${p.id}`] = { key: `p:${p.id}`, kind: 'product', id: p.id, name: p.canonical_name, ref: p.product_id_ref, size: p.size_cm,
       category: catLabel(p.category_id) ?? p.category?.name, categoryId: p.category_id, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
       // coloured categories are stocked per colour
       colorIds: (cats.data || []).filter(c => c.category_id === p.category_id).sort((a, b) => a.display_order - b.display_order).map(c => c.color_id) };
@@ -143,3 +145,11 @@ export function matchSuppliers(typed, suppliers) {
     .map(x => x.supplier);
   return { exact, similar };
 }
+
+/**
+ * The order materials appear in everywhere — recipes, batches, tables,
+ * pickers (decided 2026-10-20): by their material category's order
+ * (Materials → categories: Cement, Sand, Dust, Chipping, Kokoto, Dawa,
+ * Rangi, … Steel), then by name. Items: { rank, name }.
+ */
+export const byMaterialOrder = (a, b) => (a.rank ?? 999) - (b.rank ?? 999) || String(a.name).localeCompare(String(b.name));

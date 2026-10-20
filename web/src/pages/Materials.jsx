@@ -48,7 +48,7 @@ export default function Materials() {
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('active');
   const [categoryId, setCategoryId] = useState('');
-  const [sortBy,     setSortBy]     = useState('name_asc');   // name_asc | name_desc | category
+  const [sortBy,     setSortBy]     = useState('category');   // category (the agreed material order) | name_asc | name_desc
   const [editing, setEditing] = useState(null);       // { kind: 'material'|'category'|'unit', row }
 
   async function load() {
@@ -59,7 +59,7 @@ export default function Materials() {
           conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes),
           sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)
         `).order('name'),
-      supabase.from('material_categories').select('id, name, display_order, status').order('display_order').order('name'),
+      supabase.from('material_categories').select('*').order('display_order').order('name'),
       supabase.from('units').select('id, symbol, name, notes, status').order('symbol'),
       supabase.from('branches').select('id, name, status').order('name'),
       supabase.from('recipe_items').select('material_id, unit_id, recipe:recipe_versions(status)'),
@@ -119,7 +119,7 @@ export default function Materials() {
       const x = catOrder[a.category_id] ?? [1e9, ''], y = catOrder[b.category_id] ?? [1e9, ''];
       return x[0] - y[0] || x[1].localeCompare(y[1]) || a.name.localeCompare(b.name);
     }
-    return a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);   // name_asc
   });
   const reviewCount = inViewMaterials.filter(m => openFlags[m.id]).length;
 
@@ -145,9 +145,9 @@ export default function Materials() {
         <>
           <ListToolbar id="materials-search" search={search} onSearch={setSearch} placeholder="Search materials…"
             sort={{ value: sortBy, onChange: setSortBy, options: [
-              { value: 'name_asc',  label: 'Name: A → Z (default)' },
+              { value: 'category',  label: 'Material order (default)' },
+              { value: 'name_asc',  label: 'Name: A → Z' },
               { value: 'name_desc', label: 'Name: Z → A' },
-              { value: 'category',  label: 'By category' },
             ] }}
             filters={[{ key: 'status', label: 'Status', value: filter, onChange: setFilter, options: [
               { value: 'active', label: 'Active' }, { value: 'review', label: `Needs review (${reviewCount})` },
@@ -216,7 +216,7 @@ export default function Materials() {
                     <tr><td colSpan={5}><EmptyState icon={Layers} title="No material categories yet" description="Group materials, e.g. aggregates or pigments." /></td></tr>
                   ) : categories.map(c => (
                     <tr key={c.id}>
-                      <td style={{ fontWeight: 500 }}>{c.name}</td>
+                      <td style={{ fontWeight: 500 }}>{c.name}{c.used_in_recipes === false && <span className="badge badge-neutral" style={{ marginLeft: 6 }}>Not in recipes</span>}</td>
                       <td className="text-muted">{c.display_order}</td>
                       <td className="text-muted">{inViewMaterials.filter(m => m.category_id === c.id && m.status === 'active').length}</td>
                       <td><span className={`badge ${c.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{c.status}</span></td>
@@ -257,7 +257,8 @@ export default function Materials() {
       {editing?.kind === 'category' && (
         <SimpleModal title="material category" table="material_categories" entityType="material_category"
           row={editing.row} organizationId={organization.id}
-          fields={[{ key: 'name', label: 'Name', required: true }, { key: 'display_order', label: 'Display order', type: 'number', default: Math.max(0, ...categories.map(c => c.display_order)) + 1 }]}
+          fields={[{ key: 'name', label: 'Name', required: true }, { key: 'display_order', label: 'Display order', type: 'number', default: Math.max(0, ...categories.map(c => c.display_order)) + 1 },
+            ...('used_in_recipes' in (editing.row.id ? editing.row : (categories[0] ?? {})) ? [{ key: 'used_in_recipes', label: 'Used in recipes (a mix ingredient)', type: 'checkbox', default: true }] : [])]}
           inactiveNote="Inactive — not offered when choosing a category. Materials already in it keep it."
           onClose={close} onSaved={saved} />
       )}
@@ -282,7 +283,7 @@ function SimpleModal({ title, table, entityType, row, organizationId, fields, in
     e.preventDefault();
     setError('');
     const out = Object.fromEntries(fields.map(f => [f.key,
-      f.type === 'number' ? Number(values[f.key]) || 0 : (String(values[f.key]).trim() || null)]));
+      f.type === 'checkbox' ? !!values[f.key] : f.type === 'number' ? Number(values[f.key]) || 0 : (String(values[f.key]).trim() || null)]));
     setBusy(true);
     const { error: err } = isNew
       ? await supabase.from(table).insert({ ...out, organization_id: organizationId })
@@ -305,11 +306,15 @@ function SimpleModal({ title, table, entityType, row, organizationId, fields, in
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="simple-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`}
-          disabled={busy || fields.some(f => f.required && !String(values[f.key]).trim())}>Save</button>
+          disabled={busy || fields.some(f => f.required && !String(values[f.key] ?? '').trim())}>Save</button>
       </>}>
       <form id="simple-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {fields.map((f, i) => (
+        {fields.map((f, i) => f.type === 'checkbox' ? (
+          <label key={f.key} className="text-sm flex items-center gap-8">
+            <input type="checkbox" checked={!!values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.checked }))} /> {f.label}
+          </label>
+        ) : (
           <div key={f.key} className="form-group">
             <label className="form-label" htmlFor={`sf-${f.key}`}>{f.label}</label>
             <input id={`sf-${f.key}`} className="form-input" type={f.type || 'text'} required={f.required} autoFocus={i === 0}

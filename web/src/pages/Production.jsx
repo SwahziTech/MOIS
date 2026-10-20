@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Factory, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Factory } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
-import { loadInventoryRefs, qtyText, orgToday, warehouseLabel } from '../lib/inventory';
+import { loadInventoryRefs, qtyText, orgToday, byMaterialOrder } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
@@ -12,6 +12,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import NumberInput from '../components/NumberInput';
 import { SkeletonRow } from '../components/LoadingSpinner';
+import DayLog from '../components/production/DayLog';
 
 const LOAD_ERROR = "We couldn't load production. Please try again.";
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -21,18 +22,19 @@ const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 const VARIANCE_SHOWN = 0.10;
 
 /*
- * Production (migration 042). A batch is one mix/session — one product,
- * one colour, cast together; a branch has many a day. Materials: cement
- * bags counted, the rest from the recipe × bags (both issued from the
- * store). Pieces cure in the Curing store (not sellable) until the quality
- * release moves the passed ones into Finished Goods.
+ * Production (migrations 042, 043). A batch is one mix/session: a main
+ * product and colour, plus any leftovers cast from the same mix; a branch
+ * has many a day, logged on "Log batches" and saved together. Materials:
+ * cement bags counted, the rest from the recipe × bags. Pieces cure in the
+ * Curing store (not sellable) until the quality release moves the passed
+ * ones into Finished Goods, product by product.
  */
 export default function Production() {
   const { organization, canAt, canManage } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
 
-  const [tab,      setTab]      = useState('curing');
+  const [tab,      setTab]      = useState(null);   // opens on Log batches for those who record
   const [refs,     setRefs]     = useState(null);
   const [batches,  setBatches]  = useState([]);
   const [reasons,  setReasons]  = useState([]);
@@ -42,7 +44,6 @@ export default function Production() {
   const [people,   setPeople]   = useState({});
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [recording, setRecording] = useState(false);
   const [releasing, setReleasing] = useState(null);
   const [voiding,   setVoiding]   = useState(null);
   const [busyId,    setBusyId]    = useState(null);
@@ -55,7 +56,7 @@ export default function Production() {
     try {
       const [r, b, rr, rv, va, fl] = await Promise.all([
         loadInventoryRefs(),
-        byBranch(supabase.from('production_batches').select('*, materials:production_batch_materials(*), rejects:production_batch_rejects(*)'))
+        byBranch(supabase.from('production_batches').select('*, materials:production_batch_materials(*), outputs:production_batch_outputs(*), rejects:production_batch_rejects(*)'))
           .order('batch_date', { ascending: false }).order('created_at', { ascending: false }).limit(500),
         supabase.from('reject_reasons').select('id, name, status, display_order').order('display_order').order('name'),
         byBranch(supabase.from('recipe_versions').select('id, branch_id, category_id, color_id, version_number, effective_date, status, items:recipe_items(material_id, quantity, unit_id), products:recipe_version_products(product_id)').eq('status', 'active')),
@@ -85,14 +86,22 @@ export default function Production() {
   }
   useEffect(() => { setLoading(true); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const canRecord = !!branchId && canAt('production.create', branchId, null);
+  const current = tab ?? (canRecord ? 'log' : 'curing');
   const here = batches.filter(b => inBranch(b.branch_id));
   const curing = here.filter(b => b.status === 'curing');
   const waitingMaterials = here.filter(b => b.status !== 'void' && !b.materials_movement_id && b.materials?.length);
   const done = here.filter(b => b.status !== 'curing');
-  const shown = tab === 'curing' ? curing : tab === 'materials' ? waitingMaterials : done;
-  const canRecord = !!branchId && canAt('production.create', branchId, null);
+  const shown = current === 'curing' ? curing : current === 'materials' ? waitingMaterials : done;
 
   const productName = b => `${refs?.items[`p:${b.product_id}`]?.name ?? '—'}${b.color_id ? ` ${refs?.colorById[b.color_id]?.name ?? ''}` : ''}`;
+  const leftoversOf = b => (b.outputs || []).filter(o => !o.is_primary);
+  // How often each product is cast at the branch: the picker lists the frequent ones first
+  const usage = {};
+  for (const b of batches.filter(x => x.status !== 'void' && x.branch_id === branchId)) {
+    const ids = new Set([b.product_id, ...(b.outputs || []).map(o => o.product_id)]);
+    for (const id of ids) usage[id] = (usage[id] || 0) + 1;
+  }
   const canIssue = b => canAt('inventory.issue', b.branch_id, b.raw_warehouse_id) || canAt('production.create', b.branch_id, null);
 
   async function issue(b) {
@@ -106,13 +115,9 @@ export default function Production() {
 
   return (
     <PageShell title="Production" subtitle="Production"
-      description={branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch: materials used, pieces cast, curing and quality release.'}
-      primaryAction={canRecord && (
-        <button type="button" className="btn btn-primary" disabled={!refs} onClick={() => setRecording(true)}>
-          <Plus size={14} /> Record batch
-        </button>
-      )}>
-      <PageTabs value={tab} onChange={setTab} tabs={[
+      description={branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
+      <PageTabs value={current} onChange={setTab} tabs={[
+        ...(canRecord ? [['log', 'Log batches']] : []),
         ['curing', `Curing (${curing.length})`],
         ...(waitingMaterials.length ? [['materials', `Materials to issue (${waitingMaterials.length})`]] : []),
         ['done', 'Released & void'],
@@ -120,38 +125,49 @@ export default function Production() {
       ]} />
       {rowError && <div className="alert alert-error mb-8" role="alert">{rowError}</div>}
 
+      {current === 'log' ? (
+        error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
+          : !refs ? <div className="card"><div className="card-body"><span className="skeleton" /></div></div>
+          : <DayLog refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} curingDays={curingDays} usage={usage}
+              onSaved={async () => { setTab('curing'); await load(); }} />
+      ) : (
       <div className="card">
-        {error ? <ErrorState message={error} onRetry={load} /> : tab === 'variance' ? (
-          <VarianceTable rows={variance.filter(v => inBranch(v.branch_id))} refs={refs} loading={loading} />
+        {error ? <ErrorState message={error} onRetry={load} /> : current === 'variance' ? (
+          <VarianceTable rows={variance.filter(v => inBranch(v.branch_id))
+            .sort((a, b) => byMaterialOrder(refs?.items[`m:${a.material_id}`] ?? {}, refs?.items[`m:${b.material_id}`] ?? {}))} refs={refs} loading={loading} />
         ) : (
           <div className="table-container">
             <table>
               <thead><tr>
                 <th>Date</th><th>Product</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }}>Pieces</th>
-                <th>Yield check</th><th>{tab === 'done' ? 'Released' : 'Curing until'}</th><th>Status</th><th aria-label="Actions" />
+                <th>Yield check</th><th>{current === 'done' ? 'Released' : 'Curing until'}</th><th>Status</th><th aria-label="Actions" />
               </tr></thead>
               <tbody>
                 {loading ? <SkeletonRow cols={8} /> : shown.length === 0 ? (
                   <tr><td colSpan={8}><EmptyState icon={Factory}
-                    title={tab === 'curing' ? 'Nothing curing' : tab === 'materials' ? 'No materials waiting' : 'No released batches yet'}
-                    description={tab === 'curing' ? 'Batches cast appear here until their quality release.' : ''} /></td></tr>
+                    title={current === 'curing' ? 'Nothing curing' : current === 'materials' ? 'No materials waiting' : 'No released batches yet'}
+                    description={current === 'curing' ? 'Batches cast appear here until their quality release.' : ''} /></td></tr>
                 ) : shown.map(b => {
                   const flagged = flags[b.id];
-                  const inBand = b.yield_min == null ? null : b.pieces_cast >= b.yield_min && b.pieces_cast <= b.yield_max;
+                  // the bags used against the band the products' yields give (043)
+                  const inBand = b.theoretical_bags == null ? null : b.cement_bags >= b.bags_min - 1e-9 && (b.bags_max == null || b.cement_bags <= b.bags_max + 1e-9);
                   const rejected = (b.rejects || []).reduce((s, r) => s + r.pieces, 0);
+                  const passed = (b.outputs || []).reduce((s, o) => s + (o.pieces_passed ?? 0), 0);
                   return (
                     <tr key={b.id} className={b.status === 'void' ? 'text-muted' : ''}>
                       <td>{b.batch_date}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
-                      <td style={{ fontWeight: 500 }}>{productName(b)}</td>
+                      <td><span style={{ fontWeight: 500 }}>{productName(b)}</span>
+                        {leftoversOf(b).length > 0 && <div className="text-xs text-muted">+ {leftoversOf(b).map(o => `${o.pieces_cast} ${refs?.items[`p:${o.product_id}`]?.name ?? ''}`).join(', ')}</div>}</td>
                       <td style={{ textAlign: 'right' }}>{qtyText(b.cement_bags)}</td>
                       <td style={{ textAlign: 'right' }}>
                         {qtyText(b.pieces_cast)}
-                        {b.status === 'released' && <div className="text-xs text-muted">{b.pieces_passed} passed{rejected ? ` · ${rejected} rejected` : ''}</div>}
+                        {b.status === 'released' && <div className="text-xs text-muted">{passed} passed{rejected ? ` · ${rejected} rejected` : ''}</div>}
                       </td>
                       <td>
                         {inBand == null ? <span className="text-xs text-muted">No yield per bag set</span>
-                          : inBand ? <span className="badge badge-success">In band</span>
-                          : <span className="badge badge-warning" title={flagged}>Outside {Math.round(b.yield_min)}–{Math.round(b.yield_max)}</span>}
+                          : <span className={`badge ${inBand ? 'badge-success' : 'badge-warning'}`} title={flagged}>
+                              {Math.round((b.theoretical_bags / b.cement_bags) * 1000) / 10}%{inBand ? '' : ' — outside'}
+                            </span>}
                       </td>
                       <td>{b.status === 'released' ? b.released_on : b.status === 'void' ? '—' : (
                         <>{b.curing_until}{b.curing_until <= today && <div className="text-xs" style={{ color: 'var(--color-success)' }}>Ready to release</div>}</>
@@ -182,11 +198,8 @@ export default function Production() {
           </div>
         )}
       </div>
-
-      {recording && refs && (
-        <BatchModal refs={refs} recipes={recipes} branchId={branchId} curingDays={curingDays} today={today}
-          onClose={() => setRecording(false)} onSaved={async () => { setRecording(false); setTab('curing'); await load(); }} />
       )}
+
       {releasing && refs && (
         <ReleaseModal batch={releasing} name={productName(releasing)} refs={refs} reasons={reasons} today={today}
           onClose={() => setReleasing(null)} onSaved={async () => { setReleasing(null); await load(); }} />
@@ -198,223 +211,36 @@ export default function Production() {
   );
 }
 
-/** Record one batch: product, bags, pieces, and its materials (counted / from the recipe) */
-function BatchModal({ refs, recipes, branchId, curingDays, today, onClose, onSaved }) {
-  const { canAt } = useAuth();
-  const stores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId);
-  const rawStores = stores.filter(w => w.type === 'raw_materials' || w.type === 'general');
-  const curingStore = stores.find(w => w.type === 'wip');
-  const canBackdate = canAt('inventory.adjust', branchId, null);
-  const products = useMemo(() => Object.values(refs.items)
-    .filter(i => i.kind === 'product' && i.status === 'active' && refs.carriedByBranch?.[branchId]?.has(i.id))
-    .sort((a, b) => a.name.localeCompare(b.name)), [refs, branchId]);
-
-  const [date,     setDate]     = useState(today);
-  const [productId, setProductId] = useState('');
-  const [colorId,  setColorId]  = useState('');
-  const [rawId,    setRawId]    = useState(rawStores.find(w => w.type === 'raw_materials')?.id ?? rawStores[0]?.id ?? '');
-  const [bags,     setBags]     = useState('');
-  const [pieces,   setPieces]   = useState('');
-  const [notes,    setNotes]    = useState('');
-  const [issueNow, setIssueNow] = useState(true);
-  const [lines,    setLines]    = useState([]);   // { materialId, unitId, perBag, quantity, source, counted }
-  const [band,     setBand]     = useState(null);
-  const [busy,  setBusy]  = useState(false);
-  const [error, setError] = useState('');
-
-  const product = refs.items[`p:${productId}`];
-  const colours = product?.colorIds || [];
-  // The branch's active recipe for the product's category + colour (the server picks the same)
-  const recipe = useMemo(() => {
-    if (!product || (colours.length && !colorId)) return null;
-    const c = recipes.filter(r => r.branch_id === branchId && r.category_id === product.categoryId && (r.color_id ?? '') === (colorId || ''));
-    return c.sort((a, b) => (b.products.some(x => x.product_id === product.id) - a.products.some(x => x.product_id === product.id))
-      || String(b.effective_date ?? '').localeCompare(String(a.effective_date ?? '')) || b.version_number - a.version_number)[0] ?? null;
-  }, [product, colorId, recipes, branchId, colours.length]);
-
-  // A new recipe: its lines, cement (bags) counted, the rest from the recipe
-  useEffect(() => {
-    setLines((recipe?.items || []).map(it => {
-      const isBag = refs.unitById[it.unit_id]?.symbol?.toLowerCase() === 'bag' && Number(it.quantity) === 1;
-      return { materialId: it.material_id, unitId: it.unit_id, perBag: Number(it.quantity), quantity: '', source: isBag ? 'counted' : 'recipe', bagLine: isBag, edited: false };
-    }));
-  }, [recipe, refs]);
-  // Recipe figures follow the bags until edited; the cement line is the bags
-  const b = num(bags);
-  const shownQty = l => (l.edited ? l.quantity : b != null ? String(round(l.perBag * b)) : '');
-
-  useEffect(() => {
-    if (!productId || !branchId) { setBand(null); return; }
-    let live = true;
-    supabase.rpc('product_yield_band', { p_product_id: productId, p_branch_id: branchId }).then(({ data }) => { if (live) setBand(data?.[0] ?? null); });
-    return () => { live = false; };
-  }, [productId, branchId]);
-  const expMin = band?.yield_min != null && b != null ? Math.round(b * band.yield_min) : null;
-  const expMax = band?.yield_max != null && b != null ? Math.round(b * band.yield_max) : null;
-  const p = num(pieces);
-  const outOfBand = expMin != null && p != null && (p < expMin || p > expMax);
-
-  async function save(e) {
-    e.preventDefault();
-    setError('');
-    if (!productId) { setError('Choose the product.'); return; }
-    if (colours.length && !colorId) { setError('Choose the colour.'); return; }
-    if (!recipe) { setError(`No active recipe for this product${colorId ? ' and colour' : ''} at this branch — add one under Recipes.`); return; }
-    if (!curingStore) { setError('This branch has no curing store.'); return; }
-    if (!(b > 0)) { setError('Enter the bags of cement used.'); return; }
-    if (p == null || p < 0 || !Number.isInteger(p)) { setError('Enter the pieces cast (a whole number).'); return; }
-    const mats = lines.map(l => ({ material_id: l.materialId, unit_id: l.unitId, quantity: num(shownQty(l)) ?? 0,
-      source: l.bagLine || l.edited ? 'counted' : 'recipe' }));
-    if (mats.some(m => !(m.quantity >= 0))) { setError('Material quantities must be zero or more.'); return; }
-    setBusy(true);
-    const { error: err } = await supabase.rpc('record_production_batch', { p: {
-      batch_date: date, product_id: productId, color_id: colorId || null, recipe_version_id: recipe.id,
-      raw_warehouse_id: rawId, curing_warehouse_id: curingStore.id, cement_bags: b, pieces_cast: p,
-      notes: notes.trim() || null, issue_materials: issueNow, materials: mats,
-    } });
-    setBusy(false);
-    if (err) { setError(dbErrorMessage(err, "We couldn't record this batch. Please try again.")); return; }
-    onSaved();
-  }
-
-  return (
-    <Modal title="Record batch" onClose={onClose} size="lg"
-      footer={<>
-        {error && <span className="modal-footer-error" role="alert">{error}</span>}
-        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="submit" form="batch-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Record batch</button>
-      </>}>
-      <form id="batch-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">One mix: one product, one colour, cast together. Several mixes a day are several batches.</p>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="bt-date">Date</label>
-            <input id="bt-date" type="date" className="form-input" max={today} value={date} disabled={!canBackdate} onChange={e => setDate(e.target.value)} />
-            {!canBackdate && <span className="form-hint">Today — an earlier date needs an admin.</span>}
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="bt-raw">Materials from</label>
-            <select id="bt-raw" className="form-input" value={rawId} onChange={e => setRawId(e.target.value)}>
-              {rawStores.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group" style={{ flex: 2 }}>
-            <label className="form-label" htmlFor="bt-product">Product</label>
-            <select id="bt-product" className="form-input" value={productId} onChange={e => { setProductId(e.target.value); setColorId(''); }}>
-              <option value="" disabled>Choose…</option>
-              {products.map(i => <option key={i.id} value={i.id}>{i.name} · {i.category}</option>)}
-            </select>
-          </div>
-          {colours.length > 0 && (
-            <div className="form-group">
-              <label className="form-label" htmlFor="bt-colour">Colour</label>
-              <select id="bt-colour" className="form-input" value={colorId} onChange={e => setColorId(e.target.value)}>
-                <option value="" disabled>Choose…</option>
-                {colours.map(c => <option key={c} value={c}>{refs.colorById[c]?.name}</option>)}
-              </select>
-            </div>
-          )}
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="bt-bags">Bags of cement (counted)</label>
-            <NumberInput id="bt-bags" step="any" min="0" className="form-input" placeholder="e.g. 4 or 0.5" value={bags} onChange={e => setBags(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="bt-pieces">Pieces cast</label>
-            <NumberInput id="bt-pieces" step="1" min="0" className="form-input" value={pieces} onChange={e => setPieces(e.target.value)} />
-            {expMin != null && (
-              <span className={`form-hint${outOfBand ? ' text-warning' : ''}`}>
-                Expected {expMin}–{expMax} ({+band.average_yield_per_bag} ± {+band.yield_tolerance} per bag).{outOfBand ? ' Outside the band — it will be flagged for review.' : ''}
-              </span>
-            )}
-            {productId && band && band.yield_min == null && <span className="form-hint">No yield per bag set for this size — no check.</span>}
-          </div>
-        </div>
-
-        <section>
-          <h3 className="modal-section-title">Materials used</h3>
-          {!productId ? <p className="text-sm text-muted">Choose the product first.</p>
-            : !recipe ? <p className="text-sm text-warning">No active recipe for this {colours.length && !colorId ? 'product — choose the colour' : 'product at this branch — add one under Recipes'}.</p>
-            : (
-              <>
-                <div className="table-container">
-                  <table>
-                    <thead><tr><th>Material</th><th style={{ textAlign: 'right' }}>Recipe × bags</th><th>Used</th><th>From</th></tr></thead>
-                    <tbody>
-                      {lines.map((l, i) => {
-                        const sym = refs.unitById[l.unitId]?.symbol ?? '';
-                        return (
-                          <tr key={l.materialId}>
-                            <td style={{ fontWeight: 500 }}>{refs.items[`m:${l.materialId}`]?.name ?? '—'}</td>
-                            <td style={{ textAlign: 'right' }} className="text-muted">{b != null ? `${qtyText(round(l.perBag * b))} ${sym}` : `${qtyText(l.perBag)} ${sym} per bag`}</td>
-                            <td>
-                              <span className="flex items-center gap-4">
-                                <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} aria-label={`${refs.items[`m:${l.materialId}`]?.name} used`}
-                                  value={l.bagLine && !l.edited ? (bags ?? '') : shownQty(l)}
-                                  onChange={e => setLines(ls => ls.map((x, j) => (j === i ? { ...x, quantity: e.target.value, edited: true } : x)))} />
-                                <span className="text-xs text-muted">{sym}</span>
-                              </span>
-                            </td>
-                            <td>
-                              {l.bagLine || l.edited ? <span className="badge badge-accent">Counted</span> : <span className="badge badge-neutral">Recipe</span>}
-                              {l.edited && !l.bagLine && (
-                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => ls.map((x, j) => (j === i ? { ...x, quantity: '', edited: false } : x)))}>Use recipe</button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-xs text-muted mt-8">Cement is counted. The rest follows the recipe × bags until you type what was actually used. Stock counts later show how close the recipe figures are (Material variance).</p>
-                <label className="text-sm flex items-center gap-8 mt-8">
-                  <input type="checkbox" checked={issueNow} onChange={e => setIssueNow(e.target.checked)} />
-                  Take these materials out of {refs.warehouses.find(w => w.id === rawId)?.name ?? 'the store'} now
-                </label>
-                {!issueNow && <span className="form-hint">The storekeeper issues them later (Materials to issue).</span>}
-              </>
-            )}
-        </section>
-
-        <div className="form-group">
-          <label className="form-label" htmlFor="bt-notes">Notes (optional)</label>
-          <input id="bt-notes" className="form-input" value={notes} onChange={e => setNotes(e.target.value)} />
-        </div>
-        {curingStore && <p className="text-xs text-muted">The pieces go into {warehouseLabel(curingStore)} — not sellable until released after {curingDays} days of curing.</p>}
-      </form>
-    </Modal>
-  );
-}
-
-/** Quality release: every cast piece passes or is rejected with a reason */
+/** Quality release, product by product: every cast piece passes or is rejected with a reason */
 function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
   const fgStores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === batch.branch_id && w.type === 'finished_goods');
+  const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
   const [date, setDate] = useState(today);
-  const [passed, setPassed] = useState('');
-  const [rejects, setRejects] = useState({});
+  const [passed, setPassed] = useState({});     // output id → passed
+  const [rejects, setRejects] = useState({});   // `${output id}|${reason id}` → pieces
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const active = reasons.filter(r => r.status === 'active');
-  const rejected = Object.values(rejects).reduce((s, v) => s + (num(v) ?? 0), 0);
   const early = date < batch.curing_until;
+  const rejectedOf = o => active.reduce((s, r) => s + (num(rejects[`${o.id}|${r.id}`]) ?? 0), 0);
+  const nameOf = o => `${refs.items[`p:${o.product_id}`]?.name ?? '—'}${o.color_id ? ` ${refs.colorById[o.color_id]?.name ?? ''}` : ''}`;
 
   async function save(e) {
     e.preventDefault();
     setError('');
-    const pp = num(passed);
-    if (pp == null || pp < 0) { setError('Enter the pieces that passed.'); return; }
-    if (pp + rejected !== batch.pieces_cast) { setError(`Passed and rejected must add up to the ${batch.pieces_cast} pieces cast.`); return; }
+    for (const o of outputs) {
+      const pp = num(passed[o.id]);
+      if (pp == null || pp < 0) { setError(`${nameOf(o)}: enter the pieces that passed.`); return; }
+      if (pp + rejectedOf(o) !== o.pieces_cast) { setError(`${nameOf(o)}: passed and rejected must add up to its ${o.pieces_cast} pieces.`); return; }
+    }
     if (early && !note.trim()) { setError(`Curing runs until ${batch.curing_until} — say why it is released early.`); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('release_production_batch', { p_batch: batch.id, p: {
-      fg_warehouse_id: fgId, release_date: date, pieces_passed: pp, note: note.trim() || null,
-      rejects: Object.entries(rejects).filter(([, v]) => num(v) > 0).map(([reason_id, v]) => ({ reason_id, pieces: num(v) })),
+      fg_warehouse_id: fgId, release_date: date, note: note.trim() || null,
+      outputs: outputs.map(o => ({ output_id: o.id, pieces_passed: num(passed[o.id]),
+        rejects: active.filter(r => num(rejects[`${o.id}|${r.id}`]) > 0).map(r => ({ reason_id: r.id, pieces: num(rejects[`${o.id}|${r.id}`]) })) })),
     } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't release this batch. Please try again.")); return; }
@@ -422,19 +248,15 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={`Release ${name} · ${batch.batch_date}`} onClose={onClose}
+    <Modal title={`Release ${name} · ${batch.batch_date}`} onClose={onClose} size="lg"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="release-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Release</button>
       </>}>
       <form id="release-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">{batch.pieces_cast} pieces cast · curing until {batch.curing_until}. Passed pieces move into Finished Goods; rejected ones leave stock.</p>
+        <p className="text-sm text-muted">Curing until {batch.curing_until}. Passed pieces move into Finished Goods; rejected ones leave stock.</p>
         <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="rl-passed">Passed</label>
-            <NumberInput id="rl-passed" step="1" min="0" className="form-input" value={passed} onChange={e => setPassed(e.target.value)} />
-          </div>
           <div className="form-group">
             <label className="form-label" htmlFor="rl-fg">Into</label>
             <select id="rl-fg" className="form-input" value={fgId} onChange={e => setFgId(e.target.value)}>
@@ -446,21 +268,30 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
             <input id="rl-date" type="date" className="form-input" min={batch.batch_date} max={today} value={date} onChange={e => setDate(e.target.value)} />
           </div>
         </div>
-        <section>
-          <h3 className="modal-section-title">Rejected</h3>
-          <div className="form-row" style={{ flexWrap: 'wrap' }}>
-            {active.map(r => (
-              <div key={r.id} className="form-group" style={{ minWidth: 120 }}>
-                <label className="form-label" htmlFor={`rj-${r.id}`}>{r.name}</label>
-                <NumberInput id={`rj-${r.id}`} step="1" min="0" className="form-input" placeholder="0" value={rejects[r.id] ?? ''}
-                  onChange={e => setRejects(x => ({ ...x, [r.id]: e.target.value }))} />
-              </div>
-            ))}
-          </div>
-          <p className={`text-sm${num(passed) != null && num(passed) + rejected !== batch.pieces_cast ? ' text-warning' : ' text-muted'}`}>
-            {num(passed) ?? 0} passed + {rejected} rejected = {(num(passed) ?? 0) + rejected} of {batch.pieces_cast} cast
-          </p>
-        </section>
+        <div className="table-container">
+          <table>
+            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Cast</th><th>Passed</th>{active.map(r => <th key={r.id}>{r.name}</th>)}<th /></tr></thead>
+            <tbody>
+              {outputs.map(o => {
+                const pp = num(passed[o.id]);
+                const ok = pp != null && pp + rejectedOf(o) === o.pieces_cast;
+                return (
+                  <tr key={o.id}>
+                    <td style={{ fontWeight: 500 }}>{nameOf(o)}{!o.is_primary && <div className="text-xs text-muted">leftover</div>}</td>
+                    <td style={{ textAlign: 'right' }}>{qtyText(o.pieces_cast)}</td>
+                    <td><NumberInput step="1" min="0" className="form-input" style={{ width: 90 }} aria-label={`${nameOf(o)} passed`} value={passed[o.id] ?? ''}
+                      onChange={e => setPassed(x => ({ ...x, [o.id]: e.target.value }))} /></td>
+                    {active.map(r => (
+                      <td key={r.id}><NumberInput step="1" min="0" className="form-input" style={{ width: 70 }} placeholder="0" aria-label={`${nameOf(o)} ${r.name}`}
+                        value={rejects[`${o.id}|${r.id}`] ?? ''} onChange={e => setRejects(x => ({ ...x, [`${o.id}|${r.id}`]: e.target.value }))} /></td>
+                    ))}
+                    <td>{pp != null && <span className={`badge ${ok ? 'badge-success' : 'badge-warning'}`}>{pp + rejectedOf(o)} / {o.pieces_cast}</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         <div className="form-group">
           <label className="form-label" htmlFor="rl-note">{early ? 'Why released early? (required)' : 'Note (optional)'}</label>
           <input id="rl-note" className="form-input" value={note} onChange={e => setNote(e.target.value)} />

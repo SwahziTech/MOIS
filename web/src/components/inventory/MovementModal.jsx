@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
-import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective } from '../../lib/inventory';
+import { MOVEMENT_TYPES, warehouseLabel, qtyText, stockKey, orgToday, matchSuppliers, isCorrective, byMaterialOrder } from '../../lib/inventory';
 import Modal from '../Modal';
+import { categoryTools, productOrder } from '../../lib/categories';
 import { findRepeats, planOpeningFix, runSteps } from '../../lib/doubleEntry';
 import { fitsStore } from './DoubleEntry';
 import NumberInput from '../NumberInput';
@@ -53,9 +54,11 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   // (032); products in its catalogue (031), or already in stock in this store
   const inThisStore = key => Object.entries(balances || {}).some(([k, q]) => Number(q) !== 0 && (k === `${warehouseId}|${key}` || k.startsWith(`${warehouseId}|${key}|`)));
   const whBranchId = warehouses.find(w => w.id === warehouseId)?.branch_id;
-  const materials = itemList.filter(i => i.kind === 'material' && (!i.branchId || i.branchId === whBranchId));
+  const materials = itemList.filter(i => i.kind === 'material' && (!i.branchId || i.branchId === whBranchId)).sort(byMaterialOrder);
+  const productCats = useMemo(() => categoryTools(refs.categoryRows), [refs]);
   const products = itemList.filter(i => i.kind === 'product'
-    && (refs.carriedByBranch?.[whBranchId]?.has(i.id) || inThisStore(i.key)));
+    && (refs.carriedByBranch?.[whBranchId]?.has(i.id) || inThisStore(i.key)))
+    .sort(productOrder(productCats));
   const wh = warehouses.find(w => w.id === warehouseId);
   // Earlier dates need stock-adjustment permission at the store (migration 023)
   const canBackdate = !!wh && canAt('inventory.adjust', wh.branch_id, wh.id);

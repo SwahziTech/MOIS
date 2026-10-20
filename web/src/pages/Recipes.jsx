@@ -63,7 +63,7 @@ export default function Recipes() {
           category:product_categories(name, sort_order),
           items:recipe_items(
             material_id, quantity, unit_id, quantity_confirmed, notes,
-            material:materials(name),
+            material:materials(name, category:material_categories(display_order)),
             unit:units(symbol)
           ),
           links:recipe_version_products(product_id)
@@ -73,7 +73,7 @@ export default function Recipes() {
         .select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))')
         .order('sort_order'),
       supabase.from('materials')
-        .select('id, name, status, stock_unit_id, branch_id, conversions:material_unit_conversions(unit_id)')
+        .select('id, name, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id)')
         .order('name'),
       supabase.from('units').select('id, symbol, name'),
       supabase.from('products').select('id, canonical_name, product_id_ref, size_cm, category_id, status').order('canonical_name'),
@@ -243,11 +243,15 @@ export default function Recipes() {
   );
 }
 
+// Ingredients in the agreed material order (category order, then name)
+const byIngredientOrder = (a, b) => (a.material?.category?.display_order ?? 999) - (b.material?.category?.display_order ?? 999)
+  || String(a.material?.name ?? '').localeCompare(String(b.material?.name ?? ''));
+
 function IngredientBadges({ items }) {
   if (!items?.length) return <span className="text-muted">—</span>;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-      {items.map((it, idx) => (
+      {[...items].sort(byIngredientOrder).map((it, idx) => (
         <span key={idx} className="badge badge-neutral" title={it.quantity_confirmed ? '' : 'Quantity not yet confirmed'}>
           {it.material?.name}: {it.quantity}{it.unit?.symbol ? ` ${it.unit.symbol}` : ''}
           {!it.quantity_confirmed && ' *'}
@@ -257,7 +261,7 @@ function IngredientBadges({ items }) {
   );
 }
 
-const toRows = items => (items || []).map(it => ({
+const toRows = items => [...(items || [])].sort(byIngredientOrder).map(it => ({
   material_id: it.material_id, quantity: String(it.quantity), unit_id: it.unit_id ?? '',
   quantity_confirmed: it.quantity_confirmed, notes: it.notes ?? null,
 }));
@@ -472,7 +476,8 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                     <select className="form-input" aria-label="Material" value={r.material_id}
                       onChange={e => setRow(i, { material_id: e.target.value })}>
                       <option value="" disabled>Material…</option>
-                      {materials.filter(m => (m.status === 'active' && usableMaterial(m)) || m.id === r.material_id).map(m => (
+                      {materials.filter(m => (m.status === 'active' && usableMaterial(m) && m.category?.used_in_recipes !== false) || m.id === r.material_id)
+                        .sort((x, y) => (x.category?.display_order ?? 999) - (y.category?.display_order ?? 999) || x.name.localeCompare(y.name)).map(m => (
                         <option key={m.id} value={m.id}>{m.name}{m.status !== 'active' ? ' (inactive)' : ''}</option>
                       ))}
                     </select>

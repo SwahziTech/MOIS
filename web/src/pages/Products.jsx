@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
-import { categoryTools } from '../lib/categories';
+import { categoryTools, sizeKey, compareKeys } from '../lib/categories';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListControls';
@@ -18,26 +18,6 @@ import NumberInput from '../components/NumberInput';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
-
-/**
- * Sort key for a size like "40x40", "20x10x8", "200x13.3x80mm", "40x40x2in":
- * footprint first (first two dimensions, mm → cm), then each dimension.
- * No size sorts last.
- */
-function sizeKey(size) {
-  if (!size) return [Infinity];
-  const mm = /mm/i.test(size);
-  const nums = (String(size).match(/\d+(?:\.\d+)?/g) || []).map(Number).map(n => (mm ? n / 10 : n));
-  if (!nums.length) return [Infinity];
-  return [nums.length >= 2 ? nums[0] * nums[1] : nums[0], ...nums];
-}
-const compareKeys = (a, b) => {
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] ?? -1, y = b[i] ?? -1;
-    if (x !== y) return x - y;
-  }
-  return 0;
-};
 
 export default function Products() {
   const { organization, canManage, canAt } = useAuth();

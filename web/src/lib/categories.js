@@ -47,3 +47,36 @@ export function categoryTools(categories) {
     leaves: ordered.filter(c => !groupIds.has(c.id)),
   };
 }
+
+/**
+ * Size as a sort key: area first (width × length), then each dimension.
+ * "300x200x80mm" reads in mm, everything else in cm. No size sorts last.
+ */
+export function sizeKey(size) {
+  if (!size) return [Infinity];
+  const mm = /mm/i.test(size);
+  const nums = (String(size).match(/\d+(?:\.\d+)?/g) || []).map(Number).map(n => (mm ? n / 10 : n));
+  if (!nums.length) return [Infinity];
+  return [nums.length >= 2 ? nums[0] * nums[1] : nums[0], ...nums];
+}
+export const compareKeys = (a, b) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? -1, y = b[i] ?? -1;
+    if (x !== y) return x - y;
+  }
+  return 0;
+};
+
+/**
+ * The order products appear in everywhere (decided 2026-10-20): the
+ * organization's category order, then size smallest first, then name.
+ * Items: { categoryId, size, name }.
+ */
+export function productOrder(cats) {
+  return (a, b) => {
+    const ca = cats.byId[a.categoryId], cb = cats.byId[b.categoryId];
+    return (ca && cb ? cats.compare(ca, cb) : 0)
+      || compareKeys(sizeKey(a.size), sizeKey(b.size))
+      || String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
+  };
+}

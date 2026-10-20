@@ -73,7 +73,8 @@ export default function Stock() {
   // Chips: materials, or a product category (a group stands for its categories)
   const inChip = item => !chip || (chip === 'materials' ? item.kind === 'material'
     : item.kind === 'product' && (item.categoryId === chip || cats.byId[item.categoryId]?.parent_category_id === chip));
-  const byName = (a, b) => a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh))
+  const byName = (a, b) => (a.item.kind === 'material' && b.item.kind === 'material' ? (a.item.rank ?? 999) - (b.item.rank ?? 999) : 0)
+    || a.item.name.localeCompare(b.item.name) || warehouseLabel(a.wh).localeCompare(warehouseLabel(b.wh))
     || (refs.colorById[a.color_id]?.display_order ?? 0) - (refs.colorById[b.color_id]?.display_order ?? 0);
   const rows = balances
     .map(b => ({ ...b, item: refs?.items[itemKey(b)], wh: whById[b.warehouse_id] }))

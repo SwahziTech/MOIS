@@ -69,6 +69,9 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const pending = usePendingApprovals(branchId, location.pathname, !!session);
+  // Hidden to icons until pointed at (2026-10-20); on touch screens the logo opens it, and it closes on navigating
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [location.pathname]);
 
   const fullName =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
@@ -96,12 +99,12 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${open ? ' is-open' : ''}`} onMouseLeave={() => setOpen(false)}>
       {/* Logo / Org header */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-mark">
+        <button type="button" className="sidebar-logo-mark" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(o => !o)}>
           <LayoutGrid size={15} strokeWidth={2.2} />
-        </div>
+        </button>
         <div className="sidebar-logo-text">
           <span className="sidebar-org-name" title={organization?.legal_name || organization?.name}>
             {organization?.name || 'Organization'}
