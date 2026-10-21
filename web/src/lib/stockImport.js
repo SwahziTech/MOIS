@@ -208,7 +208,7 @@ function rank(text, candidates, nameOf, limit = 4, threshold = 0.45) {
 
 /**
  * Match parsed lines to the catalogue.
- * catalog: { categories:[{id,name,colorIds:[]}], products:[{id,name,categoryId,unitId,pcsPerSqm,status}],
+ * catalog: { categories:[{id,name,colorIds:[]}], products:[{id,name,categoryId,unitId,pcsPerSqm,status,colorIds?}],
  *            colors:[{id,name}], units:[{id,symbol,name}],
  *            decisions:[{id,subject_type,context_normalized,term_normalized,decision,product_id,color_id,category_id,decided_by_label}] }
  *   decisions = the active rows of identity_decisions (migration 026)
@@ -324,10 +324,12 @@ export function lineProblems(line, choice, catalog) {
   if (!unitId) problems.push(line.unitText ? `Unknown unit "${line.unitText}"` : 'No unit — the table heading has none');
   if (product) {
     const cat = catalog.categories.find(c => c.id === product.categoryId);
-    const coloured = (cat?.colorIds.length ?? 0) > 0;
+    // the product's own colours when an admin set them, else its category's (046)
+    const colorIds = product.colorIds ?? cat?.colorIds ?? [];
+    const coloured = colorIds.length > 0;
     if (coloured && !choice.colorId) problems.push(line.colourText ? `Colour "${line.colourText}" isn't set up` : 'Choose the colour');
-    if (coloured && choice.colorId && !cat.colorIds.includes(choice.colorId)) problems.push(`That colour isn't one of ${cat.name}'s colours`);
-    if (!coloured && choice.colorId) problems.push(`${cat?.name} has no colours`);
+    if (coloured && choice.colorId && !colorIds.includes(choice.colorId)) problems.push(`That colour isn't one of ${product.name}'s colours`);
+    if (!coloured && choice.colorId) problems.push(`${product.name} has no colours`);
     if (unitId && unitId !== product.unitId) problems.push('Counted in a different unit from the one this product is stocked in');
   }
   if (!(line.qty > 0)) problems.push('Quantity must be above zero');

@@ -44,20 +44,33 @@ export const itemKey = row => (row.material_id ? `m:${row.material_id}` : `p:${r
 /** Stock key: the item, plus its colour for coloured products (migration 024) */
 export const stockKey = row => `${itemKey(row)}${row.color_id ? `|c:${row.color_id}` : ''}`;
 
+/**
+ * A product's colours, in order (046): its own list when an admin set one
+ * (own_colors; empty = no colour), else its category's.
+ * catColors: product_category_colors rows; ownColors: product_colors rows
+ */
+export function productColorIds(product, catColors = [], ownColors = []) {
+  const rows = product?.own_colors
+    ? ownColors.filter(c => c.product_id === product.id)
+    : catColors.filter(c => c.category_id === product?.category_id);
+  return [...rows].sort((a, b) => a.display_order - b.display_order).map(c => c.color_id);
+}
+
 /** Reference data every inventory screen needs, in one round trip */
 export async function loadInventoryRefs() {
-  const [wh, mat, prod, units, sup, cats, catRows, colors, bp] = await Promise.all([
+  const [wh, mat, prod, units, sup, cats, catRows, colors, bp, own] = await Promise.all([
     supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
     supabase.from('materials')
       .select('id, name, code, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
       .order('name'),
-    supabase.from('products').select('id, canonical_name, product_id_ref, status, unit_id, category_id, size_cm, category:product_categories(name)').order('canonical_name'),
+    supabase.from('products').select('*, category:product_categories(name)').order('canonical_name'),
     supabase.from('units').select('id, symbol, name'),
     supabase.from('suppliers').select('id, name, status').order('name'),
     supabase.from('product_category_colors').select('category_id, color_id, display_order'),
     supabase.from('product_categories').select('id, name, parent_category_id, sort_order, status'),
     supabase.from('color_palette').select('id, name, display_order, is_active'),
     supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
+    supabase.from('product_colors').select('product_id, color_id, display_order'),   // 046; none before it
   ]);
   const error = wh.error || mat.error || prod.error || units.error || sup.error || cats.error || catRows.error || colors.error || bp.error;
   if (error) throw error;
@@ -78,8 +91,8 @@ export async function loadInventoryRefs() {
   for (const p of prod.data || []) {
     items[`p:${p.id}`] = { key: `p:${p.id}`, kind: 'product', id: p.id, name: p.canonical_name, ref: p.product_id_ref, size: p.size_cm,
       category: catLabel(p.category_id) ?? p.category?.name, categoryId: p.category_id, status: p.status, stockUnitId: p.unit_id, units: [{ id: p.unit_id, factor: 1 }],
-      // coloured categories are stocked per colour
-      colorIds: (cats.data || []).filter(c => c.category_id === p.category_id).sort((a, b) => a.display_order - b.display_order).map(c => c.color_id) };
+      // coloured products are stocked per colour: the product's own colours, else its category's (046)
+      colorIds: productColorIds(p, cats.data || [], own.error ? [] : own.data || []) };
   }
   const colorById = Object.fromEntries((colors.data || []).map(c => [c.id, c]));
   // each branch's own catalogue (031): product ids it carries

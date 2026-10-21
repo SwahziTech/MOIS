@@ -16,6 +16,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 import NumberInput from '../components/NumberInput';
 import CapacityEditor, { capacityText } from '../components/production/CapacityEditor';
+import ProductColours from '../components/master/ProductColours';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -711,6 +712,8 @@ function ProductModal({ product, organization, categories, units, products, bran
             <textarea id="prod-notes" className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
         </div>
+
+        {!isNew && <ProductColours product={product} categoryName={catTools.label(product.category_id)} canEdit onSaved={() => onSaved(false)} />}
 
         {!isNew && (
           <section>

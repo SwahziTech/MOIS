@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
-import { warehouseLabel, qtyText, orgToday } from '../lib/inventory';
+import { warehouseLabel, qtyText, orgToday, productColorIds } from '../lib/inventory';
 import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/stockImport';
 import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
@@ -49,10 +49,10 @@ export default function StockImport() {
 
   async function loadCatalog() {
     setLoadError('');
-    const [cats, pcc, prods, colors, units, decisions, wh, bp] = await Promise.all([
+    const [cats, pcc, prods, colors, units, decisions, wh, bp, own] = await Promise.all([
       supabase.from('product_categories').select('id, name, status, sort_order, default_unit_id, parent_category_id').order('sort_order'),
       supabase.from('product_category_colors').select('category_id, color_id, display_order'),
-      supabase.from('products').select('id, canonical_name, category_id, unit_id, pcs_per_sqm, status').order('canonical_name'),
+      supabase.from('products').select('*').order('canonical_name'),
       supabase.from('color_palette').select('id, name, display_order, is_active').order('display_order'),
       supabase.from('units').select('id, symbol, name, status'),
       supabase.from('identity_decisions')
@@ -60,6 +60,7 @@ export default function StockImport() {
         .eq('status', 'active'),
       supabase.from('warehouses').select('id, name, status, branch_id, branch:branches(id, name, status)').order('name'),
       supabase.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
+      supabase.from('product_colors').select('product_id, color_id, display_order'),   // 046; none before it
     ]);
     const err = [cats, pcc, prods, colors, units, decisions, wh, bp].find(r => r.error)?.error;
     if (err) { console.error(err); setLoadError(LOAD_ERROR); return null; }
@@ -68,7 +69,9 @@ export default function StockImport() {
       categoryRows: cats.data,
       categories: cats.data.map(x => ({ id: x.id, name: x.name, status: x.status, defaultUnitId: x.default_unit_id, parentId: x.parent_category_id,
         colorIds: pcc.data.filter(p => p.category_id === x.id).sort((a, b) => a.display_order - b.display_order).map(p => p.color_id) })),
-      products: prods.data.map(p => ({ id: p.id, name: p.canonical_name, categoryId: p.category_id, unitId: p.unit_id, pcsPerSqm: p.pcs_per_sqm, status: p.status })),
+      // colorIds: the product's colours — its own when an admin set them, else its category's (046)
+      products: prods.data.map(p => ({ id: p.id, name: p.canonical_name, categoryId: p.category_id, unitId: p.unit_id, pcsPerSqm: p.pcs_per_sqm, status: p.status,
+        ownColors: !!p.own_colors, colorIds: productColorIds(p, pcc.data, own.error ? [] : own.data || []) })),
       colors: colors.data.map(x => ({ id: x.id, name: x.name, isActive: x.is_active, display_order: x.display_order })),
       units: units.data.map(u => ({ id: u.id, symbol: u.symbol, name: u.name })),
       decisions: decisions.data,
@@ -508,6 +511,7 @@ export default function StockImport() {
                             const e = effective(l);
                             const prod = prodById[c.productId];
                             const pcat = prod && catById[prod.categoryId];
+                            const pcols = prod?.colorIds ?? [];
                             const problems = c.skip ? [] : problemsOf(l);
                             const opts = productOptions(l);
                             const undone = c.noConvert && conversionFor({ ...c, noConvert: false }, c.unitId || '');
@@ -532,13 +536,13 @@ export default function StockImport() {
                                   )}
                                 </td>
                                 <td>
-                                  {pcat?.colorIds.length ? (
+                                  {pcols.length ? (
                                     <>
                                       <select className="form-input" aria-label="Colour" value={c.colorId} disabled={c.skip} onChange={ev => setChoice(l.id, { colorId: ev.target.value })}>
                                         <option value="">{l.colourText ? `"${l.colourText}" — choose…` : 'Choose…'}</option>
-                                        {pcat.colorIds.map(id => <option key={id} value={id}>{colById[id]?.name}{colById[id]?.isActive === false ? ' (discontinued)' : ''}</option>)}
+                                        {pcols.map(id => <option key={id} value={id}>{colById[id]?.name}{colById[id]?.isActive === false ? ' (discontinued)' : ''}</option>)}
                                       </select>
-                                      {l.colourText && !c.colorId && canCreate && !catalog.colors.some(x => normalize(x.name) === normalize(l.colourText) && pcat.colorIds.includes(x.id)) && (
+                                      {l.colourText && !c.colorId && canCreate && !prod.ownColors && !catalog.colors.some(x => normalize(x.name) === normalize(l.colourText) && pcols.includes(x.id)) && (
                                         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => createColour(l)}>
                                           Add {l.colourText.toLowerCase()} to {pcat.name}
                                         </button>
