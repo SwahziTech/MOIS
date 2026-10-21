@@ -1783,3 +1783,17 @@ tr.cp-over td { background: var(--bg-warning); }
 
 /* Residual row: its own colour (047) */
 .pl-res-colour { width: auto; min-width: 110px; }
+
+/* Approval request details */
+.rd { display: flex; flex-direction: column; gap: 10px; }
+.rd-meta { font-weight: 600; margin: 0; }
+.rd-sec { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 10px; }
+.rd-title { font-size: var(--text-sm); font-weight: 600; margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rd-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.rd-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.rd-table th { text-align: left; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.rd-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.rd-table .num { text-align: right; white-space: nowrap; }
+.rd-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: var(--text-sm); margin: 0; }
+.rd-dl dt { color: var(--text-muted); }
+.rd-dl dd { margin: 0; }

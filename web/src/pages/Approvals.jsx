@@ -9,6 +9,8 @@ import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
+import RequestDetail from '../components/approvals/RequestDetail';
+import { loadInventoryRefs } from '../lib/inventory';
 
 const LOAD_ERROR = "We couldn't load approvals. Please try again.";
 
@@ -41,12 +43,14 @@ export default function Approvals() {
   const [busy,    setBusy]    = useState(null);
   const [notes,   setNotes]   = useState({});    // request id → admin's note
   const [rowError, setRowError] = useState({});  // request id → message
+  const [open,    setOpen]    = useState(null);  // request id in the details window
+  const [refs,    setRefs]    = useState(null);  // names for the details (loaded on first open)
 
   async function load() {
     setError('');
     const [pc, br] = await Promise.all([
       supabase.from('pending_changes')
-        .select('id, branch_id, kind, summary, status, requested_by, requested_at, decided_by, decided_at, decision_note, last_error')
+        .select('id, branch_id, kind, summary, payload, status, requested_by, requested_at, decided_by, decided_at, decision_note, last_error')
         .order('requested_at', { ascending: false }).limit(300),
       supabase.from('branches').select('id, name'),
     ]);
@@ -63,6 +67,11 @@ export default function Approvals() {
 
   useEffect(() => { load(); }, []);
 
+  function openRequest(r) {
+    setOpen(r.id);
+    if (!refs) loadInventoryRefs().then(setRefs).catch(() => setRefs(null));
+  }
+
   async function decide(r, approve) {
     setRowError(e => ({ ...e, [r.id]: '' }));
     setBusy(r.id);
@@ -72,7 +81,7 @@ export default function Approvals() {
     if (err) { setRowError(e => ({ ...e, [r.id]: dbErrorMessage(err) })); return; }
     if (data?.status === 'pending') {
       setRowError(e => ({ ...e, [r.id]: `Couldn't apply it: ${data.error}` }));
-    }
+    } else setOpen(null);
     await load();
   }
 
@@ -82,6 +91,7 @@ export default function Approvals() {
     window.dispatchEvent(new Event('mois:approvals-changed'));
     setBusy(null);
     if (err) { setRowError(e => ({ ...e, [r.id]: dbErrorMessage(err) })); return; }
+    setOpen(null);
     await load();
   }
 
@@ -111,7 +121,7 @@ export default function Approvals() {
                   const canDecide = canManage(KIND[r.kind]?.perm);
                   const mine = r.requested_by === session?.user?.id;
                   return (
-                    <tr key={r.id}>
+                    <tr key={r.id} className="clickable-row" onClick={() => openRequest(r)} title="Open to review">
                       <td style={{ maxWidth: 520 }}>
                         <div className="text-xs text-muted">{KIND[r.kind]?.label ?? r.kind}</div>
                         <div>{r.summary}</div>
@@ -132,7 +142,7 @@ export default function Approvals() {
                           <div className="text-xs text-muted">{people[r.decided_by] ?? ''} · {when(r.decided_at)}</div>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', minWidth: 220 }}>
+                      <td style={{ textAlign: 'right', minWidth: 220 }} onClick={e => e.stopPropagation()}>
                         {r.status === 'pending' && canDecide && (
                           <div className="flex flex-col gap-4" style={{ alignItems: 'flex-end' }}>
                             <input className="form-input" style={{ padding: '4px 8px' }} placeholder="Note (optional)" aria-label="Note"
@@ -146,6 +156,7 @@ export default function Approvals() {
                         {r.status === 'pending' && !canDecide && mine && (
                           <button type="button" className="btn btn-ghost btn-sm" disabled={busy === r.id} onClick={() => withdraw(r)}>Withdraw</button>
                         )}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openRequest(r)}>Review</button>
                       </td>
                     </tr>
                   );
@@ -155,6 +166,16 @@ export default function Approvals() {
           </div>
         )}
       </div>
+      {(() => {
+        const r = rows.find(x => x.id === open);
+        if (!r) return null;
+        return (
+          <RequestDetail request={r} kindLabel={KIND[r.kind]?.label ?? r.kind} branchName={branches[r.branch_id]} askedBy={people[r.requested_by]} refs={refs}
+            canDecide={canManage(KIND[r.kind]?.perm)} mine={r.requested_by === session?.user?.id} busy={busy === r.id} error={rowError[r.id]}
+            note={notes[r.id] ?? ''} onNote={v => setNotes(n => ({ ...n, [r.id]: v }))}
+            onDecide={approve => decide(r, approve)} onWithdraw={() => withdraw(r)} onClose={() => setOpen(null)} />
+        );
+      })()}
     </PageShell>
   );
 }
