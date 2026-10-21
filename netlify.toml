@@ -1,0 +1,14 @@
+# Netlify: the web app lives in web/ (React + Vite)
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single-page app: every route is served by index.html (React Router)
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
