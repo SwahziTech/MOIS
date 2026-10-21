@@ -15,7 +15,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 import NumberInput from '../components/NumberInput';
-import CapacityEditor from '../components/production/CapacityEditor';
+import CapacityEditor, { capacityText } from '../components/production/CapacityEditor';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -33,6 +33,7 @@ export default function Products() {
   const [specs,      setSpecs]      = useState({});   // product id → effective pcs/m² and yield (031)
   const [stock,      setStock]      = useState([]);   // stock_balances rows for products
   const [whBranch,   setWhBranch]   = useState({});   // warehouse id → branch id
+  const [capacity,   setCapacity]   = useState(null); // branch id → product id → molds / bags a day (045); null = not available
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
@@ -88,6 +89,16 @@ export default function Products() {
     setStock(stockRes.data || []);
     setWhBranch(Object.fromEntries((whRes.data || []).map(w => [w.id, w.branch_id])));
     setLoading(false);
+    loadCapacity();
+  }
+
+  // Molds per branch (045) — loaded on its own so the page still works without it
+  async function loadCapacity() {
+    const { data, error: err } = await supabase.from('branch_product_capacity').select('branch_id, product_id, molds, bags_per_day_min, bags_per_day_max');
+    if (err) { setCapacity(null); return; }
+    const m = {};
+    for (const r of data || []) (m[r.branch_id] ||= {})[r.product_id] = r;
+    setCapacity(m);
   }
 
   useEffect(() => { load(); }, []);
@@ -157,7 +168,8 @@ export default function Products() {
   // columns only when some product in view has one
   const showCoverage = filtered.some(p => specs[p.id]?.pcs_per_sqm != null);
   const showYield    = filtered.some(p => specs[p.id]?.average_yield_per_bag != null);
-  const cols = 5 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0);
+  const showMolds = !!branchId && capacity != null;
+  const cols = 5 + (showCoverage ? 1 : 0) + (showYield ? 1 : 0) + (showMolds ? 1 : 0);
 
   return (
     <PageShell
@@ -206,6 +218,7 @@ export default function Products() {
                   <th>Size</th>
                   {showCoverage && <th title="Pieces needed to cover one square metre">Pieces per m²</th>}
                   {showYield && <th title="Average pieces from one 50 kg bag of cement">Yield per bag</th>}
+                  {showMolds && <th title={`Molds available at ${branchName}: the most pieces cast in a day. Press products: bags of cement a day.`}>Molds</th>}
                   <th>Stock unit</th>
                   <th style={{ textAlign: 'right' }} title={branchId ? `On hand at ${branchName}` : 'On hand across all branches'}>
                     Stock qty{branchId ? '' : ' (all)'}
@@ -240,6 +253,7 @@ export default function Products() {
                       <td>{p.size_cm || <span className="text-muted">—</span>}</td>
                       {showCoverage && <td>{sp?.pcs_per_sqm != null ? +Number(sp.pcs_per_sqm).toPrecision(6) : <span className="text-muted" title="Not recorded yet">—</span>}</td>}
                       {showYield && <td>{sp?.average_yield_per_bag != null ? +Number(sp.average_yield_per_bag).toPrecision(6) : <span className="text-muted" title="Not recorded yet">—</span>}</td>}
+                      {showMolds && <td>{capacityText(capacity[branchId]?.[p.id], true) ?? <span className="text-muted" title="Not filled in yet — open the product to fill it">—</span>}</td>}
                       <td><span className="badge badge-neutral" title={p.unit?.name}>{p.unit?.symbol || '—'}</span></td>
                       <td style={{ textAlign: 'right', fontWeight: qty ? 600 : 400 }} className={qty ? '' : 'text-muted'}>
                         {qty ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(qty) : '—'}
@@ -277,6 +291,7 @@ export default function Products() {
           onEdit={() => { setEditing(products.find(x => x.id === viewing.id)); setViewing(null); }}
           onClose={() => setViewing(null)}
           onChanged={load}
+          onCapacityChanged={loadCapacity}
         />
       )}
 
@@ -302,7 +317,7 @@ export default function Products() {
  * removing it from the branch's list always asks first — a stray click
  * shouldn't change a catalogue.
  */
-function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, canBranchYield, organization, openFlagCount, category, categoryLabel, onEdit, onClose, onChanged }) {
+function ProductDetail({ product: p, spec, stock, carried, branchId, branchName, branchNames, canWrite, canCatalogue, canBranchYield, organization, openFlagCount, category, categoryLabel, onEdit, onClose, onChanged, onCapacityChanged }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const [prices,  setPrices]  = useState(null);
   const [recipes, setRecipes] = useState(null);
@@ -429,7 +444,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
           {p.notes && <><dt>Notes</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{p.notes}</dd></>}
         </dl>
 
-        {branchId && <CapacityEditor productId={p.id} branchId={branchId} branchName={branchName} organizationId={organization.id} canEdit={canBranchYield} />}
+        {branchId && <CapacityEditor productId={p.id} branchId={branchId} branchName={branchName} organizationId={organization.id} canEdit={canBranchYield} onChanged={onCapacityChanged} />}
 
         {branchId && spec?.spec_id && (own?.id || canBranchYield) && (
           <section>

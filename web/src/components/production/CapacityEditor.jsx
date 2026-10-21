@@ -9,7 +9,15 @@ import NumberInput from '../NumberInput';
  * mold per day) or bags of cement a day (press — a usual range). Neither =
  * not defined. The branch manager keeps it; shown in product details.
  */
-export default function CapacityEditor({ productId, branchId, branchName, organizationId, canEdit }) {
+/** Short text for a capacity row; null when nothing is filled in. short: for a table cell */
+export function capacityText(row, short = false) {
+  if (row?.molds) return short ? qtyText(row.molds) : `${qtyText(row.molds)} molds — up to ${qtyText(row.molds)} pcs a day`;
+  const lo = row?.bags_per_day_min ?? row?.bags_per_day_max, hi = row?.bags_per_day_max ?? row?.bags_per_day_min;
+  if (!lo) return null;
+  return `${qtyText(lo)}${hi !== lo ? `–${qtyText(hi)}` : ''} bags${short ? '/day' : ' of cement a day'}`;
+}
+
+export default function CapacityEditor({ productId, branchId, branchName, organizationId, canEdit, onChanged }) {
   const [row, setRow] = useState(undefined);   // undefined = loading, null = none
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -38,15 +46,14 @@ export default function CapacityEditor({ productId, branchId, branchName, organi
     if (err) { setError(dbErrorMessage(err)); return; }
     setEditing(null);
     load();
+    onChanged?.();
   }
 
   if (row === undefined) return null;
-  const text = row?.molds ? `${qtyText(row.molds)} molds — up to ${qtyText(row.molds)} pcs a day`
-    : row?.bags_per_day_min || row?.bags_per_day_max ? `${qtyText(row.bags_per_day_min ?? row.bags_per_day_max)}–${qtyText(row.bags_per_day_max ?? row.bags_per_day_min)} bags of cement a day`
-    : 'Not defined';
+  const text = capacityText(row) ?? 'Not filled in yet';
   return (
     <section>
-      <h3 className="modal-section-title">{branchName}'s capacity</h3>
+      <h3 className="modal-section-title">Molds available at {branchName}</h3>
       {editing ? (
         <div className="confirm-box">
           <div className="form-row">
@@ -72,7 +79,7 @@ export default function CapacityEditor({ productId, branchId, branchName, organi
       ) : (
         <p className="text-sm flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
           <span className={row ? '' : 'text-muted'}>{text}</span>
-          {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ molds: row?.molds ?? '', lo: row?.bags_per_day_min ?? '', hi: row?.bags_per_day_max ?? '' })}>Change…</button>}
+          {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ molds: row?.molds ?? '', lo: row?.bags_per_day_min ?? '', hi: row?.bags_per_day_max ?? '' })}>{row ? 'Change…' : 'Fill in…'}</button>}
         </p>
       )}
     </section>
