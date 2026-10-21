@@ -139,22 +139,23 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   });
   const shortLines = lines.filter(l => l.short);
 
-  // Products cast: main + leftovers (same family + colour unless allowed for this batch)
-  const leftoverChoices = carried.filter(i => i.id !== form.productId && (form.allowOther
-    ? (!colours.length || !i.colorIds?.length || i.colorIds.includes(form.colorId))
-    : i.categoryId === main?.categoryId));
-  // A residual's colour follows the main product's: the same colour by name
-  // (Red with Red, Grey with Grey); a plain main product's residuals are White.
-  // It can be changed on the row (047).
+  // A residual's colour is the main product's: the same colour by name (Red
+  // with Red, Grey with Grey); a plain main product's residuals are White.
+  // Never chosen separately (047 stores it per product).
   const residualColour = item => {
     if (!item?.colorIds?.length) return '';
     if (form.colorId && item.colorIds.includes(form.colorId)) return form.colorId;
     const want = (form.colorId ? refs.colorById[form.colorId]?.name : 'White')?.toLowerCase();
     return item.colorIds.find(id => refs.colorById[id]?.name?.toLowerCase() === want) ?? '';
   };
+  // Products cast: main + leftovers (same family unless allowed for this batch),
+  // and only those that come in the main product's colour
+  const leftoverChoices = carried.filter(i => i.id !== form.productId
+    && (form.allowOther || i.categoryId === main?.categoryId)
+    && (!i.colorIds?.length || residualColour(i)));
   const outputs = [
     ...(main ? [{ productId: main.id, colorId: form.colorId || '', pieces: num(form.pieces), primary: true }] : []),
-    ...form.leftovers.filter(l => l.productId).map(l => ({ productId: l.productId, colorId: refs.items[`p:${l.productId}`]?.colorIds?.length ? l.colorId ?? '' : '', pieces: num(l.pieces), primary: false })),
+    ...form.leftovers.filter(l => l.productId).map(l => ({ productId: l.productId, colorId: residualColour(refs.items[`p:${l.productId}`]), pieces: num(l.pieces), primary: false })),
   ];
   useEffect(() => { outputs.forEach(o => band(o.productId)); }); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -465,20 +466,14 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
               <div key={i} className="pl-res">
                 <div className="pl-res-name">
                   <select className="form-input" aria-label="Residual product" value={l.productId}
-                    onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, productId: e.target.value, colorId: residualColour(refs.items[`p:${e.target.value}`]) } : x)) })}>
+                    onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, productId: e.target.value } : x)) })}>
                     <option value="">Residual product…</option>
                     {leftoverChoices.filter(c => c.id === l.productId || !form.leftovers.some(x => x.productId === c.id)).map(c => <option key={c.id} value={c.id}>{c.name} · {c.category}</option>)}
                   </select>
                   {it && b?.average_yield_per_bag > 0 && <span className="pl-accent-text">Wastani: {+b.average_yield_per_bag} pcs/bag</span>}
                   {it && b !== undefined && !(b?.average_yield_per_bag > 0) && <WastaniMissing productId={it.id} name={it.name} branchId={branchId} />}
                 </div>
-                {it?.colorIds?.length > 0 && (
-                  <select className="form-input pl-res-colour" aria-label={`${it.name} colour`} value={l.colorId ?? ''}
-                    onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, colorId: e.target.value } : x)) })}>
-                    <option value="">Colour…</option>
-                    {it.colorIds.map(id => <option key={id} value={id}>{refs.colorById[id]?.name}</option>)}
-                  </select>
-                )}
+                <ColourChip id={residualColour(it)} />
                 <NumberInput step="1" min="0" className="pl-num" style={{ width: 90 }} placeholder="Pcs" aria-label="Residual pieces" value={l.pieces}
                   onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, pieces: e.target.value } : x)) })} />
                 <button type="button" className="icon-btn" aria-label="Remove residual" onClick={() => set({ leftovers: form.leftovers.filter((_, j) => j !== i) })}><Trash2 size={14} /></button>
