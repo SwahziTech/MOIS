@@ -1750,3 +1750,25 @@ tr.cp-over td { background: var(--bg-warning); }
 .cp-mat { display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; }
 .cp-mat strong { font-size: var(--text-xl); }
 .cp-mat.is-short strong { color: var(--color-error); }
+
+/* Capacity simulator (2026-10-21, after SwahziTech's reference) */
+.sim { gap: 14px; }
+.sim-head { display: flex; gap: 10px; align-items: flex-start; }
+.sim-icon { color: var(--accent-dark); flex-shrink: 0; margin-top: 2px; }
+.sim-title { font-size: var(--text-lg); font-weight: 700; margin: 0; }
+.sim-inputs { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
+.sim-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sim-pick { display: flex; gap: 8px; }
+.sim-product { flex: 1; justify-content: flex-start; height: 48px; font-size: var(--text-md); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sim-colour { width: auto; height: 48px; }
+.sim-target { height: 48px; font-size: var(--text-xl); font-weight: 700; }
+.sim-presets { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sim-result { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-canvas); }
+.sim-cap { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--text-md); }
+.sim-warn { display: flex; align-items: center; gap: 8px; margin: 0; }
+.sim-mats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.sim-mat { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; background: var(--bg-surface); display: flex; flex-direction: column; gap: 2px; }
+.sim-mat strong { font-size: var(--text-xl); color: var(--accent-dark); }
+.sim-mat.is-short { border-color: var(--color-error); }
+.sim-mat.is-short strong { color: var(--color-error); }
+@media (max-width: 760px) { .sim-inputs { grid-template-columns: minmax(0, 1fr); } }

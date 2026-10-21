@@ -24,7 +24,7 @@ const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', lef
  * Batches are added to today's list and saved together. The unsaved list
  * stays on this device and comes back when the page is opened again.
  */
-export default function DayLog({ refs, recipes, branchId, branchName, today, curingDays, usage = {}, onSaved }) {
+export default function DayLog({ refs, recipes, branchId, branchName, today, curingDays, usage = {}, preset = null, onSaved }) {
   const { organization, canAt, canManage } = useAuth();
   const stores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId);
   const rawStores = stores.filter(w => w.type === 'raw_materials' || w.type === 'general');
@@ -163,6 +163,13 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   };
   const mainBand = bands[form.productId];
   const expected = mainBand?.average_yield_per_bag > 0 && bags > 0 ? Math.round(bags * mainBand.average_yield_per_bag) : null;
+
+  // A product sent from the capacity simulator starts a new batch form
+  useEffect(() => {
+    if (!preset?.productId) return;
+    setEditingId(null);
+    setForm({ ...emptyForm(), productId: preset.productId, colorId: preset.colorId || '' });
+  }, [preset?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (recipe && !form.bags) document.getElementById('pl-bags')?.focus();

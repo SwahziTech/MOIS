@@ -50,6 +50,7 @@ export default function Production() {
   const [busyId,    setBusyId]    = useState(null);
   const [rowError,  setRowError]  = useState('');
   const [curingDays, setCuringDays] = useState(14);
+  const [preset, setPreset] = useState(null);   // product (and colour) sent from the simulator
 
   async function load() {
     setError('');
@@ -130,11 +131,12 @@ export default function Production() {
       {current === 'planner' ? (
         !branchId ? <div className="card"><EmptyState icon={Factory} title="Pick a branch" description="Capacity is per branch — pick one in the sidebar." /></div>
           : !refs ? <div className="card"><div className="card-body"><span className="skeleton" /></div></div>
-          : <CapacityPlanner refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} batches={batches} usage={usage} />
+          : <CapacityPlanner refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} batches={batches} usage={usage}
+              onOpenForm={canRecord ? (pr => { setPreset({ ...pr, at: Date.now() }); setTab('log'); }) : null} />
       ) : current === 'log' ? (
         error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
           : !refs ? <div className="card"><div className="card-body"><span className="skeleton" /></div></div>
-          : <DayLog refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} curingDays={curingDays} usage={usage}
+          : <DayLog refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} curingDays={curingDays} usage={usage} preset={preset}
               onSaved={async () => { setTab('curing'); await load(); }} />
       ) : (
       <div className="card">

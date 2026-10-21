@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Gauge, Factory } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -19,7 +19,7 @@ const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
  * what the store holds. A calculator by default; in "plan & compare" mode
  * the day's plan is saved and set against what was actually cast.
  */
-export default function CapacityPlanner({ refs, recipes, branchId, branchName, today, batches = [], usage = {} }) {
+export default function CapacityPlanner({ refs, recipes, branchId, branchName, today, batches = [], usage = {}, onOpenForm }) {
   const { organization, canAt } = useAuth();
   const [mode, setMode] = useState('calculator');
   const [date, setDate] = useState(today);
@@ -33,6 +33,10 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  // the simulator: one product and a target
+  const [sim, setSim] = useState({ productId: '', colorId: '', target: '' });
+  const [simPicking, setSimPicking] = useState(false);
+  const [curingDays, setCuringDays] = useState(14);
   const rawStore = refs.warehouses.find(w => w.status === 'active' && w.branch_id === branchId && w.type === 'raw_materials');
   const canSave = canAt('production.create', branchId, null);
 
@@ -47,6 +51,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
     ]).then(([o, c, st, ps, ss]) => {
       if (!live) return;
       setMode(o.data?.planner_mode ?? 'calculator');
+      if (o.data?.curing_days != null) setCuringDays(o.data.curing_days);
       setCapacity(Object.fromEntries((c.data || []).map(x => [x.product_id, x])));
       setStock(Object.fromEntries((st.data || []).map(x => [x.material_id, Number(x.quantity)])));
       const sizeOf = Object.fromEntries((ss.data || []).map(x => [x.id, x.size_cm]));
@@ -68,7 +73,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
 
   // each product's yield band at this branch (the branch's own wastani wins)
   useEffect(() => {
-    rows.forEach(async r => {
+    [...rows, ...(sim.productId ? [{ productId: sim.productId }] : [])].forEach(async r => {
       if (bands[r.productId] !== undefined) return;
       const { data } = await supabase.rpc('product_yield_band', { p_product_id: r.productId, p_branch_id: branchId });
       setBands(b => ({ ...b, [r.productId]: data?.[0] ?? null }));
@@ -129,6 +134,32 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
   }, [lines, stock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalBags = lines.reduce((s, l) => s + (l.bags ?? 0), 0);
+
+  // ---- simulator: target pieces → casting days, curing, materials
+  const simItem = refs.items[`p:${sim.productId}`];
+  const simW = bands[sim.productId]?.average_yield_per_bag;
+  const simCap = capacity[sim.productId];
+  const target = num(sim.target) ?? 0;
+  const simBags = simW > 0 ? target / simW : null;
+  const perDayMax = simCap?.molds ?? (simCap?.bags_per_day_max && simW > 0 ? Math.floor(simCap.bags_per_day_max * simW) : null);
+  const perDayMin = simCap?.molds ?? (simCap?.bags_per_day_min && simW > 0 ? Math.floor(simCap.bags_per_day_min * simW) : perDayMax);
+  const daysFast = perDayMax ? Math.ceil(target / perDayMax) : null;
+  const daysSlow = perDayMin ? Math.ceil(target / perDayMin) : null;
+  const addDays = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
+  const readyBy = daysSlow ? addDays(today, daysSlow - 1 + curingDays) : null;
+  const simRecipe = simItem && (!simItem.colorIds?.length || sim.colorId) ? recipeFor(simItem, sim.colorId) : null;
+  const simMaterials = !simRecipe || simBags == null ? [] : simRecipe.items
+    .filter(it => refs.items[`m:${it.material_id}`]?.inRecipes !== false)
+    .map(it => {
+      const qty = Number(it.quantity) * simBags;
+      const f = factorOf(it.material_id, it.unit_id);
+      const have = f ? (stock[it.material_id] ?? 0) / f : null;
+      return { item: refs.items[`m:${it.material_id}`] ?? { name: '—' }, qty, unit: refs.unitById[it.unit_id]?.symbol ?? '', short: have != null && qty > have + 1e-9, shortBy: have != null ? qty - have : 0 };
+    })
+    .sort((a, b) => byMaterialOrder(a.item, b.item));
+  const capLine = simCap?.molds ? `${qtyText(simCap.molds)} molds${simItem?.size ? ` (${simItem.size})` : ''} — ${qtyText(simCap.molds)} pcs a day`
+    : simCap?.bags_per_day_max || simCap?.bags_per_day_min ? `${qtyText(simCap.bags_per_day_min ?? simCap.bags_per_day_max)}–${qtyText(simCap.bags_per_day_max ?? simCap.bags_per_day_min)} bags a day${perDayMax ? ` — ${qtyText(perDayMin)}–${qtyText(perDayMax)} pcs a day` : ''}`
+    : null;
   const set = (i, patch) => setRows(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   async function savePlan() {
@@ -147,8 +178,88 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
         <ProductPicker title="Add a product to plan" items={carried.filter(i => !rows.some(r => r.productId === i.id && !i.colorIds?.length))} cats={cats} usage={usage} wastani={wastani}
           onClose={() => setPicking(false)} onPick={id => { setPicking(false); setRows(rs => [...rs, { productId: id, colorId: '', pieces: '' }]); }} />
       )}
+      {simPicking && (
+        <ProductPicker title="Select finished product" items={carried} cats={cats} usage={usage} wastani={wastani}
+          onClose={() => setSimPicking(false)} onPick={id => { setSimPicking(false); setSim(x => ({ ...x, productId: id, colorId: '' })); }} />
+      )}
+
+      <section className="pl-card sim">
+        <div className="sim-head">
+          <Gauge size={20} className="sim-icon" />
+          <div><h3 className="sim-title">Production capacity &amp; mix simulator</h3>
+            <p className="pl-help">Order size → casting days, curing and raw materials needed.</p></div>
+        </div>
+        <div className="sim-inputs">
+          <div className="sim-field">
+            <span className="pl-label">1. Finished product</span>
+            <div className="sim-pick">
+              <button type="button" className="btn btn-outline sim-product" onClick={() => setSimPicking(true)}>
+                {simItem ? <>{simItem.name} <span className="pl-help">({simItem.category}{simCap?.molds ? ` · ${qtyText(simCap.molds)} molds` : ''})</span></> : 'Choose product…'}
+              </button>
+              {simItem?.colorIds?.length > 0 && (
+                <select className="form-input sim-colour" aria-label="Colour" value={sim.colorId} onChange={e => setSim(x => ({ ...x, colorId: e.target.value }))}>
+                  <option value="">Colour…</option>
+                  {simItem.colorIds.map(c => <option key={c} value={c}>{refs.colorById[c]?.name}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+          <div className="sim-field">
+            <span className="pl-label">2. Target output (pcs)</span>
+            <NumberInput step="1" min="0" className="form-input sim-target" placeholder="0" value={sim.target} onChange={e => setSim(x => ({ ...x, target: e.target.value }))} />
+          </div>
+        </div>
+        <div className="sim-presets">
+          <span className="pl-help">Quick:</span>
+          {[100, 200, 500, 1000].map(n => (
+            <button key={n} type="button" className={`filter-chip${target === n ? ' is-on' : ''}`} onClick={() => setSim(x => ({ ...x, target: String(n) }))}>{qtyText(n)} pcs</button>
+          ))}
+          {perDayMax && <button type="button" className={`filter-chip${target === perDayMax ? ' is-on' : ''}`} onClick={() => setSim(x => ({ ...x, target: String(perDayMax) }))}>One day max ({qtyText(perDayMax)} pcs)</button>}
+        </div>
+
+        {simItem && (
+          <div className="sim-result">
+            <div className="sim-cap">
+              <span><span className="pl-help">Capacity: </span><strong>{capLine ?? 'Not defined for this product'}</strong></span>
+              {daysFast != null && target > 0 && (
+                <span className="pl-badge is-plain">{daysFast === daysSlow ? `${daysFast} casting day${daysFast === 1 ? '' : 's'}` : `${daysFast}–${daysSlow} casting days`}</span>
+              )}
+            </div>
+            {target > 0 && perDayMax != null && target > perDayMax && (
+              <div className="alert alert-warning sim-warn"><AlertTriangle size={14} /> {qtyText(target)} pcs is more than one day's capacity ({qtyText(perDayMax)} pcs) — {daysFast === daysSlow ? daysFast : `${daysFast}–${daysSlow}`} days of casting.</div>
+            )}
+            {target > 0 && readyBy && <p className="pl-help">Ready to sell about <strong>{readyBy}</strong> (casting + {curingDays} days curing).</p>}
+            {simW == null && bands[sim.productId] !== undefined && <p className="pl-help text-warning">No wastani for {simItem.name} — set it to work out cement and materials.</p>}
+            {simItem.colorIds?.length > 0 && !sim.colorId && <p className="pl-help">Choose the colour to see its materials.</p>}
+
+            {target > 0 && simMaterials.length > 0 && (
+              <>
+                <span className="pl-label">Raw materials for {qtyText(target)} pcs</span>
+                <div className="sim-mats">
+                  {simMaterials.map(m => (
+                    <div key={m.item.name + m.unit} className={`sim-mat${m.short ? ' is-short' : ''}`}>
+                      <span className="pl-label">{m.item.name}</span>
+                      <span><strong>{qtyText(round(m.qty))}</strong> <span className="pl-unit">{m.unit}</span></span>
+                      {m.short && <span className="pl-stock text-error">Short {qtyText(round(m.shortBy))} {m.unit}</span>}
+                    </div>
+                  ))}
+                </div>
+                {simW > 0 && <p className="pl-help">Cement: {qtyText(target)} pcs ÷ {+simW} pcs/bag = {qtyText(round(simBags))} bags</p>}
+              </>
+            )}
+
+            {onOpenForm && (
+              <button type="button" className="btn btn-primary pl-wide" onClick={() => onOpenForm({ productId: sim.productId, colorId: sim.colorId })}>
+                <Factory size={15} /> Open production form for {simItem.name}{sim.colorId ? ` ${refs.colorById[sim.colorId]?.name}` : ''}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {mode === 'plan_compare' && (<>
       <div className="pl-toolbar">
-        <span className="pl-badge is-plain">{mode === 'plan_compare' ? 'Plan & compare' : 'Calculator — nothing is saved'}</span>
+        <span className="pl-badge is-plain">Plan & compare</span>
         <label className="pl-inline">Day
           <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} />
         </label>
@@ -226,6 +337,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
           <button type="button" className={`btn btn-primary pl-wide pl-save${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={savePlan}>Save plan for {date}</button>
         </>
       )}
+      </>)}
     </div>
   );
 }
