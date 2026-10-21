@@ -175,11 +175,11 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
   return (
     <div className="pl">
       {picking && (
-        <ProductPicker title="Add a product to plan" items={carried.filter(i => !rows.some(r => r.productId === i.id && !i.colorIds?.length))} cats={cats} usage={usage} wastani={wastani}
+        <ProductPicker title="Add a product to plan" items={carried.filter(i => !rows.some(r => r.productId === i.id && !i.colorIds?.length))} cats={cats} usage={usage} wastani={wastani} capacity={capacity}
           onClose={() => setPicking(false)} onPick={id => { setPicking(false); setRows(rs => [...rs, { productId: id, colorId: '', pieces: '' }]); }} />
       )}
       {simPicking && (
-        <ProductPicker title="Select finished product" items={carried} cats={cats} usage={usage} wastani={wastani}
+        <ProductPicker title="Select finished product" items={carried} cats={cats} usage={usage} wastani={wastani} capacity={capacity}
           onClose={() => setSimPicking(false)} onPick={id => { setSimPicking(false); setSim(x => ({ ...x, productId: id, colorId: '' })); }} />
       )}
 

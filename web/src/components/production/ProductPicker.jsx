@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { qtyText } from '../../lib/inventory';
 import Modal from '../Modal';
 import { productOrder } from '../../lib/categories';
 
@@ -8,8 +9,9 @@ import { productOrder } from '../../lib/categories';
  * size and wastani. Under "All" the products this branch casts most often
  * come first (by batches recorded), then the agreed category order, size, name.
  * items: products to choose from; usage: product id → batches; wastani: product id → pcs per bag
+ * capacity (planner only): product id → the branch's molds / bags a day; shown on each card when given
  */
-export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, wastani = {}, onPick, onClose }) {
+export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, wastani = {}, capacity = null, onPick, onClose }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   // chips in the organization's category order
@@ -39,6 +41,7 @@ export default function ProductPicker({ title = 'Select primary product', items,
           {shown.map((i, n) => (
             <button type="button" key={i.id} className="pp-card" onClick={() => onPick(i.id)}>
               <span className="pp-head"><span className="pp-n">#{n + 1}</span><strong>{i.name}</strong><span className="pl-tag">{i.category}</span>
+                {capacity && <span className={`pp-cap${capOf(capacity[i.id]) ? '' : ' is-none'}`}>{capOf(capacity[i.id]) ?? 'Capacity not defined'}</span>}
                 {usage[i.id] > 0 && <span className="pp-used">{usage[i.id]} batch{usage[i.id] === 1 ? '' : 'es'}</span>}</span>
               <span className="pp-meta">
                 {[i.size && `Size: ${i.size}`, wastani[i.id] > 0 ? `Wastani: ${+wastani[i.id]} pcs/bag` : 'No wastani set'].filter(Boolean).join(' • ')}
@@ -49,4 +52,12 @@ export default function ProductPicker({ title = 'Select primary product', items,
       </div>
     </Modal>
   );
+}
+
+/** A capacity row as a short label: molds, or bags of cement a day */
+function capOf(c) {
+  if (!c) return null;
+  if (c.molds) return `${qtyText(c.molds)} molds`;
+  const lo = c.bags_per_day_min ?? c.bags_per_day_max, hi = c.bags_per_day_max ?? c.bags_per_day_min;
+  return lo ? `${qtyText(lo)}${hi !== lo ? `–${qtyText(hi)}` : ''} bags/day` : null;
 }
