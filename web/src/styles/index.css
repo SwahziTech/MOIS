@@ -1740,3 +1740,13 @@ button.sidebar-logo-mark { border: none; cursor: pointer; padding: 0; }
 /* Production ledger toolbar */
 .pled-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .pled-toolbar .form-input { width: auto; }
+
+/* Capacity planner (2026-10-21) */
+.cp-table td { vertical-align: middle; }
+.cp-colour { width: auto; display: inline-block; margin-left: 6px; height: 30px; padding: 2px 8px; }
+.cp-pcs { width: 110px; }
+tr.cp-over td { background: var(--bg-warning); }
+.cp-mats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.cp-mat { display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; }
+.cp-mat strong { font-size: var(--text-xl); }
+.cp-mat.is-short strong { color: var(--color-error); }

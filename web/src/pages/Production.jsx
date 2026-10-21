@@ -13,6 +13,7 @@ import Modal from '../components/Modal';
 import NumberInput from '../components/NumberInput';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DayLog from '../components/production/DayLog';
+import CapacityPlanner from '../components/production/CapacityPlanner';
 
 const LOAD_ERROR = "We couldn't load production. Please try again.";
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -122,10 +123,15 @@ export default function Production() {
         ...(waitingMaterials.length ? [['materials', `Materials to issue (${waitingMaterials.length})`]] : []),
         ['done', 'Released & void'],
         ['variance', 'Material variance'],
+        ['planner', 'Capacity planner'],
       ]} />
       {rowError && <div className="alert alert-error mb-8" role="alert">{rowError}</div>}
 
-      {current === 'log' ? (
+      {current === 'planner' ? (
+        !branchId ? <div className="card"><EmptyState icon={Factory} title="Pick a branch" description="Capacity is per branch — pick one in the sidebar." /></div>
+          : !refs ? <div className="card"><div className="card-body"><span className="skeleton" /></div></div>
+          : <CapacityPlanner refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} batches={batches} usage={usage} />
+      ) : current === 'log' ? (
         error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
           : !refs ? <div className="card"><div className="card-body"><span className="skeleton" /></div></div>
           : <DayLog refs={refs} recipes={recipes} branchId={branchId} branchName={branchName} today={today} curingDays={curingDays} usage={usage}

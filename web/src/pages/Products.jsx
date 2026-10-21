@@ -15,6 +15,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 import NumberInput from '../components/NumberInput';
+import CapacityEditor from '../components/production/CapacityEditor';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const sameName = (a, b) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -427,6 +428,8 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
             : <>{+band.average.toPrecision(6)} ± {+band.tolerance} → <strong>{band.tolerance === 0 ? `exactly ${+band.average.toPrecision(6)}` : `${+(band.average - band.tolerance).toPrecision(6)}–${+(band.average + band.tolerance).toPrecision(6)}`}</strong> per bag <span className="text-muted">(tolerance: {band.from})</span></>}</dd>
           {p.notes && <><dt>Notes</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{p.notes}</dd></>}
         </dl>
+
+        {branchId && <CapacityEditor productId={p.id} branchId={branchId} branchName={branchName} organizationId={organization.id} canEdit={canBranchYield} />}
 
         {branchId && spec?.spec_id && (own?.id || canBranchYield) && (
           <section>

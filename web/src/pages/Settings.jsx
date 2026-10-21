@@ -8,7 +8,7 @@ import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
-import { BranchVatCard, ExpenseCategoriesCard, RejectReasonsCard, CuringDays } from '../components/settings/PurchaseSettings';
+import { BranchVatCard, ExpenseCategoriesCard, RejectReasonsCard, CuringDays, PlannerMode } from '../components/settings/PurchaseSettings';
 
 function Row({ label, children }) {
   return (
@@ -37,6 +37,7 @@ export default function Settings() {
             <Row label="Default branch"><DefaultBranch org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Yield tolerance"><YieldTolerance org={org} canEdit={canManage('org.manage')} /></Row>
             <Row label="Curing period"><CuringDays canEdit={canManage('org.manage')} /></Row>
+            <Row label="Capacity planner"><PlannerMode canEdit={canManage('org.manage')} /></Row>
             <Row label="Status">
               {org?.status && <span className="badge badge-success">{org.status}</span>}
             </Row>
