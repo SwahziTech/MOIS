@@ -169,7 +169,7 @@
           "mold_no": 2,
           "name": "Combo",
           "size_cm": "80x40",
-          "qty_of_molds": 75,
+          "qty_of_molds": 150,
           "coverage_m2": 25,
           "pieces_per_m2": 3,
           "wastani_per_bag": 15,
@@ -274,7 +274,7 @@
           "mold_no": 9,
           "name": "40 Combo",
           "size_cm": "40x40",
-          "qty_of_molds": 99,
+          "qty_of_molds": 399,
           "coverage_m2": 16.5,
           "pieces_per_m2": 6,
           "wastani_per_bag": 37,
@@ -304,7 +304,7 @@
           "mold_no": 11,
           "name": "40 Mawingu",
           "size_cm": "40x40",
-          "qty_of_molds": 6,
+          "qty_of_molds": 304,
           "coverage_m2": 1,
           "pieces_per_m2": 6,
           "wastani_per_bag": 37,
@@ -319,7 +319,7 @@
           "mold_no": 12,
           "name": "40 Mpira",
           "size_cm": "40x40",
-          "qty_of_molds": 6,
+          "qty_of_molds": 306,
           "coverage_m2": 1,
           "pieces_per_m2": 6,
           "wastani_per_bag": 37,
@@ -540,6 +540,19 @@
           "wastani_per_bag": null,
           "alt_names": [],
           "note": "Real product (price list, 490x450mm) - appears as a SEPARATE row from '50 Draft' despite the identical size, which may mean the price list itself has a duplicate entry. Kept as its own entry rather than silently deduplicated - worth the tenant checking the original price list file and merging/deleting via the admin UI if it is in fact a duplicate."
+        },
+        {
+          "mold_id": "floor_tiles_29",
+          "mold_no": 13,
+          "name": "40 Y",
+          "size_cm": "40x40",
+          "qty_of_molds": 300,
+          "coverage_m2": null,
+          "pieces_per_m2": null,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Added 2026-10-21 from Molds Dom.md (SwahziTech's Dodoma mold list, 2026-10-19): 300 molds. Product created live 2026-10-14 (floor_tiles_29). Coverage, pcs/m2 and wastani not given - to be fed later."
         }
       ],
       "production_method": "vibro",
@@ -951,7 +964,7 @@
           "mold_no": 7,
           "name": "U-Dot Ndogo",
           "size_cm": null,
-          "qty_of_molds": 2449,
+          "qty_of_molds": 2448,
           "coverage_m2": 122,
           "pieces_per_m2": 20,
           "wastani_per_bag": null,
@@ -1140,6 +1153,17 @@
           "alt_names": [],
           "extra_parameters": {},
           "note": "Confirmed by SwahziTech 2026-10-12: real product, sold in Mwanza, not currently sold in Dodoma. Same size as '100 Sq' but a beveled-edge variant (like '50 Bevo' is to '50 Sq') - treated as a distinct mold, not merged with 100 Sq, since shape differs. Uses the category's shared ratio; no mold count or yield recorded yet - awaiting data entry."
+        },
+        {
+          "mold_id": "curbstones_08",
+          "mold_no": 5,
+          "name": "Koner",
+          "size_cm": null,
+          "qty_of_molds": 10,
+          "wastani_per_bag": null,
+          "alt_names": [],
+          "extra_parameters": {},
+          "note": "Added 2026-10-21 from Molds Dom.md (Dodoma, 2026-10-19): 10 molds. SwahziTech 2026-10-21: a new product, not produced yet. Size, wastani and recipe to be fed later."
         }
       ],
       "production_method": "vibro",
@@ -2273,6 +2297,12 @@
       "topic": "Sand type per category/item - resolved",
       "decision": "User confirmed the full mapping: all vibro-production categories (floor_tiles, wall_tiles, paving_blocks_vibro, curbstones, trench_covers) use Mchanga Mweupe. Press-machine paving (Rectangular/Zigzag/H-Paver/Worldcup/Z-Plain/W-Cup), the Chipping and Hollow Block items within Blocks, Kerbstones (50/80 Press), Culverts, and Posts & Bicons all use Mchanga Laini. Only the PLAIN Sand Block/Tofali items within Blocks (press_01/02/03/16) use Mchanga Mnene - this is a real split within a single category, not a category-wide rule.",
       "action_taken": "Added sand_material_id (and sand_material_note) to each vibro category, to culverts and posts_and_bicons at the category level, and to each individual item in press_machine_products (split 3 ways within that one category)."
+    },
+    {
+      "date": "2026-10-21",
+      "topic": "Dodoma mold counts updated from Molds Dom.md",
+      "decision": "SwahziTech's Dodoma mold list (Molds Dom.md, 2026-10-19) is the up-to-date count and replaces this file's earlier figures: 80 Combo 75 -> 150, 40 Combo 99 -> 399, 40 Mawingu 6 -> 304, 40 Mpira 6 -> 306, U-Dot Ndogo 2449 -> 2448; new: 40 Y 300 molds, Koner (curbstone, new product, not produced yet) 10 molds. Culverts and posts are not in that list; their counts here stand. qty_of_molds is the vibro daily ceiling in pieces (one cast per mold per day).",
+      "action_taken": "qty_of_molds updated on floor_tiles_02, floor_tiles_09, floor_tiles_11, floor_tiles_12, paving_07; entries added for floor_tiles_29 (40 Y) and curbstones_08 (Koner). The Markdown copies are retired so this file is the single source."
     }
   ]
 }
