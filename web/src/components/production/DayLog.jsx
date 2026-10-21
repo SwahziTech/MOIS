@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Pencil, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -8,6 +8,8 @@ import { qtyText, warehouseLabel, byMaterialOrder } from '../../lib/inventory';
 import NumberInput from '../NumberInput';
 import ProductPicker from './ProductPicker';
 import { categoryTools, productOrder } from '../../lib/categories';
+import Modal from '../Modal';
+import DaySummary from './DaySummary';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
@@ -36,7 +38,12 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [date,   setDate]   = useState(saved?.date ?? today);
   const [rawId,  setRawId]  = useState(saved?.rawId ?? rawStores.find(w => w.type === 'raw_materials')?.id ?? rawStores[0]?.id ?? '');
   const [form,   setForm]   = useState(saved?.form ?? emptyForm());
-  const [staged, setStaged] = useState(saved?.staged ?? []);
+  // lists saved before 2026-10-21 lack the per-product detail: rebuild it from what was sent
+  const [staged, setStaged] = useState(() => (saved?.staged ?? []).map(x => (x.outputs ? x : {
+    ...x,
+    outputs: (x.payload?.outputs || []).map(o => ({ productId: o.product_id, name: refs.items[`p:${o.product_id}`]?.name ?? '—', pieces: o.pieces, sqm: null, residual: !o.primary, wastani: null })),
+    materials: (x.payload?.materials || []).map(m => ({ materialId: m.material_id, name: refs.items[`m:${m.material_id}`]?.name ?? '—', quantity: m.quantity, unit: refs.unitById[m.unit_id]?.symbol ?? '', counted: m.source === 'counted' })),
+  })));
   const [restored] = useState(!!saved?.staged?.length);
   const [stock,  setStock]  = useState({});    // material id → quantity in the chosen store
   const [bands,  setBands]  = useState({});    // product id → yield band at this branch
@@ -49,6 +56,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [error, setError] = useState('');
   const [addError, setAddError] = useState('');
   const [sentNote, setSentNote] = useState('');
+  const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
+  const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify({ date, rawId, form, staged, at: new Date().toISOString() })); } catch { /* per-device convenience only */ }
@@ -120,11 +130,11 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const lines = recipeItems.map(it => {
     const isBag = refs.unitById[it.unit_id]?.symbol?.toLowerCase() === 'bag' && Number(it.quantity) === 1;
     const edited = form.edits[it.material_id];
-    const quantity = edited !== undefined ? num(edited) : bags != null ? round(Number(it.quantity) * bags) : null;
+    const quantity = edited !== undefined ? num(edited) : bags != null ? round(Number(it.quantity) * bags) : 0;
     const f = factorOf(it.material_id, it.unit_id);
     const need = quantity != null && f != null ? quantity * f : null;
     const available = (stock[it.material_id] ?? 0) - (usedToday[it.material_id] ?? 0);
-    return { ...it, perBag: Number(it.quantity), isBag, edited: edited !== undefined, quantity, need, available, short: need != null && need > available + 1e-9,
+    return { ...it, perBag: Number(it.quantity), factor: f, isBag, edited: edited !== undefined, quantity, need, available, short: need != null && need > available + 1e-9,
       source: isBag || edited !== undefined ? 'counted' : 'recipe' };
   });
   const shortLines = lines.filter(l => l.short);
@@ -154,6 +164,10 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const mainBand = bands[form.productId];
   const expected = mainBand?.average_yield_per_bag > 0 && bags > 0 ? Math.round(bags * mainBand.average_yield_per_bag) : null;
 
+  useEffect(() => {
+    if (recipe && !form.bags) document.getElementById('pl-bags')?.focus();
+  }, [recipe?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Products in the mix without a wastani (yield per bag): quality control needs it
   const noWastani = outputs.filter(o => bands[o.productId] !== undefined && !(bands[o.productId]?.average_yield_per_bag > 0));
 
@@ -174,10 +188,51 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       outputs: outputs.map(o => ({ product_id: o.productId, pieces: o.pieces, primary: o.primary })),
       materials: lines.map(l => ({ material_id: l.material_id, unit_id: l.unit_id, quantity: l.quantity ?? 0, source: l.source })),
     };
-    setStaged(s => [...s, { id: crypto.randomUUID?.() ?? String(Date.now()), payload, label: `${main.name}${form.colorId ? ` ${refs.colorById[form.colorId]?.name}` : ''}`,
-      leftovers: outputs.filter(o => !o.primary).map(o => `${o.pieces} ${refs.items[`p:${o.productId}`]?.name}`),
-      bags, pieces: totalPieces, factor: theoretical != null ? theoretical / bags : null, outOfBand }]);
+    const colourTxt = form.colorId ? ` ${refs.colorById[form.colorId]?.name}` : '';
+    const item = { id: editingId ?? (crypto.randomUUID?.() ?? String(Date.now())), payload, form: { ...form },
+      label: `${main.name}${colourTxt}`, category: main.category, bags,
+      // each product on its own — main and residuals are different stock items
+      outputs: outputs.map(o => ({ productId: o.productId, name: `${refs.items[`p:${o.productId}`]?.name}${refs.items[`p:${o.productId}`]?.colorIds?.length ? colourTxt : ''}`,
+        pieces: o.pieces, sqm: sqmOf(o.productId, o.pieces), residual: !o.primary, wastani: bands[o.productId]?.average_yield_per_bag ?? null })),
+      materials: lines.map(l => ({ materialId: l.material_id, name: refs.items[`m:${l.material_id}`]?.name, quantity: l.quantity ?? 0, unit: symOf(l.unit_id),
+        stockQty: (l.quantity ?? 0) * (l.factor ?? 0), counted: l.source === 'counted' })),
+      factor: theoretical != null ? theoretical / bags : null, theoretical, outOfBand, expected, notes: form.notes.trim() };
+    setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
+    setEditingId(null);
     setForm(emptyForm());   // "allow other products" goes back to the default too
+  }
+  function editStaged(item) {
+    setForm(item.form);
+    setEditingId(item.id);
+    setAddError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // The day at a glance, for the confirmation before saving
+  function daySummary() {
+    const products = {};
+    const mats = {};
+    staged.forEach(b => {
+      b.outputs.forEach(o => {
+        const k = o.productId + (o.name || '');
+        products[k] ??= { name: o.name, pieces: 0, sqm: o.sqm != null ? 0 : null };
+        products[k].pieces += o.pieces ?? 0;
+        if (products[k].sqm != null && o.sqm != null) products[k].sqm += o.sqm;
+      });
+      b.materials.forEach(m => {
+        mats[m.materialId] ??= { name: m.name, used: 0, unit: m.unit, rank: refs.items[`m:${m.materialId}`]?.rank ?? 999 };
+        mats[m.materialId].used += m.quantity;
+      });
+    });
+    const curingUntil = new Date(new Date(`${date}T00:00:00Z`).getTime() + curingDays * 864e5).toISOString().slice(0, 10);
+    return {
+      date, branchName, curingUntil, curingDays,
+      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, outputs: b.outputs })),
+      products: Object.values(products),
+      materials: Object.entries(mats).sort((a, b) => a[1].rank - b[1].rank || a[1].name.localeCompare(b[1].name)).map(([id, m]) => ({
+        ...m, left: (stock[id] ?? 0) - (usedToday[id] ?? 0), leftUnit: stockSym(id), short: (stock[id] ?? 0) - (usedToday[id] ?? 0) < -1e-9,
+      })),
+    };
   }
 
   // An earlier date is a stock correction: someone who isn't an org admin sends the day for approval (044)
@@ -188,13 +243,14 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     setSentNote('');
     setBusy(true);
     const batches = staged.map(s => ({ ...s.payload, batch_date: date }));
-    const pcs = staged.reduce((n, s) => n + s.pieces, 0);
     const bagsTotal = round(staged.reduce((n, s) => n + s.bags, 0));
+    const made = staged.flatMap(s => s.outputs.map(o => `${o.pieces} ${o.name}`)).join(', ');
     const { error: err } = viaApproval
       ? await supabase.rpc('request_change', { p_kind: 'production_day', p_branch_id: null, p_payload: { batches },
-          p_summary: `Production of ${date} at ${branchName}: ${staged.length} batch${staged.length === 1 ? '' : 'es'} — ${staged.map(s => s.label).join(', ')} · ${qtyText(pcs)} pcs, ${qtyText(bagsTotal)} bags` })
+          p_summary: `Production of ${date} at ${branchName}: ${staged.length} batch${staged.length === 1 ? '' : 'es'}, ${qtyText(bagsTotal)} bags — ${made}` })
       : await supabase.rpc('record_production_batches', { p: { batches } });
     setBusy(false);
+    setConfirming(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't save these batches. Please try again.")); loadStock(); return; }
     setStaged([]);
     try { localStorage.removeItem(key); } catch { /* ignore */ }
@@ -234,9 +290,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   if (!curingStore) return <div className="card"><div className="card-body"><p className="text-sm">{branchName} has no curing store yet.</p></div></div>;
 
   const colourName = form.colorId ? refs.colorById[form.colorId]?.name : '';
-  const resPieces = outputs.filter(o => !o.primary).reduce((s, o) => s + (o.pieces ?? 0), 0);
   const mainPieces = num(form.pieces);
-  const stagedPieces = staged.reduce((s, b) => s + b.pieces, 0);
   const stagedBags = round(staged.reduce((s, b) => s + b.bags, 0));
   const ColourChip = ({ id }) => (id ? <span className="pl-chip"><i style={{ background: refs.colorById[id]?.name?.toLowerCase() }} />{refs.colorById[id]?.name}</span> : null);
 
@@ -307,7 +361,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                       </span>
                       {(l.short || l.edited) && (
                         <span className={`pl-stock${l.short ? ' text-error' : ''}`}>
-                          {l.short && `Short ${qtyText(round(l.need - l.available))} ${stockSym(l.material_id)}`}
+                          {l.short && `Short ${qtyText(round(l.factor ? (l.need - l.available) / l.factor : l.need - l.available, 2))} ${l.factor ? symOf(l.unit_id) : stockSym(l.material_id)}`}
                           {l.edited && <button type="button" className="pl-reset" title="Back to the recipe" onClick={() => { const { [l.material_id]: _, ...rest } = form.edits; set({ edits: rest }); }}>↺ recipe</button>}
                         </span>
                       )}
@@ -324,7 +378,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                           value={l.quantity == null ? '' : String(l.quantity)}
                           onChange={e => set({ edits: { ...form.edits, [l.material_id]: e.target.value } })} />
                         <span className="pl-unit">{symOf(l.unit_id)}</span>
-                        {l.short && <span className="pl-stock text-error">Short {qtyText(round(l.need - l.available))} {stockSym(l.material_id)}</span>}
+                        {l.short && <span className="pl-stock text-error">Short {qtyText(round(l.factor ? (l.need - l.available) / l.factor : l.need - l.available, 2))} {l.factor ? symOf(l.unit_id) : stockSym(l.material_id)}</span>}
                       </span>
                     ))}
                   </div>
@@ -349,9 +403,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           <h4 className="pl-subtitle">Primary product output</h4>
           <div className="pl-out">
             <div className="pl-box">
-              <span className="pl-label">Mold</span>
-              <div className="pl-mid">{main ? main.name : '—'} <ColourChip id={form.colorId} /></div>
-              <span className="pl-label">Expected (bags × wastani)</span>
+              <span className="pl-label">Mold : {main ? main.category : '—'}</span>
+              <div className="pl-big pl-mold">{main ? main.name : '—'} <ColourChip id={form.colorId} /></div>
+              <span className="pl-label">Expected output ({bags > 0 ? qtyText(bags) : '—'} bags × {mainBand?.average_yield_per_bag > 0 ? +mainBand.average_yield_per_bag : 'wastani'})</span>
               <div className="pl-big">{expected != null ? `${qtyText(expected)} pcs` : '—'}
                 {expected != null && sqmOf(main.id, expected) != null && <span className="pl-sub-num"> ({qtyText(round(sqmOf(main.id, expected), 2))} m²)</span>}
               </div>
@@ -359,7 +413,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             <div className="pl-inputs">
               <label className="pl-field">
                 <span className="pl-label">Cement bags</span>
-                <NumberInput step="any" min="0" className="pl-num pl-num-lg" placeholder="0" value={form.bags} onChange={e => set({ bags: e.target.value })} />
+                <NumberInput id="pl-bags" step="any" min="0" className="pl-num pl-num-lg" placeholder="0" value={form.bags} onChange={e => set({ bags: e.target.value })} />
               </label>
               <label className="pl-field is-key">
                 <span className="pl-label">Counted pcs</span>
@@ -419,8 +473,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           {outOfBand && <p className="pl-help text-warning">Outside the band — this batch will be flagged for review.</p>}
           <div className="pl-two">
             <div className="pl-box">
-              <span className="pl-label">Total pieces in batch</span>
-              <div className="pl-mid">{qtyText(mainPieces ?? 0)} pcs{resPieces > 0 && <span className="pl-sub-num"> (+{qtyText(resPieces)} res)</span>}</div>
+              <span className="pl-label">Pieces in batch</span>
+              <div className="pl-mid">{qtyText(mainPieces ?? 0)} {main?.name ?? 'pcs'}{form.leftovers.filter(l => l.productId && num(l.pieces)).map(l => (
+                <span key={l.productId} className="pl-sub-num"> + {qtyText(num(l.pieces))} {refs.items[`p:${l.productId}`]?.name}</span>))}</div>
             </div>
             <div className="pl-box">
               <span className="pl-label">Theoretical cement needed</span>
@@ -432,8 +487,10 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
       <input className="form-input" placeholder="Batch note (optional)" aria-label="Batch note" value={form.notes} onChange={e => set({ notes: e.target.value })} />
       <div className="pl-actions">
-        <button type="button" className="btn btn-primary pl-wide" disabled={shortLines.length > 0} onClick={addToList}><Plus size={15} /> Add batch to daily productions</button>
-        <button type="button" className="btn btn-outline" onClick={() => setForm(emptyForm())}>Reset</button>
+        <button type="button" className="btn btn-primary pl-wide" disabled={shortLines.length > 0} onClick={addToList}>
+          {editingId ? <><Pencil size={15} /> Update batch {staged.findIndex(x => x.id === editingId) + 1}</> : <><Plus size={15} /> Add batch to daily productions</>}
+        </button>
+        <button type="button" className="btn btn-outline" onClick={() => { setForm(emptyForm()); setEditingId(null); }}>{editingId ? 'Cancel edit' : 'Reset'}</button>
       </div>
       {addError && <p className="text-sm text-error">{addError}</p>}
 
@@ -448,26 +505,56 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         ) : (
           <div className="pl-staged">
             {staged.map((s, i) => (
-              <div key={s.id} className="pl-staged-row">
+              <div key={s.id} className={`pl-staged-row${editingId === s.id ? ' is-editing' : ''}`}>
                 <span className="pl-staged-n">{i + 1}</span>
-                <span className="pl-staged-name"><strong>{s.label}</strong>{s.leftovers.length > 0 && <span className="pl-help"> + {s.leftovers.join(', ')}</span>}</span>
+                <span className="pl-staged-name">
+                  {(s.outputs || []).map((o, k) => (
+                    <span key={k} className={o.residual ? 'pl-staged-res' : 'pl-staged-main'}>{o.residual ? '+ ' : ''}{o.name} <strong>{qtyText(o.pieces)}</strong> pcs</span>
+                  ))}
+                </span>
                 <span>{qtyText(s.bags)} bags</span>
-                <span>{qtyText(s.pieces)} pcs</span>
                 {s.factor == null ? <span className="pl-help">no check</span> : <span className={`pl-badge${s.outOfBand ? ' is-out' : ''}`}>{Math.round(s.factor * 1000) / 10}%</span>}
-                <button type="button" className="icon-btn" aria-label="Remove batch" onClick={() => setStaged(st => st.filter(x => x.id !== s.id))}><Trash2 size={14} /></button>
+                <span className="pl-staged-actions">
+                  <button type="button" className="icon-btn" aria-label="Preview batch" title="Preview" onClick={() => setPreviewing(s)}><Eye size={14} /></button>
+                  <button type="button" className="icon-btn" aria-label="Edit batch" title="Edit" disabled={!s.form} onClick={() => editStaged(s)}><Pencil size={14} /></button>
+                  <button type="button" className="icon-btn" aria-label="Remove batch" title="Remove" onClick={() => { setStaged(st => st.filter(x => x.id !== s.id)); if (editingId === s.id) { setEditingId(null); setForm(emptyForm()); } }}><Trash2 size={14} /></button>
+                </span>
               </div>
             ))}
           </div>
         )}
-        <div className="pl-totals"><span>Total staged output: <strong>{qtyText(stagedPieces)} pcs</strong></span><span>Total cement: <strong>{qtyText(stagedBags)} bags</strong></span></div>
+        <div className="pl-totals"><span>Batches: <strong>{staged.length}</strong></span><span>Total cement: <strong>{qtyText(stagedBags)} bags</strong></span></div>
       </section>
 
       {error && <p className="text-sm text-error" role="alert">{error}</p>}
       {sentNote && <p className="text-sm text-success" role="status">{sentNote}</p>}
       {viaApproval && staged.length > 0 && <p className="pl-help">An earlier date needs an admin's approval.</p>}
-      <button type="button" className={`btn btn-primary pl-wide pl-save${busy ? ' btn-loading' : ''}`} disabled={busy || staged.length === 0} onClick={saveDay}>
-        {viaApproval ? 'Submit for approval' : 'Save daily productions'} ({staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedPieces)} pcs)
+      <button type="button" className="btn btn-primary pl-wide pl-save" disabled={busy || staged.length === 0 || !!editingId} onClick={() => { setError(''); setConfirming(true); }}>
+        {viaApproval ? 'Submit for approval' : 'Save daily productions'} ({staged.length} batch{staged.length === 1 ? '' : 'es'})
       </button>
+      {editingId && <p className="pl-help">Finish or cancel the edit to save.</p>}
+
+      {confirming && (
+        <Modal title={viaApproval ? 'Submit this production for approval?' : 'Confirm daily production'} onClose={() => setConfirming(false)} size="xl"
+          footer={<>
+            {error && <span className="modal-footer-error" role="alert">{error}</span>}
+            <button type="button" className="btn btn-outline" onClick={() => setConfirming(false)}>Back to edit</button>
+            <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>
+              {viaApproval ? 'Submit for approval' : 'Confirm & save'}
+            </button>
+          </>}>
+          <DaySummary day={daySummary()} />
+        </Modal>
+      )}
+      {previewing && (
+        <Modal title={`Batch ${staged.findIndex(x => x.id === previewing.id) + 1} — ${previewing.label}`} onClose={() => setPreviewing(null)}
+          footer={<>
+            <button type="button" className="btn btn-outline" onClick={() => setPreviewing(null)}>Close</button>
+            {previewing.form && <button type="button" className="btn btn-primary" onClick={() => { const it = previewing; setPreviewing(null); editStaged(it); }}><Pencil size={14} /> Edit</button>}
+          </>}>
+          <BatchPreview b={previewing} />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -488,5 +575,42 @@ function WastaniMissing({ productId, name, branchId }) {
         ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/products?edit=${productId}`)}>Set it now</button>
         : <span> Ask the branch manager to set it.</span>}
     </span>
+  );
+}
+
+/** One staged batch in full: products, cement and materials (recipe units), yield */
+function BatchPreview({ b }) {
+  return (
+    <div className="bp">
+      <div className="bp-row"><span className="pl-label">Mold : {b.category}</span><strong className="bp-big">{b.label}</strong></div>
+      <div className="bp-grid">
+        <div className="bp-box"><span className="pl-label">Cement</span><strong>{qtyText(b.bags)} bags</strong></div>
+        <div className="bp-box"><span className="pl-label">Expected</span><strong>{b.expected != null ? `${qtyText(b.expected)} pcs` : '—'}</strong></div>
+        <div className="bp-box"><span className="pl-label">Cement implied</span><strong>{b.theoretical != null ? `${qtyText(Math.round(b.theoretical * 100) / 100)} bags` : '—'}</strong></div>
+        <div className="bp-box"><span className="pl-label">Yield factor</span><strong className={b.outOfBand ? 'text-warning' : 'text-success'}>{b.factor != null ? `${Math.round(b.factor * 1000) / 10}%` : 'no check'}</strong></div>
+      </div>
+      <h4 className="ds-title">Products</h4>
+      <table className="ds-table"><tbody>
+        {b.outputs.map((o, i) => (
+          <tr key={i}>
+            <td>{o.residual ? '+ ' : ''}{o.name}{o.residual && <span className="ds-muted"> (residual)</span>}</td>
+            <td className="ds-num"><strong>{qtyText(o.pieces)}</strong> pcs</td>
+            <td className="ds-num ds-muted">{o.sqm != null ? `${qtyText(Math.round(o.sqm * 100) / 100)} m²` : ''}</td>
+            <td className="ds-num ds-muted">{o.wastani ? `wastani ${+o.wastani}` : ''}</td>
+          </tr>
+        ))}
+      </tbody></table>
+      <h4 className="ds-title">Materials</h4>
+      <table className="ds-table"><tbody>
+        {b.materials.map(m => (
+          <tr key={m.materialId}>
+            <td>{m.name}</td>
+            <td className="ds-num"><strong>{qtyText(m.quantity)}</strong> {m.unit}</td>
+            <td className="ds-num ds-muted">{m.counted ? 'counted' : 'recipe'}</td>
+          </tr>
+        ))}
+      </tbody></table>
+      {b.notes && <p className="text-sm"><span className="pl-label">Note</span> {b.notes}</p>}
+    </div>
   );
 }

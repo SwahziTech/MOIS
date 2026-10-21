@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory,
+  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -51,6 +51,8 @@ const NAV = [
     items: [
       // batches, curing and quality release (migration 042)
       { label: 'Production',    to: '/production', icon: Factory,       perm: 'production.view' },
+      // every confirmed production day, by period and stage (2026-10-21)
+      { label: 'Production ledger', to: '/production/ledger', icon: BookOpen, perm: 'production.view' },
     ],
   },
   {
@@ -137,7 +139,7 @@ export default function Sidebar() {
                 key={item.to}
                 id={`nav-${item.to === '/' ? 'dashboard' : item.to.slice(1)}`}
                 to={item.to}
-                end={item.to === '/'}
+                end={item.to === '/' || item.to === '/production'}
                 title={item.label}
                 className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
               >

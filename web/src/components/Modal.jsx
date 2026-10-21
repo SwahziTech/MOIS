@@ -16,7 +16,7 @@ export default function Modal({ title, onClose, children, footer, size }) {
 
   return createPortal(
     <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal${size === 'lg' ? ' modal-lg' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className={`modal${size === 'lg' ? ' modal-lg' : size === 'xl' ? ' modal-xl' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
           <h2 id="modal-title" className="card-title">{title}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">

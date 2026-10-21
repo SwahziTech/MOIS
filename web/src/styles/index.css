@@ -1706,3 +1706,37 @@ button.sidebar-logo-mark { border: none; cursor: pointer; padding: 0; }
 .pl-recipe .pl-tile-in .pl-num.pl-fit { flex: none; width: calc(var(--len) * 1ch + 4px); min-width: 1ch; font-size: var(--text-2xl); line-height: 1.1; padding: 0; }
 @supports (field-sizing: content) { .pl-recipe .pl-tile-in .pl-num.pl-fit { field-sizing: content; width: auto; } }
 @media (max-width: 760px) { .pl-recipe .pl-tile-in .pl-num.pl-fit { font-size: var(--text-xl); } }
+
+/* Production: confirmation, previews, staged rows (2026-10-21) */
+.modal.modal-xl { max-width: 1040px; width: 96vw; }
+.ds { display: flex; flex-direction: column; gap: 10px; }
+.ds-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: var(--text-sm); padding: 8px 12px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-text); }
+.ds-cure { margin-left: auto; }
+.ds-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; }
+.ds-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ds-title { font-size: var(--text-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); margin: 6px 0 0; }
+.ds-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.ds-table td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ds-num { text-align: right; white-space: nowrap; }
+.ds-n { width: 22px; color: var(--accent-dark); font-weight: 700; }
+.ds-res { color: var(--text-secondary); font-size: var(--text-xs); }
+.ds-muted { color: var(--text-muted); }
+.ds-short td { color: var(--color-error); }
+.ds-table .pl-badge { margin-left: 4px; }
+@media (max-width: 760px) { .ds-grid { grid-template-columns: minmax(0, 1fr); } .ds-cure { margin-left: 0; } }
+.bp { display: flex; flex-direction: column; gap: 10px; }
+.bp-row { display: flex; flex-direction: column; gap: 2px; }
+.bp-big { font-size: var(--text-xl); }
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.bp-box { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.pl-mold { font-size: var(--text-2xl); }
+.pl-staged-row { grid-template-columns: 24px minmax(0, 1fr) auto auto auto; }
+.pl-staged-row.is-editing { border-color: var(--accent); background: var(--accent-soft); }
+.pl-staged-name { display: flex; flex-direction: column; gap: 2px; }
+.pl-staged-res { font-size: var(--text-xs); color: var(--text-secondary); }
+.pl-staged-actions { display: inline-flex; gap: 2px; }
+@media (max-width: 760px) { .pl-staged-row { grid-template-columns: 24px minmax(0, 1fr) auto; } .pl-staged-row > span:nth-child(3), .pl-staged-row > span:nth-child(4) { display: none; } }
+
+/* Production ledger toolbar */
+.pled-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.pled-toolbar .form-input { width: auto; }

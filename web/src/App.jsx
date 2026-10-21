@@ -23,6 +23,7 @@ import StockImport  from './pages/StockImport';
 import Approvals    from './pages/Approvals';
 import Purchases    from './pages/Purchases';
 import Production   from './pages/Production';
+import ProductionLedger from './pages/ProductionLedger';
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/movements"   element={<Movements />} />
             <Route path="/purchases"   element={<Purchases />} />
             <Route path="/production"  element={<Production />} />
+            <Route path="/production/ledger" element={<ProductionLedger />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />

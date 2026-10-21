@@ -117,7 +117,7 @@ export default function Production() {
     <PageShell title="Production" subtitle="Production"
       description={branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
       <PageTabs value={current} onChange={setTab} tabs={[
-        ...(canRecord ? [['log', 'Log batches']] : []),
+        ...(canRecord ? [['log', 'Production']] : []),
         ['curing', `Curing (${curing.length})`],
         ...(waitingMaterials.length ? [['materials', `Materials to issue (${waitingMaterials.length})`]] : []),
         ['done', 'Released & void'],

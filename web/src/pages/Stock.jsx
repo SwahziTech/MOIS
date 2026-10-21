@@ -66,6 +66,8 @@ export default function Stock() {
   const balanceMap = useMemo(() => Object.fromEntries(balances.map(b => [`${b.warehouse_id}|${stockKey(b)}`, b.quantity])), [balances]);
 
   const activeWarehouses = (refs?.warehouses || []).filter(w => w.status === 'active');
+  // Curing stock (2026-10-21) is shown under the branch's Finished Goods store, tagged until its release
+  const fgOf = w => activeWarehouses.find(x => x.branch_id === w.branch_id && x.type === 'finished_goods');
   const allowedActions = ACTIONS.filter(t => activeWarehouses.some(w => canAt(MOVEMENT_TYPES[t].perm, w.branch_id, w.id)));
 
   const q = search.trim().toLowerCase();
@@ -81,7 +83,8 @@ export default function Stock() {
     .filter(b => b.item && b.wh
       && (showZero || Number(b.quantity) !== 0)
       && (!branchId || b.wh.branch_id === branchId)
-      && (!warehouseId || b.warehouse_id === warehouseId)
+      && (!warehouseId || b.warehouse_id === warehouseId
+        || (b.wh.type === 'wip' && whById[warehouseId]?.type === 'finished_goods' && whById[warehouseId]?.branch_id === b.wh.branch_id))
       && (!kind || b.item.kind === kind)
       && inChip(b.item)
       && (!q || b.item.name.toLowerCase().includes(q)))
@@ -113,7 +116,7 @@ export default function Stock() {
         ] }}
         filters={[
           { key: 'store', label: 'Store', value: warehouseId, onChange: setWarehouseId,
-            options: [{ value: '', label: 'All stores' }, ...activeWarehouses.filter(w => !branchId || w.branch_id === branchId).map(w => ({ value: w.id, label: warehouseLabel(w) }))] },
+            options: [{ value: '', label: 'All stores' }, ...activeWarehouses.filter(w => (!branchId || w.branch_id === branchId) && w.type !== 'wip').map(w => ({ value: w.id, label: warehouseLabel(w) }))] },
           { key: 'zero', label: 'Zero stock', value: showZero ? 'show' : '', onChange: v => setShowZero(v === 'show'),
             options: [{ value: '', label: 'Hide' }, { value: 'show', label: 'Show' }] },
         ]}>
@@ -152,7 +155,7 @@ export default function Stock() {
                       <div style={{ fontWeight: 500 }}>{b.item.name}{b.color_id && <span className="badge badge-neutral" style={{ marginLeft: 6 }}>{refs.colorById[b.color_id]?.name}</span>}</div>
                       <div className="text-xs text-muted">{b.item.kind === 'material' ? 'Material' : `Product · ${b.item.category ?? ''}`}</div>
                     </td>
-                    <td className="text-muted">{warehouseLabel(b.wh)}{b.wh.type === 'wip' && <div><span className="badge badge-accent">Curing — not sellable</span></div>}</td>
+                    <td className="text-muted">{b.wh.type === 'wip' ? warehouseLabel(fgOf(b.wh) ?? b.wh) : warehouseLabel(b.wh)}{b.wh.type === 'wip' && <div><span className="badge badge-accent" title={`Held in ${b.wh.name} until released`}>Curing — not sellable</span></div>}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }} className={Number(b.quantity) < 0 ? 'text-error' : ''}>
                       {qtyText(b.quantity)} <span className="text-muted" style={{ fontWeight: 400 }}>{refs.unitById[b.stock_unit_id]?.symbol}</span>
                     </td>
