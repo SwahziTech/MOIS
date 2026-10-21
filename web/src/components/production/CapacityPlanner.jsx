@@ -99,13 +99,12 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
     const pcs = num(r.pieces) ?? 0;
     const bags = w > 0 ? pcs / w : null;
     const cap = capacity[r.productId];
-    let max = null, capText = 'Capacity not defined', over = false;
+    // Only molds are a daily limit; bags a day (press) is a guide, never enforced
+    let max = null, capText = 'No daily limit', over = false;
     if (cap?.molds) { max = cap.molds; capText = `${qtyText(cap.molds)} molds · max ${qtyText(cap.molds)} pcs/day`; over = pcs > cap.molds; }
     else if (cap?.bags_per_day_max || cap?.bags_per_day_min) {
       const lo = cap.bags_per_day_min, hi = cap.bags_per_day_max ?? cap.bags_per_day_min;
-      max = w > 0 ? Math.floor(hi * w) : null;
-      capText = `${qtyText(lo ?? hi)}–${qtyText(hi)} bags/day${w > 0 ? ` · ${qtyText(Math.round((lo ?? hi) * w))}–${qtyText(Math.round(hi * w))} pcs` : ''}`;
-      over = bags != null && bags > hi + 1e-9;
+      capText = `About ${qtyText(lo ?? hi)}–${qtyText(hi)} bags/day (guide)`;
     }
     const recipe = item && (!item.colorIds?.length || r.colorId) ? recipeFor(item, r.colorId) : null;
     const cast = batches.filter(b => b.batch_date === date && b.status !== 'void')
@@ -141,8 +140,9 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
   const simCap = capacity[sim.productId];
   const target = num(sim.target) ?? 0;
   const simBags = simW > 0 ? target / simW : null;
-  const perDayMax = simCap?.molds ?? (simCap?.bags_per_day_max && simW > 0 ? Math.floor(simCap.bags_per_day_max * simW) : null);
-  const perDayMin = simCap?.molds ?? (simCap?.bags_per_day_min && simW > 0 ? Math.floor(simCap.bags_per_day_min * simW) : perDayMax);
+  // Molds are the only daily limit; a press product's bags a day is a guide only
+  const perDayMax = simCap?.molds ?? null;
+  const perDayMin = perDayMax;
   const daysFast = perDayMax ? Math.ceil(target / perDayMax) : null;
   const daysSlow = perDayMin ? Math.ceil(target / perDayMin) : null;
   const addDays = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
@@ -158,7 +158,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
     })
     .sort((a, b) => byMaterialOrder(a.item, b.item));
   const capLine = simCap?.molds ? `${qtyText(simCap.molds)} molds${simItem?.size ? ` (${simItem.size})` : ''} — ${qtyText(simCap.molds)} pcs a day`
-    : simCap?.bags_per_day_max || simCap?.bags_per_day_min ? `${qtyText(simCap.bags_per_day_min ?? simCap.bags_per_day_max)}–${qtyText(simCap.bags_per_day_max ?? simCap.bags_per_day_min)} bags a day${perDayMax ? ` — ${qtyText(perDayMin)}–${qtyText(perDayMax)} pcs a day` : ''}`
+    : simCap?.bags_per_day_max || simCap?.bags_per_day_min ? `About ${qtyText(simCap.bags_per_day_min ?? simCap.bags_per_day_max)}–${qtyText(simCap.bags_per_day_max ?? simCap.bags_per_day_min)} bags a day — a guide, not a limit`
     : null;
   const set = (i, patch) => setRows(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
@@ -220,7 +220,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
         {simItem && (
           <div className="sim-result">
             <div className="sim-cap">
-              <span><span className="pl-help">Capacity: </span><strong>{capLine ?? 'Not defined for this product'}</strong></span>
+              <span><span className="pl-help">Capacity: </span><strong>{capLine ?? 'No daily limit'}</strong></span>
               {daysFast != null && target > 0 && (
                 <span className="pl-badge is-plain">{daysFast === daysSlow ? `${daysFast} casting day${daysFast === 1 ? '' : 's'}` : `${daysFast}–${daysSlow} casting days`}</span>
               )}
@@ -228,7 +228,9 @@ export default function CapacityPlanner({ refs, recipes, branchId, branchName, t
             {target > 0 && perDayMax != null && target > perDayMax && (
               <div className="alert alert-warning sim-warn"><AlertTriangle size={14} /> {qtyText(target)} pcs is more than one day's capacity ({qtyText(perDayMax)} pcs) — {daysFast === daysSlow ? daysFast : `${daysFast}–${daysSlow}`} days of casting.</div>
             )}
-            {target > 0 && readyBy && <p className="pl-help">Ready to sell about <strong>{readyBy}</strong> (casting + {curingDays} days curing).</p>}
+            {target > 0 && (readyBy
+              ? <p className="pl-help">Ready to sell about <strong>{readyBy}</strong> (casting + {curingDays} days curing).</p>
+              : <p className="pl-help">Ready to sell {curingDays} days after casting.</p>)}
             {simW == null && bands[sim.productId] !== undefined && <p className="pl-help text-warning">No wastani for {simItem.name} — set it to work out cement and materials.</p>}
             {simItem.colorIds?.length > 0 && !sim.colorId && <p className="pl-help">Choose the colour to see its materials.</p>}
 
