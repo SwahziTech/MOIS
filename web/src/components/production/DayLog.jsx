@@ -14,7 +14,7 @@ import DaySummary from './DaySummary';
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 const draftKey = (org, branch) => `mois.production.day.${org}.${branch}`;
-const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '' });
+const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '', orderPick: {} });
 
 /**
  * Log a day's batches (migration 043), the way the factory works: each mix
@@ -59,6 +59,20 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
   const [confirming, setConfirming] = useState(false);
+  const [openLines, setOpenLines] = useState([]);    // open production orders' lines at this branch (048)
+
+  // Open production orders: each product cast can count towards one (048; none before it)
+  async function loadOrders() {
+    const { data, error: err } = await supabase.from('production_order_lines')
+      .select('id, product_id, color_id, pieces, order:production_orders!inner(id, order_no, reference, due_date, status, branch_id)')
+      .eq('order.branch_id', branchId).eq('order.status', 'open');
+    if (err || !data?.length) { setOpenLines([]); return; }
+    const { data: g } = await supabase.from('production_order_line_progress').select('line_id, passed, curing').in('line_id', data.map(l => l.id));
+    const done = Object.fromEntries((g || []).map(x => [x.line_id, x.passed + x.curing]));
+    setOpenLines(data.map(l => ({ ...l, left: Math.max(0, l.pieces - (done[l.id] ?? 0)) }))
+      .sort((a, b) => (a.order.due_date ?? '9999') .localeCompare(b.order.due_date ?? '9999') || a.order.order_no - b.order.order_no));
+  }
+  useEffect(() => { loadOrders(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify({ date, rawId, form, staged, at: new Date().toISOString() })); } catch { /* per-device convenience only */ }
@@ -153,6 +167,27 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const leftoverChoices = carried.filter(i => i.id !== form.productId
     && (form.allowOther || i.categoryId === main?.categoryId)
     && (!i.colorIds?.length || residualColour(i)));
+  const orderLinesFor = (productId, colorId) => openLines.filter(l => l.product_id === productId && (l.color_id ?? '') === (colorId || ''));
+  const orderLineOf = (productId, colorId) => {
+    const c = orderLinesFor(productId, colorId);
+    const pick = form.orderPick?.[productId];
+    if (pick === 'none') return '';
+    if (pick && c.some(l => l.id === pick)) return pick;
+    return (c.find(l => l.left > 0) ?? c[0])?.id ?? '';
+  };
+  // called as a function, not a component, so the select keeps focus across renders
+  const orderPick = (productId, colorId) => {
+    const c = orderLinesFor(productId, colorId);
+    if (!c.length) return null;
+    return (
+      <label className="pl-order">For order
+        <select className="form-input" value={orderLineOf(productId, colorId) || 'none'} onChange={e => set({ orderPick: { ...form.orderPick, [productId]: e.target.value } })}>
+          {c.map(l => <option key={l.id} value={l.id}>Order {l.order.order_no}{l.order.reference ? ` · ${l.order.reference}` : ''} · {qtyText(l.left)} to go</option>)}
+          <option value="none">No order</option>
+        </select>
+      </label>
+    );
+  };
   const outputs = [
     ...(main ? [{ productId: main.id, colorId: form.colorId || '', pieces: num(form.pieces), primary: true }] : []),
     ...form.leftovers.filter(l => l.productId).map(l => ({ productId: l.productId, colorId: residualColour(refs.items[`p:${l.productId}`]), pieces: num(l.pieces), primary: false })),
@@ -204,7 +239,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const payload = {
       batch_date: date, raw_warehouse_id: rawId, curing_warehouse_id: curingStore.id, color_id: form.colorId || null,
       recipe_version_id: recipe.id, cement_bags: bags, notes: form.notes.trim() || null, allow_other_products: form.allowOther,
-      outputs: outputs.map(o => ({ product_id: o.productId, pieces: o.pieces, primary: o.primary, ...(o.primary ? {} : { color_id: o.colorId || null }) })),
+      outputs: outputs.map(o => ({ product_id: o.productId, pieces: o.pieces, primary: o.primary, ...(o.primary ? {} : { color_id: o.colorId || null }),
+        ...(orderLineOf(o.productId, o.colorId) ? { order_line_id: orderLineOf(o.productId, o.colorId) } : {}) })),
       materials: lines.map(l => ({ material_id: l.material_id, unit_id: l.unit_id, quantity: l.quantity ?? 0, source: l.source })),
     };
     const colourTxt = form.colorId ? ` ${refs.colorById[form.colorId]?.name}` : '';
@@ -212,6 +248,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       label: `${main.name}${colourTxt}`, category: main.category, bags,
       // each product on its own — main and residuals are different stock items
       outputs: outputs.map(o => ({ productId: o.productId, name: `${refs.items[`p:${o.productId}`]?.name}${o.colorId ? ` ${refs.colorById[o.colorId]?.name}` : ''}`,
+        order: openLines.find(l => l.id === orderLineOf(o.productId, o.colorId))?.order.order_no ?? null,
         pieces: o.pieces, sqm: sqmOf(o.productId, o.pieces), residual: !o.primary, wastani: bands[o.productId]?.average_yield_per_bag ?? null })),
       materials: lines.map(l => ({ materialId: l.material_id, name: refs.items[`m:${l.material_id}`]?.name, quantity: l.quantity ?? 0, unit: symOf(l.unit_id),
         stockQty: (l.quantity ?? 0) * (l.factor ?? 0), counted: l.source === 'counted' })),
@@ -279,6 +316,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       setSentNote(`Sent for approval — ${date}'s batches are recorded once an admin approves (Approvals).`);
       return;
     }
+    loadOrders();
     onSaved();
   }
 
@@ -424,6 +462,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             <div className="pl-box">
               <span className="pl-label">Mold : {main ? main.category : '—'}</span>
               <div className="pl-big pl-mold">{main ? main.name : '—'} <ColourChip id={form.colorId} /></div>
+              {main && orderPick(main.id, form.colorId)}
               <span className="pl-label">Expected output ({bags > 0 ? qtyText(bags) : '—'} bags × {mainBand?.average_yield_per_bag > 0 ? +mainBand.average_yield_per_bag : 'wastani'})</span>
               <div className="pl-big">{expected != null ? `${qtyText(expected)} pcs` : '—'}
                 {expected != null && sqmOf(main.id, expected) != null && <span className="pl-sub-num"> ({qtyText(round(sqmOf(main.id, expected), 2))} m²)</span>}
@@ -472,6 +511,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                   </select>
                   {it && b?.average_yield_per_bag > 0 && <span className="pl-accent-text">Wastani: {+b.average_yield_per_bag} pcs/bag</span>}
                   {it && b !== undefined && !(b?.average_yield_per_bag > 0) && <WastaniMissing productId={it.id} name={it.name} branchId={branchId} />}
+                  {it && orderPick(it.id, residualColour(it))}
                 </div>
                 <ColourChip id={residualColour(it)} />
                 <NumberInput step="1" min="0" className="pl-num" style={{ width: 90 }} placeholder="Pcs" aria-label="Residual pieces" value={l.pieces}
@@ -528,7 +568,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                 <span className="pl-staged-n">{i + 1}</span>
                 <span className="pl-staged-name">
                   {(s.outputs || []).map((o, k) => (
-                    <span key={k} className={o.residual ? 'pl-staged-res' : 'pl-staged-main'}>{o.residual ? '+ ' : ''}{o.name} <strong>{qtyText(o.pieces)}</strong> pcs</span>
+                    <span key={k} className={o.residual ? 'pl-staged-res' : 'pl-staged-main'}>{o.residual ? '+ ' : ''}{o.name} <strong>{qtyText(o.pieces)}</strong> pcs{o.order ? ` · order ${o.order}` : ''}</span>
                   ))}
                 </span>
                 <span>{qtyText(s.bags)} bags</span>

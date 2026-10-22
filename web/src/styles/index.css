@@ -1797,3 +1797,24 @@ tr.cp-over td { background: var(--bg-warning); }
 .rd-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: var(--text-sm); margin: 0; }
 .rd-dl dt { color: var(--text-muted); }
 .rd-dl dd { margin: 0; }
+
+/* Production orders (048) */
+.po { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.po-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.po-actions { margin-left: auto; display: flex; gap: 2px; flex-wrap: wrap; }
+.po-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.po-table th { text-align: left; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.po-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.po-table .num { text-align: right; white-space: nowrap; }
+.po-bar { position: relative; height: 5px; border-radius: 3px; background: var(--bg-soft); margin-top: 4px; max-width: 220px; overflow: hidden; }
+.po-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--color-success); border-radius: 3px; }
+.po-bar i.po-cure { background: var(--accent-soft); border-right: 1px solid var(--accent); }
+.po-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+.po-field { display: flex; flex-direction: column; gap: 4px; }
+.po-lines { display: flex; flex-direction: column; gap: 6px; }
+.po-line { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto 32px; gap: 8px; align-items: center; }
+.po-line-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-draft { border-color: var(--accent); }
+.pl-order { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
+.pl-order select { width: auto; max-width: 260px; height: 30px; padding: 2px 8px; font-size: var(--text-xs); }
+@media (max-width: 760px) { .po-fields { grid-template-columns: minmax(0, 1fr); } .po-line { grid-template-columns: minmax(0, 1fr) 100px 32px; } .po-line .pl-help { display: none; } }

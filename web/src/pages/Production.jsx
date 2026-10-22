@@ -124,7 +124,7 @@ export default function Production() {
         ...(waitingMaterials.length ? [['materials', `Materials to issue (${waitingMaterials.length})`]] : []),
         ['done', 'Released & void'],
         ['variance', 'Material variance'],
-        ['planner', 'Capacity planner'],
+        ['planner', 'Orders & planner'],
       ]} />
       {rowError && <div className="alert alert-error mb-8" role="alert">{rowError}</div>}
 

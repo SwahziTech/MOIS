@@ -203,33 +203,3 @@ export function CuringDays({ canEdit }) {
     </span>
   );
 }
-
-/** Capacity planner mode (045): a calculator, or plans saved and compared with production */
-export function PlannerMode({ canEdit }) {
-  const { organization } = useAuth();
-  const [mode, setMode] = useState(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    if (!organization?.id) return;
-    supabase.from('organizations').select('*').eq('id', organization.id).maybeSingle()
-      .then(({ data }) => setMode(data?.planner_mode ?? null));
-  }, [organization?.id]);
-  async function change(v) {
-    setError('');
-    const { error: err } = await supabase.from('organizations').update({ planner_mode: v }).eq('id', organization.id);
-    if (err) { setError(dbErrorMessage(err)); return; }
-    setMode(v);
-  }
-  if (!mode) return null;
-  return (
-    <span className="flex flex-col gap-4">
-      {canEdit ? (
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Capacity planner mode" value={mode} onChange={e => change(e.target.value)}>
-          <option value="calculator">Calculator (nothing saved)</option>
-          <option value="plan_compare">Plan &amp; compare (plans saved)</option>
-        </select>
-      ) : <span>{mode === 'plan_compare' ? 'Plan & compare' : 'Calculator'}</span>}
-      {error && <span className="text-xs text-error">{error}</span>}
-    </span>
-  );
-}
