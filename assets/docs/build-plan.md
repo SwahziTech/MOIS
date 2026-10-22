@@ -212,6 +212,15 @@ if a second paying tenant becomes imminent before 1a-1f are solid.
 
 ---
 
+## Mobile app (Flutter) — after Phase 1
+**Status: not started** (SwahziTech, 2026-10-22: mobile comes after Phase 1)
+
+PRD sections: 9.4 (Responsive design — Mobile), 10.1 (Flutter). Phone screens
+first: materials, production, sales, stock. The React web app stays
+desktop/tablet.
+
+---
+
 ## After Phase 1 (PRD Phase 2 / Phase 3)
 
 Not detailed here — see `docs/prd.md` sections "PHASE 2 — MOIS INTELLIGENCE"
