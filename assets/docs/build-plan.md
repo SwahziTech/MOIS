@@ -150,6 +150,12 @@ until Stumarcot actually needs them (it buys informally today).
 
 PRD section: 4.5 (Procurement)
 
+**Not yet** (SwahziTech, 2026-10-22) — not part of 1c; to be raised again once
+Phase 1 is through and Stumarcot enters live, same-day data instead of back-dated:
+- Purchase requests and approvals
+- Purchase orders
+- A running supplier balance (how much is owed to each supplier)
+
 - Purchase requests, purchase orders, goods receiving, supplier history
 - Depends on 1b's inventory transaction model (receiving writes a transaction)
 
