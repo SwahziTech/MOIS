@@ -219,13 +219,16 @@ export default function Production() {
   );
 }
 
-/** Quality release, product by product: every cast piece passes or is rejected with a reason */
+/**
+ * Quality release, product by product: every cast piece passes unless it is
+ * entered as a reject (with its reason) — passed = cast − rejects, worked out
+ * here, never typed (SwahziTech, 2026-10-22).
+ */
 function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
   const fgStores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === batch.branch_id && w.type === 'finished_goods');
   const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
   const [date, setDate] = useState(today);
-  const [passed, setPassed] = useState({});     // output id → passed
   const [rejects, setRejects] = useState({});   // `${output id}|${reason id}` → pieces
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -233,21 +236,20 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
   const active = reasons.filter(r => r.status === 'active');
   const early = date < batch.curing_until;
   const rejectedOf = o => active.reduce((s, r) => s + (num(rejects[`${o.id}|${r.id}`]) ?? 0), 0);
+  const passedOf = o => o.pieces_cast - rejectedOf(o);
   const nameOf = o => `${refs.items[`p:${o.product_id}`]?.name ?? '—'}${o.color_id ? ` ${refs.colorById[o.color_id]?.name ?? ''}` : ''}`;
 
   async function save(e) {
     e.preventDefault();
     setError('');
     for (const o of outputs) {
-      const pp = num(passed[o.id]);
-      if (pp == null || pp < 0) { setError(`${nameOf(o)}: enter the pieces that passed.`); return; }
-      if (pp + rejectedOf(o) !== o.pieces_cast) { setError(`${nameOf(o)}: passed and rejected must add up to its ${o.pieces_cast} pieces.`); return; }
+      if (passedOf(o) < 0) { setError(`${nameOf(o)}: more rejects than the ${o.pieces_cast} pieces cast.`); return; }
     }
     if (early && !note.trim()) { setError(`Curing runs until ${batch.curing_until} — say why it is released early.`); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('release_production_batch', { p_batch: batch.id, p: {
       fg_warehouse_id: fgId, release_date: date, note: note.trim() || null,
-      outputs: outputs.map(o => ({ output_id: o.id, pieces_passed: num(passed[o.id]),
+      outputs: outputs.map(o => ({ output_id: o.id, pieces_passed: passedOf(o),
         rejects: active.filter(r => num(rejects[`${o.id}|${r.id}`]) > 0).map(r => ({ reason_id: r.id, pieces: num(rejects[`${o.id}|${r.id}`]) })) })),
     } });
     setBusy(false);
@@ -263,7 +265,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
         <button type="submit" form="release-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Release</button>
       </>}>
       <form id="release-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">Curing until {batch.curing_until}. Passed pieces move into Finished Goods; rejected ones leave stock.</p>
+        <p className="text-sm text-muted">Curing until {batch.curing_until}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods; rejected ones leave stock.</p>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rl-fg">Into</label>
@@ -278,22 +280,19 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
         </div>
         <div className="table-container">
           <table>
-            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Cast</th><th>Passed</th>{active.map(r => <th key={r.id}>{r.name}</th>)}<th /></tr></thead>
+            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Cast</th>{active.map(r => <th key={r.id}>{r.name}</th>)}<th style={{ textAlign: 'right' }}>Passed</th></tr></thead>
             <tbody>
               {outputs.map(o => {
-                const pp = num(passed[o.id]);
-                const ok = pp != null && pp + rejectedOf(o) === o.pieces_cast;
+                const pp = passedOf(o);
                 return (
                   <tr key={o.id}>
                     <td style={{ fontWeight: 500 }}>{nameOf(o)}{!o.is_primary && <div className="text-xs text-muted">leftover</div>}</td>
                     <td style={{ textAlign: 'right' }}>{qtyText(o.pieces_cast)}</td>
-                    <td><NumberInput step="1" min="0" className="form-input" style={{ width: 90 }} aria-label={`${nameOf(o)} passed`} value={passed[o.id] ?? ''}
-                      onChange={e => setPassed(x => ({ ...x, [o.id]: e.target.value }))} /></td>
                     {active.map(r => (
                       <td key={r.id}><NumberInput step="1" min="0" className="form-input" style={{ width: 70 }} placeholder="0" aria-label={`${nameOf(o)} ${r.name}`}
                         value={rejects[`${o.id}|${r.id}`] ?? ''} onChange={e => setRejects(x => ({ ...x, [`${o.id}|${r.id}`]: e.target.value }))} /></td>
                     ))}
-                    <td>{pp != null && <span className={`badge ${ok ? 'badge-success' : 'badge-warning'}`}>{pp + rejectedOf(o)} / {o.pieces_cast}</span>}</td>
+                    <td style={{ textAlign: 'right' }}><strong className={pp < 0 ? 'text-error' : ''}>{qtyText(pp)}</strong>{rejectedOf(o) > 0 && <div className="text-xs text-muted">{qtyText(rejectedOf(o))} rejected</div>}</td>
                   </tr>
                 );
               })}
