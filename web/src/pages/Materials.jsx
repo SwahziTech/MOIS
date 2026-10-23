@@ -177,14 +177,6 @@ export default function Materials() {
   const uncosted = inViewMaterials.filter(m => m.status === 'active' && (onHand[m.id] ?? 0) > 0 && avgCost[m.id] == null).length;
   const out = inViewMaterials.filter(m => m.status === 'active' && !((onHand[m.id] ?? 0) > 0));
   const noOpening = inViewMaterials.filter(m => m.status === 'active' && !opened[m.id]);
-  // a material's other unit, e.g. "1 Trip/Truck = 2,500 bucket"
-  const convText = m => {
-    const st = unitById[m.stock_unit_id]?.symbol;
-    const c = [...m.conversions].sort((x, y) => Math.abs(Math.log(y.factor_to_stock_unit)) - Math.abs(Math.log(x.factor_to_stock_unit)))[0];
-    if (!c || !st) return null;
-    const f = Number(c.factor_to_stock_unit);
-    return f >= 1 ? `1 ${unitById[c.unit_id]?.symbol} = ${qtyText(f)} ${st}` : `1 ${st} = ${qtyText(Math.round((1 / f) * 100) / 100)} ${unitById[c.unit_id]?.symbol}`;
-  };
   const altQty = m => {
     const c = [...m.conversions].sort((x, y) => Math.abs(Math.log(y.factor_to_stock_unit)) - Math.abs(Math.log(x.factor_to_stock_unit)))[0];   // the same unit as the conversion shown
     return c && onHand[m.id] ? `${qtyText(Math.round((onHand[m.id] / Number(c.factor_to_stock_unit)) * 100) / 100)} ${unitById[c.unit_id]?.symbol}` : null;
@@ -252,7 +244,8 @@ export default function Materials() {
                 const v = valueOf(m);
                 const sup = suppliers.find(x => x.id === lastFrom[m.id])?.name;
                 return (
-                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`}>
+                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`} title="Open for its units, conversions and sources"
+                    onClick={e => { if (!e.target.closest('button')) setEditing({ kind: 'material', row: m }); }}>
                     <div className="mm-top">
                       <span className="mm-n">#{i + 1}</span>
                       {catById[m.category_id] && <span className="pl-tag">{catById[m.category_id].name}</span>}
@@ -265,12 +258,13 @@ export default function Materials() {
                     <div className="mm-bottom">
                       <span className="mm-qty"><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)} {st}</strong>
                         {altQty(m) && <span className="sk-sub"> ({altQty(m)})</span>}</span>
-                      <span className="mm-value">
-                        {convText(m) && <span className="pl-help">{convText(m)}</span>}
-                        {branchId && <span>Value: <strong className="mm-money">{v != null ? money(v) : '—'}</strong>
-                          {avgCost[m.id] != null && <span className="pl-help"> @ {money(avgCost[m.id])}/{st}</span>}</span>}
-                      </span>
                     </div>
+                    {branchId && (
+                      <span className="mm-value">
+                        <span>Value: <strong className="mm-money">{v != null ? money(v) : '—'}</strong></span>
+                        {avgCost[m.id] != null && <span className="pl-help">@ {money(avgCost[m.id])}/{st}</span>}
+                      </span>
+                    )}
                     <span className="mm-actions">
                       {canEditMaterial(m) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>}
                       {m.status === 'active' && canAt('inventory.receive', branchId || null, null) && (

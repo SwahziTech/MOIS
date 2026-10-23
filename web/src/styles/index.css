@@ -1909,3 +1909,10 @@ tr.cp-over td { background: var(--bg-warning); }
 .mm-name { font-size: var(--text-md); }
 .mm-qty strong { font-size: var(--text-md); }
 .sk { gap: 6px; }
+
+/* Materials cards: value over unit price in its own column (2026-10-23) */
+.mm-card { grid-template-columns: minmax(0, 1fr) auto auto; cursor: pointer; }
+.mm-card:hover { border-color: var(--border-strong); }
+.mm-value { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 0; padding: 0 14px; font-size: var(--text-sm); white-space: nowrap; }
+.mm-actions { grid-column: 3; }
+@media (max-width: 760px) { .mm-card { grid-template-columns: minmax(0, 1fr) auto; } .mm-value { grid-column: 1; grid-row: auto; align-items: flex-start; padding: 0 12px 8px; } .mm-actions { grid-column: 2; grid-row: 1 / span 3; } }
