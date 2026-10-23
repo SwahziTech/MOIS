@@ -1916,3 +1916,15 @@ tr.cp-over td { background: var(--bg-warning); }
 .mm-value { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 0; padding: 0 14px; font-size: var(--text-sm); white-space: nowrap; }
 .mm-actions { grid-column: 3; }
 @media (max-width: 760px) { .mm-card { grid-template-columns: minmax(0, 1fr) auto; } .mm-value { grid-column: 1; grid-row: auto; align-items: flex-start; padding: 0 12px 8px; } .mm-actions { grid-column: 2; grid-row: 1 / span 3; } }
+
+/* List cards, one layout for every list (2026-10-23): category over name | figure in the centre | details | actions */
+.lk-card { cursor: pointer; }
+.lk-card.is-inactive { opacity: .6; }
+.lk-right { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-size: var(--text-sm); white-space: nowrap; }
+.lk-mid { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: var(--text-sm); font-weight: 600; }
+.pc-dots { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.lk-card .sk-name strong { font-size: var(--text-md); }
+.lk-card .sk-total strong { font-size: var(--text-lg); }
+.lk-card { padding: 9px 14px; }
+.lk-card .sk-tags { flex-wrap: nowrap; overflow: hidden; }
+.lk-card .sk-tags > * { flex-shrink: 0; }

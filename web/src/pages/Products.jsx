@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Package, Plus, Flag, Pencil, Ruler, Scale, Factory } from 'lucide-react';
+import { Package, Plus, Flag, Pencil, Ruler, Factory } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -230,31 +230,33 @@ export default function Products() {
             const cap = capacity?.[branchId]?.[p.id];
             const cols = productColorIds(p, colourData.cat, colourData.own);
             return (
-              <div key={p.id} className={`pc${p.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(p)}
+              <div key={p.id} className={`sk-card lk-card${p.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(p)}
                 onDoubleClick={() => { if (canWrite || (!!branchId && canAt('products.manage', branchId, null))) { setViewing(null); setEditing(p); } }}
                 title="Click for stock, prices and recipes · double-click to edit">
-                <div className="pc-main">
-                  <div className="pc-line">
-                    <strong className="pc-name">{p.canonical_name}</strong>
+                <div className="sk-name">
+                  <span className="sk-tags">
                     <span className="pl-tag">{cats.label(p.category_id)}</span>
-                    {p.size_cm && <span className="pc-size"><Ruler size={12} /> Size: {p.size_cm}</span>}
-                    <span className="pc-unit">Unit: {p.unit?.symbol ?? '—'}</span>
+                    {p.size_cm && <span className="pc-size"><Ruler size={12} /> {p.size_cm}</span>}
+                    <span className="pc-unit">{p.unit?.symbol ?? '—'}</span>
                     {p.status !== 'active' && <span className="pl-tag">inactive</span>}
                     {branchId && !carriedHere(p.id) && <span className="pl-tag">not in {branchName}&apos;s list</span>}
-                    {openFlags[p.id] > 0 && <span className="badge badge-warning"><Flag size={11} /> needs review</span>}
-                  </div>
-                  <div className="pc-line pc-figures">
-                    <span className="pc-wastani"><Scale size={13} /> Wastani: {sp?.average_yield_per_bag != null ? `${+Number(sp.average_yield_per_bag).toPrecision(6)} pcs/bag` : '—'}</span>
-                    {branchId && capacity && <span className="pc-fleet"><Factory size={13} /> {cap?.molds ? `Fleet: ${cap.molds} molds` : capacityText(cap, true) ? `~${capacityText(cap, true)}` : 'Molds not set'}</span>}
-                    {sp?.pcs_per_sqm != null && <span className="pl-help">({+Number(sp.pcs_per_sqm).toPrecision(6)} pcs/m²)</span>}
-                  </div>
+                    {openFlags[p.id] > 0 && <span className="badge badge-warning"><Flag size={11} /> review</span>}
+                  </span>
+                  <strong>{p.canonical_name}</strong>
+                </div>
+                <div className="sk-total">
+                  <span><strong className="pc-wastani">{sp?.average_yield_per_bag != null ? +Number(sp.average_yield_per_bag).toPrecision(6) : '—'}</strong> <span className="sk-unit">pcs/bag</span></span>
+                  <span className="sk-sub">wastani{sp?.pcs_per_sqm != null ? ` · ${+Number(sp.pcs_per_sqm).toPrecision(6)} pcs/m²` : ''}</span>
+                </div>
+                <div className="lk-mid">
+                  {branchId && capacity && <span className="pc-fleet"><Factory size={13} /> {cap?.molds ? `${cap.molds} molds` : capacityText(cap, true) ? `~${capacityText(cap, true)}` : 'Molds not set'}</span>}
                   {cols.length > 0 && (
-                    <div className="pc-line">
+                    <span className="pc-dots">
                       {cols.map(id => { const c = colourData.palette.find(x => x.id === id); return c && <span key={id} className="pc-dot" title={c.name}><i style={{ background: c.name.toLowerCase() }} />{c.name[0]}</span>; })}
-                    </div>
+                    </span>
                   )}
                 </div>
-                <div className="pc-actions" onClick={e => e.stopPropagation()}>
+                <div className="sk-actions" onClick={e => e.stopPropagation()}>
                   {(canWrite || (!!branchId && canAt('products.manage', branchId, null))) && (
                     <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(p)}><Pencil size={13} /> Edit</button>
                   )}

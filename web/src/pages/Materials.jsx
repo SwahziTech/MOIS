@@ -246,34 +246,37 @@ export default function Materials() {
                 const v = valueOf(m);
                 const sup = suppliers.find(x => x.id === lastFrom[m.id])?.name;
                 return (
-                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`} title={canEditMaterial(m) ? 'Click for its details · double-click to edit' : 'Click for its details'}
+                  <div key={m.id} className={`sk-card lk-card${m.status !== 'active' ? ' is-inactive' : ''}`} title={canEditMaterial(m) ? 'Click for its details · double-click to edit' : 'Click for its details'}
                     onClick={e => { if (!e.target.closest('button')) setViewing(m); }}
                     onDoubleClick={e => { if (!e.target.closest('button') && canEditMaterial(m)) { setViewing(null); setEditing({ kind: 'material', row: m }); } }}>
-                    <div className="mm-top">
-                      <span className="mm-n">#{i + 1}</span>
-                      {catById[m.category_id] && <span className="pl-tag">{catById[m.category_id].name}</span>}
-                      <strong className="mm-name">{m.name}</strong>
-                      {sup && <span className="pl-help">· last from {sup}</span>}
-                      {m.branch_id && <span className="badge badge-accent">{branchName(m.branch_id)} only</span>}
-                      {openFlags[m.id] > 0 && <span className="badge badge-warning"><Flag size={11} /> needs review</span>}
-                      {m.status !== 'active' && <span className="pl-tag">inactive</span>}
+                    <div className="sk-name">
+                      <span className="sk-tags">
+                        <span className="mm-n">#{i + 1}</span>
+                        <span className="pl-tag">{catById[m.category_id]?.name ?? 'No category'}</span>
+                        {m.branch_id && <span className="badge badge-accent">{branchName(m.branch_id)} only</span>}
+                        {openFlags[m.id] > 0 && <span className="badge badge-warning"><Flag size={11} /> review</span>}
+                        {m.status !== 'active' && <span className="pl-tag">inactive</span>}
+                        {m.status === 'active' && !((onHand[m.id] ?? 0) > 0) && <span className="sk-out">OUT</span>}
+                      </span>
+                      <strong>{m.name}</strong>
+                      {sup && <span className="pl-help">last from {sup}</span>}
                     </div>
-                    <div className="mm-bottom">
-                      <span className="mm-qty"><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)} {st}</strong>
-                        {altQty(m) && <span className="sk-sub"> ({altQty(m)})</span>}</span>
+                    <div className="sk-total">
+                      <span><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)}</strong> <span className="sk-unit">{st}</span></span>
+                      {altQty(m) && <span className="sk-sub">({altQty(m)})</span>}
                     </div>
-                    {branchId && (
-                      <span className="mm-value">
+                    <div className="lk-right">
+                      {branchId && <>
                         <span>Value: <strong className="mm-money">{v != null ? money(v) : '—'}</strong></span>
                         {avgCost[m.id] != null && <span className="pl-help">@ {money(avgCost[m.id])}/{st}</span>}
-                      </span>
-                    )}
-                    <span className="mm-actions">
-                      {canEditMaterial(m) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>}
+                      </>}
+                    </div>
+                    <div className="sk-actions">
                       {m.status === 'active' && canAt('inventory.receive', branchId || null, null) && (
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => intake('receipt', `m:${m.id}`)}>Intake {st}</button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => intake('receipt', `m:${m.id}`)}><Plus size={13} /> Intake</button>
                       )}
-                    </span>
+                      {canEditMaterial(m) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>}
+                    </div>
                   </div>
                 );
               })}
