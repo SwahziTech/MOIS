@@ -20,7 +20,7 @@ const kindForStore = w => (w?.type === 'finished_goods' ? 'product' : 'material'
  * atomically by post_inventory_movement() (migration 022); this form only
  * offers what the user may do and shows the effect before posting.
  */
-export default function MovementModal({ type, refs, balances, defaultWarehouseId, onClose, onPosted }) {
+export default function MovementModal({ type, refs, balances, defaultWarehouseId, defaultItemKey, onClose, onPosted }) {
   const { canAt, canManage, organization } = useAuth();
   const { inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
@@ -38,7 +38,9 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [reference, setReference] = useState('');
   const [reason,    setReason]    = useState('');
   const [notes,     setNotes]     = useState('');
-  const [lines,     setLines]     = useState(() => [emptyLine(kindForStore(warehouses.find(w => w.id === warehouseId)))]);
+  const [lines,     setLines]     = useState(() => [defaultItemKey && refs.items[defaultItemKey]
+    ? { ...emptyLine(refs.items[defaultItemKey].kind), key: defaultItemKey, unitId: refs.items[defaultItemKey].stockUnitId ?? '' }
+    : emptyLine(kindForStore(warehouses.find(w => w.id === warehouseId)))]);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);

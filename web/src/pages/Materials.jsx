@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Layers, Plus, Search, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { loadInventoryRefs, qtyText } from '../lib/inventory';
+import { formatMoney } from '../lib/format';
+import MovementModal from '../components/inventory/MovementModal';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage, slugify } from '../lib/masterData';
@@ -50,6 +53,13 @@ export default function Materials() {
   const [categoryId, setCategoryId] = useState('');
   const [sortBy,     setSortBy]     = useState('category');   // category (the agreed material order) | name_asc | name_desc
   const [editing, setEditing] = useState(null);       // { kind: 'material'|'category'|'unit', row }
+  // On hand, value and baseline for the picked branch (2026-10-23 layout)
+  const [onHand,   setOnHand]   = useState({});   // material id → quantity in the branch's raw stores
+  const [avgCost,  setAvgCost]  = useState({});   // material id → average cost per stock unit at the branch
+  const [lastFrom, setLastFrom] = useState({});   // material id → supplier last bought from
+  const [opened,   setOpened]   = useState({});   // material id → has an opening balance at the branch
+  const [refs,     setRefs]     = useState(null); // for receiving from a card
+  const [posting,  setPosting]  = useState(null); // { type, key }
 
   async function load() {
     setError('');
@@ -100,6 +110,39 @@ export default function Materials() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function loadStock() {
+    const [wh, bal, op, pl] = await Promise.all([
+      supabase.from('warehouses').select('id, branch_id, type, status'),
+      supabase.from('stock_balances').select('warehouse_id, material_id, quantity').not('material_id', 'is', null),
+      supabase.from('inventory_transactions').select('material_id, warehouse_id').eq('transaction_type', 'opening_balance').not('material_id', 'is', null),
+      supabase.from('purchase_line_costs').select('material_id, branch_id, supplier_id, purchase_date').order('purchase_date', { ascending: false }),
+    ]);
+    const raw = new Set((wh.data || []).filter(w => w.type !== 'finished_goods' && w.type !== 'wip' && inBranch(w.branch_id)).map(w => w.id));
+    const q = {};
+    for (const b of bal.data || []) if (raw.has(b.warehouse_id)) q[b.material_id] = (q[b.material_id] ?? 0) + Number(b.quantity);
+    setOnHand(q);
+    const o = {};
+    for (const t of op.data || []) if (raw.has(t.warehouse_id)) o[t.material_id] = true;
+    setOpened(o);
+    const last = {};
+    for (const l of pl.data || []) if (inBranch(l.branch_id) && !last[l.material_id]) last[l.material_id] = l.supplier_id;
+    setLastFrom(last);
+    // average cost needs one branch (moving average per branch, 035)
+    if (!branchId) { setAvgCost({}); return; }
+    const ids = Object.keys(q);
+    const costs = await Promise.all(ids.map(id => supabase.rpc('material_average_cost', { p_branch_id: branchId, p_material_id: id })));
+    setAvgCost(Object.fromEntries(ids.map((id, i) => [id, costs[i].data?.[0]?.average_cost ?? costs[i].data?.[0]?.last_purchase_cost ?? null])));
+  }
+  useEffect(() => { loadStock(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function intake(type, key) {
+    const rf = refs ?? await loadInventoryRefs().catch(() => null);
+    if (!rf) return;
+    setRefs(rf);
+    // into the branch's raw-materials store
+    const wh = rf.warehouses.find(w => w.status === 'active' && w.type === 'raw_materials' && (!branchId || w.branch_id === branchId));
+    setPosting({ type, key, wh: wh?.id ?? '' });
+  }
 
   const unitById = useMemo(() => Object.fromEntries(units.map(u => [u.id, u])), [units]);
   const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c])), [categories]);
@@ -154,60 +197,92 @@ export default function Materials() {
               { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All' }] }]} />
           {!loading && (
             <ChipRow value={categoryId} onChange={setCategoryId}
-              items={[...categories.filter(c => c.status === 'active' || inViewMaterials.some(m => m.category_id === c.id)).map(c => ({ id: c.id, label: c.name })),
+              items={[...categories.filter(c => c.status === 'active' || inViewMaterials.some(m => m.category_id === c.id)).map(c => ({ id: c.id, label: `${c.name} (${inViewMaterials.filter(m => m.category_id === c.id && m.status === 'active').length})` })),
                       ...(inViewMaterials.some(m => !m.category_id) ? [{ id: 'none', label: 'No category' }] : [])]} />
           )}
         </>
       )}
 
-      <div className="card">
+      {tab === 'materials' && (error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (() => {
+        const money = v => formatMoney(v, organization?.currency_code);
+        const valueOf = m => (onHand[m.id] != null && avgCost[m.id] != null ? onHand[m.id] * avgCost[m.id] : null);
+        const total = inViewMaterials.filter(m => m.status === 'active').reduce((n, m) => n + (valueOf(m) ?? 0), 0);
+        const uncosted = inViewMaterials.filter(m => m.status === 'active' && (onHand[m.id] ?? 0) > 0 && avgCost[m.id] == null).length;
+        const out = inViewMaterials.filter(m => m.status === 'active' && !((onHand[m.id] ?? 0) > 0));
+        const noOpening = inViewMaterials.filter(m => m.status === 'active' && !opened[m.id]);
+        // a material's other unit, e.g. "1 Trip/Truck = 2,500 bucket"
+        const convText = m => {
+          const st = unitById[m.stock_unit_id]?.symbol;
+          const c = [...m.conversions].sort((x, y) => Math.abs(Math.log(y.factor_to_stock_unit)) - Math.abs(Math.log(x.factor_to_stock_unit)))[0];
+          if (!c || !st) return null;
+          const f = Number(c.factor_to_stock_unit);
+          return f >= 1 ? `1 ${unitById[c.unit_id]?.symbol} = ${qtyText(f)} ${st}` : `1 ${st} = ${qtyText(Math.round((1 / f) * 100) / 100)} ${unitById[c.unit_id]?.symbol}`;
+        };
+        const altQty = m => {
+          const c = [...m.conversions].sort((x, y) => Math.abs(Math.log(y.factor_to_stock_unit)) - Math.abs(Math.log(x.factor_to_stock_unit)))[0];   // the same unit as the conversion shown
+          return c && onHand[m.id] ? `${qtyText(Math.round((onHand[m.id] / Number(c.factor_to_stock_unit)) * 100) / 100)} ${unitById[c.unit_id]?.symbol}` : null;
+        };
+        return (
+          <>
+            {noOpening.length > 0 && (
+              <div className="mm-banner">
+                <div><strong>Opening stock not set for {noOpening.length} material{noOpening.length === 1 ? '' : 's'}</strong>
+                  <span className="pl-help">{noOpening.map(m => m.name).join(', ')} — set their first physical count to begin.</span></div>
+                {canAt('inventory.adjust', branchId || null, null) && <button type="button" className="btn btn-primary" onClick={() => intake('opening_balance', `m:${noOpening[0].id}`)}>Set opening stock</button>}
+              </div>
+            )}
+            <div className="mm-stats">
+              <div className="mm-stat"><span className="pl-label">Materials</span><strong>{inViewMaterials.filter(m => m.status === 'active').length} items</strong></div>
+              <div className="mm-stat"><span className="pl-label">Stock value</span><strong className="mm-money">{branchId ? money(total) : '—'}</strong>
+                <span className="pl-help">{branchId ? (uncosted ? `${uncosted} without a purchase price` : 'at average purchase cost') : 'Pick a branch'}</span></div>
+              <div className="mm-stat"><span className="pl-label">Out of stock</span><strong className={out.length ? 'text-error' : ''}>{out.length}</strong></div>
+              <div className="mm-stat"><span className="pl-label">Opening stock</span><strong className={noOpening.length ? 'text-warning' : ''}>{noOpening.length ? `${noOpening.length} not set` : 'All set'}</strong></div>
+            </div>
+            <section className="sk">
+              <div className="sk-head"><span>{categoryId ? catById[categoryId]?.name ?? 'No category' : 'All materials'} ({sortedShown.length})</span></div>
+              {loading ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
+              : sortedShown.length === 0 ? <div className="card"><EmptyState icon={Layers} title="No materials in this view" description={search ? `No materials match "${search}".` : ''} /></div>
+              : sortedShown.map((m, i) => {
+                const st = unitById[m.stock_unit_id]?.symbol ?? '';
+                const v = valueOf(m);
+                const sup = suppliers.find(x => x.id === lastFrom[m.id])?.name;
+                return (
+                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`}>
+                    <div className="mm-top">
+                      <span className="mm-n">#{i + 1}</span>
+                      {catById[m.category_id] && <span className="pl-tag">{catById[m.category_id].name}</span>}
+                      <strong className="mm-name">{m.name}</strong>
+                      {sup && <span className="pl-help">· last from {sup}</span>}
+                      {m.branch_id && <span className="badge badge-accent">{branchName(m.branch_id)} only</span>}
+                      {openFlags[m.id] > 0 && <span className="badge badge-warning"><Flag size={11} /> needs review</span>}
+                      {m.status !== 'active' && <span className="pl-tag">inactive</span>}
+                      <span className="mm-actions">
+                        {canEditMaterial(m) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>}
+                        {m.status === 'active' && canAt('inventory.receive', branchId || null, null) && (
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => intake('receipt', `m:${m.id}`)}>Intake {st}</button>
+                        )}
+                      </span>
+                    </div>
+                    <div className="mm-bottom">
+                      <span className="mm-qty"><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)} {st}</strong>
+                        {altQty(m) && <span className="sk-sub"> ({altQty(m)})</span>}</span>
+                      <span className="mm-value">
+                        {convText(m) && <span className="pl-help">{convText(m)}</span>}
+                        {branchId && <span>Value: <strong className="mm-money">{v != null ? money(v) : '—'}</strong>
+                          {avgCost[m.id] != null && <span className="pl-help"> @ {money(avgCost[m.id])}/{st}</span>}</span>}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          </>
+        );
+      })())}
+
+      {tab !== 'materials' && <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            {tab === 'materials' && (
-              <table>
-                <thead>
-                  <tr><th>Material</th><th>Category</th><th>Stock unit</th><th>Also counted in</th><th>Used by</th><th>Status</th><th aria-label="Actions" /></tr>
-                </thead>
-                <tbody>
-                  {loading ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
-                  : shown.length === 0 ? (
-                    <tr><td colSpan={7}><EmptyState icon={Layers} title="No materials in this view" description={search ? `No materials match "${search}".` : ''} /></td></tr>
-                  ) : sortedShown.map(m => {
-                    const stock = unitById[m.stock_unit_id];
-                    return (
-                      <tr key={m.id}>
-                        <td>
-                          <div style={{ fontWeight: 500 }}>
-                            {m.name}
-                            {openFlags[m.id] > 0 && <span className="badge badge-warning" style={{ marginLeft: 8 }}><Flag size={11} /> needs review</span>}
-                          </div>
-                          <div className="text-xs text-muted" style={{ fontFamily: 'monospace' }}>{m.material_id_ref || '—'}</div>
-                        </td>
-                        <td className="text-muted">{catById[m.category_id]?.name || '—'}</td>
-                        <td>{stock ? <span className="badge badge-neutral" title={stock.name}>{stock.symbol}</span> : <span className="text-muted">not set</span>}</td>
-                        <td className="text-xs">
-                          {m.conversions.length ? m.conversions.map(c => (
-                            <div key={c.unit_id}>1 {unitById[c.unit_id]?.symbol} = {+Number(c.factor_to_stock_unit).toPrecision(6)} {stock?.symbol}</div>
-                          )) : <span className="text-muted">—</span>}
-                        </td>
-                        <td>
-                          {m.branch_id
-                            ? <span className="badge badge-accent" title="This branch's own material">{branchName(m.branch_id)} only</span>
-                            : <span className="text-muted text-sm">All branches</span>}
-                        </td>
-                        <td><span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{m.status}</span></td>
-                        <td style={{ textAlign: 'right' }}>
-                          {canEditMaterial(m) && (
-                            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-
             {tab === 'categories' && (
               <table>
                 <thead><tr><th>Category</th><th>Order</th><th>Materials</th><th>Status</th>{canWriteMaterials && <th aria-label="Actions" />}</tr></thead>
@@ -246,7 +321,12 @@ export default function Materials() {
             )}
           </div>
         )}
-      </div>
+      </div>}
+
+      {posting && refs && (
+        <MovementModal type={posting.type} refs={refs} balances={{}} defaultItemKey={posting.key} defaultWarehouseId={posting.wh}
+          onClose={() => setPosting(null)} onPosted={async () => { setPosting(null); await loadStock(); }} />
+      )}
 
       {editing?.kind === 'material' && (
         <MaterialModal material={materials.find(m => m.id === editing.row.id) ?? editing.row} organizationId={organization.id} materials={materials}
