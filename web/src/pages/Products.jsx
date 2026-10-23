@@ -22,9 +22,12 @@ const LOAD_ERROR = "We couldn't load this page. Please try again.";
 const SORT_LABEL = { size_asc: 'Size: smallest → largest (default)', size_desc: 'Size: largest → smallest', name_asc: 'Name: A → Z', name_desc: 'Name: Z → A', stock_desc: 'Stock: highest → lowest', stock_asc: 'Stock: lowest → highest' };
 
 export default function Products() {
-  const { organization, canManage, canAt } = useAuth();
+  const { organization, canManage, canAt, can } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
-  const canWrite = canManage('products.manage');   // shared product details: org admins
+  // shared product details: anyone with products.manage — org admins and branch managers (050);
+  // merging products stays with org admins
+  const canWrite = can('products.manage');
+  const canMerge = canManage('products.manage');
   // A branch's own catalogue: its managers add and remove products (031/032)
   const canCatalogue = !!branchId && canAt('products.manage', branchId, null);
   const [categories, setCategories] = useState([]);
@@ -292,7 +295,7 @@ export default function Products() {
           palette={colourData.palette}
           colorIds={editing.id ? productColorIds(editing, colourData.cat, colourData.own) : []}
           onHand={editing.id ? stock.filter(x => x.product_id === editing.id).reduce((n, x) => n + Number(x.quantity), 0) : 0}
-          renderMore={() => <ProductMore product={editing} organization={organization} products={products} onSaved={async (close = true) => { if (close) setEditing(null); await load(); }} />}
+          renderMore={() => <ProductMore product={editing} organization={organization} products={products} canMerge={canMerge} onSaved={async (close = true) => { if (close) setEditing(null); await load(); }} />}
           onClose={() => setEditing(null)}
           onSaved={async () => { setEditing(null); await load(); }}
         />
@@ -555,11 +558,11 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
 
 
 /** The edit window's "More": merge into another product, review flags, history */
-function ProductMore({ product, organization, products, onSaved }) {
+function ProductMore({ product, organization, products, canMerge, onSaved }) {
   const [merging, setMerging] = useState(false);
   return (
     <>
-      {product.status === 'active' && !merging && (
+      {canMerge && product.status === 'active' && !merging && (
         <button type="button" className="btn btn-outline btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setMerging(true)}>Merge into another product…</button>
       )}
       {merging && (

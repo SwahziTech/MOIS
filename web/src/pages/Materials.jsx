@@ -27,11 +27,12 @@ const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
  * never fixed on a material (031); old fixed sources show as history.
  */
 export default function Materials() {
-  const { organization, canManage, canAt } = useAuth();
+  const { organization, canManage, canAt, can } = useAuth();
   const { branchId, inBranch } = useBranch();
   const canWriteMaterials = canManage('materials.manage');
   // Shared materials: org-wide admins. A branch's own: that branch's managers.
-  const canEditMaterial = m => (m.branch_id ? canAt('materials.manage', m.branch_id, null) : canWriteMaterials);
+  // shared materials: anyone with materials.manage — org admins and branch managers (050); sharing one stays with org admins
+  const canEditMaterial = m => (m.branch_id ? canAt('materials.manage', m.branch_id, null) : can('materials.manage'));
   const canAddMaterial = canWriteMaterials || (!!branchId && canAt('materials.manage', branchId, null));
   const canWriteUnits = canManage('materials.manage') || canManage('products.manage');
 
