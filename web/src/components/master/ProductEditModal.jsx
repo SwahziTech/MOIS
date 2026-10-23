@@ -41,6 +41,8 @@ export default function ProductEditModal({ product, organization, categories, un
   const catColours = cid => (categories.find(c => c.id === cid)?.colors ?? []);
   const [chosen, setChosen] = useState(isNew ? [] : colorIds);
   const [coloursTouched, setColoursTouched] = useState(false);
+  // a product with no colours shows just that, until someone adds colours (SwahziTech, 2026-10-23)
+  const [pickColours, setPickColours] = useState(() => (isNew ? catColours(product.category_id ?? '').length > 0 : colorIds.length > 0));
   const [stuck, setStuck] = useState(null);      // { message, ids } — stock in a colour switched off
   const [moveTo, setMoveTo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,6 +56,7 @@ export default function ProductEditModal({ product, organization, categories, un
 
   function chooseCategory(id) {
     setCategory(id);
+    if (isNew && !coloursTouched) setPickColours(catColours(id).length > 0);   // a new product starts with its category's colours
     const suggested = categories.find(c => c.id === id)?.default_unit_id;
     if (isNew && suggested && !unitId) setUnitId(suggested);
   }
@@ -192,14 +195,25 @@ export default function ProductEditModal({ product, organization, categories, un
             <NumberInput step="any" min="0" className="form-input" placeholder="Not known" disabled={!canWrite} value={perSqm} onChange={e => setPerSqm(e.target.value)} /></label>
         )}
         <div className="pe-field"><span>Colours</span>
-          <div className="pe-colours">
-            {colourChoices.map(c => (
-              <button key={c.id} type="button" className={`pe-colour${shownColours.includes(c.id) ? ' is-on' : ''}`} disabled={!canWrite || busy} aria-pressed={shownColours.includes(c.id)} onClick={() => toggleColour(c.id)}>
-                <i style={{ background: c.name.toLowerCase() }} />{c.name}{shownColours.includes(c.id) ? ' ✓' : ''}
-              </button>
-            ))}
-          </div>
-          {shownColours.length === 0 && <span className="pl-help">No colours — stocked as a single item.</span>}
+          {!pickColours ? (
+            <div className="pe-nocolour">
+              <span className="pc-unit">No colour</span>
+              <span className="pl-help">Stocked as a single item.</span>
+              {canWrite && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setPickColours(true)}>Add colours</button>}
+            </div>
+          ) : (<>
+            <div className="pe-colours">
+              {colourChoices.map(c => (
+                <button key={c.id} type="button" className={`pe-colour${shownColours.includes(c.id) ? ' is-on' : ''}`} disabled={!canWrite || busy} aria-pressed={shownColours.includes(c.id)} onClick={() => toggleColour(c.id)}>
+                  <i style={{ background: c.name.toLowerCase() }} />{c.name}{shownColours.includes(c.id) ? ' ✓' : ''}
+                </button>
+              ))}
+              {canWrite && shownColours.length > 0 && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { setStuck(null); setColoursTouched(true); setChosen([]); setPickColours(false); }}>No colour</button>
+              )}
+            </div>
+            {shownColours.length === 0 && <span className="pl-help">All off — it will be saved with no colour.</span>}
+          </>)}
         </div>
         {stuck && (
           <div className="alert alert-warning">
