@@ -230,7 +230,9 @@ export default function Products() {
             const cap = capacity?.[branchId]?.[p.id];
             const cols = productColorIds(p, colourData.cat, colourData.own);
             return (
-              <div key={p.id} className={`pc${p.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(p)} title="Open for stock, prices and recipes">
+              <div key={p.id} className={`pc${p.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(p)}
+                onDoubleClick={() => { if (canWrite || (!!branchId && canAt('products.manage', branchId, null))) { setViewing(null); setEditing(p); } }}
+                title="Click for stock, prices and recipes · double-click to edit">
                 <div className="pc-main">
                   <div className="pc-line">
                     <strong className="pc-name">{p.canonical_name}</strong>

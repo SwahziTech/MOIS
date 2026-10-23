@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { loadInventoryRefs, qtyText } from '../lib/inventory';
 import { formatMoney } from '../lib/format';
 import MovementModal from '../components/inventory/MovementModal';
+import MaterialInfo from '../components/master/MaterialInfo';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage, slugify } from '../lib/masterData';
@@ -61,6 +62,7 @@ export default function Materials() {
   const [opened,   setOpened]   = useState({});   // material id → has an opening balance at the branch
   const [refs,     setRefs]     = useState(null); // for receiving from a card
   const [posting,  setPosting]  = useState(null); // { type, key }
+  const [viewing,  setViewing]  = useState(null); // material in the read-only info window
 
   async function load() {
     setError('');
@@ -244,8 +246,9 @@ export default function Materials() {
                 const v = valueOf(m);
                 const sup = suppliers.find(x => x.id === lastFrom[m.id])?.name;
                 return (
-                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`} title="Open for its units, conversions and sources"
-                    onClick={e => { if (!e.target.closest('button')) setEditing({ kind: 'material', row: m }); }}>
+                  <div key={m.id} className={`mm-card${m.status !== 'active' ? ' is-inactive' : ''}`} title={canEditMaterial(m) ? 'Click for its details · double-click to edit' : 'Click for its details'}
+                    onClick={e => { if (!e.target.closest('button')) setViewing(m); }}
+                    onDoubleClick={e => { if (!e.target.closest('button') && canEditMaterial(m)) { setViewing(null); setEditing({ kind: 'material', row: m }); } }}>
                     <div className="mm-top">
                       <span className="mm-n">#{i + 1}</span>
                       {catById[m.category_id] && <span className="pl-tag">{catById[m.category_id].name}</span>}
@@ -327,6 +330,12 @@ export default function Materials() {
           onClose={() => setPosting(null)} onPosted={async () => { setPosting(null); await loadStock(); }} />
       )}
 
+      {viewing && (
+        <MaterialInfo material={materials.find(x => x.id === viewing.id) ?? viewing} category={catById[viewing.category_id]} unitById={unitById}
+          branchName={branchName} branchId={branchId} onHand={onHand[viewing.id]} avgCost={avgCost[viewing.id]} currencyCode={organization?.currency_code}
+          suppliers={suppliers} canEdit={canEditMaterial(viewing)}
+          onEdit={() => { setEditing({ kind: 'material', row: viewing }); setViewing(null); }} onClose={() => setViewing(null)} />
+      )}
       {editing?.kind === 'material' && (
         <MaterialModal material={materials.find(m => m.id === editing.row.id) ?? editing.row} organizationId={organization.id} materials={materials}
           categories={categories} units={units} branches={allBranches} suppliers={suppliers} usage={usage[editing.row.id] ?? { active: 0, any: 0 }} key={editing.row.id ?? 'new'}
