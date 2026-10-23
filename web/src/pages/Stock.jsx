@@ -34,6 +34,7 @@ export default function Stock() {
   const [refs,     setRefs]     = useState(null);
   const [balances, setBalances] = useState([]);
   const [perSqm,   setPerSqm]   = useState({});   // product id → pieces per m²
+  const [reorder,  setReorder]  = useState({});   // branch id → product id → reorder level (049)
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
@@ -59,6 +60,11 @@ export default function Stock() {
       setRefs(r);
       setBalances(bal.data || []);
       setPerSqm(Object.fromEntries((ps.data || []).filter(x => Number(x.pcs_per_sqm) > 0).map(x => [x.product_id, Number(x.pcs_per_sqm)])));
+      // reorder levels (049) — on their own, so Stock works without them
+      const rl = await supabase.from('branch_products').select('branch_id, product_id, reorder_level').not('reorder_level', 'is', null);
+      const m = {};
+      for (const x of rl.error ? [] : rl.data || []) (m[x.branch_id] ||= {})[x.product_id] = Number(x.reorder_level);
+      setReorder(m);
     } catch (err) {
       console.error(err);
       setError(LOAD_ERROR);
@@ -196,6 +202,9 @@ export default function Stock() {
                   <span className="sk-tags">
                     <span className="pl-tag">{isProducts ? c.item.category : c.item.materialCategory ?? 'Material'}</span>
                     {c.total <= 0 && c.curing <= 0 && <span className="sk-out">OUT</span>}
+                    {c.total > 0 && branchId && reorder[branchId]?.[c.item.id] != null && c.total < reorder[branchId][c.item.id] && (
+                      <span className="sk-out" title={`Below the reorder level of ${qtyText(reorder[branchId][c.item.id])} ${unit(c.unitId)}`}>LOW</span>
+                    )}
                     {c.total < 0 && <span className="sk-out">BELOW ZERO</span>}
                   </span>
                   <strong>{c.item.name}</strong>
