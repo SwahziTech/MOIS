@@ -39,7 +39,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const [reason,    setReason]    = useState('');
   const [notes,     setNotes]     = useState('');
   const [lines,     setLines]     = useState(() => [defaultItemKey && refs.items[defaultItemKey]
-    ? { ...emptyLine(refs.items[defaultItemKey].kind), key: defaultItemKey, unitId: refs.items[defaultItemKey].stockUnitId ?? '' }
+    ? { ...emptyLine(refs.items[defaultItemKey].kind), key: defaultItemKey, unitId: refs.items[defaultItemKey].mainUnitId ?? refs.items[defaultItemKey].stockUnitId ?? '' }
     : emptyLine(kindForStore(warehouses.find(w => w.id === warehouseId)))]);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
@@ -92,7 +92,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         next.key = ''; next.unitId = ''; next.colorId = '';
       }
       if (patch.key !== undefined) {
-        next.unitId = items[patch.key]?.stockUnitId ?? '';
+        next.unitId = items[patch.key]?.mainUnitId ?? items[patch.key]?.stockUnitId ?? '';   // counted in its main unit (051)
         next.colorId = '';
       }
       return next;

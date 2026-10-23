@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, stockKey, qtyText, orgToday } from '../lib/inventory';
+import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, stockKey, qtyText, orgToday, mainUnitOf } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, ActionMenu, categoryChipItems } from '../components/ListControls';
 import { categoryTools, productOrder } from '../lib/categories';
@@ -210,9 +210,14 @@ export default function Stock() {
                   <strong>{c.item.name}</strong>
                 </div>
                 <div className="sk-total">
-                  <span><strong className={c.total < 0 ? 'text-error' : ''}>{qtyText(round(c.total))}</strong> <span className="sk-unit">{unit(c.unitId)}</span></span>
-                  {pcs != null && <span className="sk-sub">({qtyText(pcs)} pcs)</span>}
-                  {!isProducts && altOf(c, c.total) && <span className="sk-sub">({altOf(c, c.total)})</span>}
+                  {!isProducts && mainUnitOf(c.item) ? (<>
+                    <span><strong className={c.total < 0 ? 'text-error' : ''}>{qtyText(round(c.total / mainUnitOf(c.item).factor))}</strong> <span className="sk-unit">{unit(mainUnitOf(c.item).id)}</span></span>
+                    <span className="sk-sub">({qtyText(round(c.total))} {unit(c.unitId)})</span>
+                  </>) : (<>
+                    <span><strong className={c.total < 0 ? 'text-error' : ''}>{qtyText(round(c.total))}</strong> <span className="sk-unit">{unit(c.unitId)}</span></span>
+                    {pcs != null && <span className="sk-sub">({qtyText(pcs)} pcs)</span>}
+                    {!isProducts && altOf(c, c.total) && <span className="sk-sub">({altOf(c, c.total)})</span>}
+                  </>)}
                   {c.curing > 0 && <span className="sk-cure" title="In the curing store — not sellable until its quality release">+ {qtyText(round(c.curing))} {unit(c.unitId)}{pcsOf(c, c.curing) != null ? ` (${qtyText(pcsOf(c, c.curing))} pcs)` : ''} curing</span>}
                 </div>
                 <div className="sk-colours">

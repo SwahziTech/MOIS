@@ -61,7 +61,7 @@ export async function loadInventoryRefs() {
   const [wh, mat, prod, units, sup, cats, catRows, colors, bp, own] = await Promise.all([
     supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
     supabase.from('materials')
-      .select('id, name, code, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
+      .select('*, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
       .order('name'),
     supabase.from('products').select('*, category:product_categories(name)').order('canonical_name'),
     supabase.from('units').select('id, symbol, name'),
@@ -83,6 +83,8 @@ export async function loadInventoryRefs() {
       rank: m.category?.display_order ?? 999, materialCategory: m.category?.name ?? null,
       inRecipes: m.category?.used_in_recipes !== false,
       stockUnitId: m.stock_unit_id,
+      // the unit stock is counted and shown in (051); NULL/none = the stock unit
+      mainUnitId: m.main_unit_id && m.main_unit_id !== m.stock_unit_id && m.conversions.some(c => c.unit_id === m.main_unit_id) ? m.main_unit_id : null,
       units: m.stock_unit_id ? [{ id: m.stock_unit_id, factor: 1 }, ...m.conversions.map(c => ({ id: c.unit_id, factor: Number(c.factor_to_stock_unit) }))] : [] };
   }
   // "Paving Blocks › Vibro" for a category under a group (038)
@@ -166,3 +168,10 @@ export function matchSuppliers(typed, suppliers) {
  * Rangi, … Steel), then by name. Items: { rank, name }.
  */
 export const byMaterialOrder = (a, b) => (a.rank ?? 999) - (b.rank ?? 999) || String(a.name).localeCompare(String(b.name));
+
+/** A material's main unit as { id, factor } (factor = stock units per main unit), or null when it is the stock unit (051) */
+export function mainUnitOf(item) {
+  if (!item?.mainUnitId) return null;
+  const u = (item.units || []).find(x => x.id === item.mainUnitId);
+  return u && u.factor > 0 ? { id: u.id, factor: u.factor } : null;
+}

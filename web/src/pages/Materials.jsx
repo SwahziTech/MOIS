@@ -68,7 +68,7 @@ export default function Materials() {
     setError('');
     const [matRes, catRes, unitRes, branchRes, itemRes, flagRes, prodRes, supRes] = await Promise.all([
       supabase.from('materials').select(`
-          id, name, material_id_ref, category_id, stock_unit_id, status, notes, branch_id,
+          *,
           conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes),
           sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)
         `).order('name'),
@@ -179,6 +179,11 @@ export default function Materials() {
   const uncosted = inViewMaterials.filter(m => m.status === 'active' && (onHand[m.id] ?? 0) > 0 && avgCost[m.id] == null).length;
   const out = inViewMaterials.filter(m => m.status === 'active' && !((onHand[m.id] ?? 0) > 0));
   const noOpening = inViewMaterials.filter(m => m.status === 'active' && !opened[m.id]);
+  // the main unit (051): { sym, f } with f stock units per main unit, or null
+  const mainOf = m => {
+    const c = m.main_unit_id && m.main_unit_id !== m.stock_unit_id && m.conversions.find(x => x.unit_id === m.main_unit_id);
+    return c ? { id: c.unit_id, sym: unitById[c.unit_id]?.symbol ?? '', f: Number(c.factor_to_stock_unit) } : null;
+  };
   const altQty = m => {
     const c = [...m.conversions].sort((x, y) => Math.abs(Math.log(y.factor_to_stock_unit)) - Math.abs(Math.log(x.factor_to_stock_unit)))[0];   // the same unit as the conversion shown
     return c && onHand[m.id] ? `${qtyText(Math.round((onHand[m.id] / Number(c.factor_to_stock_unit)) * 100) / 100)} ${unitById[c.unit_id]?.symbol}` : null;
@@ -262,13 +267,18 @@ export default function Materials() {
                       {sup && <span className="pl-help">last from {sup}</span>}
                     </div>
                     <div className="sk-total">
-                      <span><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)}</strong> <span className="sk-unit">{st}</span></span>
-                      {altQty(m) && <span className="sk-sub">({altQty(m)})</span>}
+                      {mainOf(m) ? (<>
+                        <span><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round(((onHand[m.id] ?? 0) / mainOf(m).f) * 100) / 100)}</strong> <span className="sk-unit">{mainOf(m).sym}</span></span>
+                        <span className="sk-sub">({qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)} {st})</span>
+                      </>) : (<>
+                        <span><strong className={(onHand[m.id] ?? 0) < 0 ? 'text-error' : ''}>{qtyText(Math.round((onHand[m.id] ?? 0) * 100) / 100)}</strong> <span className="sk-unit">{st}</span></span>
+                        {altQty(m) && <span className="sk-sub">({altQty(m)})</span>}
+                      </>)}
                     </div>
                     <div className="lk-right">
                       {branchId && <>
                         <span>Value: <strong className="mm-money">{v != null ? money(v) : '—'}</strong></span>
-                        {avgCost[m.id] != null && <span className="pl-help">@ {money(avgCost[m.id])}/{st}</span>}
+                        {avgCost[m.id] != null && <span className="pl-help">@ {mainOf(m) ? `${money(avgCost[m.id] * mainOf(m).f)}/${mainOf(m).sym}` : `${money(avgCost[m.id])}/${st}`}</span>}
                       </>}
                     </div>
                     <div className="sk-actions">
@@ -441,6 +451,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
   const [name,     setName]     = useState(material.name ?? '');
   const [category, setCategory] = useState(material.category_id ?? '');
   const [stockId,  setStockId]  = useState(material.stock_unit_id ?? '');
+  const [mainId,   setMainId]   = useState(material.main_unit_id ?? '');
   const [notes,    setNotes]    = useState(material.notes ?? '');
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
@@ -459,7 +470,8 @@ function MaterialModal({ material, organizationId, materials, categories, units,
     setError('');
     const clash = materials.find(m => m.id !== material.id && m.name.trim().toLowerCase() === name.trim().toLowerCase());
     if (clash) { setError(`A material called "${clash.name}" already exists.`); return; }
-    const row = { name: name.trim(), category_id: category || null, stock_unit_id: stockId || null, notes: notes.trim() || null };
+    const row = { name: name.trim(), category_id: category || null, stock_unit_id: stockId || null, notes: notes.trim() || null,
+      ...(!isNew && 'main_unit_id' in material ? { main_unit_id: mainId && mainId !== stockId ? mainId : null } : {}) };
     setBusy(true);
     const { error: err } = isNew
       ? await supabase.from('materials').insert({
@@ -542,6 +554,16 @@ function MaterialModal({ material, organizationId, materials, categories, units,
               {stockLocked ? 'Fixed: conversions, sources or recipes are expressed in it.' : 'The unit stock of this material is counted in. Add a unit under Units if it is missing.'}
             </span>
           </div>
+          {!isNew && conversions.length > 0 && 'main_unit_id' in material && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="mat-main">Main unit (counting and display)</label>
+              <select id="mat-main" className="form-input" value={mainId || stockId} onChange={e => setMainId(e.target.value)}>
+                {stockId && <option value={stockId}>{unitById[stockId]?.symbol} — the stock unit</option>}
+                {conversions.map(c => <option key={c.unit_id} value={c.unit_id}>{unitById[c.unit_id]?.symbol} (= {+Number(c.factor_to_stock_unit).toPrecision(6)} {unitById[stockId]?.symbol})</option>)}
+              </select>
+              <span className="form-hint">Stock is counted and shown in this unit; the ledger keeps {unitById[stockId]?.symbol ?? 'the stock unit'} and recipes keep theirs.</span>
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label" htmlFor="mat-notes">Notes</label>
             <textarea id="mat-notes" className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />

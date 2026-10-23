@@ -16,6 +16,10 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
   const [recipes, setRecipes] = useState(null);
   const st = unitById[m.stock_unit_id]?.symbol ?? '';
   const money = v => formatMoney(v, currencyCode);
+  // the main unit (051): stock is shown in it, the stock unit beside it
+  const main = m.main_unit_id && m.main_unit_id !== m.stock_unit_id ? m.conversions.find(c => c.unit_id === m.main_unit_id) : null;
+  const mf = main ? Number(main.factor_to_stock_unit) : 1;
+  const ms = main ? unitById[main.unit_id]?.symbol ?? '' : st;
 
   useEffect(() => {
     let live = true;
@@ -45,8 +49,8 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
         </p>
 
         <div className="mm-stats">
-          <div className="mm-stat"><span className="pl-label">On hand{branchId ? '' : ' (all branches)'}</span><strong>{qtyText(Math.round((onHand ?? 0) * 100) / 100)} {st}</strong></div>
-          <div className="mm-stat"><span className="pl-label">Average cost</span><strong className="mm-money">{avgCost != null ? `${money(avgCost)}/${st}` : '—'}</strong></div>
+          <div className="mm-stat"><span className="pl-label">On hand{branchId ? '' : ' (all branches)'}</span><strong>{qtyText(Math.round(((onHand ?? 0) / mf) * 100) / 100)} {ms}</strong>{main && <span className="pl-help">{qtyText(Math.round((onHand ?? 0) * 100) / 100)} {st}</span>}</div>
+          <div className="mm-stat"><span className="pl-label">Average cost</span><strong className="mm-money">{avgCost != null ? `${money(avgCost * mf)}/${ms}` : '—'}</strong></div>
           <div className="mm-stat"><span className="pl-label">Value</span><strong className="mm-money">{avgCost != null && onHand != null ? money(onHand * avgCost) : '—'}</strong></div>
         </div>
 
@@ -54,6 +58,7 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
           <h3 className="modal-section-title">Units</h3>
           <dl className="rd-dl">
             <dt>Stock unit</dt><dd>{unitById[m.stock_unit_id]?.name ?? '—'} ({st || '—'})</dd>
+            {main && <><dt>Main unit</dt><dd>{ms} — stock is counted and shown in it</dd></>}
             {m.conversions.map(c => {
               const f = Number(c.factor_to_stock_unit);
               const u = unitById[c.unit_id]?.symbol;
