@@ -65,7 +65,7 @@ export default function Products() {
         .from('products')
         .select(`
           id, product_id_ref, canonical_name, size_cm, category_id, unit_id,
-          pcs_per_sqm, wastani_per_bag, status, notes, strength_class, yield_tolerance,
+          pcs_per_sqm, wastani_per_bag, status, notes, strength_class, yield_tolerance, own_colors,
           category:product_categories(id, name, display_format, sort_order),
           unit:units(symbol, name),
           recipes:recipe_version_products(count)
