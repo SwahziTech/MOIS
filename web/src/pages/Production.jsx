@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Factory } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -50,7 +51,16 @@ export default function Production() {
   const [busyId,    setBusyId]    = useState(null);
   const [rowError,  setRowError]  = useState('');
   const [curingDays, setCuringDays] = useState(14);
-  const [preset, setPreset] = useState(null);   // product (and colour) sent from the simulator
+  const [preset, setPreset] = useState(null);   // product (and colour) sent from the simulator or Stock
+  // Stock's "Produce" opens the production form with that product (?produce=<id>)
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('produce');
+    if (!id) return;
+    setPreset({ productId: id, colorId: '', at: Date.now() });
+    setTab('log');
+    setParams({}, { replace: true });
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setError('');

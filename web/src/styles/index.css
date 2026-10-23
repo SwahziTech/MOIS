@@ -1818,3 +1818,29 @@ tr.cp-over td { background: var(--bg-warning); }
 .pl-order { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
 .pl-order select { width: auto; max-width: 260px; height: 30px; padding: 2px 8px; font-size: var(--text-xs); }
 @media (max-width: 760px) { .po-fields { grid-template-columns: minmax(0, 1fr); } .po-line { grid-template-columns: minmax(0, 1fr) 100px 32px; } .po-line .pl-help { display: none; } }
+
+/* Stock (2026-10-23): raw materials / finished goods, one card per item */
+.sk-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-surface); margin-bottom: 12px; }
+.sk-tab { display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-weight: 600; font-size: var(--text-md); cursor: pointer; }
+.sk-tab:hover { background: var(--bg-soft); }
+.sk-tab.is-on { background: var(--accent); color: var(--text-on-accent, #1E1C19); }
+.sk { display: flex; flex-direction: column; gap: 8px; }
+.sk-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 4px 0; font-weight: 600; color: var(--text-secondary); flex-wrap: wrap; }
+.sk-card { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 0.9fr) minmax(0, 2.6fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-surface); }
+.sk-card:hover { border-color: var(--border-strong); }
+.sk-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sk-name strong { font-size: var(--text-lg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sk-out { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--color-error); border: 1px solid var(--color-error); border-radius: var(--radius-sm); padding: 0 6px; }
+.sk-total { display: flex; flex-direction: column; gap: 1px; }
+.sk-total strong { font-size: var(--text-xl); }
+.sk-unit { font-size: var(--text-xs); color: var(--text-muted); }
+.sk-sub { font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sk-cure { font-size: var(--text-xs); color: var(--accent-text); }
+.sk-colours { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-colour { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 78px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-soft); }
+.sk-colour.is-zero { opacity: .55; }
+.sk-colour-name { display: flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--text-secondary); font-weight: 600; }
+.sk-colour-name i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.sk-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+@media (max-width: 900px) { .sk-card { grid-template-columns: minmax(0, 1fr) auto; } .sk-colours { grid-column: 1 / -1; } .sk-actions { flex-direction: row; grid-column: 1 / -1; } }
