@@ -1957,3 +1957,5 @@ tr.cp-over td { background: var(--bg-warning); }
 .ih-detail dt { color: var(--text-muted); }
 .ih-detail dd { margin: 0; }
 @media (max-width: 640px) { .ih-line { grid-template-columns: 16px 46px minmax(0, 1fr) auto auto; } .ih-who, .ih-price { display: none; } }
+.pu-item { cursor: pointer; user-select: none; }
+.pu-item:hover { color: var(--accent-text); text-decoration: underline dotted; }

@@ -269,7 +269,11 @@ export default function Purchases() {
                     return (
                       <tr key={p.id} className={p.status === 'void' ? 'text-muted' : ''}>
                         <td>{p.purchase_date}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
-                        <td style={{ fontWeight: 500 }}>{ls.map(x => <div key={x.id}>{refs?.items[`m:${x.material_id}`]?.name ?? '—'}</div>)}</td>
+                        <td style={{ fontWeight: 500 }}>{ls.map(x => {
+                          // double-click (a tap on a phone) opens that material's purchases
+                          const open = () => { const it = refs?.items[`m:${x.material_id}`]; if (it) setHistoryOf({ id: it.id, name: it.name }); };
+                          return <div key={x.id} className="pu-item" title="Double-click for its purchases" onDoubleClick={open} onClick={() => { if (window.matchMedia('(pointer: coarse)').matches) open(); }}>{refs?.items[`m:${x.material_id}`]?.name ?? '—'}</div>;
+                        })}</td>
                         <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{qtyText(x.entered_quantity)} <span className="text-muted text-xs">{refs?.unitById[x.entered_unit_id]?.symbol}</span></div>)}</td>
                         <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{priceOfTx[x.id] != null ? money(priceOfTx[x.id]) : '—'}</div>)}</td>
                         <td>{supplierName(p.supplier_id)}</td>
