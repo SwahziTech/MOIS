@@ -2038,3 +2038,8 @@ tr.cp-over td { background: var(--bg-warning); }
 
 .pb-res { min-height: 26px; }
 .pb-res .pb-name { font-weight: 500; color: var(--text-secondary); }
+
+/* Curing: release several at once (2026-10-24) */
+.bulk-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.bulk-all { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.bulk-bar .btn { margin-left: auto; }

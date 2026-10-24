@@ -116,6 +116,34 @@ export default function Production() {
   }
   const canIssue = b => canAt('inventory.issue', b.branch_id, b.raw_warehouse_id) || canAt('production.create', b.branch_id, null);
 
+  // Release several at once (SwahziTech, 2026-10-24): ready batches, every piece passed — rejects go through Release… one by one
+  const [picked, setPicked] = useState(() => new Set());
+  const [bulk, setBulk] = useState(null);   // { running, done, failed: [{ name, error }] } while/after releasing
+  // any curing batch can be picked; one released before its curing ends needs a reason (asked once for all)
+  const readyToRelease = b => b.status === 'curing' && canAt('production.complete', b.branch_id, null);
+  const ready = curing.filter(readyToRelease);
+  const [bulkNote, setBulkNote] = useState('');
+  const earlyPicked = ready.filter(b => picked.has(b.id) && b.curing_until > today);
+  const togglePick = id => setPicked(s0 => { const n = new Set(s0); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  async function releaseMany() {
+    const list = ready.filter(b => picked.has(b.id));
+    const failed = [];
+    setBulk({ running: true, done: 0, total: list.length, failed });
+    for (const b of list) {
+      const fg = refs.warehouses.find(w => w.status === 'active' && w.type === 'finished_goods' && w.branch_id === b.branch_id);
+      const { error: err } = await supabase.rpc('release_production_batch', { p_batch: b.id, p: {
+        fg_warehouse_id: fg?.id ?? null, release_date: today, note: b.curing_until > today ? bulkNote.trim() : null,
+        outputs: (b.outputs || []).map(o => ({ output_id: o.id, pieces_passed: o.pieces_cast, rejects: [] })),
+      } });
+      if (err) failed.push({ name: `${b.batch_date} · ${productName(b)}`, error: dbErrorMessage(err) });
+      setBulk(x => ({ ...x, done: x.done + 1, failed: [...failed] }));
+    }
+    setBulk(x => ({ ...x, running: false }));
+    setPicked(new Set());
+    setBulkNote('');
+    await load();
+  }
+
   async function issue(b) {
     setRowError('');
     setBusyId(b.id);
@@ -155,14 +183,25 @@ export default function Production() {
             .sort((a, b) => byMaterialOrder(refs?.items[`m:${a.material_id}`] ?? {}, refs?.items[`m:${b.material_id}`] ?? {}))} refs={refs} loading={loading} />
         ) : (
           <div className="table-container">
+            {current === 'curing' && ready.length > 0 && (
+              <div className="bulk-bar">
+                <label className="bulk-all"><input type="checkbox" checked={ready.length > 0 && ready.every(b => picked.has(b.id))}
+                  onChange={e => setPicked(e.target.checked ? new Set(ready.map(b => b.id)) : new Set())} /> Select all ({ready.length})</label>
+                <span className="pl-help">{picked.size ? `${picked.size} selected` : 'Tick batches to release them together — every piece passes.'}</span>
+                <button type="button" className="btn btn-primary btn-sm" disabled={!picked.size || bulk?.running} onClick={() => setBulk({ confirm: true })}>
+                  Release selected ({picked.size})
+                </button>
+              </div>
+            )}
             <table>
               <thead><tr>
+                {current === 'curing' && <th aria-label="Select" style={{ width: 32 }} />}
                 <th>Date</th><th>Product</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }}>Pieces</th>
                 <th>Yield check</th><th>{current === 'done' ? 'Released' : 'Curing until'}</th><th>Status</th><th aria-label="Actions" />
               </tr></thead>
               <tbody>
-                {loading ? <SkeletonRow cols={8} /> : shown.length === 0 ? (
-                  <tr><td colSpan={8}><EmptyState icon={Factory}
+                {loading ? <SkeletonRow cols={current === 'curing' ? 9 : 8} /> : shown.length === 0 ? (
+                  <tr><td colSpan={current === 'curing' ? 9 : 8}><EmptyState icon={Factory}
                     title={current === 'curing' ? 'Nothing curing' : current === 'materials' ? 'No materials waiting' : 'No released batches yet'}
                     description={current === 'curing' ? 'Batches cast appear here until their quality release.' : ''} /></td></tr>
                 ) : shown.map(b => {
@@ -173,6 +212,9 @@ export default function Production() {
                   const passed = (b.outputs || []).reduce((s, o) => s + (o.pieces_passed ?? 0), 0);
                   return (
                     <tr key={b.id} className={b.status === 'void' ? 'text-muted' : ''}>
+                      {current === 'curing' && (
+                        <td>{readyToRelease(b) && <input type="checkbox" aria-label={`Select ${productName(b)} ${b.batch_date}`} checked={picked.has(b.id)} onChange={() => togglePick(b.id)} />}</td>
+                      )}
                       <td>{b.batch_date}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
                       <td><span style={{ fontWeight: 500 }}>{productName(b)}</span>
                         {leftoversOf(b).length > 0 && <div className="text-xs text-muted">+ {leftoversOf(b).map(o => `${o.pieces_cast} ${refs?.items[`p:${o.product_id}`]?.name ?? ''}`).join(', ')}</div>}</td>
@@ -218,6 +260,38 @@ export default function Production() {
       </div>
       )}
 
+      {bulk && (
+        <Modal title={bulk.confirm ? `Release ${picked.size} batch${picked.size === 1 ? '' : 'es'}?` : bulk.running ? 'Releasing…' : 'Released'}
+          onClose={() => { if (!bulk.running) setBulk(null); }}
+          footer={bulk.confirm ? <>
+            <button type="button" className="btn btn-outline" onClick={() => setBulk(null)}>Cancel</button>
+            <button type="button" className="btn btn-primary" disabled={earlyPicked.length > 0 && !bulkNote.trim()} onClick={releaseMany}>Release — all pieces pass</button>
+          </> : <button type="button" className="btn btn-primary" disabled={bulk.running} onClick={() => setBulk(null)}>Close</button>}>
+          {bulk.confirm ? (
+            <div className="flex flex-col gap-8">
+              <p className="text-sm">Every piece of these batches passes and moves into Finished Goods today. A batch with rejects: use its own <strong>Release…</strong> instead.</p>
+              {earlyPicked.length > 0 && (
+                <label className="pe-field"><span>{earlyPicked.length} of them {earlyPicked.length === 1 ? 'is' : 'are'} still curing — why release early? (required)</span>
+                  <input className="form-input" autoFocus value={bulkNote} placeholder="e.g. 7 days only" onChange={e => setBulkNote(e.target.value)} /></label>
+              )}
+              <table className="rd-table"><tbody>
+                {ready.filter(b => picked.has(b.id)).map(b => (
+                  <tr key={b.id}><td>{b.batch_date}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
+                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{b.curing_until > today ? `early · until ${b.curing_until}` : 'ready'}</td></tr>
+                ))}
+              </tbody></table>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-8">
+              <p className="text-sm">{bulk.done} of {bulk.total} done{bulk.running ? '…' : '.'} {!bulk.running && bulk.failed.length === 0 && 'All released.'}</p>
+              {bulk.failed.length > 0 && (
+                <div className="alert alert-error"><strong>Not released:</strong>
+                  <ul style={{ margin: '4px 0 0 18px' }}>{bulk.failed.map((f, i) => <li key={i}>{f.name} — {f.error}</li>)}</ul></div>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
       {releasing && refs && (
         <ReleaseModal batch={releasing} name={productName(releasing)} refs={refs} reasons={reasons} today={today}
           onClose={() => setReleasing(null)} onSaved={async () => { setReleasing(null); await load(); }} />
