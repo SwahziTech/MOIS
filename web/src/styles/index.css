@@ -2026,3 +2026,12 @@ tr.cp-over td { background: var(--bg-warning); }
 /* Production breakdown, plain (2026-10-24): no box around each material — label over plain figures, like the pieces */
 .pb-mat, .pb-strip.is-muted .pb-mat { border: 0; background: transparent; padding: 0 2px; border-radius: 0; }
 .pb-strip { gap: 4px 10px; }
+
+/* Production breakdown (2026-10-24): softer materials after cement in batch rows; batches clearly apart */
+.pb-strip.is-soft .pb-mat + .pb-mat .pb-mat-val strong { color: var(--text-secondary); font-weight: 500; }
+.pb-strip.is-soft .pb-mat + .pb-mat .pb-mat-label { opacity: .75; }
+.pb { gap: 12px; }
+.pb-batch { border: 1px solid var(--border-strong); border-left: 4px solid var(--accent); background: var(--bg-surface); }
+.pb-batch:nth-child(even) { background: var(--bg-soft); }
+.pb-head { border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 2px; }
+.pb-day { border-left-width: 4px; }

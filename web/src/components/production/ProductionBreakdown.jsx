@@ -7,14 +7,15 @@ const r2 = n => Math.round(n * 100) / 100;
  * top, the amount big, its unit small — side by side, in material order.
  * materials: [{ id, label, name, qty, unit, rank }]
  */
-export function MaterialStrip({ materials, muted = false }) {
+// soft: in batch rows, every material after the first (cement) is shown softer, so cement and pieces stand out
+export function MaterialStrip({ materials, muted = false, soft = false }) {
   if (!materials.length) return <span className="pl-help">—</span>;
   // two different materials with the same short name (three sands) show their full names
   const seen = {};
   for (const m of materials) (seen[m.label] ||= new Set()).add(m.id);
   const labelOf = m => (seen[m.label].size > 1 ? m.name : m.label);
   return (
-    <div className={`pb-strip${muted ? ' is-muted' : ''}`}>
+    <div className={`pb-strip${muted ? ' is-muted' : ''}${soft ? ' is-soft' : ''}`}>
       {materials.map(m => (
         <span key={`${m.id}|${m.unit}`} className="pb-mat" title={m.name}>
           <span className="pb-mat-label">{labelOf(m)}</span>
@@ -82,7 +83,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
                 <span className="pb-name">{o.residual ? '+ ' : ''}{o.name}</span>
                 <span className="pb-pcs"><strong>{qtyText(o.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
                   {o.passed != null && <span className="pl-help"> · {qtyText(o.passed)} passed</span>}</span>
-                <MaterialStrip materials={mats.map(m => ({ ...m, qty: m.qty * sh[i] }))} muted={several} />
+                <MaterialStrip materials={mats.map(m => ({ ...m, qty: m.qty * sh[i] }))} muted={several} soft />
                 <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(o.pieces) || 0) / (b.bags * sh[i])))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
               </div>
             ))}
@@ -90,7 +91,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
               <div className="pb-row pb-total">
                 <span className="pb-name">Batch {b.n} total</span>
                 <span className="pb-pcs"><strong>{qtyText(pcs(b))}</strong> <span className="pb-mat-unit">pcs</span></span>
-                <MaterialStrip materials={mats} />
+                <MaterialStrip materials={mats} soft />
                 <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2(pcs(b) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
               </div>
             )}
