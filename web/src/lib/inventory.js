@@ -204,3 +204,49 @@ export function breakdownMaterials(lines, refs) {
       unit: refs.unitById[l.unit_id]?.symbol ?? '', rank: it?.rank ?? 999 };
   }).filter(m => m.qty > 0);
 }
+
+/** A material's factor from a unit to its stock unit (1 for the stock unit; null when not listed) */
+export function stockFactor(refs, materialId, unitId) {
+  const it = refs.items[`m:${materialId}`];
+  return it?.units?.find(u => u.id === unitId)?.factor ?? (unitId === it?.stockUnitId ? 1 : null);
+}
+
+/**
+ * Material cost of batches not saved yet — an estimate (≈) the way 055 costs
+ * a saved batch: today's stock layers, oldest first, at the full amount paid
+ * (VAT included); beyond the costed stock, the latest cost; batches in order,
+ * each taking from what the one before left. Shared among the products by
+ * the cement each takes (pieces ÷ pieces per bag; by pieces when one has none).
+ * batches: [{ materials: [{ material_id, quantity, unit_id }], outputs: [{ pieces, perBag, sqm }] }]
+ * → [{ cost, complete, outputs: [{ perPiece, perSqm }] }]
+ */
+export async function estimateBatchCosts(refs, branchId, batches) {
+  const ids = [...new Set(batches.flatMap(b => (b.materials || []).map(m => m.material_id)))];
+  const values = Object.fromEntries(await Promise.all(ids.map(async id => [id, await materialStockValue(branchId, id)])));
+  const layers = Object.fromEntries(ids.map(id => [id, (values[id]?.layers || []).filter(l => l.cost != null && Number(l.quantity) > 0)
+    .map(l => ({ q: Number(l.quantity), c: Number(l.cost) }))]));
+  return batches.map(b => {
+    let cost = 0; let complete = true;
+    for (const m of b.materials || []) {
+      const f = stockFactor(refs, m.material_id, m.unit_id);
+      let need = (Number(m.quantity) || 0) * (f ?? 0);
+      if (need > 0 && f == null) { complete = false; continue; }
+      const ls = layers[m.material_id] || [];
+      while (need > 1e-12 && ls.length) {
+        const take = Math.min(ls[0].q, need);
+        cost += take * ls[0].c; need -= take; ls[0].q -= take;
+        if (ls[0].q <= 1e-12) ls.shift();
+      }
+      const latest = values[m.material_id]?.last_cost;
+      if (need > 1e-12) { if (latest != null) cost += need * Number(latest); else complete = false; }
+    }
+    const outs = b.outputs || [];
+    const byBag = outs.every(o => !(o.pieces > 0) || o.perBag > 0);
+    const w = o => (o.pieces > 0 ? (byBag ? o.pieces / o.perBag : o.pieces) : 0);
+    const total = outs.reduce((s, o) => s + w(o), 0);
+    return { cost, complete, outputs: outs.map(o => {
+      const share = total > 0 ? w(o) / total : 0;
+      return { perPiece: o.pieces > 0 ? cost * share / o.pieces : null, perSqm: o.sqm > 0 ? cost * share / o.sqm : null };
+    }) };
+  });
+}

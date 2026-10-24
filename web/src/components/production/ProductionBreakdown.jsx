@@ -48,18 +48,18 @@ function sumMaterials(lists) {
  * As the production form is filled: the batch's materials belong to its main
  * product; residuals are cast from the same mix and are not given a share.
  *
- * Material cost (055), once a batch is saved: the batch's cost in its head,
+ * Material cost (055): the batch's cost in its head (≈ an estimate before it is saved),
  * each product's cost per piece (and per m²) at the row's end — main and
  * residuals alike, shared by the cement each takes.
  *
- * batches: [{ n, bags, stage?, cost?, costComplete?, outputs: [{ name, pieces, passed?, residual, perBag, perPiece?, perSqm? }],
+ * batches: [{ n, bags, stage?, cost?, costComplete?, estimate?, outputs: [{ name, pieces, passed?, residual, perBag, perPiece?, perSqm? }],
  *             materials: [{ id, label, name, qty, unit, rank }] }]
  */
 export default function ProductionBreakdown({ batches, dayTotal = true, stageBadge, currency }) {
   const costed = batches.some(b => b.cost != null);
   const money = v => formatMoney(Number(v), currency);
-  const unitCost = o => (o.perPiece == null ? <span className="pl-help">—</span> : (
-    <span className="pb-cost-val"><strong>{money(o.perPiece)}</strong> <span className="pb-mat-unit">/pc</span>
+  const unitCost = (o, est) => (o.perPiece == null ? <span className="pl-help">—</span> : (
+    <span className="pb-cost-val"><strong>{est ? '≈ ' : ''}{money(o.perPiece)}</strong> <span className="pb-mat-unit">/pc</span>
       {o.perSqm != null && <span className="pb-cost-sqm">{money(o.perSqm)} <span className="pb-mat-unit">/m²</span></span>}</span>
   ));
   const live = batches.filter(b => b.stage !== 'Void');
@@ -75,8 +75,8 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
             <div className="pb-head">
               <strong>Batch {b.n}</strong>
               <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}</span>
-              {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : 'Materials at cost, oldest stock first, VAT included'}>
-                material cost <strong>{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
+              {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
+                material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
               {b.stage && stageBadge?.(b.stage)}
             </div>
             {main && (
@@ -86,7 +86,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
                   {main.passed != null && <span className="pl-help"> · {qtyText(main.passed)} passed</span>}</span>
                 <MaterialStrip materials={mats} soft />
                 <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(main.pieces) || 0) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
-                {costed && <span className="pb-cost">{unitCost(main)}</span>}
+                {costed && <span className="pb-cost">{unitCost(main, b.estimate)}</span>}
               </div>
             )}
             {residuals.map((o, i) => (
@@ -96,7 +96,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
                   {o.passed != null && <span className="pl-help"> · {qtyText(o.passed)} passed</span>}</span>
                 <span className="pl-help">residual · same mix as {main?.name}</span>
                 <span />
-                {costed && <span className="pb-cost">{unitCost(o)}</span>}
+                {costed && <span className="pb-cost">{unitCost(o, b.estimate)}</span>}
               </div>
             ))}
           </section>
@@ -109,7 +109,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
             <span className="pb-pcs"><strong>{qtyText(live.reduce((s, b) => s + pcs(b), 0))}</strong> <span className="pb-mat-unit">pcs</span></span>
             <MaterialStrip materials={sumMaterials(live.map(b => b.materials))} />
             <span className="pb-avg"><strong>{qtyText(r2(live.reduce((s, b) => s + (Number(b.bags) || 0), 0)))}</strong> <span className="pb-mat-unit">bags</span></span>
-            {costed && <span className="pb-cost"><strong>{money(live.reduce((s, b) => s + (Number(b.cost) || 0), 0))}</strong></span>}
+            {costed && <span className="pb-cost"><strong>{live.some(b => b.estimate) ? '≈ ' : ''}{money(live.reduce((s, b) => s + (Number(b.cost) || 0), 0))}</strong></span>}
           </div>
         </section>
       )}

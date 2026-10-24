@@ -4,7 +4,7 @@ import { Plus, Trash2, AlertTriangle, Pencil, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
-import { qtyText, warehouseLabel, byMaterialOrder, materialShortName, breakdownMaterials } from '../../lib/inventory';
+import { qtyText, warehouseLabel, byMaterialOrder, materialShortName, breakdownMaterials, estimateBatchCosts } from '../../lib/inventory';
 import NumberInput from '../NumberInput';
 import ProductPicker from './ProductPicker';
 import ProductionBreakdown from './ProductionBreakdown';
@@ -64,10 +64,14 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
   // Before saving: the same product, colour and bags already recorded (or sent for approval) on this date
   // at this branch? Shown in the confirm window — saving is still allowed, e.g. a genuine second batch.
+  const [estimates, setEstimates] = useState(null);   // ≈ material cost of the staged batches (055's way)
+  const costInput = b => ({ materials: b.payload?.materials || [], outputs: b.outputs.map(o => ({ pieces: o.pieces, perBag: o.wastani, sqm: o.sqm })) });
   async function openConfirm() {
     setError('');
     setAlready([]);
+    setEstimates(null);
     setConfirming(true);
+    estimateBatchCosts(refs, branchId, staged.map(costInput)).then(setEstimates).catch(() => setEstimates(null));
     const [bt, pc] = await Promise.all([
       supabase.from('production_batches').select('product_id, color_id, cement_bags, created_at').eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void'),
       supabase.from('pending_changes').select('payload, requested_at').eq('kind', 'production_day').eq('status', 'pending'),
@@ -309,7 +313,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     return {
       date, branchName, curingUntil, curingDays,
       batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand,
-        outputs: b.outputs.map(o => ({ ...o, perBag: o.wastani })),
+        ...(estimates?.[i] ? { cost: estimates[i].cost, costComplete: estimates[i].complete, estimate: true } : {}),
+        outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(estimates?.[i]?.outputs[j] ?? {}) })),
         materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) })),
       products: Object.values(products),
       materials: Object.entries(mats).sort((a, b) => a[1].rank - b[1].rank || a[1].name.localeCompare(b[1].name)).map(([id, m]) => ({
@@ -634,7 +639,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
               <span className="pl-help">Check Production › Curing or Approvals first. Save anyway only if these are genuinely extra batches.</span>
             </div>
           )}
-          <DaySummary day={daySummary()} />
+          <DaySummary day={daySummary()} currency={organization?.currency_code} />
         </Modal>
       )}
       {previewing && (
@@ -643,7 +648,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             <button type="button" className="btn btn-outline" onClick={() => setPreviewing(null)}>Close</button>
             {previewing.form && <button type="button" className="btn btn-primary" onClick={() => { const it = previewing; setPreviewing(null); editStaged(it); }}><Pencil size={14} /> Edit</button>}
           </>}>
-          <BatchPreview b={previewing} refs={refs} />
+          <BatchPreview b={previewing} refs={refs} branchId={branchId} currency={organization?.currency_code} costInput={costInput} />
         </Modal>
       )}
     </div>
@@ -670,7 +675,9 @@ function WastaniMissing({ productId, name, branchId }) {
 }
 
 /** One staged batch in full: products, cement and materials (recipe units), yield */
-function BatchPreview({ b, refs }) {
+function BatchPreview({ b, refs, branchId, currency, costInput }) {
+  const [est, setEst] = useState(null);
+  useEffect(() => { estimateBatchCosts(refs, branchId, [costInput(b)]).then(x => setEst(x[0])).catch(() => setEst(null)); }, [b]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="bp">
       <div className="bp-row"><span className="pl-label">Mold : {b.category}</span><strong className="bp-big">{b.label}</strong></div>
@@ -680,8 +687,9 @@ function BatchPreview({ b, refs }) {
         <div className="bp-box"><span className="pl-label">Cement implied</span><strong>{b.theoretical != null ? `${qtyText(Math.round(b.theoretical * 100) / 100)} bags` : '—'}</strong></div>
         <div className="bp-box"><span className="pl-label">Yield factor</span><strong className={b.outOfBand ? 'text-warning' : 'text-success'}>{b.factor != null ? `${Math.round(b.factor * 1000) / 10}%` : 'no check'}</strong></div>
       </div>
-      <ProductionBreakdown dayTotal={false} batches={[{ n: 1, bags: b.bags,
-        outputs: b.outputs.map(o => ({ ...o, perBag: o.wastani })),
+      <ProductionBreakdown dayTotal={false} currency={currency} batches={[{ n: 1, bags: b.bags,
+        ...(est ? { cost: est.cost, costComplete: est.complete, estimate: true } : {}),
+        outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(est?.outputs[j] ?? {}) })),
         materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) }]} />
       {b.notes && <p className="text-sm"><span className="pl-label">Note</span> {b.notes}</p>}
     </div>
