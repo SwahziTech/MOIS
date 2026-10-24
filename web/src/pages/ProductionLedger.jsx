@@ -106,9 +106,11 @@ export default function ProductionLedger() {
       date: d.date, branchName: branchNameOf(d.branchId), curingUntil: curing.at(-1) ?? null,
       batches: d.batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
+        cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),
-        outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed, perBag: o.yield_per_bag })),
+        outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed, perBag: o.yield_per_bag,
+          perPiece: o.cost_per_piece, perSqm: o.cost_per_sqm })),
         materials: breakdownMaterials(b.materials, refs),
       })),
       products: productsOf(d).map(p => ({ ...p, sqm: sqmOf(p.productId, p.pieces) })),
@@ -174,7 +176,7 @@ export default function ProductionLedger() {
       {openDay && refs && (
         <Modal title={`Production — ${openDay.date}`} onClose={() => setOpen(null)} size="xl"
           footer={<button type="button" className="btn btn-outline" onClick={() => setOpen(null)}>Close</button>}>
-          <DaySummary day={summaryOf(openDay)} />
+          <DaySummary day={summaryOf(openDay)} currency={organization?.currency_code} />
         </Modal>
       )}
     </PageShell>

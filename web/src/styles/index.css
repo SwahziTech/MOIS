@@ -2043,3 +2043,13 @@ tr.cp-over td { background: var(--bg-warning); }
 .bulk-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .bulk-all { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
 .bulk-bar .btn { margin-left: auto; }
+
+/* Production breakdown: material cost per piece / m² (055) — a fifth column once batches are costed */
+.pb.has-cost .pb-row { grid-template-columns: minmax(115px, 0.9fr) 78px minmax(0, 3.1fr) 78px 112px; }
+.pb-cost { text-align: right; line-height: 1.2; }
+.pb-cost-val { display: inline-flex; flex-direction: column; align-items: flex-end; }
+.pb-cost-val strong { font-size: var(--text-md); }
+.pb-cost-sqm { font-size: var(--text-xs); color: var(--text-secondary); }
+.pb-cost-head { margin-left: auto; color: var(--text-secondary); }
+.pb-cost-head strong { color: var(--text-primary); font-size: var(--text-sm); }
+@media (max-width: 760px) { .pb.has-cost .pb-row { grid-template-columns: minmax(0, 1fr) auto; } .pb-cost { grid-column: 1 / -1; text-align: left; } .pb-cost-val { align-items: flex-start; flex-direction: row; gap: 8px; } }

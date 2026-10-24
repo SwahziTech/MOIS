@@ -13,7 +13,7 @@ const STAGE_BADGE = { Curing: 'badge-accent', Ready: 'badge-warning', Released: 
  *        batches: [{ n, bags, factor?, outOfBand?, stage?, outputs: [{ name, pieces, residual, passed?, perBag }], materials: [{ id, label, name, qty, unit, rank }] }],
  *        materials?: [{ name, label?, left, leftUnit, short?, rank? }] }
  */
-export default function DaySummary({ day }) {
+export default function DaySummary({ day, currency }) {
   return (
     <div className="ds">
       <div className="ds-head">
@@ -22,7 +22,7 @@ export default function DaySummary({ day }) {
         {day.curingUntil && <span className="ds-cure">Curing until <strong>{day.curingUntil}</strong>{day.curingDays ? ` (${day.curingDays} days)` : ''}</span>}
       </div>
 
-      <ProductionBreakdown batches={day.batches} stageBadge={st => <span className={`badge ${STAGE_BADGE[st]}`}>{st}</span>} />
+      <ProductionBreakdown batches={day.batches} currency={currency} stageBadge={st => <span className={`badge ${STAGE_BADGE[st]}`}>{st}</span>} />
 
       {day.materials?.some(m => m.left !== undefined) && (
         <section className="pb-left">
