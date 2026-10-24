@@ -1987,3 +1987,21 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-strip { grid-template-columns: repeat(auto-fill, minmax(102px, 1fr)); }
 .pb-mat { padding: 4px 6px; }
 .pb-row { grid-template-columns: minmax(110px, 0.9fr) 84px minmax(0, 3.2fr) 84px; }
+
+/* Production breakdown, tight list (2026-10-24): scan many batches without scrolling */
+.pb { gap: 4px; }
+.pb-batch { padding: 4px 8px; gap: 2px; border-radius: var(--radius-sm); }
+.pb-head { gap: 8px; font-size: var(--text-xs); }
+.pb-head strong { font-size: var(--text-sm); }
+.pb-head .badge { padding: 0 6px; font-size: 10px; }
+.pb-row { grid-template-columns: minmax(110px, 0.9fr) 70px minmax(0, 3.4fr) 70px; gap: 8px; font-size: var(--text-sm); min-height: 26px; }
+.pb-total { padding-top: 2px; }
+.pb-name { font-size: var(--text-sm); }
+.pb-pcs strong, .pb-avg strong { font-size: var(--text-sm); }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 3px; }
+.pb-mat { padding: 1px 5px; border-radius: 4px; line-height: 1.15; }
+.pb-mat-label { font-size: 9px; letter-spacing: .04em; }
+.pb-mat-val strong { font-size: var(--text-sm); }
+.pb-mat-unit { font-size: 9px; }
+.pb-left { margin-top: 6px; gap: 2px; }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
