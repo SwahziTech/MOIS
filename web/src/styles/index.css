@@ -2005,3 +2005,20 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-mat-unit { font-size: 9px; }
 .pb-left { margin-top: 6px; gap: 2px; }
 .pb-strip { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+
+/* Production breakdown, medium (2026-10-24): between the first cards and the tight list */
+.pb { gap: 7px; }
+.pb-batch { padding: 6px 10px; gap: 4px; border-radius: var(--radius-md); }
+.pb-head { font-size: var(--text-sm); }
+.pb-head strong { font-size: var(--text-md); }
+.pb-row { grid-template-columns: minmax(115px, 0.9fr) 78px minmax(0, 3.3fr) 78px; gap: 9px; font-size: var(--text-md); min-height: 38px; }
+.pb-total { padding-top: 4px; }
+.pb-name { font-size: var(--text-md); }
+.pb-pcs strong, .pb-avg strong { font-size: var(--text-md); }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 5px; }
+.pb-mat { padding: 3px 7px; border-radius: var(--radius-sm); line-height: 1.2; }
+.pb-mat-label { font-size: 10px; letter-spacing: .05em; }
+.pb-mat-val strong { font-size: var(--text-md); }
+.pb-mat-unit { font-size: 10px; }
+.pb-left { margin-top: 8px; gap: 3px; }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
