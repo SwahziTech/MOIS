@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Plus, Search, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { loadInventoryRefs, qtyText } from '../lib/inventory';
+import { loadInventoryRefs, qtyText, materialStockValue } from '../lib/inventory';
 import { formatMoney } from '../lib/format';
 import MovementModal from '../components/inventory/MovementModal';
 import MaterialInfo from '../components/master/MaterialInfo';
@@ -59,7 +59,8 @@ export default function Materials() {
   const [editing, setEditing] = useState(null);       // { kind: 'material'|'category'|'unit', row }
   // On hand, value and baseline for the picked branch (2026-10-23 layout)
   const [onHand,   setOnHand]   = useState({});   // material id → quantity in the branch's raw stores
-  const [avgCost,  setAvgCost]  = useState({});   // material id → average cost per stock unit at the branch
+  const [avgCost,  setAvgCost]  = useState({});   // material id → cost per stock unit of the stock left (052)
+  const [stockValue, setStockValue] = useState({}); // material id → value of the stock left, layer by layer (052)
   const [lastFrom, setLastFrom] = useState({});   // material id → supplier last bought from
   const [opened,   setOpened]   = useState({});   // material id → has an opening balance at the branch
   const [refs,     setRefs]     = useState(null); // for receiving from a card
@@ -136,8 +137,10 @@ export default function Materials() {
     // average cost needs one branch (moving average per branch, 035)
     if (!branchId) { setAvgCost({}); return; }
     const ids = Object.keys(q);
-    const costs = await Promise.all(ids.map(id => supabase.rpc('material_average_cost', { p_branch_id: branchId, p_material_id: id })));
-    setAvgCost(Object.fromEntries(ids.map((id, i) => [id, costs[i].data?.[0]?.average_cost ?? costs[i].data?.[0]?.last_purchase_cost ?? null])));
+    // first in, first out (052): opening stock at its opening cost, each purchase at its own cost
+    const costs = await Promise.all(ids.map(id => materialStockValue(branchId, id)));
+    setAvgCost(Object.fromEntries(ids.map((id, i) => [id, costs[i]?.unit_cost ?? null])));
+    setStockValue(Object.fromEntries(ids.map((id, i) => [id, costs[i]?.value ?? null])));
   }
   useEffect(() => { loadStock(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function intake(type, key) {
@@ -176,7 +179,7 @@ export default function Materials() {
   const saved = async () => { setEditing(null); await load(); };
 
   const money = v => formatMoney(v, organization?.currency_code);
-  const valueOf = m => (onHand[m.id] != null && avgCost[m.id] != null ? onHand[m.id] * avgCost[m.id] : null);
+  const valueOf = m => stockValue[m.id] ?? (onHand[m.id] != null && avgCost[m.id] != null ? onHand[m.id] * avgCost[m.id] : null);
   const total = inViewMaterials.filter(m => m.status === 'active').reduce((n, m) => n + (valueOf(m) ?? 0), 0);
   const uncosted = inViewMaterials.filter(m => m.status === 'active' && (onHand[m.id] ?? 0) > 0 && avgCost[m.id] == null).length;
   const out = inViewMaterials.filter(m => m.status === 'active' && !((onHand[m.id] ?? 0) > 0));
@@ -208,7 +211,7 @@ export default function Materials() {
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Materials</span><strong>{inViewMaterials.filter(m => m.status === 'active').length} items</strong></div>
             <div className="mm-stat"><span className="pl-label">Stock value</span><strong className="mm-money">{branchId ? money(total) : '—'}</strong>
-              <span className="pl-help">{branchId ? (uncosted ? `${uncosted} without a purchase price` : 'at average purchase cost') : 'Pick a branch'}</span></div>
+              <span className="pl-help">{branchId ? (uncosted ? `${uncosted} without a cost` : 'oldest stock used first') : 'Pick a branch'}</span></div>
             <div className="mm-stat"><span className="pl-label">Out of stock</span><strong className={out.length ? 'text-error' : ''}>{out.length}</strong></div>
             <div className="mm-stat"><span className="pl-label">Opening stock</span><strong className={noOpening.length ? 'text-warning' : ''}>{noOpening.length ? `${noOpening.length} not set` : 'All set'}</strong></div>
           </div>

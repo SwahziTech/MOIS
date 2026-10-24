@@ -175,3 +175,17 @@ export function mainUnitOf(item) {
   const u = (item.units || []).find(x => x.id === item.mainUnitId);
   return u && u.factor > 0 ? { id: u.id, factor: u.factor } : null;
 }
+
+/**
+ * A material's stock value at a branch: first in, first out over opening-cost
+ * and purchase-cost layers (052) → { on_hand, value, unit_cost, uncosted_quantity,
+ * last_cost, layers }. Before 052 is live: 035's purchase average, same shape.
+ */
+export async function materialStockValue(branchId, materialId) {
+  const { data, error } = await supabase.rpc('material_stock_value', { p_branch_id: branchId, p_material_id: materialId });
+  if (!error) return data?.[0] ?? null;
+  const { data: old } = await supabase.rpc('material_average_cost', { p_branch_id: branchId, p_material_id: materialId });
+  const o = old?.[0];
+  return o ? { on_hand: null, value: null, unit_cost: o.average_cost ?? o.last_purchase_cost ?? null, uncosted_quantity: o.uncosted_quantity,
+    costed_quantity: o.costed_quantity, last_cost: o.last_purchase_cost, last_date: o.last_purchase_date, layers: [] } : null;
+}

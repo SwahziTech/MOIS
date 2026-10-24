@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
-import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder } from '../lib/inventory';
+import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
@@ -23,7 +23,7 @@ const METHODS = ['Cash', 'Mobile money', 'Bank transfer', 'Cheque'];
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 // From the third purchase of a material at a branch, a new entry starts
 // from the latest one's details (decided 2026-10-18); the user changes what differs
-const AUTOFILL_AFTER = 2;
+const AUTOFILL_AFTER = 1;   // a material's last price, unit and supplier fill the next purchase (SwahziTech, 2026-10-24)
 // VAT on a purchase (decided 2026-10-18): ticked = the prices include VAT at
 // the branch's rate (041, set by the branch manager), worked out as
 // goods × r/(100 + r) — 18/118 at 18%. 18% until a branch has its own.
@@ -137,14 +137,24 @@ export default function Purchases() {
     if (tab !== 'costs' || !branchId || !materials.length) return;
     let live = true;
     Promise.all(materials.filter(m => m.status === 'active' && (!m.branch_id || m.branch_id === branchId)).map(async m => {
-      const { data } = await supabase.rpc('material_average_cost', { p_branch_id: branchId, p_material_id: m.id });
-      return { material: m, ...(data?.[0] || {}) };
+      const v = await materialStockValue(branchId, m.id);
+      return { material: m, average_cost: v?.unit_cost ?? null, last_purchase_cost: v?.last_cost ?? null, last_purchase_date: v?.last_date ?? null,
+        costed_quantity: v?.costed_quantity ?? (v?.on_hand != null ? Number(v.on_hand) - Number(v.uncosted_quantity ?? 0) : null), uncosted_quantity: v?.uncosted_quantity ?? 0, value: v?.value ?? null };
     })).then(rows => { if (live) setCosts(rows); });
     return () => { live = false; };
   }, [tab, branchId, materials, purchases]);
 
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const waitingHere = awaiting.filter(a => inBranch(a.branch_id));
+  // Opening stock costs: a material never bought yet fills its price from there
+  const [openingCosts, setOpeningCosts] = useState([]);
+  useEffect(() => {
+    supabase.from('inventory_transactions')
+      .select('material_id, entered_unit_id, entered_quantity, unit_cost, transaction_date, warehouse:warehouses(branch_id)')
+      .eq('transaction_type', 'opening_balance').not('material_id', 'is', null).not('unit_cost', 'is', null)
+      .then(({ data }) => setOpeningCosts(data || []));
+  }, []);
+
   // Each material's recorded purchases per branch, newest first (purchases load newest first)
   const history = useMemo(() => {
     const h = {};
@@ -157,8 +167,13 @@ export default function Purchases() {
           qty: Number(t.entered_quantity), price: Number(l.unit_price), method: p.payment_method });
       }
     }
+    for (const o of openingCosts) {
+      const k = `${o.warehouse?.branch_id}|${o.material_id}`;
+      if (h[k]?.some(x => !x.opening)) continue;   // a real purchase always wins
+      (h[k] ||= []).push({ date: o.transaction_date, supplierId: null, unitId: o.entered_unit_id, qty: Number(o.entered_quantity), price: Number(o.unit_cost), method: null, opening: true });
+    }
     return h;
-  }, [purchases, txByMove]);
+  }, [purchases, txByMove, openingCosts]);
 
   // Technical admin (system.manage): may delete a purchase entered wrongly (040)
   const isTechAdmin = canManage('system.manage');
@@ -321,18 +336,18 @@ export default function Purchases() {
               <EmptyState icon={ShoppingCart} title="Pick a branch" description="Material costs are per branch — pick one in the sidebar." />
             ) : (
               <table>
-                <thead><tr><th>Material</th><th style={{ textAlign: 'right' }}>Average cost</th><th style={{ textAlign: 'right' }}>Last purchase</th><th>Costed stock</th></tr></thead>
+                <thead><tr><th>Material</th><th style={{ textAlign: 'right' }} title="Cost of the stock left — oldest stock is used first">Cost of stock left</th><th style={{ textAlign: 'right' }}>Latest cost</th><th>Costed stock</th></tr></thead>
                 <tbody>
                   {costs.length === 0 ? <SkeletonRow cols={4} /> : costs.map(c => {
                     const unit = refs?.unitById[refs?.items[`m:${c.material.id}`]?.stockUnitId]?.symbol ?? '';
                     return (
                       <tr key={c.material.id}>
                         <td style={{ fontWeight: 500 }}>{c.material.name}</td>
-                        <td style={{ textAlign: 'right' }}>{c.average_cost != null ? <>{money(round2(c.average_cost))} <span className="text-muted">/ {unit}</span></> : <span className="text-muted">no purchases yet</span>}</td>
+                        <td style={{ textAlign: 'right' }}>{c.average_cost != null ? <>{money(round2(c.average_cost))} <span className="text-muted">/ {unit}</span></> : <span className="text-muted">no cost yet</span>}</td>
                         <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{c.last_purchase_date}</span></> : <span className="text-muted">—</span>}</td>
                         <td className="text-sm text-muted">
                           {Number(c.costed_quantity) > 0 ? `${qtyText(c.costed_quantity)} ${unit}` : '—'}
-                          {Number(c.uncosted_quantity) > 0 && <div className="text-xs">{qtyText(c.uncosted_quantity)} {unit} with no cost (before the first purchase)</div>}
+                          {Number(c.uncosted_quantity) > 0 && <div className="text-xs">{qtyText(c.uncosted_quantity)} {unit} with no cost</div>}
                         </td>
                       </tr>
                     );
@@ -539,6 +554,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
     if (past.length < AUTOFILL_AFTER) return null;
     const [a, z] = past;
     const one = p => `${p.date} · ${supplierName(p.supplierId)} · ${qtyText(p.qty)} ${refs.unitById[p.unitId]?.symbol ?? ''} at ${money(p.price)}`;
+    if (a.opening) return <div className="text-xs text-muted purchase-hint">Price filled from the opening stock cost: {money(a.price)} per {refs.unitById[a.unitId]?.symbol ?? 'unit'} ({a.date}). Change it if this purchase is different.</div>;
     return (
       <div className="text-xs text-muted purchase-hint">
         Filled from the last {z ? '2 purchases' : 'purchase'}: {[a, z].filter(Boolean).map(one).join('; ')}.{z && a.price !== z.price && a.unitId === z.unitId ? ` The price changed from ${money(z.price)} to ${money(a.price)}.` : ''} Change anything that is different this time.
