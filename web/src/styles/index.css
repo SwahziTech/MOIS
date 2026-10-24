@@ -2035,3 +2035,6 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-batch:nth-child(even) { background: var(--bg-soft); }
 .pb-head { border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 2px; }
 .pb-day { border-left-width: 4px; }
+
+.pb-res { min-height: 26px; }
+.pb-res .pb-name { font-weight: 500; color: var(--text-secondary); }

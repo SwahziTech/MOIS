@@ -38,26 +38,14 @@ function sumMaterials(lists) {
 }
 
 /**
- * Each product's share of a mixed batch: by the cement its pieces take
- * (pieces ÷ its pieces per bag, as the weighted yield does), or by pieces
- * when a product has no pieces-per-bag figure.
- */
-function shares(outputs) {
-  const known = outputs.every(o => Number(o.perBag) > 0);
-  const w = outputs.map(o => (known ? (Number(o.pieces) || 0) / Number(o.perBag) : Number(o.pieces) || 0));
-  const total = w.reduce((s, x) => s + x, 0);
-  return w.map(x => (total > 0 ? x / total : 1 / outputs.length));
-}
-
-/**
  * Production in Stumarcot's format (SwahziTech, 2026-10-24):
  *   Batch 1 · bags
- *     product + colour | pieces | materials used | pieces per bag
- *     product + colour | pieces | materials used | pieces per bag
- *     Batch 1 total    | pieces | materials used | pieces per bag
+ *     main product + colour | pieces | the batch's materials | pieces per bag
+ *     + residual + colour   | pieces | same mix
  *   …
- *   Day total          | pieces | materials used | bags
- * A batch's materials are shared among its products by the cement each takes.
+ *   Day total             | pieces | materials used | bags
+ * As the production form is filled: the batch's materials belong to its main
+ * product; residuals are cast from the same mix and are not given a share.
  *
  * batches: [{ n, bags, stage?, outputs: [{ name, pieces, passed?, residual, perBag }],
  *             materials: [{ id, label, name, qty, unit, rank }] }]
@@ -68,33 +56,34 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
   return (
     <div className="pb">
       {batches.map(b => {
-        const sh = shares(b.outputs);
         const mats = [...b.materials].sort(byRank);
-        const several = b.outputs.length > 1;
+        const main = b.outputs.find(o => !o.residual) ?? b.outputs[0];
+        const residuals = b.outputs.filter(o => o !== main);
         return (
           <section key={b.n} className={`pb-batch${b.stage === 'Void' ? ' is-void' : ''}`}>
             <div className="pb-head">
               <strong>Batch {b.n}</strong>
-              <span className="pl-help">{qtyText(r2(b.bags))} bags</span>
+              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}</span>
               {b.stage && stageBadge?.(b.stage)}
             </div>
-            {b.outputs.map((o, i) => (
-              <div key={i} className="pb-row">
-                <span className="pb-name">{o.residual ? '+ ' : ''}{o.name}</span>
-                <span className="pb-pcs"><strong>{qtyText(o.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
-                  {o.passed != null && <span className="pl-help"> · {qtyText(o.passed)} passed</span>}</span>
-                <MaterialStrip materials={mats.map(m => ({ ...m, qty: m.qty * sh[i] }))} muted={several} soft />
-                <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(o.pieces) || 0) / (b.bags * sh[i])))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
-              </div>
-            ))}
-            {several && (
-              <div className="pb-row pb-total">
-                <span className="pb-name">Batch {b.n} total</span>
-                <span className="pb-pcs"><strong>{qtyText(pcs(b))}</strong> <span className="pb-mat-unit">pcs</span></span>
+            {main && (
+              <div className="pb-row">
+                <span className="pb-name">{main.name}</span>
+                <span className="pb-pcs"><strong>{qtyText(main.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
+                  {main.passed != null && <span className="pl-help"> · {qtyText(main.passed)} passed</span>}</span>
                 <MaterialStrip materials={mats} soft />
-                <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2(pcs(b) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
+                <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(main.pieces) || 0) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
               </div>
             )}
+            {residuals.map((o, i) => (
+              <div key={i} className="pb-row pb-res">
+                <span className="pb-name">+ {o.name}</span>
+                <span className="pb-pcs"><strong>{qtyText(o.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
+                  {o.passed != null && <span className="pl-help"> · {qtyText(o.passed)} passed</span>}</span>
+                <span className="pl-help">residual · same mix as {main?.name}</span>
+                <span />
+              </div>
+            ))}
           </section>
         );
       })}
