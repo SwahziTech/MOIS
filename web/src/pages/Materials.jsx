@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layers, Plus, Search, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { loadInventoryRefs, qtyText } from '../lib/inventory';
@@ -29,6 +30,7 @@ const numOrNull = v => (String(v ?? '').trim() === '' ? null : Number(v));
  */
 export default function Materials() {
   const { organization, canManage, canAt, can } = useAuth();
+  const navigate = useNavigate();
   const { branchId, inBranch } = useBranch();
   const canWriteMaterials = canManage('materials.manage');
   // Shared materials: org-wide admins. A branch's own: that branch's managers.
@@ -282,8 +284,8 @@ export default function Materials() {
                       </>}
                     </div>
                     <div className="sk-actions">
-                      {m.status === 'active' && canAt('inventory.receive', branchId || null, null) && (
-                        <button type="button" className="btn btn-outline btn-sm" onClick={() => intake('receipt', `m:${m.id}`)}><Plus size={13} /> Intake</button>
+                      {m.status === 'active' && canAt('procurement.receive', branchId || null, null) && (
+                        <button type="button" className="btn btn-outline btn-sm" title="Record a purchase of it" onClick={() => navigate(`/purchases?buy=${m.id}`)}><Plus size={13} /> Intake</button>
                       )}
                       {canEditMaterial(m) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: 'material', row: m })}>Edit</button>}
                     </div>

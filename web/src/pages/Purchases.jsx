@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -55,7 +55,15 @@ export default function Purchases() {
   const [costs,     setCosts]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [editing, setEditing] = useState(null);     // { mode: 'complete'|'new'|'edit', receipt?, purchase? }
+  const [editing, setEditing] = useState(null);     // { mode: 'complete'|'new'|'edit', receipt?, purchase?, materialId? }
+  // Materials' "Intake" opens a new purchase for that material (?buy=<material id>)
+  const [params, setParams] = useSearchParams();
+  const buyId = params.get('buy');
+  useEffect(() => {
+    if (!buyId || !refs) return;
+    setEditing({ mode: 'new', materialId: buyId });
+    setParams({}, { replace: true });
+  }, [buyId, refs]); // eslint-disable-line react-hooks/exhaustive-deps
   const [deleting, setDeleting] = useState(null);   // a void purchase the technical admin is deleting
   const [vatRates,  setVatRates]  = useState({});     // branch id → VAT rate (041)
   const [expCats,   setExpCats]   = useState([]);
@@ -363,7 +371,7 @@ export default function Purchases() {
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, vatRateOf = () => DEFAULT_VAT, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, vatRateOf = () => DEFAULT_VAT, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -509,11 +517,13 @@ function PurchaseModal({ mode, receipt, purchase, refs, materials, txByMove, org
         next.unitId = past[0].unitId;
         next.price = String(past[0].price);
       } else {
-        next.unitId = item?.stockUnitId ?? '';
+        next.unitId = item?.mainUnitId ?? item?.stockUnitId ?? '';   // its main unit (051), e.g. Pipa, Bag/s
       }
     }
     return next;
   }));
+  // opened from a material's Intake: that material is on the first line
+  useEffect(() => { if (isNew && materialId) pickMaterial(0, materialId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   function pickMaterial(i, materialId) {
     setNewLine(i, { materialId });
     const past = pastOf(wh?.branch_id ?? branchId, materialId);
