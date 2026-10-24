@@ -1959,3 +1959,31 @@ tr.cp-over td { background: var(--bg-warning); }
 @media (max-width: 640px) { .ih-line { grid-template-columns: 16px 46px minmax(0, 1fr) auto auto; } .ih-who, .ih-price { display: none; } }
 .pu-item { cursor: pointer; user-select: none; }
 .pu-item:hover { color: var(--accent-text); text-decoration: underline dotted; }
+
+/* Production breakdown, Stumarcot's format (2026-10-24): product | pieces | material tiles | pieces per bag */
+.pb { display: flex; flex-direction: column; gap: 10px; }
+.pb-batch { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.pb-batch.is-void { opacity: .5; }
+.pb-day { border-color: var(--accent); background: var(--accent-soft); }
+.pb-head { display: flex; align-items: center; gap: 10px; }
+.pb-row { display: grid; grid-template-columns: minmax(120px, 1.1fr) 90px minmax(0, 3fr) 90px; gap: 10px; align-items: center; }
+.pb-total { border-top: 1px dashed var(--border-strong); padding-top: 6px; }
+.pb-day .pb-total { border-top: 0; padding-top: 0; }
+.pb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-total .pb-name { color: var(--accent-text); }
+.pb-pcs, .pb-avg { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pb-avg { text-align: right; }
+.pb-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.pb-mat { display: flex; flex-direction: column; gap: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-surface); min-width: 0; }
+.pb-strip.is-muted .pb-mat { background: transparent; }
+.pb-mat-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pb-mat-val strong { font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.pb-mat-unit { font-size: 10px; color: var(--text-muted); }
+.pb-left { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+@media (max-width: 760px) { .pb-row { grid-template-columns: minmax(0, 1fr) auto; } .pb-strip { grid-column: 1 / -1; grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); } .pb-avg { grid-column: 2; grid-row: 1; } .pb-pcs { grid-column: 1; } }
+.pb-strip { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+.pb-mat-val { white-space: nowrap; }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.pb-strip { grid-template-columns: repeat(auto-fill, minmax(102px, 1fr)); }
+.pb-mat { padding: 4px 6px; }
+.pb-row { grid-template-columns: minmax(110px, 0.9fr) 84px minmax(0, 3.2fr) 84px; }

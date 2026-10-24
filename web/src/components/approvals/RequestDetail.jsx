@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { qtyText, warehouseLabel } from '../../lib/inventory';
+import { qtyText, warehouseLabel, breakdownMaterials } from '../../lib/inventory';
+import ProductionBreakdown from '../production/ProductionBreakdown';
 import Modal from '../Modal';
 
 /**
@@ -50,41 +51,31 @@ const colour = (refs, id) => (id ? refs.colorById[id]?.name ?? '—' : '');
 const unit = (refs, id) => refs.unitById[id]?.symbol ?? '';
 const store = (refs, id) => { const w = refs.warehouses.find(x => x.id === id); return w ? warehouseLabel(w) : '—'; };
 
+// A production day in Stumarcot's format: each batch's products with the materials they used, then the day's total
 function ProductionDay({ p, refs }) {
   const batches = p.batches || [];
-  return batches.map((b, i) => {
-    const main = (b.outputs || []).find(o => o.primary);
-    return (
-      <section key={i} className="rd-sec">
-        <h4 className="rd-title">
-          Batch {i + 1} · {b.batch_date} · {main ? itemName(refs, main) : '—'}{b.color_id ? ` ${colour(refs, b.color_id)}` : ''} · <strong>{qtyText(b.cement_bags)} bags</strong>
-          {b.allow_other_products && <span className="pl-tag">other products allowed</span>}
-        </h4>
-        <div className="rd-cols">
-          <table className="rd-table">
-            <thead><tr><th>Cast</th><th>Colour</th><th className="num">Pieces</th></tr></thead>
-            <tbody>
-              {(b.outputs || []).map((o, k) => (
-                <tr key={k}><td>{o.primary ? '' : '+ '}{itemName(refs, o)}{!o.primary && <span className="pl-help"> (residual)</span>}</td>
-                  <td>{colour(refs, o.primary ? b.color_id : (o.color_id ?? (refs.items[`p:${o.product_id}`]?.colorIds?.length ? b.color_id : null))) || '—'}</td>
-                  <td className="num">{qtyText(o.pieces)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <table className="rd-table">
-            <thead><tr><th>Material used</th><th className="num">Quantity</th></tr></thead>
-            <tbody>
-              {(b.materials || []).map((m, k) => (
-                <tr key={k}><td>{itemName(refs, m)}{m.source === 'counted' && <span className="pl-help"> (counted)</span>}</td>
-                  <td className="num">{qtyText(m.quantity)} {unit(refs, m.unit_id)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="pl-help">From {store(refs, b.raw_warehouse_id)} → cures in {store(refs, b.curing_warehouse_id)}{b.notes ? ` · ${b.notes}` : ''}</p>
-      </section>
-    );
-  });
+  const [perBag, setPerBag] = useState({});   // product id → pieces per bag
+  useEffect(() => {
+    const ids = [...new Set(batches.flatMap(b => (b.outputs || []).map(o => o.product_id)))];
+    if (!ids.length) return;
+    supabase.from('product_specs').select('product_id, average_yield_per_bag').in('product_id', ids)
+      .then(({ data }) => setPerBag(Object.fromEntries((data || []).map(x => [x.product_id, x.average_yield_per_bag]))));
+  }, [p]); // eslint-disable-line react-hooks/exhaustive-deps
+  const colourOf = (b, o) => (o.primary ? b.color_id : o.color_id ?? (refs.items[`p:${o.product_id}`]?.colorIds?.length ? b.color_id : null));
+  const first = batches[0];
+  return (
+    <section className="rd-sec">
+      {first && <p className="pl-help">{first.batch_date} · from {store(refs, first.raw_warehouse_id)} → cures in {store(refs, first.curing_warehouse_id)}</p>}
+      <ProductionBreakdown batches={batches.map((b, i) => ({
+        n: i + 1, bags: Number(b.cement_bags),
+        outputs: [...(b.outputs || [])].sort((x, y) => (y.primary ? 1 : 0) - (x.primary ? 1 : 0)).map(o => ({
+          name: `${itemName(refs, o)}${colourOf(b, o) ? ` ${colour(refs, colourOf(b, o))}` : ''}`,
+          pieces: o.pieces, residual: !o.primary, perBag: perBag[o.product_id] })),
+        materials: breakdownMaterials(b.materials, refs),
+      }))} />
+      {batches.some(b => b.notes) && <p className="pl-help">Notes: {batches.filter(b => b.notes).map(b => b.notes).join(' · ')}</p>}
+    </section>
+  );
 }
 
 function Purchase({ p, refs }) {

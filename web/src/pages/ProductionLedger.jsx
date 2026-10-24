@@ -3,7 +3,7 @@ import { BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { loadInventoryRefs, qtyText, orgToday, byMaterialOrder } from '../lib/inventory';
+import { loadInventoryRefs, qtyText, orgToday, byMaterialOrder, breakdownMaterials } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -108,7 +108,8 @@ export default function ProductionLedger() {
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),
-        outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed })),
+        outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed, perBag: o.yield_per_bag })),
+        materials: breakdownMaterials(b.materials, refs),
       })),
       products: productsOf(d).map(p => ({ ...p, sqm: sqmOf(p.productId, p.pieces) })),
       materials: Object.values(mats).sort((a, b) => byMaterialOrder(a.item, b.item)).map(m => ({ name: m.item.name, used: m.used, unit: m.unit })),

@@ -189,3 +189,18 @@ export async function materialStockValue(branchId, materialId) {
   return o ? { on_hand: null, value: null, unit_cost: o.average_cost ?? o.last_purchase_cost ?? null, uncosted_quantity: o.uncosted_quantity,
     costed_quantity: o.costed_quantity, last_cost: o.last_purchase_cost, last_date: o.last_purchase_date, layers: [] } : null;
 }
+
+/** A material's short name for tiles and strips: its code ("CEM"), else the first word of its name */
+export function materialShortName(item) {
+  if (item?.code) return item.code.charAt(0) + item.code.slice(1).toLowerCase();
+  return (item?.name ?? '').split(/[\s/(]+/)[0];
+}
+
+/** A batch's materials for ProductionBreakdown: [{ material_id, quantity, unit_id }] → strip entries */
+export function breakdownMaterials(lines, refs) {
+  return (lines || []).map(l => {
+    const it = refs.items[`m:${l.material_id}`];
+    return { id: l.material_id, label: materialShortName(it), name: it?.name ?? '—', qty: Number(l.quantity) || 0,
+      unit: refs.unitById[l.unit_id]?.symbol ?? '', rank: it?.rank ?? 999 };
+  }).filter(m => m.qty > 0);
+}

@@ -4,9 +4,10 @@ import { Plus, Trash2, AlertTriangle, Pencil, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
-import { qtyText, warehouseLabel, byMaterialOrder } from '../../lib/inventory';
+import { qtyText, warehouseLabel, byMaterialOrder, materialShortName, breakdownMaterials } from '../../lib/inventory';
 import NumberInput from '../NumberInput';
 import ProductPicker from './ProductPicker';
+import ProductionBreakdown from './ProductionBreakdown';
 import { categoryTools, productOrder } from '../../lib/categories';
 import Modal from '../Modal';
 import DaySummary from './DaySummary';
@@ -307,10 +308,12 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const curingUntil = new Date(new Date(`${date}T00:00:00Z`).getTime() + curingDays * 864e5).toISOString().slice(0, 10);
     return {
       date, branchName, curingUntil, curingDays,
-      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, outputs: b.outputs })),
+      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand,
+        outputs: b.outputs.map(o => ({ ...o, perBag: o.wastani })),
+        materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) })),
       products: Object.values(products),
       materials: Object.entries(mats).sort((a, b) => a[1].rank - b[1].rank || a[1].name.localeCompare(b[1].name)).map(([id, m]) => ({
-        ...m, left: (stock[id] ?? 0) - (usedToday[id] ?? 0), leftUnit: stockSym(id), short: (stock[id] ?? 0) - (usedToday[id] ?? 0) < -1e-9,
+        ...m, label: shortName(id), left: (stock[id] ?? 0) - (usedToday[id] ?? 0), leftUnit: stockSym(id), short: (stock[id] ?? 0) - (usedToday[id] ?? 0) < -1e-9,
       })),
     };
   }
@@ -345,11 +348,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   }
 
   const symOf = id => refs.unitById[id]?.symbol ?? '';
-  const shortName = materialId => {
-    const m = refs.items[`m:${materialId}`];
-    if (m?.code) return m.code.charAt(0) + m.code.slice(1).toLowerCase();
-    return (m?.name ?? '').split(/[\s/(]+/)[0];
-  };
+  const shortName = materialId => materialShortName(refs.items[`m:${materialId}`]);
   const stockSym = materialId => symOf(refs.items[`m:${materialId}`]?.stockUnitId);
 
   // A unit that no longer fits beside its number drops below it, at the bottom right
@@ -644,7 +643,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             <button type="button" className="btn btn-outline" onClick={() => setPreviewing(null)}>Close</button>
             {previewing.form && <button type="button" className="btn btn-primary" onClick={() => { const it = previewing; setPreviewing(null); editStaged(it); }}><Pencil size={14} /> Edit</button>}
           </>}>
-          <BatchPreview b={previewing} />
+          <BatchPreview b={previewing} refs={refs} />
         </Modal>
       )}
     </div>
@@ -671,7 +670,7 @@ function WastaniMissing({ productId, name, branchId }) {
 }
 
 /** One staged batch in full: products, cement and materials (recipe units), yield */
-function BatchPreview({ b }) {
+function BatchPreview({ b, refs }) {
   return (
     <div className="bp">
       <div className="bp-row"><span className="pl-label">Mold : {b.category}</span><strong className="bp-big">{b.label}</strong></div>
@@ -681,27 +680,9 @@ function BatchPreview({ b }) {
         <div className="bp-box"><span className="pl-label">Cement implied</span><strong>{b.theoretical != null ? `${qtyText(Math.round(b.theoretical * 100) / 100)} bags` : '—'}</strong></div>
         <div className="bp-box"><span className="pl-label">Yield factor</span><strong className={b.outOfBand ? 'text-warning' : 'text-success'}>{b.factor != null ? `${Math.round(b.factor * 1000) / 10}%` : 'no check'}</strong></div>
       </div>
-      <h4 className="ds-title">Products</h4>
-      <table className="ds-table"><tbody>
-        {b.outputs.map((o, i) => (
-          <tr key={i}>
-            <td>{o.residual ? '+ ' : ''}{o.name}{o.residual && <span className="ds-muted"> (residual)</span>}</td>
-            <td className="ds-num"><strong>{qtyText(o.pieces)}</strong> pcs</td>
-            <td className="ds-num ds-muted">{o.sqm != null ? `${qtyText(Math.round(o.sqm * 100) / 100)} m²` : ''}</td>
-            <td className="ds-num ds-muted">{o.wastani ? `wastani ${+o.wastani}` : ''}</td>
-          </tr>
-        ))}
-      </tbody></table>
-      <h4 className="ds-title">Materials</h4>
-      <table className="ds-table"><tbody>
-        {b.materials.map(m => (
-          <tr key={m.materialId}>
-            <td>{m.name}</td>
-            <td className="ds-num"><strong>{qtyText(m.quantity)}</strong> {m.unit}</td>
-            <td className="ds-num ds-muted">{m.counted ? 'counted' : 'recipe'}</td>
-          </tr>
-        ))}
-      </tbody></table>
+      <ProductionBreakdown dayTotal={false} batches={[{ n: 1, bags: b.bags,
+        outputs: b.outputs.map(o => ({ ...o, perBag: o.wastani })),
+        materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) }]} />
       {b.notes && <p className="text-sm"><span className="pl-label">Note</span> {b.notes}</p>}
     </div>
   );
