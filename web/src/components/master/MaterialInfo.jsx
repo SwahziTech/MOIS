@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { qtyText } from '../../lib/inventory';
+import { qtyText, materialStockValue } from '../../lib/inventory';
 import { formatMoney } from '../../lib/format';
 import Modal from '../Modal';
 import { EntityFlags, EntityHistory } from './EntityPanels';
@@ -12,7 +12,8 @@ import { EntityFlags, EntityHistory } from './EntityPanels';
  * recipes using it, review flags and history.
  */
 export default function MaterialInfo({ material: m, category, unitById, branchName, branchId, onHand, avgCost, currencyCode, suppliers, canEdit, onEdit, onClose }) {
-  const [buys, setBuys] = useState(null);
+  const [moves, setMoves] = useState(null);   // every stock line of this material at the branch, oldest first
+  const [fifo, setFifo] = useState(null);     // value and cost layers left (052)
   const [recipes, setRecipes] = useState(null);
   const st = unitById[m.stock_unit_id]?.symbol ?? '';
   const money = v => formatMoney(v, currencyCode);
@@ -24,13 +25,22 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
   useEffect(() => {
     let live = true;
     Promise.all([
-      supabase.from('purchase_line_costs').select('purchase_date, supplier_id, branch_id, stock_quantity, unit_price, entered_quantity, entered_unit_id, cost_per_stock_unit')
-        .eq('material_id', m.id).order('purchase_date', { ascending: false }).limit(5),
+      supabase.from('inventory_transactions')
+        .select('id, transaction_date, transaction_type, quantity, entered_quantity, entered_unit_id, unit_cost, seq, warehouse:warehouses!inner(branch_id, name), movement:inventory_movements(reason, reference)')
+        .eq('material_id', m.id).order('transaction_date').order('seq'),
+      supabase.from('purchase_line_costs').select('transaction_id, supplier_id, unit_price, cost_per_stock_unit').eq('material_id', m.id),
+      branchId ? materialStockValue(branchId, m.id) : Promise.resolve(null),
       supabase.from('recipe_items').select('quantity, unit_id, recipe:recipe_versions!inner(status, branch_id, variant_label, color:color_palette(name), category:product_categories(name))')
         .eq('material_id', m.id).eq('recipe.status', 'active'),
-    ]).then(([p, r]) => {
+    ]).then(([t, pc, v, r]) => {
       if (!live) return;
-      setBuys((p.data || []).filter(x => !branchId || x.branch_id === branchId));
+      const bought = Object.fromEntries((pc.data || []).map(x => [x.transaction_id, x]));
+      let bal = 0;
+      setMoves((t.data || []).filter(x => !branchId || x.warehouse?.branch_id === branchId).map(x => {
+        bal += Number(x.quantity);
+        return { ...x, buy: bought[x.id] ?? null, balance: bal };
+      }));
+      setFifo(v);
       setRecipes((r.data || []).filter(x => !branchId || x.recipe.branch_id === branchId));
     });
     return () => { live = false; };
@@ -50,8 +60,10 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
 
         <div className="mm-stats">
           <div className="mm-stat"><span className="pl-label">On hand{branchId ? '' : ' (all branches)'}</span><strong>{qtyText(Math.round(((onHand ?? 0) / mf) * 100) / 100)} {ms}</strong>{main && <span className="pl-help">{qtyText(Math.round((onHand ?? 0) * 100) / 100)} {st}</span>}</div>
-          <div className="mm-stat"><span className="pl-label">Average cost</span><strong className="mm-money">{avgCost != null ? `${money(avgCost * mf)}/${ms}` : '—'}</strong></div>
-          <div className="mm-stat"><span className="pl-label">Value</span><strong className="mm-money">{avgCost != null && onHand != null ? money(onHand * avgCost) : '—'}</strong></div>
+          <div className="mm-stat"><span className="pl-label">Value of stock left</span><strong className="mm-money">{fifo?.value != null ? money(fifo.value) : avgCost != null && onHand != null ? money(onHand * avgCost) : '—'}</strong>
+            <span className="pl-help">oldest stock is used first</span></div>
+          <div className="mm-stat"><span className="pl-label">Latest cost</span><strong className="mm-money">{fifo?.last_cost != null ? `${money(fifo.last_cost * mf)}/${ms}` : '—'}</strong>
+            {fifo?.unit_cost != null && <span className="pl-help">average of stock left {money(fifo.unit_cost * mf)}/{ms}</span>}</div>
         </div>
 
         <section>
@@ -70,19 +82,51 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
           </dl>
         </section>
 
-        <section>
-          <h3 className="modal-section-title">Recent purchases{branchId ? ` at ${branchName(branchId)}` : ''}</h3>
-          {buys === null ? <span className="skeleton" /> : buys.length === 0 ? <p className="pl-help">None recorded yet.</p> : (
+        {fifo?.layers?.length > 0 && (
+          <section>
+            <h3 className="modal-section-title">Stock left, by cost — oldest is used first</h3>
             <table className="rd-table">
-              <thead><tr><th>Date</th><th>Supplier</th><th className="num">Quantity</th><th className="num">Landed cost</th></tr></thead>
+              <thead><tr><th>In on</th><th className="num">Quantity left</th><th className="num">Cost</th><th className="num">Value</th></tr></thead>
               <tbody>
-                {buys.map((b, i) => (
-                  <tr key={i}><td>{b.purchase_date}</td><td>{suppliers.find(s => s.id === b.supplier_id)?.name ?? '—'}</td>
-                    <td className="num">{qtyText(b.entered_quantity)} {unitById[b.entered_unit_id]?.symbol}</td>
-                    <td className="num">{b.cost_per_stock_unit != null ? `${money(b.cost_per_stock_unit)}/${st}` : '—'}</td></tr>
+                {fifo.layers.map((l, i) => (
+                  <tr key={i}><td>{l.date}</td>
+                    <td className="num">{qtyText(Math.round((l.quantity / mf) * 100) / 100)} {ms}</td>
+                    <td className="num">{l.cost != null ? `${money(l.cost * mf)}/${ms}` : 'no cost'}</td>
+                    <td className="num">{l.cost != null ? money(l.cost * l.quantity) : '—'}</td></tr>
                 ))}
               </tbody>
             </table>
+          </section>
+        )}
+
+        <section>
+          <h3 className="modal-section-title">Every stock movement{branchId ? ` at ${branchName(branchId)}` : ''}</h3>
+          {moves === null ? <span className="skeleton" /> : moves.length === 0 ? <p className="pl-help">No stock recorded yet.</p> : (
+            <div className="mi-moves">
+              <table className="rd-table">
+                <thead><tr><th>Date</th><th>What</th><th className="num">Quantity</th><th className="num">Price / cost</th><th className="num">Balance</th></tr></thead>
+                <tbody>
+                  {[...moves].reverse().map(x => {
+                    const label = ({ opening_balance: 'Opening stock', receipt: 'Received', issue: 'Issued', transfer_in: 'Transfer in', transfer_out: 'Transfer out', adjustment: 'Adjustment', count: 'Count', reversal: 'Reversal', reclassification: 'Reclassified', production_use: 'Used in production', production_output: 'Cast', curing_out: 'Released from curing', curing_in: 'Into stock' })[x.transaction_type] ?? x.transaction_type;
+                    const eu = unitById[x.entered_unit_id]?.symbol ?? '';
+                    const sign = Number(x.quantity) < 0 ? '−' : '+';
+                    const who = x.buy ? suppliers.find(z => z.id === x.buy.supplier_id)?.name : null;
+                    return (
+                      <tr key={x.id}>
+                        <td>{x.transaction_date}</td>
+                        <td>{label}{who ? <span className="pl-help"> · {who}</span> : x.movement?.reason ? <span className="pl-help"> · {x.movement.reason}</span> : null}</td>
+                        <td className="num">{sign}{qtyText(Math.abs(Number(x.entered_quantity)))} {eu}</td>
+                        <td className="num">
+                          {x.buy ? <>{money(x.buy.unit_price)}/{eu}{x.buy.cost_per_stock_unit != null && <div className="pl-help">cost {money(x.buy.cost_per_stock_unit * mf)}/{ms} after VAT &amp; transport</div>}</>
+                            : x.unit_cost != null ? `${money(x.unit_cost)}/${eu}` : ''}
+                        </td>
+                        <td className="num">{qtyText(Math.round((x.balance / mf) * 100) / 100)} {ms}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 

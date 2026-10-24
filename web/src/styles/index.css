@@ -1930,3 +1930,6 @@ tr.cp-over td { background: var(--bg-warning); }
 .lk-card .sk-tags > * { flex-shrink: 0; }
 
 .pe-nocolour { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.mi-moves { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.mi-moves thead th { position: sticky; top: 0; background: var(--bg-surface); }
