@@ -142,12 +142,17 @@ BEGIN
          cement_share = s.share,
          material_cost = round(total * s.share, 2),
          cost_per_piece = CASE WHEN o.pieces_cast > 0 THEN round(total * s.share / o.pieces_cast, 2) END,
-         cost_per_sqm = CASE WHEN o.pieces_cast > 0 AND p.pcs_per_sqm > 0 THEN round(total * s.share / o.pieces_cast * p.pcs_per_sqm, 2) END
+         -- per m²: products counted in m², at their size's pieces per m² (product_specs)
+         cost_per_sqm = CASE WHEN o.pieces_cast > 0 AND s.per_sqm > 0 THEN round(total * s.share / o.pieces_cast * s.per_sqm, 2) END
     FROM (SELECT x.id, CASE WHEN x.pieces_cast > 0 AND weight > 0
-                            THEN (CASE WHEN byBag THEN x.pieces_cast / x.yield_per_bag ELSE x.pieces_cast END) / weight ELSE 0 END AS share
-            FROM public.production_batch_outputs x WHERE x.batch_id = b.id) s,
-         public.products p
-   WHERE o.id = s.id AND p.id = o.product_id;
+                            THEN (CASE WHEN byBag THEN x.pieces_cast / x.yield_per_bag ELSE x.pieces_cast END) / weight ELSE 0 END AS share,
+                 CASE WHEN upper(u.symbol) = 'SQM' THEN ps.pcs_per_sqm END AS per_sqm
+            FROM public.production_batch_outputs x
+            JOIN public.products p ON p.id = x.product_id
+            LEFT JOIN public.units u ON u.id = p.unit_id
+            LEFT JOIN public.product_specs ps ON ps.product_id = x.product_id
+           WHERE x.batch_id = b.id) s
+   WHERE o.id = s.id;
 END;
 $$;
 REVOKE ALL ON FUNCTION public.production_cost_batch(uuid) FROM PUBLIC, anon, authenticated;
