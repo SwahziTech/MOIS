@@ -117,7 +117,7 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
                         <td>{label}{who ? <span className="pl-help"> · {who}</span> : x.movement?.reason ? <span className="pl-help"> · {x.movement.reason}</span> : null}</td>
                         <td className="num">{sign}{qtyText(Math.abs(Number(x.entered_quantity)))} {eu}</td>
                         <td className="num">
-                          {x.buy ? <>{money(x.buy.unit_price)}/{eu}{x.buy.cost_per_stock_unit != null && <div className="pl-help">cost {money(x.buy.cost_per_stock_unit * mf)}/{ms} after VAT &amp; transport</div>}</>
+                          {x.buy ? <>{money(x.buy.unit_price)}/{eu}{x.buy.cost_per_stock_unit != null && <div className="pl-help">cost {money(x.buy.cost_per_stock_unit * mf)}/{ms} incl. VAT &amp; transport</div>}</>
                             : x.unit_cost != null ? `${money(x.unit_cost)}/${eu}` : ''}
                         </td>
                         <td className="num">{qtyText(Math.round((x.balance / mf) * 100) / 100)} {ms}</td>
