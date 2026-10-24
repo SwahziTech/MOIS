@@ -59,6 +59,30 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
   const [confirming, setConfirming] = useState(false);
+  const [already, setAlready] = useState([]);      // staged batches that look already saved (or waiting for approval) for this date
+
+  // Before saving: the same product, colour and bags already recorded (or sent for approval) on this date
+  // at this branch? Shown in the confirm window — saving is still allowed, e.g. a genuine second batch.
+  async function openConfirm() {
+    setError('');
+    setAlready([]);
+    setConfirming(true);
+    const [bt, pc] = await Promise.all([
+      supabase.from('production_batches').select('product_id, color_id, cement_bags, created_at').eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void'),
+      supabase.from('pending_changes').select('payload, requested_at').eq('kind', 'production_day').eq('status', 'pending'),
+    ]);
+    const seen = [
+      ...(bt.data || []).map(b => ({ product: b.product_id, color: b.color_id ?? '', bags: Number(b.cement_bags), how: 'saved', at: b.created_at })),
+      ...(pc.data || []).flatMap(x => (x.payload?.batches || []).filter(b => b.batch_date === date).map(b => ({
+        product: (b.outputs || []).find(o => o.primary)?.product_id, color: b.color_id ?? '', bags: Number(b.cement_bags), how: 'waiting for approval', at: x.requested_at }))),
+    ];
+    const hits = staged.map(st => {
+      const main = (st.payload.outputs || []).find(o => o.primary)?.product_id;
+      const m = seen.find(x => x.product === main && x.color === (st.payload.color_id ?? '') && x.bags === Number(st.payload.cement_bags));
+      return m ? { label: st.label, bags: st.bags, how: m.how, at: m.at } : null;
+    }).filter(Boolean);
+    setAlready(hits);
+  }
   const [openLines, setOpenLines] = useState([]);    // open production orders' lines at this branch (048)
 
   // Open production orders: each product cast can count towards one (048; none before it)
@@ -588,7 +612,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       {error && <p className="text-sm text-error" role="alert">{error}</p>}
       {sentNote && <p className="text-sm text-success" role="status">{sentNote}</p>}
       {viaApproval && staged.length > 0 && <p className="pl-help">An earlier date needs an admin's approval.</p>}
-      <button type="button" className="btn btn-primary pl-wide pl-save" disabled={busy || staged.length === 0 || !!editingId} onClick={() => { setError(''); setConfirming(true); }}>
+      <button type="button" className="btn btn-primary pl-wide pl-save" disabled={busy || staged.length === 0 || !!editingId} onClick={openConfirm}>
         {viaApproval ? 'Submit for approval' : 'Save daily productions'} ({staged.length} batch{staged.length === 1 ? '' : 'es'})
       </button>
       {editingId && <p className="pl-help">Finish or cancel the edit to save.</p>}
@@ -599,9 +623,18 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             {error && <span className="modal-footer-error" role="alert">{error}</span>}
             <button type="button" className="btn btn-outline" onClick={() => setConfirming(false)}>Back to edit</button>
             <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>
-              {viaApproval ? 'Submit for approval' : 'Confirm & save'}
+              {already.length ? (viaApproval ? 'Submit anyway' : 'Save anyway') : viaApproval ? 'Submit for approval' : 'Confirm & save'}
             </button>
           </>}>
+          {already.length > 0 && (
+            <div className="alert alert-warning" role="alert" style={{ marginBottom: 12 }}>
+              <strong>{date} may already be recorded.</strong> These look like batches already {already.every(a => a.how === 'saved') ? 'saved' : 'saved or waiting for approval'} for this date — saving again counts them twice:
+              <ul style={{ margin: '6px 0 0 18px' }}>
+                {already.map((a, i) => <li key={i}>{a.label} · {qtyText(a.bags)} bags — {a.how} {new Date(a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</li>)}
+              </ul>
+              <span className="pl-help">Check Production › Curing or Approvals first. Save anyway only if these are genuinely extra batches.</span>
+            </div>
+          )}
           <DaySummary day={daySummary()} />
         </Modal>
       )}
