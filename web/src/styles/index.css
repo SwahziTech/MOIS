@@ -2022,3 +2022,7 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-mat-unit { font-size: 10px; }
 .pb-left { margin-top: 8px; gap: 3px; }
 .pb-strip { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+
+/* Production breakdown, plain (2026-10-24): no box around each material — label over plain figures, like the pieces */
+.pb-mat, .pb-strip.is-muted .pb-mat { border: 0; background: transparent; padding: 0 2px; border-radius: 0; }
+.pb-strip { gap: 4px 10px; }
