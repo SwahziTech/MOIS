@@ -51,6 +51,7 @@ export default function Production() {
   const [busyId,    setBusyId]    = useState(null);
   const [rowError,  setRowError]  = useState('');
   const [curingDays, setCuringDays] = useState(14);
+  const [minCuring, setMinCuring] = useState(null);   // fewest days before release (054); null = none
   const [preset, setPreset] = useState(null);   // product (and colour) sent from the simulator or Stock
   // Stock's "Produce" opens the production form with that product (?produce=<id>)
   const [params, setParams] = useSearchParams();
@@ -78,8 +79,9 @@ export default function Production() {
       const err = b.error || rr.error || rv.error || va.error || fl.error;
       if (err) throw err;
       setRefs(r);
-      const { data: o } = await supabase.from('organizations').select('curing_days').eq('id', organization.id).maybeSingle();
+      const { data: o } = await supabase.from('organizations').select('*').eq('id', organization.id).maybeSingle();
       if (o?.curing_days != null) setCuringDays(o.curing_days);
+      setMinCuring(o?.min_curing_days ?? null);
       setBatches(b.data || []);
       setReasons(rr.data || []);
       setRecipes(rv.data || []);
@@ -120,10 +122,13 @@ export default function Production() {
   const [picked, setPicked] = useState(() => new Set());
   const [bulk, setBulk] = useState(null);   // { running, done, failed: [{ name, error }] } while/after releasing
   // any curing batch can be picked; one released before its curing ends needs a reason (asked once for all)
-  const readyToRelease = b => b.status === 'curing' && canAt('production.complete', b.branch_id, null);
+  const plusDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
+  const readyOn = b => (minCuring != null ? plusDays(b.batch_date, minCuring) : b.curing_until);
+  // with a minimum (054) a batch can be picked from that day; without one, any curing batch (early ones need a reason)
+  const readyToRelease = b => b.status === 'curing' && canAt('production.complete', b.branch_id, null) && (minCuring == null || readyOn(b) <= today);
   const ready = curing.filter(readyToRelease);
   const [bulkNote, setBulkNote] = useState('');
-  const earlyPicked = ready.filter(b => picked.has(b.id) && b.curing_until > today);
+  const earlyPicked = minCuring != null ? [] : ready.filter(b => picked.has(b.id) && b.curing_until > today);
   const togglePick = id => setPicked(s0 => { const n = new Set(s0); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   async function releaseMany() {
     const list = ready.filter(b => picked.has(b.id));
@@ -132,7 +137,7 @@ export default function Production() {
     for (const b of list) {
       const fg = refs.warehouses.find(w => w.status === 'active' && w.type === 'finished_goods' && w.branch_id === b.branch_id);
       const { error: err } = await supabase.rpc('release_production_batch', { p_batch: b.id, p: {
-        fg_warehouse_id: fg?.id ?? null, release_date: today, note: b.curing_until > today ? bulkNote.trim() : null,
+        fg_warehouse_id: fg?.id ?? null, release_date: today, note: minCuring == null && b.curing_until > today ? bulkNote.trim() : null,
         outputs: (b.outputs || []).map(o => ({ output_id: o.id, pieces_passed: o.pieces_cast, rejects: [] })),
       } });
       if (err) failed.push({ name: `${b.batch_date} · ${productName(b)}`, error: dbErrorMessage(err) });
@@ -230,7 +235,9 @@ export default function Production() {
                             </span>}
                       </td>
                       <td>{b.status === 'released' ? b.released_on : b.status === 'void' ? '—' : (
-                        <>{b.curing_until}{b.curing_until <= today && <div className="text-xs" style={{ color: 'var(--color-success)' }}>Ready to release</div>}</>
+                        <>{b.curing_until}{readyOn(b) <= today
+                          ? <div className="text-xs" style={{ color: 'var(--color-success)' }}>Ready to release</div>
+                          : minCuring != null && <div className="text-xs text-muted">ready {readyOn(b)}</div>}</>
                       )}</td>
                       <td>
                         <span className={`badge ${b.status === 'curing' ? 'badge-accent' : b.status === 'released' ? 'badge-success' : 'badge-neutral'}`}>
@@ -277,7 +284,7 @@ export default function Production() {
               <table className="rd-table"><tbody>
                 {ready.filter(b => picked.has(b.id)).map(b => (
                   <tr key={b.id}><td>{b.batch_date}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
-                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{b.curing_until > today ? `early · until ${b.curing_until}` : 'ready'}</td></tr>
+                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{minCuring == null && b.curing_until > today ? `early · until ${b.curing_until}` : 'ready'}</td></tr>
                 ))}
               </tbody></table>
             </div>
@@ -293,7 +300,7 @@ export default function Production() {
         </Modal>
       )}
       {releasing && refs && (
-        <ReleaseModal batch={releasing} name={productName(releasing)} refs={refs} reasons={reasons} today={today}
+        <ReleaseModal batch={releasing} name={productName(releasing)} refs={refs} reasons={reasons} today={today} minFrom={minCuring != null ? readyOn(releasing) : null}
           onClose={() => setReleasing(null)} onSaved={async () => { setReleasing(null); await load(); }} />
       )}
       {voiding && (
@@ -308,7 +315,7 @@ export default function Production() {
  * entered as a reject (with its reason) — passed = cast − rejects, worked out
  * here, never typed (SwahziTech, 2026-10-22).
  */
-function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
+function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClose, onSaved }) {
   const fgStores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === batch.branch_id && w.type === 'finished_goods');
   const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
@@ -318,7 +325,9 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const active = reasons.filter(r => r.status === 'active');
-  const early = date < batch.curing_until;
+  // with a minimum curing period (054): not before it, no reason needed after it; without one, early needs a reason
+  const tooSoon = minFrom != null && date < minFrom;
+  const early = minFrom == null && date < batch.curing_until;
   const rejectedOf = o => active.reduce((s, r) => s + (num(rejects[`${o.id}|${r.id}`]) ?? 0), 0);
   const passedOf = o => o.pieces_cast - rejectedOf(o);
   const nameOf = o => `${refs.items[`p:${o.product_id}`]?.name ?? '—'}${o.color_id ? ` ${refs.colorById[o.color_id]?.name ?? ''}` : ''}`;
@@ -329,6 +338,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, onClose, onSaved }) {
     for (const o of outputs) {
       if (passedOf(o) < 0) { setError(`${nameOf(o)}: more rejects than the ${o.pieces_cast} pieces cast.`); return; }
     }
+    if (tooSoon) { setError(`It cures at least until ${minFrom} — release from then.`); return; }
     if (early && !note.trim()) { setError(`Curing runs until ${batch.curing_until} — say why it is released early.`); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('release_production_batch', { p_batch: batch.id, p: {

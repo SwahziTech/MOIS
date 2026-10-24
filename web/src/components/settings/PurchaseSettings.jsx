@@ -203,3 +203,49 @@ export function CuringDays({ canEdit }) {
     </span>
   );
 }
+
+/** Fewest days a batch cures before its quality release (054); from then it can be released without a reason */
+export function MinCuringDays({ canEdit }) {
+  const { organization } = useAuth();
+  const [days, setDays] = useState(undefined);   // undefined = loading; null = no minimum
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!organization?.id) return;
+    supabase.from('organizations').select('*').eq('id', organization.id).maybeSingle()
+      .then(({ data }) => setDays(data && 'min_curing_days' in data ? data.min_curing_days : undefined));
+  }, [organization?.id]);
+  async function save() {
+    setError('');
+    const n = String(value).trim() === '' ? null : Number(value);
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 365)) { setError('Enter whole days, 0 to 365, or leave blank for no minimum.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.from('organizations').update({ min_curing_days: n }).eq('id', organization.id);
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setDays(n);
+    setEditing(false);
+  }
+  if (days === undefined) return null;
+  if (!editing) {
+    return (
+      <span className="flex items-center gap-8">
+        {days == null ? 'No minimum' : `${days} days`}
+        {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setValue(days == null ? '' : String(days)); setEditing(true); }}>Change</button>}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-4">
+      <span className="flex items-center gap-8">
+        <NumberInput step="1" min="0" className="form-input" style={{ width: 90 }} aria-label="Minimum curing days" placeholder="None" value={value} onChange={e => setValue(e.target.value)} /> days
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+      </span>
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>Release is refused before this; from it on, no reason is needed.</span>
+      {error && <span className="text-xs text-error">{error}</span>}
+    </span>
+  );
+}
