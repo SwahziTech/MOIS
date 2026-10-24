@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { qtyText, materialStockValue } from '../../lib/inventory';
 import { formatMoney } from '../../lib/format';
 import Modal from '../Modal';
+import { ItemHistoryList } from '../inventory/ItemHistory';
 import { EntityFlags, EntityHistory } from './EntityPanels';
 
 /**
@@ -12,7 +13,6 @@ import { EntityFlags, EntityHistory } from './EntityPanels';
  * recipes using it, review flags and history.
  */
 export default function MaterialInfo({ material: m, category, unitById, branchName, branchId, onHand, avgCost, currencyCode, suppliers, canEdit, onEdit, onClose }) {
-  const [moves, setMoves] = useState(null);   // every stock line of this material at the branch, oldest first
   const [fifo, setFifo] = useState(null);     // value and cost layers left (052)
   const [recipes, setRecipes] = useState(null);
   const st = unitById[m.stock_unit_id]?.symbol ?? '';
@@ -25,21 +25,11 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
   useEffect(() => {
     let live = true;
     Promise.all([
-      supabase.from('inventory_transactions')
-        .select('id, transaction_date, transaction_type, quantity, entered_quantity, entered_unit_id, unit_cost, seq, warehouse:warehouses!inner(branch_id, name), movement:inventory_movements(reason, reference)')
-        .eq('material_id', m.id).order('transaction_date').order('seq'),
-      supabase.from('purchase_line_costs').select('transaction_id, supplier_id, unit_price, cost_per_stock_unit').eq('material_id', m.id),
       branchId ? materialStockValue(branchId, m.id) : Promise.resolve(null),
       supabase.from('recipe_items').select('quantity, unit_id, recipe:recipe_versions!inner(status, branch_id, variant_label, color:color_palette(name), category:product_categories(name))')
         .eq('material_id', m.id).eq('recipe.status', 'active'),
-    ]).then(([t, pc, v, r]) => {
+    ]).then(([v, r]) => {
       if (!live) return;
-      const bought = Object.fromEntries((pc.data || []).map(x => [x.transaction_id, x]));
-      let bal = 0;
-      setMoves((t.data || []).filter(x => !branchId || x.warehouse?.branch_id === branchId).map(x => {
-        bal += Number(x.quantity);
-        return { ...x, buy: bought[x.id] ?? null, balance: bal };
-      }));
       setFifo(v);
       setRecipes((r.data || []).filter(x => !branchId || x.recipe.branch_id === branchId));
     });
@@ -66,6 +56,12 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
             {fifo?.unit_cost != null && <span className="pl-help">average of stock left {money(fifo.unit_cost * mf)}/{ms}</span>}</div>
         </div>
 
+        <ItemHistoryList item={{ kind: 'material', id: m.id, name: m.name }} branchId={branchId} mode="all" suppliers={suppliers}
+          unit={{ factor: mf, symbol: ms, stockSymbol: st }} />
+
+        <details className="pe-more">
+          <summary>More about {m.name} — units, cost layers, recipes, notes</summary>
+          <div className="pe-more-body">
         <section>
           <h3 className="modal-section-title">Units</h3>
           <dl className="rd-dl">
@@ -100,37 +96,6 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
         )}
 
         <section>
-          <h3 className="modal-section-title">Every stock movement{branchId ? ` at ${branchName(branchId)}` : ''}</h3>
-          {moves === null ? <span className="skeleton" /> : moves.length === 0 ? <p className="pl-help">No stock recorded yet.</p> : (
-            <div className="mi-moves">
-              <table className="rd-table">
-                <thead><tr><th>Date</th><th>What</th><th className="num">Quantity</th><th className="num">Price / cost</th><th className="num">Balance</th></tr></thead>
-                <tbody>
-                  {[...moves].reverse().map(x => {
-                    const label = ({ opening_balance: 'Opening stock', receipt: 'Received', issue: 'Issued', transfer_in: 'Transfer in', transfer_out: 'Transfer out', adjustment: 'Adjustment', count: 'Count', reversal: 'Reversal', reclassification: 'Reclassified', production_use: 'Used in production', production_output: 'Cast', curing_out: 'Released from curing', curing_in: 'Into stock' })[x.transaction_type] ?? x.transaction_type;
-                    const eu = unitById[x.entered_unit_id]?.symbol ?? '';
-                    const sign = Number(x.quantity) < 0 ? '−' : '+';
-                    const who = x.buy ? suppliers.find(z => z.id === x.buy.supplier_id)?.name : null;
-                    return (
-                      <tr key={x.id}>
-                        <td>{x.transaction_date}</td>
-                        <td>{label}{who ? <span className="pl-help"> · {who}</span> : x.movement?.reason ? <span className="pl-help"> · {x.movement.reason}</span> : null}</td>
-                        <td className="num">{sign}{qtyText(Math.abs(Number(x.entered_quantity)))} {eu}</td>
-                        <td className="num">
-                          {x.buy ? <>{money(x.buy.unit_price)}/{eu}{x.buy.cost_per_stock_unit != null && <div className="pl-help">cost {money(x.buy.cost_per_stock_unit * mf)}/{ms} incl. VAT &amp; transport</div>}</>
-                            : x.unit_cost != null ? `${money(x.unit_cost)}/${eu}` : ''}
-                        </td>
-                        <td className="num">{qtyText(Math.round((x.balance / mf) * 100) / 100)} {ms}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section>
           <h3 className="modal-section-title">Used in recipes{branchId ? ` at ${branchName(branchId)}` : ''}</h3>
           {recipes === null ? <span className="skeleton" /> : recipes.length === 0 ? <p className="pl-help">Not in any active recipe.</p> : (
             <div className="pl-tags">
@@ -144,6 +109,8 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
         {m.notes && <section><h3 className="modal-section-title">Notes</h3><p className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{m.notes}</p></section>}
         <EntityFlags entityType="material" entityId={m.id} canResolve={false} canRaise={false} />
         <EntityHistory entityType="material" entityId={m.id} />
+          </div>
+        </details>
       </div>
     </Modal>
   );

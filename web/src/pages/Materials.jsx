@@ -256,9 +256,9 @@ export default function Materials() {
                 const v = valueOf(m);
                 const sup = suppliers.find(x => x.id === lastFrom[m.id])?.name;
                 return (
-                  <div key={m.id} className={`sk-card lk-card${m.status !== 'active' ? ' is-inactive' : ''}`} title={canEditMaterial(m) ? 'Click for its details · double-click to edit' : 'Click for its details'}
+                  <div key={m.id} className={`sk-card lk-card${m.status !== 'active' ? ' is-inactive' : ''}`} title="Open for its transactions"
                     onClick={e => { if (!e.target.closest('button')) setViewing(m); }}
-                    onDoubleClick={e => { if (!e.target.closest('button') && canEditMaterial(m)) { setViewing(null); setEditing({ kind: 'material', row: m }); } }}>
+                    >
                     <div className="sk-name">
                       <span className="sk-tags">
                         <span className="mm-n">#{i + 1}</span>

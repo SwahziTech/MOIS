@@ -10,6 +10,7 @@ import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, 
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
+import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -56,6 +57,7 @@ export default function Purchases() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [editing, setEditing] = useState(null);     // { mode: 'complete'|'new'|'edit', receipt?, purchase?, materialId? }
+  const [historyOf, setHistoryOf] = useState(null); // a material whose purchases are shown
   // Materials' "Intake" opens a new purchase for that material (?buy=<material id>)
   const [params, setParams] = useSearchParams();
   const buyId = params.get('buy');
@@ -341,7 +343,7 @@ export default function Purchases() {
                   {costs.length === 0 ? <SkeletonRow cols={4} /> : costs.map(c => {
                     const unit = refs?.unitById[refs?.items[`m:${c.material.id}`]?.stockUnitId]?.symbol ?? '';
                     return (
-                      <tr key={c.material.id}>
+                      <tr key={c.material.id} className="clickable-row" title="Open its purchases" onClick={() => setHistoryOf(c.material)}>
                         <td style={{ fontWeight: 500 }}>{c.material.name}</td>
                         <td style={{ textAlign: 'right' }}>{c.average_cost != null ? <>{money(round2(c.average_cost))} <span className="text-muted">/ {unit}</span></> : <span className="text-muted">no cost yet</span>}</td>
                         <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{c.last_purchase_date}</span></> : <span className="text-muted">—</span>}</td>
@@ -382,6 +384,15 @@ export default function Purchases() {
             onCancel={() => setDeleting(null)} onDeleted={async () => { setDeleting(null); await load(); }} />
         </Modal>
       )}
+      {historyOf && refs && (() => {
+        const it = refs.items[`m:${historyOf.id}`];
+        const mu = it?.mainUnitId ? it.units.find(u => u.id === it.mainUnitId) : null;
+        return (
+          <ItemHistoryModal title={`${historyOf.name} — purchases`} item={{ kind: 'material', id: historyOf.id, name: historyOf.name }} branchId={branchId} mode="purchases"
+            suppliers={refs.suppliers} unit={{ factor: mu?.factor ?? 1, symbol: refs.unitById[mu?.id ?? it?.stockUnitId]?.symbol ?? '', stockSymbol: refs.unitById[it?.stockUnitId]?.symbol ?? '' }}
+            onClose={() => setHistoryOf(null)} />
+        );
+      })()}
     </PageShell>
   );
 }

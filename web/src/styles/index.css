@@ -1933,3 +1933,27 @@ tr.cp-over td { background: var(--bg-warning); }
 
 .mi-moves { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .mi-moves thead th { position: sticky; top: 0; background: var(--bg-surface); }
+
+/* Item history (2026-10-24): short rows, newest on top, details on tap */
+.ih { display: flex; flex-direction: column; gap: 8px; }
+.ih-filters { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ih-select { width: auto; height: 30px; padding: 2px 8px; font-size: var(--text-xs); }
+.ih-list { border: 1px solid var(--border); border-radius: var(--radius-md); max-height: 420px; overflow-y: auto; }
+.ih-row + .ih-row { border-top: 1px solid var(--border); }
+.ih-row.is-open { background: var(--bg-soft); }
+.ih-line { width: 100%; display: grid; grid-template-columns: 16px 52px 110px minmax(0, 1fr) 110px 100px 70px; gap: 8px; align-items: center; padding: 7px 10px; border: 0; background: transparent; color: var(--text-primary); font-size: var(--text-sm); text-align: left; cursor: pointer; }
+.ih-line:hover { background: var(--bg-soft); }
+.ih-date { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ih-kind { font-size: var(--text-xs); font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--bg-soft); color: var(--text-secondary); justify-self: start; }
+.ih-kind.is-purchase { background: var(--accent-soft); color: var(--accent-text); }
+.ih-kind.is-production { background: var(--bg-success); color: var(--color-success); }
+.ih-who { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ih-qty, .ih-price, .ih-bal { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ih-qty { font-weight: 700; }
+.ih-qty.is-in { color: var(--color-success); }
+.ih-price { color: var(--text-muted); font-size: var(--text-xs); }
+.ih-bal { color: var(--text-secondary); }
+.ih-detail { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; padding: 4px 12px 10px 36px; font-size: var(--text-xs); }
+.ih-detail dt { color: var(--text-muted); }
+.ih-detail dd { margin: 0; }
+@media (max-width: 640px) { .ih-line { grid-template-columns: 16px 46px minmax(0, 1fr) auto auto; } .ih-who, .ih-price { display: none; } }

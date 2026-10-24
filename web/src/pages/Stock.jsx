@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import MovementModal from '../components/inventory/MovementModal';
 import { DoubleEntryAlert } from '../components/inventory/DoubleEntry';
+import ItemHistoryModal from '../components/inventory/ItemHistory';
 
 const LOAD_ERROR = "We couldn't load stock. Please try again.";
 const ACTIONS = ['receipt', 'issue', 'transfer', 'adjustment', 'count', 'opening_balance'];
@@ -45,6 +46,7 @@ export default function Stock() {
   const [chip,        setChip]        = useState('');
   const [sortBy,      setSortBy]      = useState('size');
   const [posting,     setPosting]     = useState(null);   // movement type
+  const [historyOf,   setHistoryOf]   = useState(null);   // an item whose history is open
 
   async function load(date = asOfDate) {
     setError('');
@@ -197,7 +199,7 @@ export default function Stock() {
             const colours = c.item.colorIds || [];
             const pcs = pcsOf(c, c.total);
             return (
-              <div key={c.item.key} className="sk-card">
+              <div key={c.item.key} className="sk-card lk-card" title="Open its history" onClick={e => { if (!e.target.closest('button')) setHistoryOf(c.item); }}>
                 <div className="sk-name">
                   <span className="sk-tags">
                     <span className="pl-tag">{isProducts ? c.item.category : c.item.materialCategory ?? 'Material'}</span>
@@ -253,6 +255,15 @@ export default function Stock() {
         </section>
       )}
 
+      {historyOf && refs && (() => {
+        const mu = mainUnitOf(historyOf);
+        return (
+          <ItemHistoryModal title={historyOf.name} item={{ kind: historyOf.kind, id: historyOf.id, name: historyOf.name }} branchId={branchId || null} mode="all"
+            suppliers={refs.suppliers} colorName={id => refs.colorById[id]?.name ?? ''}
+            unit={{ factor: mu?.factor ?? 1, symbol: unit(mu?.id ?? historyOf.stockUnitId), stockSymbol: unit(historyOf.stockUnitId) }}
+            onClose={() => setHistoryOf(null)} />
+        );
+      })()}
       {posting && refs && (
         <MovementModal type={posting} refs={refs} balances={balanceMap} defaultWarehouseId={warehouseId}
           onClose={() => setPosting(null)} onPosted={async () => { setPosting(null); await load(); }} />
