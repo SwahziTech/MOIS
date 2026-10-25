@@ -36,6 +36,9 @@ export default function ProductEditModal({ product, organization, categories, un
   const [unitId, setUnitId] = useState(product.unit_id ?? '');
   const [perSqm, setPerSqm] = useState(product.pcs_per_sqm ?? '');
   const [reorder, setReorder] = useState(branchRow?.reorder_level ?? '');
+  // labour norm (057): "3" or "2-3" bags one person casts in a day
+  const lab0 = branchRow?.labour?.min != null ? (Number(branchRow.labour.min) === Number(branchRow.labour.max) ? String(+branchRow.labour.min) : `${+branchRow.labour.min}-${+branchRow.labour.max}`) : '';
+  const [perPerson, setPerPerson] = useState(lab0);
   const [tolerance, setTolerance] = useState(product.yield_tolerance ?? '');
   const [notes, setNotes] = useState(product.notes ?? '');
   const catColours = cid => (categories.find(c => c.id === cid)?.colors ?? []);
@@ -86,6 +89,8 @@ export default function ProductEditModal({ product, organization, categories, un
     if (m !== null && !(Number.isInteger(m) && m > 0)) { setError('Molds: a whole number above zero, or blank.'); return; }
     const r = numOrNull(reorder);
     if (r !== null && !(r >= 0)) { setError('Reorder level: zero or more, or blank.'); return; }
+    const pp = perPerson.trim() === '' ? null : perPerson.split(/[-–]/).map(x => Number(x.trim()));
+    if (pp && (pp.length > 2 || pp.some(x => !(x > 0)) || (pp.length === 2 && pp[0] > pp[1]))) { setError('Bags a person: a number like 3, or a range like 2-3, or blank.'); return; }
 
     setBusy(true);
     const fail = msg => { setBusy(false); setError(msg); };
@@ -110,6 +115,11 @@ export default function ProductEditModal({ product, organization, categories, un
         if (err) return fail(`Saved, but not added to ${branchName}'s list: ${dbErrorMessage(err)}`);
       } else if (branchRow?.id && numOrNull(branchRow.reorder_level) !== r) {
         const { error: err } = await supabase.from('branch_products').update({ reorder_level: r }).eq('id', branchRow.id);
+        if (err) return fail(dbErrorMessage(err));
+      }
+      // the labour norm (057): bags a person, on the branch's list
+      if (branchRow?.id && perPerson.trim() !== lab0) {
+        const { error: err } = await supabase.from('branch_products').update({ bags_per_person_min: pp ? pp[0] : null, bags_per_person_max: pp ? pp[pp.length - 1] : null }).eq('id', branchRow.id);
         if (err) return fail(dbErrorMessage(err));
       }
       // the branch's molds (press products keep their bags a day)
@@ -232,6 +242,12 @@ export default function ProductEditModal({ product, organization, categories, un
             <NumberInput step="any" min="0" className="form-input" placeholder="Not set" disabled={!canBranch || (!isNew && !branchRow?.id)} value={reorder} onChange={e => setReorder(e.target.value)} />
             {!isNew && !branchRow?.id && <span className="pl-help">Not in {branchName}'s list — add it there first.</span>}
             <span className="pl-help">In {units.find(u => u.id === unitId)?.symbol ?? 'its unit'}. Stock shows LOW below this.</span>
+          </label>
+        )}
+        {branchId && !isNew && branchRow?.id && (
+          <label className="pe-field"><span>Bags a person at {branchName}</span>
+            <input className="form-input" inputMode="decimal" placeholder="e.g. 3 or 2-3 (blank: the machine's crew)" disabled={!canBranch} value={perPerson} onChange={e => setPerPerson(e.target.value)} />
+            <span className="pl-help">Labour norm: cement bags one person casts in a day. Press products take the press crew instead (Production ⚙).</span>
           </label>
         )}
         {!isNew && canWrite && (

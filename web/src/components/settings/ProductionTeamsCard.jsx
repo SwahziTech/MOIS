@@ -26,7 +26,7 @@ export default function ProductionTeamsCard() {
     if (!branch) return;
     const [t, m, mp, bp] = await Promise.all([
       supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branch).order('name'),
-      supabase.from('machines').select('id, name, status').eq('branch_id', branch).order('name'),
+      supabase.from('machines').select('*').eq('branch_id', branch).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
       supabase.from('branch_products').select('product_id, product:products(canonical_name)').eq('branch_id', branch).eq('status', 'active'),
     ]);
@@ -90,7 +90,7 @@ export default function ProductionTeamsCard() {
         )}
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Every batch records its team and machine. Retired ones stay on past batches. New ones can also be added in the batch form.</p>
+        <p className="text-xs text-muted mb-8">Every batch records its team and machine. Retired ones stay on past batches. New ones can also be added in the batch form. A machine's crew (e.g. 9-12) is the people it takes to run, whatever the bags — products without it use their bags a person (Products).</p>
         {!data ? <p className="text-sm text-muted">Loading…</p> : (
           <>
             <h3 className="ptc-title">Teams</h3>
@@ -117,7 +117,18 @@ export default function ProductionTeamsCard() {
               const made = data.links.filter(l => l.machine_id === m.id).map(l => data.products.find(p => p.id === l.product_id)).filter(Boolean);
               return (
                 <div key={m.id} className="ptc-item">
-                  {nameLine('machines', m)}
+                  {nameLine('machines', m, 'crew_min' in m && (
+                    <span className="ptc-crew">crew
+                      <input className="form-input" aria-label={`${m.name} crew`} placeholder="—" disabled={!canEdit || busy}
+                        defaultValue={m.crew_min != null ? (m.crew_min === m.crew_max ? String(m.crew_min) : `${m.crew_min}-${m.crew_max}`) : ''}
+                        onBlur={e => {
+                          const v = e.target.value.trim(); const c = v === '' ? null : v.split(/[-–]/).map(x => Number(x.trim()));
+                          if (c && (c.length > 2 || c.some(x => !(Number.isInteger(x) && x > 0)) || (c.length === 2 && c[0] > c[1]))) { setError('Crew: whole people, like 12 or 9-12, or blank.'); return; }
+                          const lo = c ? c[0] : null, hi = c ? c[c.length - 1] : null;
+                          if (lo !== m.crew_min || hi !== m.crew_max) run(supabase.from('machines').update({ crew_min: lo, crew_max: hi }).eq('id', m.id));
+                        }} />
+                    </span>
+                  ))}
                   <div className="ptc-chips">
                     {made.length === 0 && <span className="text-xs text-muted">Makes any product</span>}
                     {made.map(p => (

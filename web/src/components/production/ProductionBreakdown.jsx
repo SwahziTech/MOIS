@@ -83,7 +83,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
           <section key={b.n} className={`pb-batch${b.stage === 'Void' ? ' is-void' : ''}`}>
             <div className="pb-head">
               <strong>Batch {b.n}</strong>
-              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${b.team}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
+              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${b.team}` : ''}{b.people != null ? ` · ${b.people} ${b.people === 1 ? 'person' : 'people'}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
               {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
                 material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
               {b.stage && stageBadge?.(b.stage)}

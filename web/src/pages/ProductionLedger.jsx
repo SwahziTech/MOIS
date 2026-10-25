@@ -10,6 +10,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
+import { peopleOf } from '../components/production/BatchNotes';
 import { formatMoney } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
@@ -59,7 +60,7 @@ export default function ProductionLedger() {
       setPcsPerSqm(Object.fromEntries((ps.data || []).map(x => [x.product_id, Number(x.pcs_per_sqm)])));
       // production tracking (056) — the ledger still works without it
       const [t, m] = await Promise.all([
-        supabase.from('production_teams').select('id, name, members:production_team_members(id, name)'),
+        supabase.from('production_teams').select('id, name, members:production_team_members(id, name, status)'),
         supabase.from('machines').select('id, name'),
       ]);
       setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [] });
@@ -114,10 +115,12 @@ export default function ProductionLedger() {
     const curing = d.batches.filter(b => b.status === 'curing').map(b => b.curing_until).sort();
     return {
       date: d.date, branchName: branchNameOf(d.branchId), curingUntil: curing.at(-1) ?? null,
+      people: track && d.batches.some(b => b.team_id && b.status !== 'void')
+        ? new Set(d.batches.filter(b => b.team_id && b.status !== 'void').flatMap(b => peopleOf(track.teams, b.team_id, b.worker_ids))).size : null,
       batches: d.batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
-        team: teamOf(b), machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
+        team: teamOf(b), people: track && b.team_id ? peopleOf(track.teams, b.team_id, b.worker_ids).length : null, machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
         qc: b.status === 'released' ? { tags: b.qc_tags || [], note: b.release_note } : null,
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),

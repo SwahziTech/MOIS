@@ -19,11 +19,15 @@ export function useProductionLists(branchId) {
     if (!branchId) return;
     const [t, m, mp] = await Promise.all([
       supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branchId).order('name'),
-      supabase.from('machines').select('id, name, status').eq('branch_id', branchId).order('name'),
+      supabase.from('machines').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
     ]);
-    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [] }); return; }
-    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [] });
+    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [], norms: {} }); return; }
+    // labour norms (057): bags a person per product at this branch — the screens work without them
+    const n = await supabase.from('branch_products').select('product_id, bags_per_person_min, bags_per_person_max').eq('branch_id', branchId);
+    const norms = Object.fromEntries((n.error ? [] : n.data || []).filter(x => x.bags_per_person_min != null || x.bags_per_person_max != null)
+      .map(x => [x.product_id, { min: Number(x.bags_per_person_min ?? x.bags_per_person_max), max: Number(x.bags_per_person_max ?? x.bags_per_person_min) }]));
+    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], norms });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   return [lists, load];
@@ -32,6 +36,36 @@ export function useProductionLists(branchId) {
 const lastKey = (kind, branchId, extra = '') => `mois.batchnotes.${kind}.${branchId}${extra ? `.${extra}` : ''}`;
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
 const recall = k => { try { return localStorage.getItem(k); } catch { return null; } };
+
+/** The people on a batch: who worked when that was changed, else the team's members (ids) */
+export function peopleOf(teams, teamId, workerIds) {
+  if (workerIds) return workerIds;
+  const t = (teams || []).find(x => x.id === teamId);
+  return t ? t.members.filter(m => m.status !== 'inactive').map(m => m.id) : [];
+}
+
+/**
+ * People a day's batches should take by the labour norms (057): a machine
+ * with a crew counts its crew once a day, whatever the bags; any other batch
+ * needs its bags ÷ the product's bags a person. → { min, max, missing } —
+ * missing: batches without a norm (left out).
+ * batches: [{ machineId, productId, bags }]
+ */
+export function labourNorm(lists, batches) {
+  let min = 0, max = 0, missing = 0;
+  const crews = new Set();
+  for (const b of batches) {
+    const m = lists?.machines?.find(x => x.id === b.machineId);
+    if (m && (m.crew_min || m.crew_max)) {
+      if (!crews.has(m.id)) { crews.add(m.id); min += m.crew_min ?? m.crew_max; max += m.crew_max ?? m.crew_min; }
+      continue;
+    }
+    const n = lists?.norms?.[b.productId];
+    if (!n) { missing += 1; continue; }
+    min += b.bags / n.max; max += b.bags / n.min;
+  }
+  return { min: Math.ceil(min - 1e-9), max: Math.ceil(max - 1e-9), missing };
+}
 
 /** The team's name, and who worked when that was changed: "Juma team (2 of 3)" */
 export function teamLabel(lists, teamId, workerIds) {

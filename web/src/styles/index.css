@@ -2127,3 +2127,8 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-strip-row { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
 @media (max-width: 760px) { .pb-strip-row { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); } }
 @media (min-width: 761px) { .pb-total .pb-strip-row { grid-template-columns: repeat(var(--pb-n), minmax(0, 1fr)); } }   /* the day total spreads its materials over its full width */
+
+/* People and labour norm (057) */
+.ds-people { font-size: var(--text-sm); }
+.ptc-crew { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-muted); }
+.ptc-crew .form-input { width: 64px; padding-top: 2px; padding-bottom: 2px; }

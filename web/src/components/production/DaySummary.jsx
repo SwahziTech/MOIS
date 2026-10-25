@@ -19,6 +19,12 @@ export default function DaySummary({ day, currency }) {
       <div className="ds-head">
         <span><strong>{day.date}</strong> · {day.branchName}</span>
         <span>{day.batches.length} batch{day.batches.length === 1 ? '' : 'es'} · {qtyText(round(day.batches.reduce((s, b) => s + b.bags, 0)))} bags</span>
+        {day.people != null && (
+          <span className="ds-people" title="Each person counted once for the day, whichever batches they worked on">
+            <strong>{day.people}</strong> {day.people === 1 ? 'person' : 'people'}
+            {day.norm && (day.norm.max > 0) && <span className={`pl-help${day.people < day.norm.min ? ' text-warning' : ''}`}> · norm {day.norm.min === day.norm.max ? day.norm.min : `${day.norm.min}–${day.norm.max}`}{day.norm.missing ? ` (${day.norm.missing} batch${day.norm.missing === 1 ? '' : 'es'} without a norm)` : ''}</span>}
+          </span>
+        )}
         {day.curingUntil && <span className="ds-cure">Curing until <strong>{day.curingUntil}</strong>{day.curingDays ? ` (${day.curingDays} days)` : ''}</span>}
       </div>
 

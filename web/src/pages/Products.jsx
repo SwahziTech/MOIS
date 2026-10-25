@@ -39,6 +39,7 @@ export default function Products() {
   const [whBranch,   setWhBranch]   = useState({});   // warehouse id → branch id
   const [capacity,   setCapacity]   = useState(null); // branch id → product id → molds / bags a day (045); null = not available
   const [reorder,    setReorder]    = useState({});   // branch id → product id → reorder level (049)
+  const [labour,     setLabour]     = useState({});   // branch id → product id → { min, max } bags a person (057)
   const [colourData, setColourData] = useState({ palette: [], cat: [], own: [] });   // colours (046)
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -113,6 +114,10 @@ export default function Products() {
     ]);
     const r = {};
     for (const x of rl.error ? [] : rl.data || []) (r[x.branch_id] ||= {})[x.product_id] = x.reorder_level;
+    const ln = await supabase.from('branch_products').select('branch_id, product_id, bags_per_person_min, bags_per_person_max');
+    const lb = {};
+    for (const x of ln.error ? [] : ln.data || []) (lb[x.branch_id] ||= {})[x.product_id] = { min: x.bags_per_person_min, max: x.bags_per_person_max };
+    setLabour(lb);
     setReorder(r);
     setColourData({ palette: pal.data || [], cat: cc.data || [], own: pc.error ? [] : pc.data || [] });
   }
@@ -295,7 +300,7 @@ export default function Products() {
           branchId={branchId} branchName={branchName}
           canWrite={canWrite} canBranch={!!branchId && canAt('products.manage', branchId, null)}
           capacityRow={editing.id && branchId ? capacity?.[branchId]?.[editing.id] ?? null : null}
-          branchRow={editing.id && branchId ? { id: carried[editing.id]?.[branchId]?.id, reorder_level: reorder[branchId]?.[editing.id] ?? null } : null}
+          branchRow={editing.id && branchId ? { id: carried[editing.id]?.[branchId]?.id, reorder_level: reorder[branchId]?.[editing.id] ?? null, labour: labour[branchId]?.[editing.id] ?? null } : null}
           palette={colourData.palette}
           colorIds={editing.id ? productColorIds(editing, colourData.cat, colourData.own) : []}
           onHand={editing.id ? stock.filter(x => x.product_id === editing.id).reduce((n, x) => n + Number(x.quantity), 0) : 0}

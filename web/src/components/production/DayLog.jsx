@@ -11,7 +11,7 @@ import ProductionBreakdown from './ProductionBreakdown';
 import { categoryTools, productOrder } from '../../lib/categories';
 import Modal from '../Modal';
 import DaySummary from './DaySummary';
-import BatchNotes, { useProductionLists, teamLabel } from './BatchNotes';
+import BatchNotes, { useProductionLists, teamLabel, peopleOf, labourNorm } from './BatchNotes';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
@@ -321,10 +321,17 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         mats[m.materialId].used += m.quantity;
       });
     });
+    // people (056/057): each person once a day, whichever batches they worked on; the norm from the bags and machines
+    // (from each batch's team as sent, so batches listed earlier count too)
+    const peopleIn = b => (lists?.ready && b.payload?.team_id ? peopleOf(lists.teams, b.payload.team_id, b.payload.worker_ids) : null);
+    const known = staged.map(peopleIn).filter(Boolean);
+    const people = known.length ? new Set(known.flat()).size : null;
+    const norm = known.length ? labourNorm(lists, staged.map(b => ({ machineId: b.payload?.machine_id, bags: b.bags,
+      productId: (b.payload?.outputs || []).find(o => o.primary)?.product_id }))) : null;
     const curingUntil = new Date(new Date(`${date}T00:00:00Z`).getTime() + curingDays * 864e5).toISOString().slice(0, 10);
     return {
-      date, branchName, curingUntil, curingDays,
-      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, team: b.team, machine: b.machine,
+      date, branchName, curingUntil, curingDays, people, norm,
+      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, team: b.team, machine: b.machine, people: peopleIn(b)?.length ?? null,
         ...(estimates?.[i] ? { cost: estimates[i].cost, costComplete: estimates[i].complete, estimate: true } : {}),
         outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(estimates?.[i]?.outputs[j] ?? {}) })),
         materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) })),
