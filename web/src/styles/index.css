@@ -2094,3 +2094,15 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-extra strong { color: var(--text-primary); font-weight: 600; }
 .qc-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .pled-track-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+
+/* Settings: production teams & machines (056) */
+.ptc-title { font-size: var(--text-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin: 10px 0 2px; }
+.ptc-item { padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
+.ptc-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--text-sm); }
+.ptc-actions { margin-left: auto; display: inline-flex; gap: 2px; }
+.ptc-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ptc-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 4px 2px 9px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--text-xs); }
+.ptc-chip button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0 2px; display: inline-flex; }
+.ptc-add { display: inline-flex; align-items: center; gap: 2px; }
+.ptc-add .form-input { width: 150px; padding-top: 4px; padding-bottom: 4px; }
+.ptc-sel { width: 150px; padding-top: 4px; padding-bottom: 4px; }

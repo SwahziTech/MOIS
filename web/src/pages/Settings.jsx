@@ -8,6 +8,7 @@ import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
+import ProductionTeamsCard from '../components/settings/ProductionTeamsCard';
 import { BranchVatCard, ExpenseCategoriesCard, RejectReasonsCard, WasteReasonsCard, CuringDays, MinCuringDays } from '../components/settings/PurchaseSettings';
 
 function Row({ label, children }) {
@@ -63,6 +64,7 @@ export default function Settings() {
         <ExpenseCategoriesCard />
         <RejectReasonsCard />
         <WasteReasonsCard />
+        <ProductionTeamsCard />
 
         <section className="card">
           <div className="card-header"><h2 className="card-title">Appearance</h2></div>
