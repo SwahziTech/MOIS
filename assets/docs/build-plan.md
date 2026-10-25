@@ -160,7 +160,24 @@ Phase 1 is through and Stumarcot enters live, same-day data instead of back-date
 - Depends on 1b's inventory transaction model (receiving writes a transaction)
 
 ## 1d — Production Engine
-**Status: CURRENT** (started 2026-10-18 on SwahziTech's instruction, while 1c finishes)
+**Status: DONE** (2026-10-25, on SwahziTech's instruction; started 2026-10-18)
+
+Built (migrations 042–057): batches with main + residual products and the
+weighted yield band; day lists saved together, back-dated days through
+Approvals; material issue and material variance; curing store, minimum (7)
+and normal (14) curing, quality release with reject reasons — one by one or
+several at once; production orders with the capacity planner (vibro molds,
+press bags a day); batch material cost first in first out at the full amount
+paid, VAT included, shared by cement taken (cost per piece and per m²);
+production tracking — team (who worked), machine/line, quality tags at
+release; people per batch and per day with labour norms (bags a person per
+product, a machine's crew); production ledger with a Tracking view; Production
+settings behind the page's ⚙. Stumarcot's materials format (ProductionBreakdown)
+is locked for every screen showing production materials.
+Moved to 1e: stock at cost, a product's cost across batches, margins, and
+full production cost (labour, power, diesel, expenses). Waste ("thrown away")
+was built and removed on SwahziTech's instruction (2026-10-25); its tables stay
+unused.
 
 Spec decided with SwahziTech from Stumarcot's answers (2026-10-18): a batch is one
 mix/session (one product, one colour), many per day; cement bags counted, other
