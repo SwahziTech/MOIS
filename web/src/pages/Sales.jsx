@@ -169,7 +169,7 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
       Promise.all([
         supabase.rpc('product_price_ex_vat', { p_branch_id: branchId, p_product_id: l.productId, p_color_id: l.colorId || null }),
         supabase.rpc('product_price_vat_rate', { p_branch_id: branchId, p_product_id: l.productId, p_color_id: l.colorId || null }),
-      ]).then(([a, b]) => setPrices(p => ({ ...p, [k]: { ex: a.data?.[0]?.price ?? null, source: a.data?.[0]?.source, rate: Number(b.data ?? 0) } })));
+      ]).then(([a, b]) => { const row = Array.isArray(a.data) ? a.data[0] : a.data; return setPrices(p => ({ ...p, [k]: { ex: row?.price ?? null, source: row?.source, rate: Number(b.data ?? 0) } })); });
     }
   }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
 
