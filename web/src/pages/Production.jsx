@@ -278,7 +278,7 @@ export default function Production() {
           </> : <button type="button" className="btn btn-primary" disabled={bulk.running} onClick={() => setBulk(null)}>Close</button>}>
           {bulk.confirm ? (
             <div className="flex flex-col gap-8">
-              <p className="text-sm">Every piece of these batches passes and moves into Finished Goods today. A batch with rejects: use its own <strong>Release…</strong> instead.</p>
+              <p className="text-sm">Every piece of these batches passes and moves into Finished Goods, dated each batch's production day. A batch with rejects: use its own <strong>Release…</strong> instead.</p>
               {earlyPicked.length > 0 && (
                 <label className="pe-field"><span>{earlyPicked.length} of them {earlyPicked.length === 1 ? 'is' : 'are'} still curing — why release early? (required)</span>
                   <input className="form-input" autoFocus value={bulkNote} placeholder="e.g. 7 days only" onChange={e => setBulkNote(e.target.value)} /></label>
@@ -364,7 +364,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
         <button type="submit" form="release-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Release</button>
       </>}>
       <form id="release-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">Curing until {batch.curing_until}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods; rejected ones leave stock.</p>
+        <p className="text-sm text-muted">Curing until {batch.curing_until}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods and rejected ones leave stock, both dated the production day ({batch.batch_date}); the date below is the day of this quality release.</p>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rl-fg">Into</label>

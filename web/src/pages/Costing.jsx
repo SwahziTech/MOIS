@@ -18,8 +18,10 @@ const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 /*
  * Costing (1e, migration 058; SwahziTech 2026-10-25): per product and colour
  * at a branch — the latest batch's material cost per m² or piece, the price
- * WITHOUT VAT, the margin between them, and the finished stock at cost
- * (first in first out; opening stock at the first batch cost, marked).
+ * WITHOUT VAT, the margin between them, the finished stock at cost (first in
+ * first out: production cost per batch; stock with no production cost —
+ * opening stock, products never produced — estimated at its price without
+ * VAT, kept apart; 060) and the stock at its price without VAT.
  * Materials only for now: power, diesel and labour are shared once expenses
  * are entered. Locked list layout: category over name, figure centred
  * (margin), details right; click shows the stock layers.
@@ -74,13 +76,13 @@ export default function Costing() {
   }, [items, search, chip, sortBy, cats, order]);
 
   const totals = useMemo(() => {
-    let value = 0, est = 0;
+    let value = 0, est = 0, sales = 0;
     for (const x of items) {
-      if (x.value == null) continue;
-      value += Number(x.value);
-      if (Number(x.estimated_quantity) > 0 && x.unit_cost != null) est += Number(x.estimated_quantity) * Number(x.unit_cost);
+      value += Number(x.value) || 0;
+      est += Number(x.estimated_value) || 0;
+      sales += Number(x.sales_value) || 0;
     }
-    return { value, est, unpriced: items.filter(x => x.batches > 0 && x.price == null).length, uncosted: items.filter(x => Number(x.uncosted_quantity) > 0).length };
+    return { value, est, prod: value - est, sales, unpriced: items.filter(x => x.price == null).length };
   }, [items]);
 
   return (
@@ -92,12 +94,12 @@ export default function Costing() {
         <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
-              <span className="pl-help">{totals.est > 0 ? `${money(totals.est)} of it opening stock at first batch cost` : 'oldest stock first'}</span></div>
+              <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
+            <div className="mm-stat"><span className="pl-label">Stock at price</span><strong className="mm-money">{rows ? money(totals.sales) : '—'}</strong><span className="pl-help">without VAT</span></div>
             <div className="mm-stat"><span className="pl-label">Products</span><strong>{items.length}</strong><span className="pl-help">made or in stock here</span></div>
-            <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">made, but no price for its colour</span></div>
-            <div className="mm-stat"><span className="pl-label">Not costed</span><strong className={totals.uncosted ? 'text-warning' : ''}>{totals.uncosted}</strong><span className="pl-help">stock with no batch cost yet</span></div>
+            <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">not valued — set it in Pricing</span></div>
           </div>
-          <p className="pl-help" style={{ margin: '0 0 8px' }}>Cost = materials only (latest batch, VAT included). Margin = price without VAT − cost. Power, diesel and labour come later.</p>
+          <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Power, diesel and labour come later.</p>
 
           <ListToolbar id="costing-search" search={search} onSearch={setSearch} placeholder="Search product (e.g. Buibui, 600R)…"
             sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }] }} />
@@ -122,11 +124,14 @@ export default function Costing() {
                     </>) : <span className="pl-help">{x.cost == null ? 'not produced yet' : 'no price'}</span>}
                   </div>
                   <div className="co-details">
-                    <span>cost <strong>{x.cost != null ? money(round(x.cost)) : '—'}</strong> /{per(x.it)}{x.last_batch_date ? <span className="pl-help"> · {x.last_batch_date}</span> : ''}</span>
+                    <span>{x.cost != null ? <>production cost <strong>{money(round(x.cost))}</strong> /{per(x.it)}<span className="pl-help"> · {x.last_batch_date}</span></>
+                      : <>cost <span className="co-est-txt">estimated at price</span></>}</span>
                     <span>price <strong>{x.price != null ? money(round(x.price)) : '—'}</strong> /{per(x.it)}{x.price == null && x.price_source ? <span className="pl-help"> · {x.price_source}</span> : ''}</span>
-                    <span>stock {qtyText(round(Number(x.on_hand)))} {unitOf(x.it)}{x.value != null ? <> · <strong>{money(round(Number(x.value)))}</strong></> : ''}
-                      {Number(x.estimated_quantity) > 0 && <span className="co-est" title="Opening stock valued at this product's first batch cost"> first batch cost</span>}
-                      {Number(x.uncosted_quantity) > 0 && <span className="co-est"> {qtyText(round(Number(x.uncosted_quantity)))} not costed</span>}</span>
+                    <span>stock {qtyText(round(Number(x.on_hand)))} {unitOf(x.it)}{x.value != null ? <> · at cost <strong>{money(round(Number(x.value)))}</strong></> : ''}
+                      {Number(x.estimated_value) > 0 && Number(x.estimated_value) < Number(x.value) - 0.5 && <span className="co-est" title="Part with no production cost, estimated at the price without VAT"> {money(round(Number(x.estimated_value)))} estimated</span>}
+                      {Number(x.estimated_value) > 0 && Number(x.estimated_value) >= Number(x.value) - 0.5 && <span className="co-est"> estimated</span>}
+                      {x.sales_value != null && <> · at price {money(round(Number(x.sales_value)))}</>}
+                      {Number(x.uncosted_quantity) > 0 && <span className="co-est"> {qtyText(round(Number(x.uncosted_quantity)))} not valued</span>}</span>
                   </div>
                 </div>
               );
@@ -145,7 +150,7 @@ export default function Costing() {
   );
 }
 
-/** The stock left, lot by lot, oldest first: the batch it was made in (or opening stock), when it entered finished goods, how much is left, at what cost */
+/** The stock left, lot by lot, oldest first: the day it was produced (its stock date; curing until released), how much is left, at what cost */
 function LayerList({ branchId, row, unit, money }) {
   const [layers, setLayers] = useState(null);
   useEffect(() => {
@@ -156,16 +161,16 @@ function LayerList({ branchId, row, unit, money }) {
   if (!layers.length) return <p className="pl-help">No stock left.</p>;
   return (
     <table className="rd-table">
-      <thead><tr><th>Made</th><th>In stock from</th><th style={{ textAlign: 'right' }}>Left</th><th style={{ textAlign: 'right' }}>Cost / {unit}</th><th style={{ textAlign: 'right' }}>Value</th><th /></tr></thead>
+      <thead><tr><th>Produced</th><th>Stage</th><th style={{ textAlign: 'right' }}>Left</th><th style={{ textAlign: 'right' }}>Cost / {unit}</th><th style={{ textAlign: 'right' }}>Value</th><th /></tr></thead>
       <tbody>
         {layers.map((l, i) => (
           <tr key={i}>
-            <td>{l.made ?? (l.estimated || !l.batch ? 'opening stock' : '—')}</td>
-            <td>{l.made && l.made !== l.date ? <>{l.date} <span className="pl-help">released</span></> : l.date}</td>
+            <td>{l.date}</td>
+            <td>{l.stage === 'curing' ? 'curing' : l.stage === 'released' ? 'released' : l.batch ? '—' : 'opening stock'}</td>
             <td style={{ textAlign: 'right' }}>{qtyText(round(Number(l.quantity)))} {unit}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost))) : '—'}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost) * Number(l.quantity))) : '—'}</td>
-            <td className="pl-help">{l.estimated ? 'at first batch cost' : l.batch ? (l.made === l.date ? 'curing' : 'batch cost') : l.cost == null ? 'no cost known' : ''}</td>
+            <td className={l.estimated ? 'co-est-txt' : 'pl-help'}>{l.estimated ? 'estimated at price' : l.cost == null ? 'no price' : 'production cost'}</td>
           </tr>
         ))}
       </tbody>
