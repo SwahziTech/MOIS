@@ -2132,3 +2132,7 @@ tr.cp-over td { background: var(--bg-warning); }
 .ds-people { font-size: var(--text-sm); }
 .ptc-crew { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-muted); }
 .ptc-crew .form-input { width: 64px; padding-top: 2px; padding-bottom: 2px; }
+/* Costing (058): cost, price and stock in the details column */
+.co-details { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
+.co-details strong { font-weight: 600; }
+.co-est { margin-left: 6px; font-size: var(--text-xs); color: var(--color-warning); }
