@@ -84,7 +84,7 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
             <table className="rd-table">
               <thead><tr><th>In on</th><th className="num">Quantity left</th><th className="num">Cost</th><th className="num">Value</th></tr></thead>
               <tbody>
-                {fifo.layers.map((l, i) => (
+                {[...fifo.layers].reverse().map((l, i) => (   /* newest on top (locked 2026-10-25) */
                   <tr key={i}><td>{l.date}</td>
                     <td className="num">{qtyText(Math.round((l.quantity / mf) * 100) / 100)} {ms}</td>
                     <td className="num">{l.cost != null ? `${money(l.cost * mf)}/${ms}` : 'no cost'}</td>

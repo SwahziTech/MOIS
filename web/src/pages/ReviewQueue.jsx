@@ -67,7 +67,7 @@ export default function ReviewQueue() {
       .from('review_flags')
       .select('id, entity_type, entity_id, reason_code, reason, created_at, admin_explanation')
       .eq('status', 'open')
-      .order('entity_type').order('created_at');
+      .order('entity_type').order('created_at', { ascending: false });   // newest on top (2026-10-25)
     if (err) { console.error(err); setError(LOAD_ERROR); setLoading(false); return; }
 
     const byType = {};

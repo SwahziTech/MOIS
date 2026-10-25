@@ -163,7 +163,7 @@ function LayerList({ branchId, row, unit, money }) {
     <table className="rd-table">
       <thead><tr><th>Produced</th><th>Stage</th><th style={{ textAlign: 'right' }}>Left</th><th style={{ textAlign: 'right' }}>Cost / {unit}</th><th style={{ textAlign: 'right' }}>Value</th><th /></tr></thead>
       <tbody>
-        {layers.map((l, i) => (
+        {[...layers].reverse().map((l, i) => (   /* newest on top (locked 2026-10-25) */
           <tr key={i}>
             <td>{l.date}</td>
             <td>{l.stage === 'curing' ? 'curing' : l.stage === 'released' ? 'released' : l.batch ? '—' : 'opening stock'}</td>

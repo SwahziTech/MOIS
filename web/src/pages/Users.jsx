@@ -49,7 +49,7 @@ export default function UsersPage() {
           )
         `)
         .eq('organization_id', organization.id)
-        .order('created_at'),
+        .order('created_at', { ascending: false }),   // newest on top (2026-10-25)
       supabase.from('roles').select('id, name').order('name'),
       supabase.from('branches').select('id, name').eq('status', 'active').order('name'),
       supabase.from('warehouses').select('id, name, branch_id').eq('status', 'active').order('name'),
