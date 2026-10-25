@@ -2122,3 +2122,8 @@ tr.cp-over td { background: var(--bg-warning); }
 .pl-calib-pcs { font-size: var(--text-sm); }
 .pl-calib .pl-badge { margin-left: auto; }
 .pl-calib-warn { flex-basis: 100%; }
+/* Materials never overlap (2026-10-25): tiles keep their figure width and wrap when the strip is narrow (a small window);
+   at the developing screen they stay on one row (locked); the steel row keeps the same columns */
+.pb-strip-row { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+@media (max-width: 760px) { .pb-strip-row { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); } }
+@media (min-width: 761px) { .pb-total .pb-strip-row { grid-template-columns: repeat(var(--pb-n), minmax(0, 1fr)); } }   /* the day total spreads its materials over its full width */

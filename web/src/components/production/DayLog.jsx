@@ -655,7 +655,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         </Modal>
       )}
       {previewing && (
-        <Modal title={`Batch ${staged.findIndex(x => x.id === previewing.id) + 1} — ${previewing.label}`} onClose={() => setPreviewing(null)}
+        <Modal size="xl" title={`Batch ${staged.findIndex(x => x.id === previewing.id) + 1} — ${previewing.label}`} onClose={() => setPreviewing(null)}
           footer={<>
             <button type="button" className="btn btn-outline" onClick={() => setPreviewing(null)}>Close</button>
             {previewing.form && <button type="button" className="btn btn-primary" onClick={() => { const it = previewing; setPreviewing(null); editStaged(it); }}><Pencil size={14} /> Edit</button>}
