@@ -40,7 +40,8 @@ export default function ProductPicker({ title = 'Select primary product', items,
           {shown.length === 0 && <div className="pl-empty">No product matches.</div>}
           {shown.map((i, n) => (
             <button type="button" key={i.id} className="pp-card" onClick={() => onPick(i.id)}>
-              <span className="pp-head"><span className="pp-n">#{n + 1}</span><strong>{i.name}</strong><span className="pl-tag">{i.category}</span>
+              <span className="pp-cat">{i.category}</span>{/* category over name (locked) */}
+              <span className="pp-head"><span className="pp-n">#{n + 1}</span><strong>{i.name}</strong>
                 {capacity?.[i.id]?.molds ? <span className="pp-cap">{capOf(capacity[i.id])}</span>
                   : capOf(capacity?.[i.id]) && <span className="pp-cap is-none" title="A guide, not a limit">~{capOf(capacity[i.id])}</span>}
                 {usage[i.id] > 0 && <span className="pp-used">{usage[i.id]} batch{usage[i.id] === 1 ? '' : 'es'}</span>}</span>
