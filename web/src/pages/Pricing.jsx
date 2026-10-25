@@ -60,14 +60,14 @@ export default function Pricing() {
 
   async function load() {
     setError('');
+    const PRICE_COLS = 'id, product_id, branch_id, color_id, is_available, price_per_unit_exclusive, vat_per_unit, price_per_unit_inclusive, price_per_sqm_inclusive, pcs_per_sqm_at_pricing, raw_notes';
+    // the price's own VAT rate (061) when the database has it
+    const loadPrices = async () => {
+      const withVat = await supabase.from('product_branch_pricing').select(`${PRICE_COLS}, vat_rate`);
+      return withVat.error ? supabase.from('product_branch_pricing').select(PRICE_COLS) : withVat;
+    };
     const [priceRes, branchRes, ruleRes, prodRes, catRes, bpRes] = await Promise.all([
-      supabase
-        .from('product_branch_pricing')
-        .select(`
-          id, product_id, branch_id, color_id, is_available,
-          price_per_unit_exclusive, vat_per_unit, price_per_unit_inclusive,
-          price_per_sqm_inclusive, pcs_per_sqm_at_pricing, raw_notes
-        `),
+      loadPrices(),
       supabase.from('branches').select('id, name, status, vat_rate').order('name'),
       supabase
         .from('category_color_pricing_rules')
@@ -209,7 +209,9 @@ export default function Pricing() {
                           </div>
                           <div className="text-xs text-muted">
                             {!row.is_available ? 'not sold here'
-                              : row.price_per_sqm_inclusive != null ? (row.price_per_unit_inclusive != null && row.pcs_per_sqm_at_pricing ? `${money(row.price_per_unit_inclusive)} each · ${row.pcs_per_sqm_at_pricing} per m²` : 'per-piece price not set') : 'incl. VAT'}
+                              : row.price_per_sqm_inclusive != null ? (row.price_per_unit_inclusive != null && row.pcs_per_sqm_at_pricing ? `${money(row.price_per_unit_inclusive)} each · ${row.pcs_per_sqm_at_pricing} per m²` : 'per-piece price not set')
+                              : Number(row.vat_rate ?? impliedVatRate(row)) === 0 ? 'no VAT' : 'incl. VAT'}
+                            {row.is_available && row.price_per_sqm_inclusive != null && Number(row.vat_rate ?? impliedVatRate(row)) === 0 && ' · no VAT'}
                           </div>
                           {colourPrices[`${p.id}|${b.id}`] && (
                             <div className="text-xs text-muted">+ {colourPrices[`${p.id}|${b.id}`].length} colour price{colourPrices[`${p.id}|${b.id}`].length === 1 ? '' : 's'}</div>
@@ -219,7 +221,7 @@ export default function Pricing() {
                       return (
                         <td key={b.id}>
                           {(canWrite || canProposeAt(b)) && (p.status === 'active' || row) ? (
-                            <button type="button" className="price-cell" onClick={() => setEditingPrice({ product: p, branch: b, row })}
+                            <button type="button" className="price-cell" title={row ? 'Click to change this price' : 'Click to add a price'} onClick={() => setEditingPrice({ product: p, branch: b, row })}
                               aria-label={`${row ? 'Edit' : 'Add'} ${p.canonical_name} price in ${b.name}`}>
                               {row ? cell : <span className="text-muted flex items-center gap-4"><Plus size={12} /> Add</span>}
                             </button>
@@ -290,7 +292,7 @@ export default function Pricing() {
       )}
 
       {editingPrice && (
-        <PriceModal {...editingPrice} organization={organization} usualVatRate={usualVatRate}
+        <PriceModal {...editingPrice} organization={organization} usualVatRate={usualVatRate} vatColumn={prices.some(x => 'vat_rate' in x)}
           colours={categories.find(c => c.id === editingPrice.product.category_id)?.colors ?? []}
           baseColourId={rules.find(r => r.category_id === editingPrice.product.category_id && r.branch_id === editingPrice.branch.id)?.base_color_id ?? null}
           colourRows={prices.filter(x => x.color_id && x.product_id === editingPrice.product.id && x.branch_id === editingPrice.branch.id)}
@@ -305,7 +307,7 @@ export default function Pricing() {
   );
 }
 
-function PriceModal({ product, branch, row, organization, usualVatRate, colours, baseColourId, colourRows, viaApproval, onClose, onSaved }) {
+function PriceModal({ product, branch, row, organization, usualVatRate, vatColumn = false, colours, baseColourId, colourRows, viaApproval, onClose, onSaved }) {
   const isNew = !row;
   const money = v => formatMoney(v, organization?.currency_code);
   // Most prices are per m²; per piece is the exception
@@ -313,7 +315,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
   const [perSqm,    setPerSqm]    = useState(row?.price_per_sqm_inclusive ?? '');
   const [pcs,       setPcs]       = useState(row?.pcs_per_sqm_at_pricing ?? product.pcs_per_sqm ?? '');
   const [perUnit,   setPerUnit]   = useState(row?.price_per_unit_inclusive ?? '');
-  const [vatRate,   setVatRate]   = useState(row ? impliedVatRate(row) ?? '' : usualVatRate ?? '');
+  const [vatRate,   setVatRate]   = useState(row ? row.vat_rate ?? impliedVatRate(row) ?? usualVatRate ?? '' : usualVatRate ?? '');   // 061: kept on the price; 0 = sold without VAT
   const [available, setAvailable] = useState(row?.is_available ?? true);
   const [notes,     setNotes]     = useState(row?.raw_notes ?? '');
   const [submitted, setSubmitted] = useState(false);
@@ -370,6 +372,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
         price_per_unit_inclusive: inc != null ? round2(inc) : null,
         price_per_unit_exclusive: ex != null ? round2(ex) : null,
         vat_per_unit:             ex != null ? round2(inc - ex) : null,
+        ...(vatColumn ? { vat_rate: rate } : {}),   // 061
         price_per_sqm_inclusive:  byArea && numOrNull(sqm) != null ? (exVat ? round2(toInc(numOrNull(sqm))) : numOrNull(sqm)) : null,
         pcs_per_sqm_at_pricing:   byArea && numOrNull(pcs) != null ? Number(pcs) : null,
       };
@@ -484,7 +487,11 @@ function PriceModal({ product, branch, row, organization, usualVatRate, colours,
           <div className="form-group">
             <label className="form-label" htmlFor="pr-vat">VAT rate (%)</label>
             <NumberInput id="pr-vat" step="any" min="0" className="form-input" placeholder="Not recorded" value={vatRate} onChange={e => setVatRate(e.target.value)} />
-            <span className="form-hint">{row ? 'As implied by this price\'s current figures.' : 'Suggested from your other prices — check it.'}</span>
+            <span className="flex items-center gap-4 mt-4">
+              {usualVatRate != null && Number(usualVatRate) > 0 && <button type="button" className={`filter-chip${numOrNull(vatRate) === Number(usualVatRate) ? ' is-on' : ''}`} onClick={() => setVatRate(String(usualVatRate))}>VAT {usualVatRate}%</button>}
+              <button type="button" className={`filter-chip${numOrNull(vatRate) === 0 ? ' is-on' : ''}`} onClick={() => setVatRate('0')}>No VAT</button>
+            </span>
+            <span className="form-hint">{numOrNull(vatRate) === 0 ? 'Sold without VAT: the price is the same with and without VAT.' : 'The VAT in this price. Pick No VAT for a product sold without VAT.'}</span>
           </div>
           <div className="form-group">
             <span className="form-label">Works out to</span>
