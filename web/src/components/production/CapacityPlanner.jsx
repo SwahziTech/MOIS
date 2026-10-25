@@ -89,6 +89,8 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cats = useMemo(() => categoryTools(refs.categoryRows), [refs]);
+  // pieces per m² only for products counted in m² — piece products always in pieces (2026-10-25)
+  const sqmPer = id => (refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol?.toUpperCase() === 'SQM' ? perSqm[id] : undefined);
   const carried = useMemo(() => Object.values(refs.items)
     .filter(i => i.kind === 'product' && i.status === 'active' && refs.carriedByBranch?.[branchId]?.has(i.id))
     .map(i => ({ ...i, size: i.size || sizes[i.id] })).sort(productOrder(cats)), [refs, branchId, cats, sizes]);
@@ -106,7 +108,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
   const simW = bands[sim.productId]?.average_yield_per_bag;
   const simCap = capacity[sim.productId];
   // the target is typed in m² when the product has pieces per m², and worked in pieces
-  const simPerSqm = perSqm[sim.productId];
+  const simPerSqm = sqmPer(sim.productId);
   const inSqm = sim.unit === 'sqm' && simPerSqm > 0;
   const typed = num(sim.target) ?? 0;
   const target = inSqm ? Math.ceil(typed * simPerSqm - 1e-9) : typed;
@@ -200,7 +202,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
     <div className="pl">
       {simPicking && (
         <ProductPicker title="Select finished product" items={carried} cats={cats} usage={usage} wastani={wastani} capacity={capacity}
-          onClose={() => setSimPicking(false)} onPick={id => { setSimPicking(false); setSim(x => ({ ...x, productId: id, colorId: '', target: '', unit: perSqm[id] > 0 ? 'sqm' : 'pcs' })); }} />
+          onClose={() => setSimPicking(false)} onPick={id => { setSimPicking(false); setSim(x => ({ ...x, productId: id, colorId: '', target: '', unit: sqmPer(id) > 0 ? 'sqm' : 'pcs' })); }} />
       )}
 
       {/* ---- orders ---- */}
@@ -290,7 +292,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
           {draft.lines.length === 0 ? <div className="pl-empty">No products yet — choose one in the simulator, set the target, then "Add to order".</div> : (
             <div className="po-lines">
               {draft.lines.map((l, i) => {
-                const per = perSqm[l.productId];
+                const per = sqmPer(l.productId);
                 return (
                   <div key={`${l.productId}|${l.colorId}`} className="po-line">
                     <span className="po-line-name">{nameOf(l.productId, l.colorId)}</span>

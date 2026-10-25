@@ -251,7 +251,7 @@ export default function Products() {
                 </div>
                 <div className="sk-total">
                   <span><strong className="pc-wastani">{sp?.average_yield_per_bag != null ? +Number(sp.average_yield_per_bag).toPrecision(6) : '—'}</strong> <span className="sk-unit">pcs/bag</span></span>
-                  <span className="sk-sub">wastani{sp?.pcs_per_sqm != null ? ` · ${+Number(sp.pcs_per_sqm).toPrecision(6)} pcs/m²` : ''}</span>
+                  <span className="sk-sub">wastani{sp?.pcs_per_sqm != null && p.unit?.symbol?.toUpperCase() === 'SQM' ? ` · ${+Number(sp.pcs_per_sqm).toPrecision(6)} pcs/m²` : ''}</span>
                 </div>
                 <div className="lk-mid">
                   {branchId && capacity && <span className="pc-fleet"><Factory size={13} /> {cap?.molds ? `${cap.molds} molds` : capacityText(cap, true) ? `~${capacityText(cap, true)}` : 'Molds not set'}</span>}
@@ -438,7 +438,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
         <dl className="detail-list text-sm">
           <dt>Size</dt><dd>{p.size_cm || '—'}</dd>
           <dt>Stock unit</dt><dd>{unit || '—'}</dd>
-          <dt>Pieces per m²</dt><dd>{spec?.pcs_per_sqm != null ? <>{+Number(spec.pcs_per_sqm).toPrecision(6)} <span className="text-muted">({sourceText(spec.pcs_source)})</span></> : '—'}</dd>
+          {unit.toUpperCase() === 'SQM' && <><dt>Pieces per m²</dt><dd>{spec?.pcs_per_sqm != null ? <>{+Number(spec.pcs_per_sqm).toPrecision(6)} <span className="text-muted">({sourceText(spec.pcs_source)})</span></> : '—'}</dd></>}   {/* piece products: no m² (2026-10-25) */}
           <dt>Yield per bag</dt><dd>{spec?.average_yield_per_bag != null ? <>{+Number(spec.average_yield_per_bag).toPrecision(6)} average <span className="text-muted">({sourceText(spec.yield_source)})</span></> : '—'}</dd>
           <dt>Quality check</dt><dd>{band == null ? <span className="text-muted">— (no average yield yet)</span>
             : band.tolerance == null ? <span className="text-muted">no tolerance set</span>
