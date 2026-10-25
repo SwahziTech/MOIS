@@ -2116,3 +2116,9 @@ tr.cp-over td { background: var(--bg-warning); }
 .ps-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
 .ps-row > span:first-child { color: var(--text-muted); }
 .pl-res-pick { text-align: left; cursor: pointer; font-weight: 600; min-width: 180px; }
+/* Yield calibration: one compact row (2026-10-25) */
+.pl-sub.pl-calib { display: flex; flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 14px; }
+.pl-calib .pl-subtitle { margin: 0; }
+.pl-calib-pcs { font-size: var(--text-sm); }
+.pl-calib .pl-badge { margin-left: auto; }
+.pl-calib-warn { flex-basis: 100%; }

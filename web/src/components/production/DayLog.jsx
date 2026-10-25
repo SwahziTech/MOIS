@@ -569,25 +569,16 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           })}
         </div>
 
-        <div className="pl-sub">
-          <div className="pl-subhead">
-            <h4 className="pl-subtitle">Weighted batch yield calibration</h4>
-            {theoretical != null && bags > 0 && totalPieces > 0 && (
-              <span className={`pl-badge${outOfBand ? ' is-out' : ''}`}>Yield factor: {Math.round((theoretical / bags) * 1000) / 10}%</span>
-            )}
-          </div>
-          {outOfBand && <p className="pl-help text-warning">Outside the band — this batch will be flagged for review.</p>}
-          <div className="pl-two">
-            <div className="pl-box">
-              <span className="pl-label">Pieces in batch</span>
-              <div className="pl-mid">{qtyText(mainPieces ?? 0)} {main?.name ?? 'pcs'}{form.leftovers.filter(l => l.productId && num(l.pieces)).map(l => (
-                <span key={l.productId} className="pl-sub-num"> + {qtyText(num(l.pieces))} {refs.items[`p:${l.productId}`]?.name}</span>))}</div>
-            </div>
-            <div className="pl-box">
-              <span className="pl-label">Theoretical cement needed</span>
-              <div className="pl-mid pl-accent-text">{theoretical != null && totalPieces > 0 ? `${qtyText(round(theoretical, 2))} bags` : '—'}</div>
-            </div>
-          </div>
+        {/* Weighted batch yield calibration, one compact row (2026-10-25): product · pieces, cement implied (small), yield factor */}
+        <div className="pl-sub pl-calib">
+          <span className="pl-subtitle">Yield calibration</span>
+          <span className="pl-calib-pcs">{main?.name ?? '—'} · <strong>{qtyText(mainPieces ?? 0)}</strong> pcs{form.leftovers.filter(l => l.productId && num(l.pieces)).map(l => (
+            <span key={l.productId}> + {refs.items[`p:${l.productId}`]?.name} · <strong>{qtyText(num(l.pieces))}</strong> pcs</span>))}</span>
+          <span className="pl-help">cement implied {theoretical != null && totalPieces > 0 ? `${qtyText(round(theoretical, 2))} bags` : '—'}</span>
+          {theoretical != null && bags > 0 && totalPieces > 0 && (
+            <span className={`pl-badge${outOfBand ? ' is-out' : ''}`}>Yield factor: {Math.round((theoretical / bags) * 1000) / 10}%</span>
+          )}
+          {outOfBand && <span className="pl-help text-warning pl-calib-warn">Outside the band — this batch will be flagged for review.</span>}
         </div>
       </section>
 
