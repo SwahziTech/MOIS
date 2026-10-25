@@ -25,6 +25,8 @@ import Purchases    from './pages/Purchases';
 import Production   from './pages/Production';
 import ProductionLedger from './pages/ProductionLedger';
 import Costing from './pages/Costing';
+import Sales from './pages/Sales';
+import Customers from './pages/Customers';
 
 export default function App() {
   return (
@@ -57,6 +59,8 @@ export default function App() {
             <Route path="/production"  element={<Production />} />
             <Route path="/production/ledger" element={<ProductionLedger />} />
             <Route path="/costing" element={<Costing />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/customers" element={<Customers />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />

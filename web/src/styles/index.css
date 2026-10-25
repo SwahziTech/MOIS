@@ -2142,3 +2142,8 @@ tr.cp-over td { background: var(--bg-warning); }
 
 /* LOCKED 2026-10-25: products — name on top, category row below; materials — category on top */
 .sk-name.is-product > strong { order: -1; }
+
+/* Sales (064) */
+.sl-table td { vertical-align: top; }
+.sl-table .form-input { min-width: 0; }
+.sl-totals { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
