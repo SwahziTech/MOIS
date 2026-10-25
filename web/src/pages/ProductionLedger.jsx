@@ -10,7 +10,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
-import { peopleOf } from '../components/production/BatchNotes';
+import { peopleOf, labourNorm } from '../components/production/BatchNotes';
 import { formatMoney } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
@@ -61,9 +61,14 @@ export default function ProductionLedger() {
       // production tracking (056) — the ledger still works without it
       const [t, m] = await Promise.all([
         supabase.from('production_teams').select('id, name, members:production_team_members(id, name, status)'),
-        supabase.from('machines').select('id, name'),
+        supabase.from('machines').select('*'),
       ]);
-      setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [] });
+      // labour norms (057): bags a person, per branch and product
+      const ln = await supabase.from('branch_products').select('branch_id, product_id, bags_per_person_min, bags_per_person_max');
+      const norms = {};
+      for (const x of ln.error ? [] : ln.data || []) if (x.bags_per_person_min != null || x.bags_per_person_max != null)
+        (norms[x.branch_id] ||= {})[x.product_id] = { min: Number(x.bags_per_person_min ?? x.bags_per_person_max), max: Number(x.bags_per_person_max ?? x.bags_per_person_min) };
+      setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [], norms });
       if (b.error) throw b.error;
       setRefs(r);
       setBatches(b.data || []);
@@ -117,6 +122,8 @@ export default function ProductionLedger() {
       date: d.date, branchName: branchNameOf(d.branchId), curingUntil: curing.at(-1) ?? null,
       people: track && d.batches.some(b => b.team_id && b.status !== 'void')
         ? new Set(d.batches.filter(b => b.team_id && b.status !== 'void').flatMap(b => peopleOf(track.teams, b.team_id, b.worker_ids))).size : null,
+      norm: track && d.batches.some(b => b.team_id && b.status !== 'void')
+        ? labourNorm({ machines: track.machines, norms: track.norms[d.branchId] || {} }, d.batches.filter(b => b.status !== 'void').map(b => ({ machineId: b.machine_id, productId: b.product_id, bags: Number(b.cement_bags) }))) : null,
       batches: d.batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
