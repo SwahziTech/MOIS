@@ -145,7 +145,7 @@ export default function Costing() {
   );
 }
 
-/** The stock left, layer by layer (oldest first): when it came in, how much, at what cost */
+/** The stock left, lot by lot, oldest first: the batch it was made in (or opening stock), when it entered finished goods, how much is left, at what cost */
 function LayerList({ branchId, row, unit, money }) {
   const [layers, setLayers] = useState(null);
   useEffect(() => {
@@ -156,15 +156,16 @@ function LayerList({ branchId, row, unit, money }) {
   if (!layers.length) return <p className="pl-help">No stock left.</p>;
   return (
     <table className="rd-table">
-      <thead><tr><th>In</th><th style={{ textAlign: 'right' }}>Left</th><th style={{ textAlign: 'right' }}>Cost / {unit}</th><th style={{ textAlign: 'right' }}>Value</th><th /></tr></thead>
+      <thead><tr><th>Made</th><th>In stock from</th><th style={{ textAlign: 'right' }}>Left</th><th style={{ textAlign: 'right' }}>Cost / {unit}</th><th style={{ textAlign: 'right' }}>Value</th><th /></tr></thead>
       <tbody>
         {layers.map((l, i) => (
           <tr key={i}>
-            <td>{l.date}</td>
+            <td>{l.made ?? (l.estimated || !l.batch ? 'opening stock' : '—')}</td>
+            <td>{l.made && l.made !== l.date ? <>{l.date} <span className="pl-help">released</span></> : l.date}</td>
             <td style={{ textAlign: 'right' }}>{qtyText(round(Number(l.quantity)))} {unit}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost))) : '—'}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost) * Number(l.quantity))) : '—'}</td>
-            <td className="pl-help">{l.estimated ? 'opening stock · first batch cost' : l.batch ? 'batch' : l.cost == null ? 'no cost known' : ''}</td>
+            <td className="pl-help">{l.estimated ? 'at first batch cost' : l.batch ? (l.made === l.date ? 'curing' : 'batch cost') : l.cost == null ? 'no cost known' : ''}</td>
           </tr>
         ))}
       </tbody>
