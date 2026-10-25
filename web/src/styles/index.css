@@ -2106,3 +2106,5 @@ tr.cp-over td { background: var(--bg-warning); }
 .ptc-add { display: inline-flex; align-items: center; gap: 2px; }
 .ptc-add .form-input { width: 150px; padding-top: 4px; padding-bottom: 4px; }
 .ptc-sel { width: 150px; padding-top: 4px; padding-bottom: 4px; }
+/* the open list of a chip dropdown follows the theme (it was light text on white) */
+.bn-chip-sel option { background: var(--bg-surface); color: var(--text-primary); }
