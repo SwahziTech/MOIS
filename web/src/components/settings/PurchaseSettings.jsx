@@ -81,6 +81,11 @@ export function RejectReasonsCard() {
     help="Picked for the rejected pieces at a batch's quality release after curing." />;
 }
 
+export function WasteReasonsCard() {
+  return <NamedListCard table="waste_reasons" perm="products.manage" title="Waste reasons" placeholder="New reason"
+    help="Picked for material thrown away while making a batch (Thrown away, in the batch's notes)." />;
+}
+
 /** A short list an organization keeps (name, order, in use) */
 function NamedListCard({ table, perm, title, help, placeholder }) {
   const { canManage, organization } = useAuth();

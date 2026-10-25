@@ -10,6 +10,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
+import { formatMoney } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
 const STAGES = ['Curing', 'Ready', 'Released', 'Void'];
@@ -41,6 +42,9 @@ export default function ProductionLedger() {
   const [sortBy, setSortBy] = useState('newest');
   const [open, setOpen] = useState(null);         // a day key
   const [pcsPerSqm, setPcsPerSqm] = useState({});
+  const [track, setTrack] = useState(null);       // teams, machines, waste, reasons (056); null before it
+  const [view, setView] = useState('days');       // days | tracking
+  const [groupBy, setGroupBy] = useState('team');  // team | machine | product | waste
 
   async function load() {
     setError('');
@@ -53,6 +57,14 @@ export default function ProductionLedger() {
         supabase.from('product_specs').select('product_id, pcs_per_sqm'),
       ]);
       setPcsPerSqm(Object.fromEntries((ps.data || []).map(x => [x.product_id, Number(x.pcs_per_sqm)])));
+      // production tracking (056) — the ledger still works without it
+      const [t, m, w, wr] = await Promise.all([
+        supabase.from('production_teams').select('id, name, members:production_team_members(id, name)'),
+        supabase.from('machines').select('id, name'),
+        supabase.from('production_batch_waste').select('*'),
+        supabase.from('waste_reasons').select('id, name'),
+      ]);
+      setTrack(t.error || m.error || w.error ? null : { teams: t.data || [], machines: m.data || [], waste: w.data || [], reasons: wr.data || [] });
       if (b.error) throw b.error;
       setRefs(r);
       setBatches(b.data || []);
@@ -107,6 +119,10 @@ export default function ProductionLedger() {
       batches: d.batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
+        team: teamOf(b), machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
+        waste: (track?.waste || []).filter(w => w.batch_id === b.id).map(w => ({ name: refs.items[`m:${w.material_id}`]?.name ?? '—', qty: Number(w.quantity),
+          unit: refs.unitById[w.unit_id]?.symbol ?? '', reason: track.reasons.find(r => r.id === w.reason_id)?.name ?? '', cost: w.cost })),
+        qc: b.status === 'released' ? { tags: b.qc_tags || [], note: b.release_note } : null,
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),
         outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed, perBag: o.yield_per_bag,
@@ -118,11 +134,58 @@ export default function ProductionLedger() {
     };
   }
 
+  // the team, and who worked when it differed: "Juma team (2 of 3: Juma, Neema)"
+  function teamOf(b) {
+    const t = track?.teams.find(x => x.id === b.team_id);
+    if (!t) return null;
+    if (!b.worker_ids) return t.name;
+    const people = track.teams.flatMap(x => x.members);
+    return `${t.name} (${b.worker_ids.map(id => people.find(p => p.id === id)?.name ?? '?').join(', ')})`;
+  }
+
+  // Tracking: the period's batches by team, machine, product or waste reason
+  const tracking = useMemo(() => {
+    if (!track || !refs) return [];
+    const live = days.flatMap(d => d.batches).filter(b => b.status !== 'void');
+    const rows = {};
+    const row = (k, name) => (rows[k] ||= { key: k, name, batches: 0, bags: 0, pieces: 0, implied: 0, implying: 0, released: 0, rejected: 0, cost: 0, costPcs: 0, waste: 0, wasteTimes: 0 });
+    if (groupBy === 'waste') {
+      const ids = new Set(live.map(b => b.id));
+      for (const w of track.waste.filter(x => ids.has(x.batch_id))) {
+        const r = row(w.reason_id, track.reasons.find(x => x.id === w.reason_id)?.name ?? '—');
+        r.wasteTimes += 1; r.waste += Number(w.cost) || 0;
+      }
+      return Object.values(rows).sort((a, b) => b.waste - a.waste);
+    }
+    for (const b of live) {
+      const keys = groupBy === 'team' ? [[b.team_id ?? '-', track.teams.find(t => t.id === b.team_id)?.name ?? 'No team (before 25 Oct)']]
+        : groupBy === 'machine' ? [[b.machine_id ?? '-', track.machines.find(m => m.id === b.machine_id)?.name ?? 'No machine (before 25 Oct)']]
+        : [[b.product_id, refs.items[`p:${b.product_id}`]?.name ?? '—']];
+      for (const [k, name] of keys) {
+        const r = row(k, name);
+        r.batches += 1; r.bags += Number(b.cement_bags);
+        const pcs = (b.outputs || []).reduce((s, o) => s + o.pieces_cast, 0);
+        r.pieces += pcs;
+        if (b.theoretical_bags != null) { r.implied += Number(b.theoretical_bags); r.implying += Number(b.cement_bags); }
+        if (b.status === 'released') { r.released += pcs; r.rejected += (b.rejects || []).reduce((s, x) => s + x.pieces, 0); }
+        if (b.material_cost != null) { r.cost += Number(b.material_cost); r.costPcs += pcs; }
+        r.waste += track.waste.filter(w => w.batch_id === b.id).reduce((s, w) => s + (Number(w.cost) || 0), 0);
+      }
+    }
+    return Object.values(rows).sort((a, b) => b.pieces - a.pieces);
+  }, [track, refs, days, groupBy]);
+  const money = v => formatMoney(v, organization?.currency_code);
+  const pct = v => (v == null || !isFinite(v) ? '—' : `${Math.round(v * 1000) / 10}%`);
+
   const openDay = days.find(d => d.key === open);
   return (
     <PageShell title="Production ledger" subtitle="Production"
       description={branchId ? `Every production day confirmed at ${branchName}.` : 'Every production day confirmed, at every branch.'}>
       <div className="pled-toolbar">
+        <div className="filter-chips">
+          <button type="button" className={`filter-chip${view === 'days' ? ' is-on' : ''}`} onClick={() => setView('days')}>Days</button>
+          <button type="button" className={`filter-chip${view === 'tracking' ? ' is-on' : ''}`} disabled={!track} title={track ? '' : 'Production tracking is not set up yet'} onClick={() => setView('tracking')}>Tracking</button>
+        </div>
         <select className="form-input" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
@@ -146,7 +209,48 @@ export default function ProductionLedger() {
         </select>
       </div>
 
-      <div className="card">
+      {view === 'tracking' && track && (
+        <div className="card">
+          <div className="pled-track-head">
+            <span className="pl-help">Batches in the period above (void left out). Yield = cement the pieces imply ÷ cement used; rejects = of pieces released.</span>
+            <div className="filter-chips">
+              {[['team', 'Team'], ['machine', 'Machine'], ['product', 'Product'], ['waste', 'Waste reason']].map(([k, l]) => (
+                <button type="button" key={k} className={`filter-chip${groupBy === k ? ' is-on' : ''}`} onClick={() => setGroupBy(k)}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="table-container">
+            {groupBy === 'waste' ? (
+              <table>
+                <thead><tr><th>Why thrown away</th><th style={{ textAlign: 'right' }}>Times</th><th style={{ textAlign: 'right' }}>Cost</th></tr></thead>
+                <tbody>{tracking.length === 0 ? <tr><td colSpan={3} className="text-muted">Nothing thrown away in this period.</td></tr> : tracking.map(r => (
+                  <tr key={r.key}><td style={{ fontWeight: 500 }}>{r.name}</td><td style={{ textAlign: 'right' }}>{r.wasteTimes}</td><td style={{ textAlign: 'right' }}>{money(r.waste)}</td></tr>
+                ))}</tbody>
+              </table>
+            ) : (
+              <table>
+                <thead><tr><th>{{ team: 'Team', machine: 'Machine', product: 'Product' }[groupBy]}</th><th style={{ textAlign: 'right' }}>Batches</th><th style={{ textAlign: 'right' }}>Bags</th>
+                  <th style={{ textAlign: 'right' }}>Pieces</th><th style={{ textAlign: 'right' }}>Yield</th><th style={{ textAlign: 'right' }}>Rejects</th>
+                  <th style={{ textAlign: 'right' }}>Material / pc</th><th style={{ textAlign: 'right' }}>Waste</th></tr></thead>
+                <tbody>{tracking.length === 0 ? <tr><td colSpan={8} className="text-muted">No batches in this period.</td></tr> : tracking.map(r => (
+                  <tr key={r.key}>
+                    <td style={{ fontWeight: 500 }} className={r.key === '-' ? 'text-muted' : ''}>{r.name}</td>
+                    <td style={{ textAlign: 'right' }}>{r.batches}</td>
+                    <td style={{ textAlign: 'right' }}>{qtyText(round(r.bags))}</td>
+                    <td style={{ textAlign: 'right' }}>{qtyText(r.pieces)}</td>
+                    <td style={{ textAlign: 'right' }}>{r.implying > 0 ? pct(r.implied / r.implying) : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{r.released > 0 ? pct(r.rejected / r.released) : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{r.costPcs > 0 ? money(r.cost / r.costPcs) : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{r.waste > 0 ? money(r.waste) : '—'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === 'days' && <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
@@ -171,7 +275,7 @@ export default function ProductionLedger() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       {openDay && refs && (
         <Modal title={`Production — ${openDay.date}`} onClose={() => setOpen(null)} size="xl"

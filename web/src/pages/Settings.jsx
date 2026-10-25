@@ -8,7 +8,7 @@ import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
-import { BranchVatCard, ExpenseCategoriesCard, RejectReasonsCard, CuringDays, MinCuringDays } from '../components/settings/PurchaseSettings';
+import { BranchVatCard, ExpenseCategoriesCard, RejectReasonsCard, WasteReasonsCard, CuringDays, MinCuringDays } from '../components/settings/PurchaseSettings';
 
 function Row({ label, children }) {
   return (
@@ -62,6 +62,7 @@ export default function Settings() {
         <BranchVatCard />
         <ExpenseCategoriesCard />
         <RejectReasonsCard />
+        <WasteReasonsCard />
 
         <section className="card">
           <div className="card-header"><h2 className="card-title">Appearance</h2></div>

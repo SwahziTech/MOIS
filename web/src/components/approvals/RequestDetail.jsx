@@ -60,6 +60,11 @@ function ProductionDay({ p, refs }) {
   const { organization } = useAuth();
   const [perBag, setPerBag] = useState({});   // product id → pieces per bag
   const [est, setEst] = useState(null);       // ≈ material cost per batch (055's way)
+  const [names, setNames] = useState({});     // team, machine, waste reason id → name (056)
+  useEffect(() => {
+    Promise.all([supabase.from('production_teams').select('id, name'), supabase.from('machines').select('id, name'), supabase.from('waste_reasons').select('id, name')])
+      .then(rs => setNames(Object.fromEntries(rs.flatMap(x => (x.data || []).map(y => [y.id, y.name])))));
+  }, []);
   useEffect(() => {
     const ids = [...new Set(batches.flatMap(b => (b.outputs || []).map(o => o.product_id)))];
     if (!ids.length) return;
@@ -83,6 +88,8 @@ function ProductionDay({ p, refs }) {
       {first && <p className="pl-help">{first.batch_date} · from {store(refs, first.raw_warehouse_id)} → cures in {store(refs, first.curing_warehouse_id)}</p>}
       <ProductionBreakdown batches={batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags),
+        team: names[b.team_id] ? `${names[b.team_id]}${b.worker_ids ? ` (${b.worker_ids.length} worked)` : ''}` : null, machine: names[b.machine_id] ?? null,
+        waste: (b.waste || []).map(w => ({ name: refs.items[`m:${w.material_id}`]?.name ?? '—', qty: Number(w.quantity), unit: unit(refs, w.unit_id), reason: names[w.reason_id] ?? '' })),
         ...(est?.[i] ? { cost: est[i].cost, costComplete: est[i].complete, estimate: true } : {}),
         outputs: sortOuts(b).map((o, j) => ({ ...(est?.[i]?.outputs[j] ?? {}),
           name: `${itemName(refs, o)}${colourOf(b, o) ? ` ${colour(refs, colourOf(b, o))}` : ''}`,

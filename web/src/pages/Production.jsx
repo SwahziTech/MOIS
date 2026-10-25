@@ -322,6 +322,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
   const [date, setDate] = useState(today);
   const [rejects, setRejects] = useState({});   // `${output id}|${reason id}` → pieces
   const [note, setNote] = useState('');
+  const [tags, setTags] = useState([]);   // quality issues seen (056)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const active = reasons.filter(r => r.status === 'active');
@@ -346,6 +347,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
       outputs: outputs.map(o => ({ output_id: o.id, pieces_passed: passedOf(o),
         rejects: active.filter(r => num(rejects[`${o.id}|${r.id}`]) > 0).map(r => ({ reason_id: r.id, pieces: num(rejects[`${o.id}|${r.id}`]) })) })),
     } });
+    if (!err && tags.length) await supabase.rpc('set_batch_quality', { p_batch: batch.id, p_tags: tags });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't release this batch. Please try again.")); return; }
     onSaved();
@@ -394,13 +396,28 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
           </table>
         </div>
         <div className="form-group">
-          <label className="form-label" htmlFor="rl-note">{early ? 'Why released early? (required)' : 'Note (optional)'}</label>
+          <QcTags value={tags} onChange={setTags} />
+          <label className="form-label" htmlFor="rl-note">{early ? 'Why released early? (required)' : 'Quality note (optional)'}</label>
           <input id="rl-note" className="form-input" value={note} onChange={e => setNote(e.target.value)} />
         </div>
       </form>
     </Modal>
   );
 }
+
+/** Quality issues seen at release (056): tap the ones that had an issue */
+function QcTags({ value, onChange }) {
+  return (
+    <div className="qc-tags" role="group" aria-label="Quality issues">
+      <span className="pl-help">Issues seen:</span>
+      {QC_TAGS.map(t => (
+        <button type="button" key={t} className={`filter-chip${value.includes(t) ? ' is-on' : ''}`} aria-pressed={value.includes(t)}
+          onClick={() => onChange(value.includes(t) ? value.filter(x => x !== t) : [...value, t])}>{t}</button>
+      ))}
+    </div>
+  );
+}
+const QC_TAGS = ['Colour', 'Edges', 'Size', 'Strength', 'Surface'];
 
 function VoidModal({ batch, name, onClose, onSaved }) {
   const [reason, setReason] = useState('');

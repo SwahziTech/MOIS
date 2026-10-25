@@ -58,7 +58,10 @@ function sumMaterials(lists) {
  * each product's cost per piece (and per m²) at the row's end — main and
  * residuals alike, shared by the cement each takes.
  *
- * batches: [{ n, bags, stage?, cost?, costComplete?, estimate?, outputs: [{ name, pieces, passed?, residual, perBag, perPiece?, perSqm? }],
+ * Tracking (056): the team and machine in the batch head; anything thrown
+ * away and the quality tags/note on soft lines under the batch.
+ *
+ * batches: [{ n, bags, stage?, cost?, costComplete?, estimate?, team?, machine?, waste?: [{ name, qty, unit, reason, cost? }], qc?: { tags, note }, outputs: [{ name, pieces, passed?, residual, perBag, perPiece?, perSqm? }],
  *             materials: [{ id, label, name, qty, unit, rank }] }]
  */
 export default function ProductionBreakdown({ batches, dayTotal = true, stageBadge, currency }) {
@@ -80,7 +83,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
           <section key={b.n} className={`pb-batch${b.stage === 'Void' ? ' is-void' : ''}`}>
             <div className="pb-head">
               <strong>Batch {b.n}</strong>
-              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}</span>
+              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${b.team}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
               {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
                 material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
               {b.stage && stageBadge?.(b.stage)}
@@ -105,6 +108,12 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
                 {costed && <span className="pb-cost">{unitCost(o, b.estimate)}</span>}
               </div>
             ))}
+            {(b.waste || []).length > 0 && (
+              <div className="pb-extra">wasted {b.waste.map((w, i) => <span key={i}>{i ? ' · ' : ''}<strong>{qtyText(r2(w.qty))}</strong> {w.unit} {w.name} ({w.reason}){w.cost != null ? ` ${money(w.cost)}` : ''}</span>)}</div>
+            )}
+            {b.qc && (b.qc.tags?.length || b.qc.note) && (
+              <div className="pb-extra">QC {b.qc.tags?.length ? <strong>{b.qc.tags.join(', ')}</strong> : null}{b.qc.note ? ` — ${b.qc.note}` : ''}</div>
+            )}
           </section>
         );
       })}

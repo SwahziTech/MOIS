@@ -11,11 +11,15 @@ import ProductionBreakdown from './ProductionBreakdown';
 import { categoryTools, productOrder } from '../../lib/categories';
 import Modal from '../Modal';
 import DaySummary from './DaySummary';
+import BatchNotes, { useProductionLists, teamLabel } from './BatchNotes';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 const draftKey = (org, branch) => `mois.production.day.${org}.${branch}`;
-const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '', orderPick: {} });
+const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '', orderPick: {},
+  teamId: '', workerIds: null, machineId: '', waste: [] });   // production tracking (056)
+// a new batch keeps who made it and on what — the same crew usually casts the next one
+const nextForm = f => ({ ...emptyForm(), teamId: f.teamId ?? '', workerIds: f.workerIds ?? null, machineId: f.machineId ?? '' });
 
 /**
  * Log a day's batches (migration 043), the way the factory works: each mix
@@ -56,6 +60,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
   const [addError, setAddError] = useState('');
+  const [lists, reloadLists] = useProductionLists(branchId);   // teams, machines, waste reasons (056)
   const [sentNote, setSentNote] = useState('');
   const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
@@ -265,9 +270,17 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     if (form.leftovers.some(l => !l.productId)) { setAddError('Choose each leftover product, or remove the empty row.'); return; }
     const noColour = outputs.find(o => !o.primary && refs.items[`p:${o.productId}`]?.colorIds?.length && !o.colorId);
     if (noColour) { setAddError(`Choose the colour for ${refs.items[`p:${noColour.productId}`]?.name}.`); return; }
+    const tracked = !!lists?.ready;
+    if (tracked && !form.teamId) { setAddError('Choose the team that made this batch (or + New team).'); return; }
+    if (tracked && !form.machineId) { setAddError('Choose the machine it was made on (or + New machine).'); return; }
+    if (tracked && form.workerIds && !form.workerIds.length) { setAddError('Tick at least one person who worked on this batch.'); return; }
+    const waste = (form.waste || []).filter(w => w.materialId || num(w.quantity) || w.reasonId);
+    if (waste.some(w => !w.materialId || !(num(w.quantity) > 0) || !w.unitId || !w.reasonId)) { setAddError('Thrown away: choose the material, the amount and why — or remove the line.'); return; }
     const payload = {
       batch_date: date, raw_warehouse_id: rawId, curing_warehouse_id: curingStore.id, color_id: form.colorId || null,
       recipe_version_id: recipe.id, cement_bags: bags, notes: form.notes.trim() || null, allow_other_products: form.allowOther,
+      ...(tracked ? { team_id: form.teamId, machine_id: form.machineId, ...(form.workerIds ? { worker_ids: form.workerIds } : {}),
+        waste: waste.map(w => ({ material_id: w.materialId, quantity: num(w.quantity), unit_id: w.unitId, reason_id: w.reasonId })) } : {}),
       outputs: outputs.map(o => ({ product_id: o.productId, pieces: o.pieces, primary: o.primary, ...(o.primary ? {} : { color_id: o.colorId || null }),
         ...(orderLineOf(o.productId, o.colorId) ? { order_line_id: orderLineOf(o.productId, o.colorId) } : {}) })),
       materials: lines.map(l => ({ material_id: l.material_id, unit_id: l.unit_id, quantity: l.quantity ?? 0, source: l.source })),
@@ -281,10 +294,12 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         pieces: o.pieces, sqm: sqmOf(o.productId, o.pieces), residual: !o.primary, wastani: bands[o.productId]?.average_yield_per_bag ?? null })),
       materials: lines.map(l => ({ materialId: l.material_id, name: refs.items[`m:${l.material_id}`]?.name, quantity: l.quantity ?? 0, unit: symOf(l.unit_id),
         stockQty: (l.quantity ?? 0) * (l.factor ?? 0), counted: l.source === 'counted' })),
-      factor: theoretical != null ? theoretical / bags : null, theoretical, outOfBand, expected, notes: form.notes.trim() };
+      factor: theoretical != null ? theoretical / bags : null, theoretical, outOfBand, expected, notes: form.notes.trim(),
+      team: tracked ? teamLabel(lists, form.teamId, form.workerIds) : null, machine: tracked ? lists.machines.find(m => m.id === form.machineId)?.name : null,
+      waste: waste.map(w => ({ name: refs.items[`m:${w.materialId}`]?.name ?? '—', qty: num(w.quantity), unit: symOf(w.unitId), reason: lists.reasons.find(r => r.id === w.reasonId)?.name ?? '' })) };
     setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
     setEditingId(null);
-    setForm(emptyForm());   // "allow other products" goes back to the default too
+    setForm(nextForm(form));   // "allow other products" goes back to the default too; team and machine stay
   }
   function editStaged(item) {
     setForm(item.form);
@@ -312,7 +327,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const curingUntil = new Date(new Date(`${date}T00:00:00Z`).getTime() + curingDays * 864e5).toISOString().slice(0, 10);
     return {
       date, branchName, curingUntil, curingDays,
-      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand,
+      batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, team: b.team, machine: b.machine, waste: b.waste,
         ...(estimates?.[i] ? { cost: estimates[i].cost, costComplete: estimates[i].complete, estimate: true } : {}),
         outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(estimates?.[i]?.outputs[j] ?? {}) })),
         materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) })),
@@ -353,6 +368,14 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   }
 
   const symOf = id => refs.unitById[id]?.symbol ?? '';
+  // what can be thrown away: this batch's materials first, then the branch's other materials
+  const wasteMaterials = useMemo(() => {
+    const inBatch = new Set(lines.map(l => l.material_id));
+    return Object.values(refs.items).filter(it => it.kind === 'material' && it.status === 'active' && (!it.branchId || it.branchId === branchId))
+      .map(it => ({ id: it.id, name: it.name, first: inBatch.has(it.id), rank: it.rank ?? 999,
+        unitIds: [...new Set([...(lines.find(l => l.material_id === it.id) ? [lines.find(l => l.material_id === it.id).unit_id] : []), it.stockUnitId, ...(it.units || []).map(u => u.id)].filter(Boolean))] }))
+      .sort((a, b) => b.first - a.first || a.rank - b.rank || a.name.localeCompare(b.name));
+  }, [refs, branchId, lines]);
   const shortName = materialId => materialShortName(refs.items[`m:${materialId}`]);
   const stockSym = materialId => symOf(refs.items[`m:${materialId}`]?.stockUnitId);
 
@@ -572,12 +595,15 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         </div>
       </section>
 
-      <input className="form-input" placeholder="Batch note (optional)" aria-label="Batch note" value={form.notes} onChange={e => set({ notes: e.target.value })} />
+      <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} lists={lists} reload={reloadLists} symOf={symOf}
+        materials={wasteMaterials}
+        value={{ teamId: form.teamId ?? '', workerIds: form.workerIds ?? null, machineId: form.machineId ?? '', waste: form.waste ?? [], notes: form.notes }}
+        onChange={v => set(v)} />
       <div className="pl-actions">
         <button type="button" className="btn btn-primary pl-wide" disabled={shortLines.length > 0} onClick={addToList}>
           {editingId ? <><Pencil size={15} /> Update batch {staged.findIndex(x => x.id === editingId) + 1}</> : <><Plus size={15} /> Add batch to daily productions</>}
         </button>
-        <button type="button" className="btn btn-outline" onClick={() => { setForm(emptyForm()); setEditingId(null); }}>{editingId ? 'Cancel edit' : 'Reset'}</button>
+        <button type="button" className="btn btn-outline" onClick={() => { setForm(nextForm(form)); setEditingId(null); }}>{editingId ? 'Cancel edit' : 'Reset'}</button>
       </div>
       {addError && <p className="text-sm text-error">{addError}</p>}
 
@@ -687,7 +713,7 @@ function BatchPreview({ b, refs, branchId, currency, costInput }) {
         <div className="bp-box"><span className="pl-label">Cement implied</span><strong>{b.theoretical != null ? `${qtyText(Math.round(b.theoretical * 100) / 100)} bags` : '—'}</strong></div>
         <div className="bp-box"><span className="pl-label">Yield factor</span><strong className={b.outOfBand ? 'text-warning' : 'text-success'}>{b.factor != null ? `${Math.round(b.factor * 1000) / 10}%` : 'no check'}</strong></div>
       </div>
-      <ProductionBreakdown dayTotal={false} currency={currency} batches={[{ n: 1, bags: b.bags,
+      <ProductionBreakdown dayTotal={false} currency={currency} batches={[{ n: 1, bags: b.bags, team: b.team, machine: b.machine, waste: b.waste,
         ...(est ? { cost: est.cost, costComplete: est.complete, estimate: true } : {}),
         outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(est?.outputs[j] ?? {}) })),
         materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) }]} />

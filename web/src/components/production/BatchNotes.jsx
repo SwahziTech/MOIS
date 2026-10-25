@@ -1,0 +1,231 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Users, Cog, Trash2, Plus, X } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { dbErrorMessage } from '../../lib/masterData';
+
+/**
+ * Production tracking for one batch (migration 056), in the batch's note zone
+ * (SwahziTech, 2026-10-25): who made it, on what, what was thrown away making
+ * it, and the note. Team and machine are required but start filled — the
+ * last team used at the branch, the machine that makes the product — so a
+ * normal batch needs no taps. A team is created once and picked after; who
+ * worked is recorded only when it differs from the team.
+ *
+ * value: { teamId, workerIds (null = whole team), machineId, waste: [{ materialId, quantity, unitId, reasonId }], notes }
+ */
+export function useProductionLists(branchId) {
+  const [lists, setLists] = useState(null);   // null = loading; { ready: false } before 056
+  async function load() {
+    if (!branchId) return;
+    const [t, m, mp, w] = await Promise.all([
+      supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branchId).order('name'),
+      supabase.from('machines').select('id, name, status').eq('branch_id', branchId).order('name'),
+      supabase.from('machine_products').select('machine_id, product_id'),
+      supabase.from('waste_reasons').select('id, name, status, display_order').order('display_order').order('name'),
+    ]);
+    if (t.error || m.error || w.error) { setLists({ ready: false, teams: [], machines: [], links: [], reasons: [] }); return; }
+    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], reasons: w.data || [] });
+  }
+  useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [lists, load];
+}
+
+const lastKey = (kind, branchId, extra = '') => `mois.batchnotes.${kind}.${branchId}${extra ? `.${extra}` : ''}`;
+const remember = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
+const recall = k => { try { return localStorage.getItem(k); } catch { return null; } };
+
+/** The team's name, and who worked when that was changed: "Juma team (2 of 3)" */
+export function teamLabel(lists, teamId, workerIds) {
+  const t = lists?.teams?.find(x => x.id === teamId);
+  if (!t) return null;
+  const active = t.members.filter(m => m.status === 'active');
+  return workerIds ? `${t.name} (${workerIds.length} of ${active.length})` : t.name;
+}
+
+export default function BatchNotes({ branchId, organizationId, productId, lists, reload, value, onChange, materials, symOf }) {
+  const set = patch => onChange({ ...value, ...patch });
+  const teams = (lists?.teams || []).filter(t => t.status === 'active');
+  const team = teams.find(t => t.id === value.teamId);
+  const allMachines = (lists?.machines || []).filter(m => m.status === 'active');
+  // machines that make this product; all the branch's machines until one is linked
+  const linked = allMachines.filter(m => lists.links.some(l => l.machine_id === m.id && l.product_id === productId));
+  const machines = linked.length ? linked : allMachines;
+  const reasons = (lists?.reasons || []).filter(r => r.status === 'active');
+  const [editing, setEditing] = useState(null);   // 'workers' | 'newTeam' | 'newMachine'
+  const [text, setText] = useState('');
+  const [members, setMembers] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Start filled: the last team used here (or the only one); the machine last used for this product (or the only one)
+  useEffect(() => {
+    if (!lists?.ready || value.teamId) return;
+    const last = recall(lastKey('team', branchId));
+    const pick = teams.find(t => t.id === last) ?? (teams.length === 1 ? teams[0] : null);
+    if (pick) set({ teamId: pick.id, workerIds: null });
+  }, [lists, branchId, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!lists?.ready || !productId) return;
+    if (value.machineId && machines.some(m => m.id === value.machineId)) return;
+    const last = recall(lastKey('machine', branchId, productId));
+    const pick = machines.find(m => m.id === last) ?? (machines.length === 1 ? machines[0] : null);
+    set({ machineId: pick?.id ?? '' });
+  }, [lists, branchId, productId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function run(fn) {
+    setError(''); setBusy(true);
+    try { await fn(); } catch (e) { setError(e.code === '23505' ? 'That name is already on the list.' : dbErrorMessage(e)); }
+    setBusy(false);
+  }
+  const must = ({ data, error: err }) => { if (err) throw err; return data; };
+
+  function pickTeam(id) {
+    if (id === '+') { setEditing('newTeam'); setText(''); setMembers(''); return; }
+    remember(lastKey('team', branchId), id);
+    set({ teamId: id, workerIds: null });
+  }
+  async function pickMachine(id) {
+    if (id === '+') { setEditing('newMachine'); setText(''); return; }
+    set({ machineId: id });
+    if (!id || !productId) return;
+    remember(lastKey('machine', branchId, productId), id);
+    // learn which machines make the product: picking one links it
+    if (!lists.links.some(l => l.machine_id === id && l.product_id === productId)) {
+      await supabase.from('machine_products').insert({ machine_id: id, product_id: productId, organization_id: organizationId });
+      reload();
+    }
+  }
+  const createTeam = () => run(async () => {
+    const t = must(await supabase.from('production_teams').insert({ organization_id: organizationId, branch_id: branchId, name: text.trim() }).select('id').single());
+    const names = members.split(',').map(s => s.trim()).filter(Boolean);
+    if (names.length) must(await supabase.from('production_team_members').insert(names.map(name => ({ organization_id: organizationId, team_id: t.id, name }))));
+    await reload();
+    remember(lastKey('team', branchId), t.id);
+    set({ teamId: t.id, workerIds: null });
+    setEditing(null);
+  });
+  const createMachine = () => run(async () => {
+    const m = must(await supabase.from('machines').insert({ organization_id: organizationId, branch_id: branchId, name: text.trim() }).select('id').single());
+    if (productId) await supabase.from('machine_products').insert({ machine_id: m.id, product_id: productId, organization_id: organizationId });
+    await reload();
+    remember(lastKey('machine', branchId, productId), m.id);
+    set({ machineId: m.id });
+    setEditing(null);
+  });
+  const addMember = () => run(async () => {
+    must(await supabase.from('production_team_members').insert({ organization_id: organizationId, team_id: team.id, name: text.trim() }));
+    setText('');
+    await reload();
+  });
+  const leaveTeam = id => run(async () => {   // left for good: kept on past batches
+    must(await supabase.from('production_team_members').update({ status: 'inactive' }).eq('id', id));
+    if (value.workerIds) set({ workerIds: value.workerIds.filter(x => x !== id) });
+    await reload();
+  });
+
+  // who worked: the team's members (ticked = worked) and helpers from the branch's other teams
+  const activeMembers = team ? team.members.filter(m => m.status === 'active') : [];
+  const helpers = useMemo(() => teams.filter(t => t.id !== value.teamId).flatMap(t => t.members.filter(m => m.status === 'active').map(m => ({ ...m, team: t.name }))), [teams, value.teamId]);
+  const worked = value.workerIds ?? activeMembers.map(m => m.id);
+  function toggleWorker(id) {
+    const next = worked.includes(id) ? worked.filter(x => x !== id) : [...worked, id];
+    const whole = next.length === activeMembers.length && activeMembers.every(m => next.includes(m.id));
+    set({ workerIds: whole ? null : next });
+  }
+
+  const wasteLine = (w, i) => {
+    const it = materials.find(m => m.id === w.materialId);
+    const patch = p => set({ waste: value.waste.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+    return (
+      <div key={i} className="bn-waste">
+        <Trash2 size={13} className="bn-ico" aria-hidden="true" />
+        <select className="form-select bn-sel" aria-label="Material thrown away" value={w.materialId}
+          onChange={e => { const m = materials.find(x => x.id === e.target.value); patch({ materialId: e.target.value, unitId: m?.unitIds[0] ?? '' }); }}>
+          <option value="">Material…</option>
+          {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <input className="form-input bn-qty" inputMode="decimal" aria-label="Amount thrown away" placeholder="Amount" value={w.quantity}
+          onChange={e => patch({ quantity: e.target.value })} />
+        <select className="form-select bn-unit" aria-label="Unit" value={w.unitId} onChange={e => patch({ unitId: e.target.value })}>
+          {(it?.unitIds || []).map(u => <option key={u} value={u}>{symOf(u)}</option>)}
+        </select>
+        <select className="form-select bn-sel" aria-label="Why thrown away" value={w.reasonId} onChange={e => patch({ reasonId: e.target.value })}>
+          <option value="">Why…</option>
+          {reasons.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+        <button type="button" className="icon-btn" aria-label="Remove thrown away" onClick={() => set({ waste: value.waste.filter((_, j) => j !== i) })}><X size={14} /></button>
+      </div>
+    );
+  };
+
+  if (!lists) return null;
+  const noteInput = (
+    <input className="form-input bn-note" placeholder="Note (optional)" aria-label="Batch note" value={value.notes} onChange={e => set({ notes: e.target.value })} />
+  );
+  if (!lists.ready) return <div className="bn">{noteInput}</div>;   // before 056: the note only
+
+  return (
+    <div className="bn">
+      <div className="bn-strip">
+        <span className={`bn-chip${value.teamId ? '' : ' is-missing'}`}>
+          <Users size={14} className="bn-ico" aria-hidden="true" />
+          <select className="bn-chip-sel" aria-label="Team" value={value.teamId} onChange={e => pickTeam(e.target.value)}>
+            {!value.teamId && <option value="">{teams.length ? 'Team…' : 'No team yet'}</option>}
+            {teams.map(t => <option key={t.id} value={t.id}>{t.id === value.teamId ? teamLabel(lists, t.id, value.workerIds) : t.name}</option>)}
+            <option value="+">+ New team…</option>
+          </select>
+          {team && <button type="button" className="bn-edit" onClick={() => setEditing(editing === 'workers' ? null : 'workers')}>{editing === 'workers' ? 'done' : 'who worked'}</button>}
+        </span>
+        <span className={`bn-chip${value.machineId ? '' : ' is-missing'}`}>
+          <Cog size={14} className="bn-ico" aria-hidden="true" />
+          <select className="bn-chip-sel" aria-label="Machine" value={value.machineId} onChange={e => pickMachine(e.target.value)}>
+            {!value.machineId && <option value="">{allMachines.length ? 'Machine…' : 'No machine yet'}</option>}
+            {machines.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {linked.length > 0 && allMachines.filter(m => !linked.includes(m)).map(m => <option key={m.id} value={m.id}>{m.name} (other)</option>)}
+            <option value="+">+ New machine…</option>
+          </select>
+        </span>
+        <button type="button" className="bn-add" onClick={() => set({ waste: [...value.waste, { materialId: '', quantity: '', unitId: '', reasonId: '' }] })}>
+          <Plus size={13} /> Thrown away
+        </button>
+        {noteInput}
+      </div>
+
+      {editing === 'newTeam' && (
+        <div className="bn-panel">
+          <input className="form-input bn-sel" autoFocus placeholder="Team name, e.g. Juma team" value={text} onChange={e => setText(e.target.value)} />
+          <input className="form-input" style={{ flex: 2 }} placeholder="Members, separated by commas (optional)" value={members} onChange={e => setMembers(e.target.value)} />
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy || !text.trim()} onClick={createTeam}>Create team</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button>
+        </div>
+      )}
+      {editing === 'newMachine' && (
+        <div className="bn-panel">
+          <input className="form-input bn-sel" autoFocus placeholder="Machine or line, e.g. Press 1" value={text} onChange={e => setText(e.target.value)} />
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy || !text.trim()} onClick={createMachine}>Add machine</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button>
+        </div>
+      )}
+      {editing === 'workers' && team && (
+        <div className="bn-panel bn-workers">
+          <span className="pl-help">Untick anyone away for this batch; tick a helper. The team stays as it is.</span>
+          <div className="bn-people">
+            {activeMembers.map(m => (
+              <label key={m.id} className="bn-person"><input type="checkbox" checked={worked.includes(m.id)} onChange={() => toggleWorker(m.id)} /> {m.name}
+                <button type="button" className="bn-x" title="Left the team for good" aria-label={`${m.name} left the team`} onClick={() => leaveTeam(m.id)}><X size={11} /></button></label>
+            ))}
+            {helpers.map(m => (
+              <label key={m.id} className="bn-person is-helper"><input type="checkbox" checked={worked.includes(m.id)} onChange={() => toggleWorker(m.id)} /> {m.name} <span className="pl-help">({m.team})</span></label>
+            ))}
+          </div>
+          <div className="flex items-center gap-8">
+            <input className="form-input bn-sel" placeholder={`New member of ${team.name}`} value={text} onChange={e => setText(e.target.value)} />
+            <button type="button" className="btn btn-outline btn-sm" disabled={busy || !text.trim()} onClick={addMember}>Add to team</button>
+          </div>
+        </div>
+      )}
+      {value.waste.map(wasteLine)}
+      {error && <p className="text-xs text-error">{error}</p>}
+    </div>
+  );
+}
