@@ -10,6 +10,7 @@ const LABEL = {
   opening_balance: 'Opening stock', receipt: 'Received', issue: 'Issued', transfer_in: 'Transfer in', transfer_out: 'Transfer out',
   adjustment: 'Adjustment', count: 'Count', reversal: 'Reversal', reclassification: 'Reclassified',
   production_use: 'Production', production_output: 'Cast', curing_out: 'Out of curing', curing_in: 'Released',
+  sale_delivery: 'Sold — left', waste: 'Thrown away',
 };
 const PRODUCTION = new Set(['production_use', 'production_output', 'curing_out', 'curing_in']);
 const groupOf = t => (t.buy ? 'purchase' : PRODUCTION.has(t.transaction_type) ? 'production' : 'movement');

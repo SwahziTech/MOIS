@@ -25,6 +25,8 @@ export const MOVEMENT_TYPES = {
   production_use:    { label: 'Production use',    noun: 'Production use',      perm: 'production.create',   help: '' },
   production_output: { label: 'Into curing',       noun: 'Production — curing', perm: 'production.create',   help: '' },
   curing_release:    { label: 'Quality release',   noun: 'Quality release',     perm: 'production.complete', help: '' },
+  // posted by a sale's delivery or collection (migration 065), never from the stock forms
+  sale_delivery:     { label: 'Sale delivery',     noun: 'Sale delivery',       perm: 'sales.create',        help: '' },
 };
 
 /**

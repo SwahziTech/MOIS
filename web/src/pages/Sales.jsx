@@ -50,7 +50,11 @@ export default function Sales() {
     try {
       const [r, s, c] = await Promise.all([
         refs ? Promise.resolve(refs) : loadInventoryRefs(),
-        supabase.from('sales').select('*, lines:sale_lines(*), payments:sale_payments(*)').order('sale_date', { ascending: false }).order('sale_no', { ascending: false }).limit(500),
+        (async () => {
+          const q = cols => supabase.from('sales').select(cols).order('sale_date', { ascending: false }).order('sale_no', { ascending: false }).limit(500);
+          const withDeliveries = await q('*, lines:sale_lines(*), payments:sale_payments(*), deliveries:sale_deliveries(*, lines:sale_delivery_lines(*))');
+          return withDeliveries.error ? q('*, lines:sale_lines(*), payments:sale_payments(*)') : withDeliveries;   // before 065
+        })(),
         supabase.from('customers').select('*').order('name'),
       ]);
       if (s.error) throw s.error;
@@ -105,6 +109,7 @@ export default function Sales() {
                       <span>paid <strong>{money(paid)}</strong>{Number(s.total) - paid > 0.004 ? <span className="co-est"> {money(r2(Number(s.total) - paid))} owed</span> : <span className="pl-help"> · paid in full</span>}</span>
                     )}
                     {s.stage === 'cancelled' && <span className="pl-help">{s.cancel_reason}</span>}
+                    {(s.deliveries || []).length > 0 && <span className="pl-help">delivered {money((s.deliveries || []).reduce((t, d) => t + Number(d.value), 0))}</span>}
                   </div>
                 </div>
               );
@@ -320,6 +325,7 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
   const [efd, setEfd] = useState(sale.efd_receipt_no ?? '');
   const [askEfd, setAskEfd] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [handing, setHanding] = useState(false);   // a delivery or collection being recorded (065)
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -328,7 +334,16 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
   const owed = r2(Number(sale.total) - paid);
   const unitOf = id => refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '';
   const per = id => (unitOf(id).toUpperCase() === 'SQM' ? 'm²' : 'pc');
-  const editable = ['quotation', 'order'].includes(sale.stage) && canAt('sales.create', br, null);
+  const editable = ['quotation', 'order'].includes(sale.stage) && canAt('sales.create', br, null) && !(sale.deliveries || []).length;
+  // deliveries (065): what has left, its cost, and the margin on it (without VAT)
+  const deliveries = [...(sale.deliveries || [])].sort((a, b) => b.delivery_no - a.delivery_no);
+  const given = deliveries.reduce((t, d) => t + Number(d.value), 0);
+  const doneOf = lineId => deliveries.reduce((t, d) => t + (d.lines || []).filter(x => x.sale_line_id === lineId).reduce((u, x) => u + Number(x.quantity), 0), 0);
+  const lineById = Object.fromEntries((sale.lines || []).map(l => [l.id, l]));
+  const exOf = x => Number(x.value) / (1 + Number(lineById[x.sale_line_id]?.vat_rate ?? 0) / 100);
+  const delivered = deliveries.flatMap(d => d.lines || []).reduce((t, x) => ({ ex: t.ex + exOf(x), cost: t.cost + Number(x.cost ?? 0), est: t.est + Number(x.estimated_cost ?? 0), unknown: t.unknown || x.cost == null }), { ex: 0, cost: 0, est: 0, unknown: false });
+  const canHand = ['order', 'invoice'].includes(sale.stage) && (canAt('sales.create', br, null) || canAt('inventory.issue', br, null))
+    && (sale.lines || []).some(l => Number(l.quantity) - doneOf(l.id) > 1e-9);
 
   async function run(fn) {
     setError(''); setBusy(true);
@@ -349,6 +364,7 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
           <button type="button" className="btn btn-ghost" onClick={() => setCancelling(true)}>Cancel sale</button>}
         {sale.stage === 'quotation' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
         {['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAskEfd(true)}>Invoice</button>}
+        {canHand && <button type="button" className="btn btn-outline" onClick={() => setHanding(true)}>Deliver / collect</button>}
         {['order', 'invoice'].includes(sale.stage) && owed > 0 && canAt('payments.record', br, null) && <button type="button" className="btn btn-primary" onClick={() => { setPay(p => ({ ...p, amount: String(owed) })); setPaying(true); }}>Record payment</button>}
       </>}>
       <div className="modal-form">
@@ -391,7 +407,28 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
                 ))}
               </tbody></table>
             )}
-            <p className="pl-help">Goods are delivered or collected up to the value paid (deliveries come next).</p>
+            <p className="pl-help">Goods leave up to the value paid: {money(r2(Math.max(paid - given, 0)))} can leave now.</p>
+          </section>
+        )}
+        {deliveries.length > 0 && (
+          <section>
+            <h3 className="modal-section-title">Delivered · {money(r2(given))} of {money(Number(sale.total))}</h3>
+            <table className="rd-table"><tbody>
+              {deliveries.map(d => (
+                <tr key={d.id}>
+                  <td>{d.delivered_on}</td>
+                  <td>{d.kind === 'collection' ? 'Collected' : 'Delivered'} #{d.delivery_no}{d.received_by ? ` · ${d.received_by}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
+                    <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
+                  <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
+                </tr>
+              ))}
+            </tbody></table>
+            <p className="text-sm">
+              Delivered without VAT <strong>{money(r2(delivered.ex))}</strong> · cost <strong>{money(r2(delivered.cost))}</strong>
+              {delivered.est > 0.5 && <span className="co-est-txt"> ({money(r2(delivered.est))} estimated at price)</span>}
+              {' · '}margin <strong className={delivered.ex - delivered.cost < 0 ? 'text-error' : ''}>{money(r2(delivered.ex - delivered.cost))}</strong>
+              {delivered.unknown && <span className="pl-help"> · part with no cost known</span>}
+            </p>
           </section>
         )}
         {sale.stage === 'invoice' && canAt('invoices.create', br, null) && (
@@ -429,6 +466,8 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
           </div>
         </Modal>
       )}
+      {handing && <DeliveryModal sale={sale} refs={refs} money={money} doneOf={doneOf} canLeave={r2(Math.max(paid - given, 0))} per={per}
+        onClose={() => setHanding(false)} onSaved={async () => { setHanding(false); await onChanged(); }} />}
       {cancelling && (
         <Modal title={`Cancel #${sale.sale_no}?`} onClose={() => setCancelling(false)}
           footer={<><button type="button" className="btn btn-outline" onClick={() => setCancelling(false)}>Back</button>
@@ -436,6 +475,76 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
           <label className="pe-field"><span>Why? (required)</span><input className="form-input" autoFocus value={reason} onChange={e => setReason(e.target.value)} /></label>
         </Modal>
       )}
+    </Modal>
+  );
+}
+
+/** Hand goods over: line by line what leaves, up to what is still to deliver and the value paid */
+function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSaved }) {
+  const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
+  const unitInc = l => Number(l.total) / Number(l.quantity);
+  const [kind, setKind] = useState('collection');
+  const [qty, setQty] = useState(() => Object.fromEntries(lines.map(l => [l.id, ''])));
+  const [receivedBy, setReceivedBy] = useState(sale.walk_in_name ?? '');
+  const [vehicle, setVehicle] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const value = lines.reduce((t, l) => t + r2(unitInc(l) * (num(qty[l.id]) ?? 0)), 0);
+  // fill what the payments cover, line by line in order
+  function fillPaid() {
+    let room = canLeave;
+    const next = {};
+    for (const l of lines) {
+      const q = Math.max(0, Math.min(l.left, Math.floor((room / unitInc(l)) * 100) / 100));
+      next[l.id] = q > 0 ? String(q) : '';
+      room -= r2(unitInc(l) * q);
+    }
+    setQty(next);
+  }
+  async function save() {
+    setError('');
+    if (value <= 0) { setError('Enter what leaves.'); return; }
+    if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
+    setBusy(true);
+    const { error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle,
+      lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
+    onSaved();
+  }
+  return (
+    <Modal title={`Goods leaving on #${sale.sale_no}`} onClose={onClose} size="lg"
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record {value > 0 ? money(r2(value)) : ''}</button></>}>
+      <div className="modal-form">
+        <div className="flex items-center gap-8" role="group" aria-label="How it leaves">
+          <button type="button" className={`filter-chip${kind === 'collection' ? ' is-on' : ''}`} onClick={() => setKind('collection')}>Collected by the customer</button>
+          <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>Delivered</button>
+          <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
+        </div>
+        <table className="rd-table">
+          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
+          <tbody>
+            {lines.map(l => (
+              <tr key={l.id}>
+                <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong></td>
+                <td style={{ textAlign: 'right' }}>{qtyText(l.left)} {per(l.product_id)}</td>
+                <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>
+                <td style={{ textAlign: 'right' }}>{num(qty[l.id]) > 0 ? money(r2(unitInc(l) * num(qty[l.id]))) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex items-center gap-8">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={fillPaid}>Fill what is paid for</button>
+          <span style={{ marginLeft: 'auto' }}><strong>{money(r2(value))}</strong> leaving</span>
+        </div>
+        <div className="form-row">
+          <label className="pe-field"><span>Received by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>
+          {kind === 'delivery' && <label className="pe-field"><span>Vehicle / driver (optional)</span><input className="form-input" value={vehicle} onChange={e => setVehicle(e.target.value)} /></label>}
+        </div>
+      </div>
     </Modal>
   );
 }
