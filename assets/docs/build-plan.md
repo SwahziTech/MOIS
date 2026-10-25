@@ -196,7 +196,13 @@ PRD sections: 4.7 (Production), 4.8 (Recipes/BOMs — activation),
   gets used for scheduling/targets — not before
 
 ## 1e — Sales & Costing
-**Status: not started**
+**Status: CURRENT** (from 2026-10-25, on SwahziTech's instruction, after 1d)
+
+Carried in from 1d (SwahziTech, 2026-10-25): stock at cost (a product's cost
+across batches), margins, and full production cost — labour (teams, who
+worked, labour norms), power, diesel and other expenses shared over what was
+produced. Batch material cost (055) is already there; rejects never re-cost a
+batch.
 
 PRD sections: 4.11 (Sales/CRM), 4.12 (Documents), 4.13 (Costing)
 
