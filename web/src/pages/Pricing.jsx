@@ -311,9 +311,8 @@ function PriceModal({ product, branch, row, organization, usualVatRate, vatColum
   const isNew = !row;
   const money = v => formatMoney(v, organization?.currency_code);
   // Most prices are per m²; per piece is the exception
-  // products not counted in m² are always priced per piece (2026-10-25); m² products default to per m²
-  const pieceOnly = (product.unit?.symbol ?? '').toUpperCase() !== 'SQM';
-  const [byArea,    setByArea]    = useState(pieceOnly ? false : row ? row.price_per_sqm_inclusive != null : true);
+  // the product's unit decides (2026-10-25): counted in m² → priced per m²; otherwise per piece. Set in Products.
+  const byArea = (product.unit?.symbol ?? '').toUpperCase() === 'SQM';
   const [perSqm,    setPerSqm]    = useState(row?.price_per_sqm_inclusive ?? '');
   const [pcs,       setPcs]       = useState(row?.pcs_per_sqm_at_pricing ?? product.pcs_per_sqm ?? '');
   const [perUnit,   setPerUnit]   = useState(row?.price_per_unit_inclusive ?? '');
@@ -462,13 +461,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, vatColum
           <button type="button" className={`filter-chip${!exVat ? ' is-on' : ''}`} aria-pressed={!exVat} onClick={() => switchVat(false)}>includes VAT</button>
           <button type="button" className={`filter-chip${exVat ? ' is-on' : ''}`} aria-pressed={exVat} onClick={() => switchVat(true)}>excludes VAT</button>
         </div>
-        {pieceOnly ? <p className="text-xs text-muted">Counted in pieces: priced per piece.</p> : (
-        <label className="text-sm flex items-center gap-8">
-          <input type="checkbox" checked={byArea} onChange={e => setByArea(e.target.checked)} />
-          Priced per m²
-          <span className="text-xs text-muted">(untick for a price per piece)</span>
-        </label>
-        )}
+        <p className="text-xs text-muted">{byArea ? 'Counted in m²: priced per m².' : 'Counted in pieces: priced per piece.'} The unit is set on the product (Products).</p>
         {byArea ? (
           <div className="form-row">
             <div className="form-group">
