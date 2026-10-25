@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Receipt, Plus, Trash2 } from 'lucide-react';
+import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -354,11 +354,15 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
     return true;
   }
   const toStage = (stage, p = {}) => run(() => supabase.rpc('set_sale_stage', { p_sale: sale.id, p_stage: stage, p }));
+  // printable documents open in a tab of their own
+  const openDoc = (doc, extra = '') => window.open(`/print/sale/${sale.id}?doc=${doc}${extra}`, '_blank', 'noopener');
 
   return (
     <Modal title={`${STAGES[sale.stage]} #${sale.sale_no} — ${buyer}`} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {sale.stage !== 'cancelled' && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
+          <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
         {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
         {sale.stage !== 'cancelled' && paid === 0 && canAt('sales.create', br, null) && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) &&
           <button type="button" className="btn btn-ghost" onClick={() => setCancelling(true)}>Cancel sale</button>}
@@ -403,7 +407,8 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
             {(sale.payments || []).length === 0 ? <p className="pl-help">No payment yet.</p> : (
               <table className="rd-table"><tbody>
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
-                  <tr key={p.id}><td>{p.paid_on}</td><td>{METHODS[p.method]}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td></tr>
+                  <tr key={p.id}><td>{p.paid_on}</td><td>{METHODS[p.method]}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
+                    <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
                 ))}
               </tbody></table>
             )}
@@ -420,6 +425,7 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
                   <td>{d.kind === 'collection' ? 'Collected' : 'Delivered'} #{d.delivery_no}{d.received_by ? ` · ${d.received_by}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
                     <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
+                  <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={13} /> Delivery note</button></td>
                 </tr>
               ))}
             </tbody></table>

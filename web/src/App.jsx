@@ -27,6 +27,7 @@ import ProductionLedger from './pages/ProductionLedger';
 import Costing from './pages/Costing';
 import Sales from './pages/Sales';
 import Customers from './pages/Customers';
+import SaleDocument from './pages/SaleDocument';
 
 export default function App() {
   return (
@@ -43,6 +44,9 @@ export default function App() {
           {/* The recovery link signs the user in, so this page must not sit
               under AuthLayout (which redirects signed-in users away). */}
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* A sale's printable documents: a tab of their own, no sidebar (signed-in check inside) */}
+          <Route path="/print/sale/:id" element={<SaleDocument />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}
           <Route element={<ProtectedLayout />}>

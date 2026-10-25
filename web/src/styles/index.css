@@ -2147,3 +2147,39 @@ tr.cp-over td { background: var(--bg-warning); }
 .sl-table td { vertical-align: top; }
 .sl-table .form-input { min-width: 0; }
 .sl-totals { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+
+/* Printable sale documents (2026-10-26): always black on white, A4 */
+.doc-page { min-height: 100vh; background: #e9e7e3; padding: 16px; color: #1a1a1a; }
+.doc-msg { padding: 40px; text-align: center; }
+.doc-bar { max-width: 210mm; margin: 0 auto 12px; display: flex; align-items: center; gap: 12px; }
+.doc-bar .pl-help { color: #555; }
+.doc { max-width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; color: #1a1a1a; padding: 16mm 14mm; box-shadow: 0 1px 6px rgba(0,0,0,.15); font-size: 12px; line-height: 1.45; display: flex; flex-direction: column; gap: 14px; }
+.doc-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #4B3621; padding-bottom: 10px; }
+.doc-co { display: flex; gap: 12px; align-items: flex-start; }
+.doc-logo { max-height: 64px; max-width: 150px; object-fit: contain; }
+.doc-co-name { font-size: 16px; }
+.doc-title { text-align: right; }
+.doc-title h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; color: #4B3621; }
+.doc-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #777; }
+.doc-to { display: flex; flex-direction: column; }
+.doc-table { width: 100%; border-collapse: collapse; }
+.doc-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #555; border-bottom: 1px solid #bbb; padding: 6px 4px; }
+.doc-table td { border-bottom: 1px solid #e3e3e3; padding: 6px 4px; }
+.doc .num { text-align: right; white-space: nowrap; }
+.doc-totals { margin-left: auto; margin-top: 8px; min-width: 260px; border-collapse: collapse; }
+.doc-totals td { padding: 3px 4px; }
+.doc-grand td { border-top: 2px solid #1a1a1a; font-weight: 700; font-size: 14px; }
+.doc-pay { margin-top: 10px; }
+.doc-pre { white-space: pre-wrap; }
+.doc-note { color: #444; }
+.doc-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; }
+.doc-sign div { border-top: 1px solid #1a1a1a; padding-top: 4px; font-size: 11px; color: #444; }
+.doc-foot { margin-top: auto; border-top: 1px solid #ddd; padding-top: 8px; font-size: 10.5px; color: #444; }
+.doc-gen { margin-top: 4px; color: #999; font-size: 9.5px; }
+@media print { @page { size: A4; margin: 0; } .doc-bar { display: none; } .doc-page { background: #fff; padding: 0; } .doc { box-shadow: none; margin: 0; } }
+/* documents ignore the app theme: every cell black on white */
+.doc, .doc * { color: #1a1a1a; }
+.doc table, .doc thead, .doc tbody, .doc tr, .doc th, .doc td { background: transparent !important; }
+.doc tr:hover td { background: transparent !important; }
+.doc .doc-table th, .doc .doc-label, .doc .doc-gen { color: #666; }
+.doc .doc-title h1 { color: #4B3621; }

@@ -9,6 +9,7 @@ import PageShell from '../components/PageShell';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
 import { BranchVatCard, ExpenseCategoriesCard } from '../components/settings/PurchaseSettings';
+import CompanyDetailsCard from '../components/settings/CompanyDetailsCard';
 
 function Row({ label, children }) {
   return (
@@ -57,6 +58,7 @@ export default function Settings() {
           </div>
         </section>
 
+        <CompanyDetailsCard />
         <BranchVatCard />
         <ExpenseCategoriesCard />
 
