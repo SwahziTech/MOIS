@@ -2057,3 +2057,14 @@ tr.cp-over td { background: var(--bg-warning); }
 .pb-head > strong { white-space: nowrap; }
 /* "passed" under the pieces, not beside them — beside, it ran over the materials (2026-10-25) */
 .pb-passed { display: block; font-size: 11px; color: var(--text-muted); line-height: 1.1; }
+
+/* LOCKED 2026-10-25: a batch's materials on ONE row at the developing screen's width; steel on its own row below */
+.pb-strip { display: flex; flex-direction: column; gap: 4px; }
+.pb-strip-row { display: grid; grid-template-columns: repeat(var(--pb-n), minmax(0, 1fr)); gap: 10px; }   /* the steel row lines up under the columns above */
+.pb-strip.is-soft .pb-strip-row .pb-mat + .pb-mat .pb-mat-val strong { color: var(--text-secondary); font-weight: 500; }
+.pb-strip.is-soft .pb-strip-row .pb-mat + .pb-mat .pb-mat-label { opacity: .75; }
+.pb-strip.is-soft .pb-strip-row.is-steel .pb-mat:first-child .pb-mat-val strong { color: var(--text-secondary); font-weight: 500; }
+.pb-strip.is-soft .pb-strip-row.is-steel .pb-mat:first-child .pb-mat-label { opacity: .75; }
+@media (max-width: 760px) { .pb-strip-row { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); } }
+/* Day total: its materials (more than a batch — press + vibro) on one row across the full width, under the totals */
+@media (min-width: 761px) { .pb-total .pb-strip { grid-column: 1 / -1; grid-row: 2; } .pb-total .pb-avg { grid-column: 4; grid-row: 1; } .pb-total .pb-cost { grid-column: 5; grid-row: 1; } }

@@ -201,7 +201,7 @@ export function breakdownMaterials(lines, refs) {
   return (lines || []).map(l => {
     const it = refs.items[`m:${l.material_id}`];
     return { id: l.material_id, label: materialShortName(it), name: it?.name ?? '—', qty: Number(l.quantity) || 0,
-      unit: refs.unitById[l.unit_id]?.symbol ?? '', rank: it?.rank ?? 999 };
+      unit: refs.unitById[l.unit_id]?.symbol ?? '', rank: it?.rank ?? 999, steel: /steel/i.test(it?.materialCategory ?? '') };
   }).filter(m => m.qty > 0);
 }
 

@@ -15,17 +15,23 @@ export function MaterialStrip({ materials, muted = false, soft = false }) {
   const seen = {};
   for (const m of materials) (seen[m.label] ||= new Set()).add(m.id);
   const labelOf = m => (seen[m.label].size > 1 ? m.name : m.label);
-  return (
-    <div className={`pb-strip${muted ? ' is-muted' : ''}${soft ? ' is-soft' : ''}`}>
-      {materials.map(m => (
+  // one row of materials (locked 2026-10-25, at the developing screen's width); steel on its own row below
+  const row = materials.filter(m => !m.steel);
+  const steel = materials.filter(m => m.steel);
+  const tile = m => (
         <span key={`${m.id}|${m.unit}`} className="pb-mat" title={m.name}>
           <span className="pb-mat-label">{labelOf(m)}</span>
           <span className="pb-mat-val"><strong>{qtyText(r2(m.qty))}</strong> <span className="pb-mat-unit">{m.unit}</span></span>
         </span>
-      ))}
+  );
+  return (
+    <div className={`pb-strip${muted ? ' is-muted' : ''}${soft ? ' is-soft' : ''}`} style={{ '--pb-n': Math.max(row.length, steel.length, 1) }}>
+      <div className="pb-strip-row">{row.map(tile)}</div>
+      {steel.length > 0 && <div className="pb-strip-row is-steel">{steel.map(tile)}</div>}
     </div>
   );
 }
+
 
 const byRank = (a, b) => (a.rank ?? 999) - (b.rank ?? 999) || String(a.name).localeCompare(String(b.name));
 function sumMaterials(lists) {
