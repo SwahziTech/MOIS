@@ -44,6 +44,7 @@ export default function Sales() {
   const [stage, setStage] = useState('');
   const [editing, setEditing] = useState(null);   // a sale (or {} for new)
   const [viewing, setViewing] = useState(null);   // a sale id
+  const [view, setView] = useState('list');       // list | overview
 
   async function load() {
     setError('');
@@ -85,6 +86,12 @@ export default function Sales() {
       primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New sale</button>}>
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
+          <div className="filter-chips" style={{ marginBottom: 8 }}>
+            <button type="button" className={`filter-chip${view === 'list' ? ' is-on' : ''}`} onClick={() => setView('list')}>Sales</button>
+            <button type="button" className={`filter-chip${view === 'overview' ? ' is-on' : ''}`} onClick={() => setView('overview')}>Overview</button>
+          </div>
+          {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} today={today} buyerOf={buyerOf} />}
+          {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
           <ChipRow value={stage} onChange={setStage} items={Object.entries(STAGES).map(([id, label]) => ({ id, label }))} />
           <section className="sk">
@@ -115,6 +122,7 @@ export default function Sales() {
               );
             })}
           </section>
+          </>}
         </>
       )}
 
@@ -552,5 +560,89 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Sales at a glance for a period (2026-10-26): sold (orders and invoices by
+ * their date), paid in, still owed (all open), delivered and its margin
+ * (without VAT less the stock's cost; the estimated part marked) — by
+ * product and by customer. Figures as saved; nothing re-priced here.
+ */
+function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
+  const [period, setPeriod] = useState('30');
+  const from = period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
+  const live = sales.filter(x => x.stage === 'order' || x.stage === 'invoice');
+  const sold = live.filter(x => x.sale_date >= from);
+  const payments = live.flatMap(x => (x.payments || []).map(pm => ({ ...pm, sale: x }))).filter(pm => pm.paid_on >= from);
+  const deliveries = live.flatMap(x => (x.deliveries || []).map(d => ({ ...d, sale: x }))).filter(d => d.delivered_on >= from);
+  const owed = live.reduce((t, x) => t + Number(x.total) - (x.payments || []).reduce((u, pm) => u + Number(pm.amount), 0), 0);
+  const lineOf = Object.fromEntries(live.flatMap(x => x.lines || []).map(l => [l.id, l]));
+  const dl = deliveries.flatMap(d => (d.lines || []).map(x => ({ ...x, line: lineOf[x.sale_line_id], sale: d.sale })));
+  const exOf = x => Number(x.value) / (1 + Number(x.line?.vat_rate ?? 0) / 100);
+  const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+  const delivered = { value: sum(deliveries, d => Number(d.value)), ex: sum(dl, exOf), cost: sum(dl, x => Number(x.cost ?? 0)), est: sum(dl, x => Number(x.estimated_cost ?? 0)) };
+  const queued = sales.filter(x => x.stage === 'quotation' && x.sale_date >= from);
+
+  // by product: sold (orders + invoices), delivered, margin on delivered
+  const byProduct = {};
+  const prow = (l) => (byProduct[`${l.product_id}|${l.color_id ?? ''}`] ||= { name: `${refs.items[`p:${l.product_id}`]?.name ?? '—'}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}`,
+    unit: (refs.unitById[refs.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs', qty: 0, value: 0, dqty: 0, ex: 0, cost: 0, est: 0 });
+  for (const x of sold) for (const l of x.lines || []) { const pr = prow(l); pr.qty += Number(l.quantity); pr.value += Number(l.total); }
+  for (const x of dl) { if (!x.line) continue; const pr = prow(x.line); pr.dqty += Number(x.quantity); pr.ex += exOf(x); pr.cost += Number(x.cost ?? 0); pr.est += Number(x.estimated_cost ?? 0); }
+  // by customer: sold, paid, owed (all open)
+  const byCustomer = {};
+  const crow = x => (byCustomer[x.customer_id ?? `walk:${x.walk_in_name ?? ''}`] ||= { name: buyerOf(x), sold: 0, paid: 0, owed: 0 });
+  for (const x of sold) crow(x).sold += Number(x.total);
+  for (const pm of payments) crow(pm.sale).paid += Number(pm.amount);
+  for (const x of live) { const o = Number(x.total) - sum(x.payments || [], pm => Number(pm.amount)); if (o > 0.004) crow(x).owed += o; }
+
+  const pct = (a, b) => (b > 0 ? ` · ${Math.round((a / b) * 100)}%` : '');
+  return (
+    <>
+      <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
+          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
+        </select>
+        <span className="pl-help">Orders and invoices by their date; payments and deliveries by theirs. Owed is everything still open.</span>
+      </div>
+      <div className="mm-stats">
+        <div className="mm-stat"><span className="pl-label">Sold</span><strong className="mm-money">{money(sum(sold, x => Number(x.total)))}</strong><span className="pl-help">{sold.length} order{sold.length === 1 ? '' : 's'}/invoice{sold.length === 1 ? '' : 's'} · with VAT</span></div>
+        <div className="mm-stat"><span className="pl-label">Paid in</span><strong className="mm-money">{money(sum(payments, pm => Number(pm.amount)))}</strong><span className="pl-help">{payments.length} payment{payments.length === 1 ? '' : 's'}</span></div>
+        <div className="mm-stat"><span className="pl-label">Owed now</span><strong className={`mm-money${owed > 0.004 ? ' text-warning' : ''}`}>{money(Math.max(owed, 0))}</strong><span className="pl-help">on open orders and invoices</span></div>
+        <div className="mm-stat"><span className="pl-label">Delivered</span><strong className="mm-money">{money(delivered.value)}</strong>
+          <span className="pl-help">margin {money(delivered.ex - delivered.cost)}{pct(delivered.ex - delivered.cost, delivered.ex)}{delivered.est > 0.5 ? ` · ${money(delivered.est)} of cost estimated` : ''}</span></div>
+      </div>
+      {queued.length > 0 && <p className="pl-help" style={{ margin: '0 0 8px' }}>{queued.length} quotation{queued.length === 1 ? '' : 's'} in the period, worth {money(sum(queued, x => Number(x.total)))}, not yet ordered.</p>}
+      <div className="so-grid">
+        <section className="card">
+          <div className="card-header"><h2 className="card-title">By product</h2></div>
+          <div className="table-container"><table>
+            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Sold</th><th style={{ textAlign: 'right' }}>Value</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Margin</th></tr></thead>
+            <tbody>{Object.values(byProduct).length === 0 ? <tr><td colSpan={5} className="text-muted">Nothing sold in this period.</td></tr>
+              : Object.values(byProduct).sort((a, b) => b.value - a.value).map(x => (
+                <tr key={x.name}><td style={{ fontWeight: 500 }}>{x.name}</td>
+                  <td style={{ textAlign: 'right' }}>{qtyText(r2(x.qty))} {x.unit}</td>
+                  <td style={{ textAlign: 'right' }}>{money(r2(x.value))}</td>
+                  <td style={{ textAlign: 'right' }}>{x.dqty > 0 ? `${qtyText(r2(x.dqty))} ${x.unit}` : '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{x.dqty > 0 ? <>{money(r2(x.ex - x.cost))}{x.est > 0.5 && <div className="co-est-txt text-xs">cost partly estimated</div>}</> : '—'}</td></tr>
+              ))}</tbody>
+          </table></div>
+        </section>
+        <section className="card">
+          <div className="card-header"><h2 className="card-title">By customer</h2></div>
+          <div className="table-container"><table>
+            <thead><tr><th>Customer</th><th style={{ textAlign: 'right' }}>Sold</th><th style={{ textAlign: 'right' }}>Paid</th><th style={{ textAlign: 'right' }}>Owed now</th></tr></thead>
+            <tbody>{Object.values(byCustomer).length === 0 ? <tr><td colSpan={4} className="text-muted">No customers in this period.</td></tr>
+              : Object.values(byCustomer).sort((a, b) => b.sold - a.sold || b.owed - a.owed).map(x => (
+                <tr key={x.name}><td style={{ fontWeight: 500 }}>{x.name}</td>
+                  <td style={{ textAlign: 'right' }}>{money(r2(x.sold))}</td>
+                  <td style={{ textAlign: 'right' }}>{money(r2(x.paid))}</td>
+                  <td style={{ textAlign: 'right' }} className={x.owed > 0.004 ? 'text-warning' : ''}>{x.owed > 0.004 ? money(r2(x.owed)) : '—'}</td></tr>
+              ))}</tbody>
+          </table></div>
+        </section>
+      </div>
+    </>
   );
 }

@@ -2183,3 +2183,6 @@ tr.cp-over td { background: var(--bg-warning); }
 .doc tr:hover td { background: transparent !important; }
 .doc .doc-table th, .doc .doc-label, .doc .doc-gen { color: #666; }
 .doc .doc-title h1 { color: #4B3621; }
+
+/* Sales overview (2026-10-26) */
+.so-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); align-items: start; }
