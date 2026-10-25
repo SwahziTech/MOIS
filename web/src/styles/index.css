@@ -2115,3 +2115,4 @@ tr.cp-over td { background: var(--bg-warning); }
 .ps-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); align-items: start; }
 .ps-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
 .ps-row > span:first-child { color: var(--text-muted); }
+.pl-res-pick { text-align: left; cursor: pointer; font-weight: 600; min-width: 180px; }

@@ -56,6 +56,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [wastani, setWastani] = useState({});   // product id → shared yield per bag (picker cards)
   const [sizes,   setSizes]   = useState({});   // product id → size (from its size spec)
   const [picking, setPicking] = useState(false);
+  const [pickingResidual, setPickingResidual] = useState(null);   // a residual row's index, or 'new'
   const tilesRef = useRef(null);
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
@@ -392,6 +393,15 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
   return (
     <div className="pl">
+      {pickingResidual !== null && (
+        <ProductPicker title="Select residual product" usage={usage} wastani={wastani} cats={cats} onClose={() => setPickingResidual(null)}
+          items={leftoverChoices.filter(c => !form.leftovers.some((x, j) => x.productId === c.id && j !== pickingResidual))}
+          onPick={id => {
+            const at = pickingResidual;
+            setPickingResidual(null);
+            set({ leftovers: at === 'new' ? [...form.leftovers, { productId: id, pieces: '' }] : form.leftovers.map((x, j) => (j === at ? { ...x, productId: id } : x)) });
+          }} />
+      )}
       {picking && (
         <ProductPicker items={carried} cats={cats} usage={usage} wastani={wastani} onClose={() => setPicking(false)}
           onPick={id => { setPicking(false); set({ productId: id, colorId: '', leftovers: [], edits: {}, allowOther: false }); }} />
@@ -532,7 +542,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         <div className="pl-sub">
           <div className="pl-subhead">
             <h4 className="pl-subtitle">Residuals (secondary products)</h4>
-            <button type="button" className="btn btn-outline btn-sm" disabled={!main} onClick={() => set({ leftovers: [...form.leftovers, { productId: '', pieces: '' }] })}><Plus size={13} /> Add residual product</button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={!main} onClick={() => setPickingResidual('new')}><Plus size={13} /> Add residual product</button>
           </div>
           {isManager && main && (
             <label className="pl-allow"><input type="checkbox" checked={form.allowOther} onChange={e => set({ allowOther: e.target.checked, leftovers: [] })} /> Allow other products for this batch</label>
@@ -543,11 +553,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             return (
               <div key={i} className="pl-res">
                 <div className="pl-res-name">
-                  <select className="form-input" aria-label="Residual product" value={l.productId}
-                    onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, productId: e.target.value } : x)) })}>
-                    <option value="">Residual product…</option>
-                    {leftoverChoices.filter(c => c.id === l.productId || !form.leftovers.some(x => x.productId === c.id)).map(c => <option key={c.id} value={c.id}>{c.name} · {c.category}</option>)}
-                  </select>
+                  <button type="button" className="form-input pl-res-pick" aria-label="Residual product" onClick={() => setPickingResidual(i)}>
+                    {it ? it.name : 'Choose residual product…'}
+                  </button>
                   {it && b?.average_yield_per_bag > 0 && <span className="pl-accent-text">Wastani: {+b.average_yield_per_bag} pcs/bag</span>}
                   {it && b !== undefined && !(b?.average_yield_per_bag > 0) && <WastaniMissing productId={it.id} name={it.name} branchId={branchId} />}
                   {it && orderPick(it.id, residualColour(it))}
