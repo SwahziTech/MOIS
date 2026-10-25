@@ -83,7 +83,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
               <div className="pb-row">
                 <span className="pb-name">{main.name}</span>
                 <span className="pb-pcs"><strong>{qtyText(main.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
-                  {main.passed != null && <span className="pl-help"> · {qtyText(main.passed)} passed</span>}</span>
+                  {main.passed != null && <span className="pb-passed">{qtyText(main.passed)} passed</span>}</span>
                 <MaterialStrip materials={mats} soft />
                 <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(main.pieces) || 0) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
                 {costed && <span className="pb-cost">{unitCost(main, b.estimate)}</span>}
@@ -93,7 +93,7 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
               <div key={i} className="pb-row pb-res">
                 <span className="pb-name">+ {o.name}</span>
                 <span className="pb-pcs"><strong>{qtyText(o.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
-                  {o.passed != null && <span className="pl-help"> · {qtyText(o.passed)} passed</span>}</span>
+                  {o.passed != null && <span className="pb-passed">{qtyText(o.passed)} passed</span>}</span>
                 <span className="pl-help">residual · same mix as {main?.name}</span>
                 <span />
                 {costed && <span className="pb-cost">{unitCost(o, b.estimate)}</span>}

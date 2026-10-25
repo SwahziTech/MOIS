@@ -2055,3 +2055,5 @@ tr.cp-over td { background: var(--bg-warning); }
 @media (max-width: 760px) { .pb.has-cost .pb-row { grid-template-columns: minmax(0, 1fr) auto; } .pb-cost { grid-column: 1 / -1; text-align: left; } .pb-cost-val { align-items: flex-start; flex-direction: row; gap: 8px; } }
 .pb-head { flex-wrap: wrap; row-gap: 2px; }
 .pb-head > strong { white-space: nowrap; }
+/* "passed" under the pieces, not beside them — beside, it ran over the materials (2026-10-25) */
+.pb-passed { display: block; font-size: 11px; color: var(--text-muted); line-height: 1.1; }
