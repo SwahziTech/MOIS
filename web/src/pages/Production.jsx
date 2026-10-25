@@ -15,6 +15,7 @@ import NumberInput from '../components/NumberInput';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DayLog from '../components/production/DayLog';
 import CapacityPlanner from '../components/production/CapacityPlanner';
+import ProductionSettings from '../components/production/ProductionSettings';
 
 const LOAD_ERROR = "We couldn't load production. Please try again.";
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -52,6 +53,7 @@ export default function Production() {
   const [rowError,  setRowError]  = useState('');
   const [curingDays, setCuringDays] = useState(14);
   const [minCuring, setMinCuring] = useState(null);   // fewest days before release (054); null = none
+  const [showSettings, setShowSettings] = useState(false);
   const [preset, setPreset] = useState(null);   // product (and colour) sent from the simulator or Stock
   // Stock's "Produce" opens the production form with that product (?produce=<id>)
   const [params, setParams] = useSearchParams();
@@ -159,7 +161,7 @@ export default function Production() {
   }
 
   return (
-    <PageShell title="Production" subtitle="Production"
+    <PageShell title="Production" subtitle="Production" onSettings={() => setShowSettings(true)}
       description={branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
       <PageTabs value={current} onChange={setTab} tabs={[
         ...(canRecord ? [['log', 'Production']] : []),
@@ -306,6 +308,7 @@ export default function Production() {
       {voiding && (
         <VoidModal batch={voiding} name={productName(voiding)} onClose={() => setVoiding(null)} onSaved={async () => { setVoiding(null); await load(); }} />
       )}
+      {showSettings && <ProductionSettings onClose={() => { setShowSettings(false); load(); }} />}
     </PageShell>
   );
 }

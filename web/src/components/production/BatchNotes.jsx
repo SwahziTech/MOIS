@@ -1,30 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Cog, Trash2, Plus, X } from 'lucide-react';
+import { Users, Cog, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
 
 /**
  * Production tracking for one batch (migration 056), in the batch's note zone
- * (SwahziTech, 2026-10-25): who made it, on what, what was thrown away making
- * it, and the note. Team and machine are required but start filled — the
+ * (SwahziTech, 2026-10-25): who made it, on what, and the note ("thrown
+ * away" was removed the same day). Team and machine are required but start filled — the
  * last team used at the branch, the machine that makes the product — so a
  * normal batch needs no taps. A team is created once and picked after; who
  * worked is recorded only when it differs from the team.
  *
- * value: { teamId, workerIds (null = whole team), machineId, waste: [{ materialId, quantity, unitId, reasonId }], notes }
+ * value: { teamId, workerIds (null = whole team), machineId, notes }
  */
 export function useProductionLists(branchId) {
   const [lists, setLists] = useState(null);   // null = loading; { ready: false } before 056
   async function load() {
     if (!branchId) return;
-    const [t, m, mp, w] = await Promise.all([
+    const [t, m, mp] = await Promise.all([
       supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branchId).order('name'),
       supabase.from('machines').select('id, name, status').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
-      supabase.from('waste_reasons').select('id, name, status, display_order').order('display_order').order('name'),
     ]);
-    if (t.error || m.error || w.error) { setLists({ ready: false, teams: [], machines: [], links: [], reasons: [] }); return; }
-    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], reasons: w.data || [] });
+    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [] }); return; }
+    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [] });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   return [lists, load];
@@ -42,7 +41,7 @@ export function teamLabel(lists, teamId, workerIds) {
   return workerIds ? `${t.name} (${workerIds.length} of ${active.length})` : t.name;
 }
 
-export default function BatchNotes({ branchId, organizationId, productId, lists, reload, value, onChange, materials, symOf }) {
+export default function BatchNotes({ branchId, organizationId, productId, lists, reload, value, onChange }) {
   const set = patch => onChange({ ...value, ...patch });
   const teams = (lists?.teams || []).filter(t => t.status === 'active');
   const team = teams.find(t => t.id === value.teamId);
@@ -50,7 +49,6 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
   // machines that make this product; all the branch's machines until one is linked
   const linked = allMachines.filter(m => lists.links.some(l => l.machine_id === m.id && l.product_id === productId));
   const machines = linked.length ? linked : allMachines;
-  const reasons = (lists?.reasons || []).filter(r => r.status === 'active');
   const [editing, setEditing] = useState(null);   // 'workers' | 'newTeam' | 'newMachine'
   const [text, setText] = useState('');
   const [members, setMembers] = useState('');
@@ -133,31 +131,6 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
     set({ workerIds: whole ? null : next });
   }
 
-  const wasteLine = (w, i) => {
-    const it = materials.find(m => m.id === w.materialId);
-    const patch = p => set({ waste: value.waste.map((x, j) => (j === i ? { ...x, ...p } : x)) });
-    return (
-      <div key={i} className="bn-waste">
-        <Trash2 size={13} className="bn-ico" aria-hidden="true" />
-        <select className="form-select bn-sel" aria-label="Material thrown away" value={w.materialId}
-          onChange={e => { const m = materials.find(x => x.id === e.target.value); patch({ materialId: e.target.value, unitId: m?.unitIds[0] ?? '' }); }}>
-          <option value="">Material…</option>
-          {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <input className="form-input bn-qty" inputMode="decimal" aria-label="Amount thrown away" placeholder="Amount" value={w.quantity}
-          onChange={e => patch({ quantity: e.target.value })} />
-        <select className="form-select bn-unit" aria-label="Unit" value={w.unitId} onChange={e => patch({ unitId: e.target.value })}>
-          {(it?.unitIds || []).map(u => <option key={u} value={u}>{symOf(u)}</option>)}
-        </select>
-        <select className="form-select bn-sel" aria-label="Why thrown away" value={w.reasonId} onChange={e => patch({ reasonId: e.target.value })}>
-          <option value="">Why…</option>
-          {reasons.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
-        <button type="button" className="icon-btn" aria-label="Remove thrown away" onClick={() => set({ waste: value.waste.filter((_, j) => j !== i) })}><X size={14} /></button>
-      </div>
-    );
-  };
-
   if (!lists) return null;
   const noteInput = (
     <input className="form-input bn-note" placeholder="Note (optional)" aria-label="Batch note" value={value.notes} onChange={e => set({ notes: e.target.value })} />
@@ -185,9 +158,6 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
             <option value="+">+ New machine…</option>
           </select>
         </span>
-        <button type="button" className="bn-add" onClick={() => set({ waste: [...value.waste, { materialId: '', quantity: '', unitId: '', reasonId: '' }] })}>
-          <Plus size={13} /> Thrown away
-        </button>
         {noteInput}
       </div>
 
@@ -224,7 +194,6 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
           </div>
         </div>
       )}
-      {value.waste.map(wasteLine)}
       {error && <p className="text-xs text-error">{error}</p>}
     </div>
   );

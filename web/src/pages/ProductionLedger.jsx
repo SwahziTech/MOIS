@@ -42,9 +42,9 @@ export default function ProductionLedger() {
   const [sortBy, setSortBy] = useState('newest');
   const [open, setOpen] = useState(null);         // a day key
   const [pcsPerSqm, setPcsPerSqm] = useState({});
-  const [track, setTrack] = useState(null);       // teams, machines, waste, reasons (056); null before it
+  const [track, setTrack] = useState(null);       // teams and machines (056); null before it
   const [view, setView] = useState('days');       // days | tracking
-  const [groupBy, setGroupBy] = useState('team');  // team | machine | product | waste
+  const [groupBy, setGroupBy] = useState('team');  // team | machine | product
 
   async function load() {
     setError('');
@@ -58,13 +58,11 @@ export default function ProductionLedger() {
       ]);
       setPcsPerSqm(Object.fromEntries((ps.data || []).map(x => [x.product_id, Number(x.pcs_per_sqm)])));
       // production tracking (056) — the ledger still works without it
-      const [t, m, w, wr] = await Promise.all([
+      const [t, m] = await Promise.all([
         supabase.from('production_teams').select('id, name, members:production_team_members(id, name)'),
         supabase.from('machines').select('id, name'),
-        supabase.from('production_batch_waste').select('*'),
-        supabase.from('waste_reasons').select('id, name'),
       ]);
-      setTrack(t.error || m.error || w.error ? null : { teams: t.data || [], machines: m.data || [], waste: w.data || [], reasons: wr.data || [] });
+      setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [] });
       if (b.error) throw b.error;
       setRefs(r);
       setBatches(b.data || []);
@@ -120,8 +118,6 @@ export default function ProductionLedger() {
         n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
         team: teamOf(b), machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
-        waste: (track?.waste || []).filter(w => w.batch_id === b.id).map(w => ({ name: refs.items[`m:${w.material_id}`]?.name ?? '—', qty: Number(w.quantity),
-          unit: refs.unitById[w.unit_id]?.symbol ?? '', reason: track.reasons.find(r => r.id === w.reason_id)?.name ?? '', cost: w.cost })),
         qc: b.status === 'released' ? { tags: b.qc_tags || [], note: b.release_note } : null,
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),
@@ -143,20 +139,12 @@ export default function ProductionLedger() {
     return `${t.name} (${b.worker_ids.map(id => people.find(p => p.id === id)?.name ?? '?').join(', ')})`;
   }
 
-  // Tracking: the period's batches by team, machine, product or waste reason
+  // Tracking: the period's batches by team, machine or product
   const tracking = useMemo(() => {
     if (!track || !refs) return [];
     const live = days.flatMap(d => d.batches).filter(b => b.status !== 'void');
     const rows = {};
-    const row = (k, name) => (rows[k] ||= { key: k, name, batches: 0, bags: 0, pieces: 0, implied: 0, implying: 0, released: 0, rejected: 0, cost: 0, costPcs: 0, waste: 0, wasteTimes: 0 });
-    if (groupBy === 'waste') {
-      const ids = new Set(live.map(b => b.id));
-      for (const w of track.waste.filter(x => ids.has(x.batch_id))) {
-        const r = row(w.reason_id, track.reasons.find(x => x.id === w.reason_id)?.name ?? '—');
-        r.wasteTimes += 1; r.waste += Number(w.cost) || 0;
-      }
-      return Object.values(rows).sort((a, b) => b.waste - a.waste);
-    }
+    const row = (k, name) => (rows[k] ||= { key: k, name, batches: 0, bags: 0, pieces: 0, implied: 0, implying: 0, released: 0, rejected: 0, cost: 0, costPcs: 0 });
     for (const b of live) {
       const keys = groupBy === 'team' ? [[b.team_id ?? '-', track.teams.find(t => t.id === b.team_id)?.name ?? 'No team (before 25 Oct)']]
         : groupBy === 'machine' ? [[b.machine_id ?? '-', track.machines.find(m => m.id === b.machine_id)?.name ?? 'No machine (before 25 Oct)']]
@@ -169,7 +157,6 @@ export default function ProductionLedger() {
         if (b.theoretical_bags != null) { r.implied += Number(b.theoretical_bags); r.implying += Number(b.cement_bags); }
         if (b.status === 'released') { r.released += pcs; r.rejected += (b.rejects || []).reduce((s, x) => s + x.pieces, 0); }
         if (b.material_cost != null) { r.cost += Number(b.material_cost); r.costPcs += pcs; }
-        r.waste += track.waste.filter(w => w.batch_id === b.id).reduce((s, w) => s + (Number(w.cost) || 0), 0);
       }
     }
     return Object.values(rows).sort((a, b) => b.pieces - a.pieces);
@@ -214,25 +201,18 @@ export default function ProductionLedger() {
           <div className="pled-track-head">
             <span className="pl-help">Batches in the period above (void left out). Yield = cement the pieces imply ÷ cement used; rejects = of pieces released.</span>
             <div className="filter-chips">
-              {[['team', 'Team'], ['machine', 'Machine'], ['product', 'Product'], ['waste', 'Waste reason']].map(([k, l]) => (
+              {[['team', 'Team'], ['machine', 'Machine'], ['product', 'Product']].map(([k, l]) => (
                 <button type="button" key={k} className={`filter-chip${groupBy === k ? ' is-on' : ''}`} onClick={() => setGroupBy(k)}>{l}</button>
               ))}
             </div>
           </div>
           <div className="table-container">
-            {groupBy === 'waste' ? (
-              <table>
-                <thead><tr><th>Why thrown away</th><th style={{ textAlign: 'right' }}>Times</th><th style={{ textAlign: 'right' }}>Cost</th></tr></thead>
-                <tbody>{tracking.length === 0 ? <tr><td colSpan={3} className="text-muted">Nothing thrown away in this period.</td></tr> : tracking.map(r => (
-                  <tr key={r.key}><td style={{ fontWeight: 500 }}>{r.name}</td><td style={{ textAlign: 'right' }}>{r.wasteTimes}</td><td style={{ textAlign: 'right' }}>{money(r.waste)}</td></tr>
-                ))}</tbody>
-              </table>
-            ) : (
+            {(
               <table>
                 <thead><tr><th>{{ team: 'Team', machine: 'Machine', product: 'Product' }[groupBy]}</th><th style={{ textAlign: 'right' }}>Batches</th><th style={{ textAlign: 'right' }}>Bags</th>
                   <th style={{ textAlign: 'right' }}>Pieces</th><th style={{ textAlign: 'right' }}>Yield</th><th style={{ textAlign: 'right' }}>Rejects</th>
-                  <th style={{ textAlign: 'right' }}>Material / pc</th><th style={{ textAlign: 'right' }}>Waste</th></tr></thead>
-                <tbody>{tracking.length === 0 ? <tr><td colSpan={8} className="text-muted">No batches in this period.</td></tr> : tracking.map(r => (
+                  <th style={{ textAlign: 'right' }}>Material / pc</th></tr></thead>
+                <tbody>{tracking.length === 0 ? <tr><td colSpan={7} className="text-muted">No batches in this period.</td></tr> : tracking.map(r => (
                   <tr key={r.key}>
                     <td style={{ fontWeight: 500 }} className={r.key === '-' ? 'text-muted' : ''}>{r.name}</td>
                     <td style={{ textAlign: 'right' }}>{r.batches}</td>
@@ -241,7 +221,6 @@ export default function ProductionLedger() {
                     <td style={{ textAlign: 'right' }}>{r.implying > 0 ? pct(r.implied / r.implying) : '—'}</td>
                     <td style={{ textAlign: 'right' }}>{r.released > 0 ? pct(r.rejected / r.released) : '—'}</td>
                     <td style={{ textAlign: 'right' }}>{r.costPcs > 0 ? money(r.cost / r.costPcs) : '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{r.waste > 0 ? money(r.waste) : '—'}</td>
                   </tr>
                 ))}</tbody>
               </table>

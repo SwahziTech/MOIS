@@ -2108,3 +2108,10 @@ tr.cp-over td { background: var(--bg-warning); }
 .ptc-sel { width: 150px; padding-top: 4px; padding-bottom: 4px; }
 /* the open list of a chip dropdown follows the theme (it was light text on white) */
 .bn-chip-sel option { background: var(--bg-surface); color: var(--text-primary); }
+
+/* ⚙ beside a page heading: that page's own settings (Production, 2026-10-25) */
+.page-settings { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: 8px; vertical-align: middle; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-muted); cursor: pointer; }
+.page-settings:hover, .page-settings:focus-visible { color: var(--text-primary); background: var(--bg-surface); }
+.ps-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); align-items: start; }
+.ps-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.ps-row > span:first-child { color: var(--text-muted); }

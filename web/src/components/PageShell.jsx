@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
  * PageShell — the standard page frame (2026-10-17). No top bar: the page
@@ -7,7 +7,8 @@ import { ChevronRight } from 'lucide-react';
  * one-line description on the left and the page's main "+ New" action on
  * the right. The light/dark switch lives in the sidebar header.
  */
-export default function PageShell({ title, subtitle, description, primaryAction, actions, children }) {
+// onSettings: a small ⚙ beside the heading opens the page's own settings (2026-10-25)
+export default function PageShell({ title, subtitle, description, primaryAction, actions, onSettings, children }) {
   return (
     <main className="page-content animate-fadeIn">
       <nav className="page-breadcrumb" aria-label="Breadcrumb">
@@ -21,7 +22,9 @@ export default function PageShell({ title, subtitle, description, primaryAction,
       </nav>
       <div className="page-header page-header-row">
         <div className="page-header-text">
-          <h1 className="page-title">{title}</h1>
+          <h1 className="page-title">{title}{onSettings && (
+            <button type="button" className="page-settings" aria-label={`${title} settings`} title={`${title} settings`} onClick={onSettings}><SettingsIcon size={17} /></button>
+          )}</h1>
           {description && <p className="page-description">{description}</p>}
         </div>
         {(primaryAction || actions) && (
