@@ -197,9 +197,9 @@ export default function Pricing() {
                 ) : orderedProducts.map(p => (
                   <tr key={p.id}>
                     <td>
-                      {/* category over name (locked) */}
-                      <div className="text-xs text-muted">{catTools.label(p.category_id)}</div>
+                      {/* products: name on top, category below (locked 2026-10-25) */}
                       <div style={{ fontWeight: 500 }}>{p.canonical_name}{p.status !== 'active' && <span className="text-muted"> (inactive)</span>}</div>
+                      <div className="text-xs text-muted">{catTools.label(p.category_id)}</div>
                     </td>
                     {branches.map(b => {
                       const row = basePrice[`${p.id}|${b.id}`];

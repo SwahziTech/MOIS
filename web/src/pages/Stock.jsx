@@ -200,7 +200,7 @@ export default function Stock() {
             const pcs = pcsOf(c, c.total);
             return (
               <div key={c.item.key} className="sk-card lk-card" title="Open its history" onClick={e => { if (!e.target.closest('button')) setHistoryOf(c.item); }}>
-                <div className="sk-name">
+                <div className={`sk-name${isProducts ? ' is-product' : ''}`}>{/* products: name on top; materials: category on top (locked 2026-10-25) */}
                   <span className="sk-tags">
                     <span className="pl-tag">{isProducts ? c.item.category : c.item.materialCategory ?? 'Material'}</span>
                     {c.total <= 0 && c.curing <= 0 && <span className="sk-out">OUT</span>}

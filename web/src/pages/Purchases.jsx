@@ -315,7 +315,7 @@ export default function Purchases() {
                       return (
                         <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>
                           <td>{e.expense_date}</td>
-                          <td><div className="text-xs text-muted">{catName(e.category_id)}</div><span style={{ fontWeight: 500 }}>{e.description}</span></td>
+                          <td><span style={{ fontWeight: 500 }}>{e.description}</span><div className="text-xs text-muted">{catName(e.category_id)}</div></td>
                           <td style={{ textAlign: 'right' }}>{e.quantity != null ? qtyText(e.quantity) : '—'}</td>
                           <td style={{ textAlign: 'right' }}>{e.unit_price != null ? money(e.unit_price) : '—'}</td>
                           <td>{e.supplier_id ? supplierName(e.supplier_id) : '—'}</td>

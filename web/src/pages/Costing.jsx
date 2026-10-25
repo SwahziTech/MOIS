@@ -113,9 +113,9 @@ export default function Costing() {
               const pct = x.margin != null && x.price > 0 ? Math.round((x.margin / x.price) * 100) : null;
               return (
                 <div key={`${x.product_id}|${x.color_id ?? ''}`} className="sk-card lk-card" title="Open its stock at cost" onClick={() => setOpen(x)}>
-                  <div className="sk-name">
-                    <span className="pl-help">{x.it.category}</span>
+                  <div className="sk-name">{/* products: name on top, category below (locked) */}
                     <strong>{x.it.name}{x.colour ? ` ${x.colour}` : ''}</strong>
+                    <span className="pl-help">{x.it.category}</span>
                   </div>
                   <div className="sk-total">
                     {x.margin != null ? (<>

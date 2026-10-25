@@ -238,7 +238,7 @@ export default function Products() {
               <div key={p.id} className={`sk-card lk-card${p.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(p)}
                 onDoubleClick={() => { if (canWrite || (!!branchId && canAt('products.manage', branchId, null))) { setViewing(null); setEditing(p); } }}
                 title="Click for stock, prices and recipes · double-click to edit">
-                <div className="sk-name">
+                <div className="sk-name is-product">{/* products: name on top, category below (locked 2026-10-25) */}
                   <span className="sk-tags">
                     <span className="pl-tag">{cats.label(p.category_id)}</span>
                     {p.size_cm && <span className="pc-size"><Ruler size={12} /> {p.size_cm}</span>}

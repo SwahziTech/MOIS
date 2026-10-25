@@ -2139,3 +2139,6 @@ tr.cp-over td { background: var(--bg-warning); }
 .co-est-txt { color: var(--color-warning); }
 
 .pp-cat { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* LOCKED 2026-10-25: products — name on top, category row below; materials — category on top */
+.sk-name.is-product > strong { order: -1; }
