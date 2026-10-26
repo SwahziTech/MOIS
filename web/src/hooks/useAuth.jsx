@@ -20,11 +20,15 @@ export function AuthProvider({ children }) {
     loadedFor.current = userId;
     setProfileReady(false);
 
-    const { data: profileData, error: profileErr } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    const readProfile = () => supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    let { data: profileData, error: profileErr } = await readProfile();
+    // an expired sign-in (e.g. the tab sat closed overnight): renew it once; if that fails, back to the sign-in page —
+    // never read it as "no organization" (2026-10-26)
+    if (profileErr && (profileErr.code === 'PGRST303' || /JWT expired/i.test(profileErr.message ?? ''))) {
+      const { error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr) { await supabase.auth.signOut(); return; }
+      ({ data: profileData, error: profileErr } = await readProfile());
+    }
     if (profileErr) console.error('profile load failed', profileErr);
     if (loadedFor.current !== userId) return; // signed out / switched meanwhile
 
