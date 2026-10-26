@@ -677,9 +677,13 @@ ul, ol { list-style: none; }
 /* ----------------------------------------------------------------
    TABLE
 ---------------------------------------------------------------- */
+/* Long lists keep their header in view (2026-10-26, every page): the table scrolls inside its box,
+   at most the screen's height, with the header row pinned at the top and totals at the foot */
 .table-container {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 160px);
 }
+.modal .table-container { max-height: 60vh; }
 
 table {
   width: 100%;
@@ -688,6 +692,9 @@ table {
 }
 
 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   padding: 10px 14px;
   background: var(--bg-canvas);
   border-bottom: 1px solid var(--border-strong);
@@ -2217,3 +2224,8 @@ tr.cp-over td { background: var(--bg-warning); }
 .sb-table tr.sb-multi:not(.sb-last) td { border-bottom-color: transparent; }
 .sb-table tr.sb-shade > td:first-child { box-shadow: inset 4px 0 0 var(--color-accent-khaki, var(--accent)); }
 .sb-items { display: block; margin-top: 1px; font-size: 10px; font-weight: 400; color: var(--text-muted); opacity: .7; }   /* very small and faint */
+
+/* frozen header and totals (2026-10-26) */
+.table-container tfoot td { position: sticky; bottom: 0; z-index: 3; background: var(--bg-surface); }
+@media print { thead th, .table-container tfoot td { position: static; } .table-container { max-height: none; overflow: visible; } }
+.sb-table th.sb-acc { background: linear-gradient(color-mix(in srgb, var(--color-warning) 14%, transparent), color-mix(in srgb, var(--color-warning) 14%, transparent)), var(--bg-canvas); }   /* solid, so frozen rows do not show through */
