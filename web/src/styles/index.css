@@ -2205,3 +2205,7 @@ tr.cp-over td { background: var(--bg-warning); }
 .sl-discount { font-size: var(--text-xs); font-weight: 600; color: var(--color-warning); }
 .sl-promote { display: flex; flex-direction: column; gap: 8px; }
 .sl-efd { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-warning); border-radius: var(--radius-md); }
+
+/* sales book: a sale's money merged across its rows (2026-10-26) */
+.sb-table td.sb-merge { vertical-align: middle; border-left: 1px solid var(--border); }
+.sb-table tr.sb-first td { border-top: 1px solid var(--border); }

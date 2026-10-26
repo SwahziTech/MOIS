@@ -202,6 +202,8 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
   const [efd, setEfd] = useState('');
   const activeAccounts = accounts.filter(a => a.status === 'active');
   const [pays, setPays] = useState([{ accountId: '', amount: '', receiptNo: '', auto: true }]);   // auto: follows the total until typed
+  const [payMode, setPayMode] = useState('order');    // order: one payment for the whole order | items: one per item (070)
+  const [itemPays, setItemPays] = useState({});       // line index → { accountId, amount, receiptNo }
   const [lines, setLines] = useState(() => (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({
     productId: l.product_id, colorId: l.color_id ?? '', quantity: String(+l.quantity),
     price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' })));
@@ -290,7 +292,15 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
           ...(inc != null && pr ? { price: inc, discount_reason: l.reason } : {}) };   // the price charged a unit (069)
       }),
     };
-    if (book) {
+    if (book && payMode === 'items' && lines.length > 1) {
+      const ps = lines.map((l, i) => ({ i, x: itemPays[i] || {}, total: preview(l)?.total ?? 0 }))
+        .map(({ i, x, total }) => ({ line_no: i + 1, accountId: x.accountId || '', value: x.amount === undefined || x.amount === '' ? total : num(x.amount), receiptNo: x.receiptNo || '' }))
+        .filter(x => x.value > 0);
+      if (!activeAccounts.length && ps.length) { setError('Add the receiving accounts first (Sales ⚙) — a payment must name its account.'); return; }
+      if (ps.some(x => !x.accountId)) { setError('Choose the account each item was paid into — it is required.'); return; }
+      payload.site = site; payload.efd_receipt_no = efd;
+      payload.payments = ps.map(x => ({ line_no: x.line_no, account_id: x.accountId, amount: x.value, receipt_no: x.receiptNo }));
+    } else if (book) {
       const ps = pays.map(x => ({ ...x, value: x.auto && pays.length === 1 ? r2(totals.total) : num(x.amount) })).filter(x => x.value > 0);
       if (ps.some(x => !x.accountId) && activeAccounts.length) { setError('Choose the account each payment went into — it is required.'); return; }
       if (ps.length && !activeAccounts.length) { setError('Add the receiving accounts first (Sales ⚙) — a payment must name its account.'); return; }
@@ -419,6 +429,31 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
         {book && (
           <section>
             <h3 className="modal-section-title">Paid</h3>
+            {lines.length > 1 && (
+              <div className="flex items-center gap-8" role="group" aria-label="How it was paid">
+                <button type="button" className={`filter-chip${payMode === 'order' ? ' is-on' : ''}`} onClick={() => setPayMode('order')}>One payment for the whole order</button>
+                <button type="button" className={`filter-chip${payMode === 'items' ? ' is-on' : ''}`} onClick={() => setPayMode('items')}>Separately per item</button>
+              </div>
+            )}
+            {payMode === 'items' && lines.length > 1 ? (
+              <table className="rd-table">
+                <thead><tr><th>Item</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into account (required)</th><th>Receipt no.</th></tr></thead>
+                <tbody>{lines.map((l, i) => {
+                  const x = itemPays[i] || {};
+                  const setX = patch => setItemPays(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
+                  return (
+                    <tr key={i}>
+                      <td><strong>{refs.items[`p:${l.productId}`]?.name}{l.colorId ? ` ${refs.colorById[l.colorId]?.name ?? ''}` : ''}</strong></td>
+                      <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }}
+                        value={x.amount === undefined ? String(preview(l)?.total ?? '') : x.amount} onChange={e => setX({ amount: e.target.value })} /></td>
+                      <td><select className="form-input" value={x.accountId || ''} onChange={e => setX({ accountId: e.target.value })}>
+                        <option value="">Choose…</option>{activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></td>
+                      <td><input className="form-input" style={{ width: 110 }} value={x.receiptNo || ''} onChange={e => setX({ receiptNo: e.target.value })} /></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            ) : <>
             {activeAccounts.length === 0 && <p className="pl-help">No receiving accounts set for this branch yet — a manager adds them under Sales ⚙. Until then a payment is recorded as cash.</p>}
             {pays.map((x, i) => (
               <div key={i} className="form-row" style={{ alignItems: 'flex-end' }}>
@@ -439,6 +474,7 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPays(ps => [...ps.map(y => ({ ...y, amount: y.auto ? String(r2(totals.total)) : y.amount, auto: false })), { accountId: '', amount: '', receiptNo: '', auto: false }])}><Plus size={13} /> Split into another account</button>
               <span className="pl-help" style={{ marginLeft: 'auto' }}>Nothing paid yet? Set the amount to 0 — it stays owed.</span>
             </div>
+            </>}
             <label className="pe-field"><span>EFD receipt no. (optional)</span><input className="form-input" value={efd} onChange={e => setEfd(e.target.value)} /></label>
           </section>
         )}
@@ -455,7 +491,7 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
 /** One sale: its lines and totals, payments, and what can be done next */
 function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
   const [paying, setPaying] = useState(false);
-  const [pay, setPay] = useState({ amount: '', method: 'cash', reference: '', paid_on: today, account_id: '', receipt_no: '' });
+  const [pay, setPay] = useState({ amount: '', method: 'cash', reference: '', paid_on: today, account_id: '', receipt_no: '', sale_line_id: '' });
   const activeAccounts = accounts.filter(a => a.status === 'active');
   const accountName = id => accounts.find(a => a.id === id)?.name;
   const [efd, setEfd] = useState(sale.efd_receipt_no ?? '');
@@ -621,6 +657,13 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               <label className="pe-field"><span>Amount (up to {money(owed)})</span><NumberInput step="any" min="0" className="form-input" value={pay.amount} onChange={e => setPay({ ...pay, amount: e.target.value })} /></label>
               <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={pay.paid_on} onChange={e => setPay({ ...pay, paid_on: e.target.value })} /></label>
             </div>
+            {(sale.lines || []).length > 1 && (
+              <label className="pe-field"><span>For</span>
+                <select className="form-input" value={pay.sale_line_id} onChange={e => setPay({ ...pay, sale_line_id: e.target.value })}>
+                  <option value="">The whole order</option>
+                  {[...sale.lines].sort((a, b) => a.line_no - b.line_no).map(l => <option key={l.id} value={l.id}>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''} — {money(Number(l.total))}</option>)}
+                </select></label>
+            )}
             <label className="pe-field"><span>Receipt no. (optional)</span><input className="form-input" value={pay.receipt_no} onChange={e => setPay({ ...pay, receipt_no: e.target.value })} /></label>
             {activeAccounts.length > 0 && !pay.account_id && <p className="text-xs text-warning">Choose the account — it is required.</p>}
             {!activeAccounts.length && pay.method !== 'cash' && <label className="pe-field"><span>{pay.method === 'bank' ? 'Bank' : 'Mobile money'} reference (required)</span><input className="form-input" value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} /></label>}
@@ -861,13 +904,16 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   let lastDate = null;
   for (const x of inPeriod) {
     const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => lineOk(x, l));
+    // paid per item (070): every payment names its item → each row shows its own; else the sale's money is merged across its rows
+    const perItem = (x.payments || []).length > 0 && (x.payments || []).every(pm => pm.sale_line_id);
     lines.forEach((l, i) => {
       // the date once per day when the book runs by date; on every sale's first row when sorted by amount
-      rows.push({ x, l, first: i === 0, showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
+      rows.push({ x, l, first: i === 0, span: lines.length, perItem, showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
       lastDate = x.sale_date;
     });
   }
-  const paidTo = (x, accId) => (x.payments || []).filter(pm => (accId === 'other' ? !pm.account_id : pm.account_id === accId)).reduce((t, pm) => t + Number(pm.amount), 0);
+  const paidTo = (x, accId, lineId) => (x.payments || []).filter(pm => (accId === 'other' ? !pm.account_id : pm.account_id === accId) && (!lineId || pm.sale_line_id === lineId)).reduce((t, pm) => t + Number(pm.amount), 0);
+  const slips = (x, lineId) => (x.payments || []).filter(pm => !lineId || pm.sale_line_id === lineId).map(pm => pm.receipt_no).filter(Boolean).join(', ');
   const sum = f => rows.reduce((t, row) => t + f(row), 0);
   const vatOn = l => Number(l.vat_rate) > 0;
   return (
@@ -897,10 +943,10 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
           </thead>
           <tbody>
             {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
-            : rows.map(({ x, l, first, showDate }) => (
-              <tr key={l.id} className={`clickable-row${showDate ? ' sb-day' : ''}`} onClick={() => onOpen(x.id)}>
+            : rows.map(({ x, l, first, span, perItem, showDate }) => (
+              <tr key={l.id} className={`clickable-row${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? x.sale_date : ''}</td>
-                <td>{first ? buyerOf(x) : ''}</td>
+                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}</td>}
                 <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
                 <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>
                 <td className="num">{money(r2(Number(l.total) / Number(l.quantity)))}</td>
@@ -908,10 +954,16 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
                 <td className="num">{vatOn(l) ? money(Number(l.total)) : ''}</td>
                 <td className="num">{vatOn(l) ? money(Number(l.vat)) : ''}</td>
                 <td className="num">{vatOn(l) ? '' : money(Number(l.total))}</td>
-                {cols.map(a => <td key={a.id} className="num">{first && paidTo(x, a.id) > 0 ? money(paidTo(x, a.id)) : ''}</td>)}
-                {hasOther && <td className="num">{first && paidTo(x, 'other') > 0 ? money(paidTo(x, 'other')) : ''}</td>}
-                <td>{first ? (x.payments || []).map(pm => pm.receipt_no).filter(Boolean).join(', ') : ''}</td>
-                <td>{first ? x.site ?? '' : ''}</td>
+                {perItem ? <>
+                  {cols.map(a => <td key={a.id} className="num">{paidTo(x, a.id, l.id) > 0 ? money(paidTo(x, a.id, l.id)) : ''}</td>)}
+                  {hasOther && <td className="num">{paidTo(x, 'other', l.id) > 0 ? money(paidTo(x, 'other', l.id)) : ''}</td>}
+                  <td>{slips(x, l.id)}</td>
+                </> : first && <>
+                  {cols.map(a => <td key={a.id} rowSpan={span} className="num sb-merge">{paidTo(x, a.id) > 0 ? money(paidTo(x, a.id)) : ''}</td>)}
+                  {hasOther && <td rowSpan={span} className="num sb-merge">{paidTo(x, 'other') > 0 ? money(paidTo(x, 'other')) : ''}</td>}
+                  <td rowSpan={span} className="sb-merge">{slips(x)}</td>
+                </>}
+                {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
                 {/* has it left the store? (065) — all, part (how much) or not yet */}
                 <td>{(() => { const st = stateOf(x, l); const d = doneOf(x, l.id);
                   return st === 'done' ? <span className="sb-del is-done">Delivered</span>
