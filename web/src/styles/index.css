@@ -2194,3 +2194,9 @@ tr.cp-over td { background: var(--bg-warning); }
 .sb-table tr.sb-day td { border-top: 2px solid var(--border-strong, var(--border)); }
 .sb-table th.sb-acc { background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
 .sb-table tfoot td { border-top: 2px solid var(--border); font-weight: 600; }
+
+/* sales book: delivered or not (2026-10-26) */
+.sb-del { font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.sb-del.is-done { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+.sb-del.is-part { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
+.sb-del.is-not { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 12%, transparent); }

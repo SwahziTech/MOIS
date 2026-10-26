@@ -725,9 +725,32 @@ function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
  */
 function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   const [period, setPeriod] = useState('month');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
+  const [delivery, setDelivery] = useState('');       // '' | not | part | done
+  const [payment, setPayment] = useState('');         // '' | owed | paid
+  const [account, setAccount] = useState('');         // '' | an account id
+  const [vat, setVat] = useState('');                 // '' | with | without
   const monthStart = today.slice(0, 8) + '01';
   const from = period === 'month' ? monthStart : period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
-  const inPeriod = sales.filter(x => x.sale_date >= from).sort((a, b) => b.sale_date.localeCompare(a.sale_date) || b.sale_no - a.sale_no);
+  // delivered so far, per line (065)
+  const doneOf = (x, lineId) => (x.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === lineId).reduce((u, y) => u + Number(y.quantity), 0), 0);
+  const stateOf = (x, l) => { const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
+  const paidOf = x => (x.payments || []).reduce((t, pm) => t + Number(pm.amount), 0);
+  const nameOf = l => `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}`;
+  const accName = id => accounts.find(a => a.id === id)?.name ?? '';
+  // smart search: number, customer, phone, item, site, receipt no., EFD, account
+  const q = search.trim().toLowerCase();
+  const matches = x => !q || [`#${x.sale_no}`, String(x.sale_no), buyerOf(x), x.walk_in_phone, x.site, x.efd_receipt_no,
+    ...(x.lines || []).map(nameOf), ...(x.payments || []).flatMap(pm => [pm.receipt_no, accName(pm.account_id)])]
+    .filter(Boolean).some(t => String(t).toLowerCase().includes(q));
+  const lineOk = (x, l) => (!delivery || stateOf(x, l) === delivery) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
+  const inPeriod = sales.filter(x => x.sale_date >= from && matches(x)
+      && (!payment || (payment === 'owed') === (Number(x.total) - paidOf(x) > 0.004))
+      && (!account || (x.payments || []).some(pm => pm.account_id === account))
+      && (x.lines || []).some(l => lineOk(x, l)))
+    .sort((a, b) => (sortBy === 'amount' ? Number(b.total) - Number(a.total) : 0)
+      || (sortBy === 'oldest' ? a.sale_date.localeCompare(b.sale_date) || a.sale_no - b.sale_no : b.sale_date.localeCompare(a.sale_date) || b.sale_no - a.sale_no));
   // account columns: the branch's accounts, plus "Other" for payments without one
   const cols = [...accounts.filter(a => a.status === 'active' || inPeriod.some(x => (x.payments || []).some(pm => pm.account_id === a.id)))];
   const hasOther = inPeriod.some(x => (x.payments || []).some(pm => !pm.account_id));
@@ -735,9 +758,10 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   const rows = [];
   let lastDate = null;
   for (const x of inPeriod) {
-    const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no);
+    const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => lineOk(x, l));
     lines.forEach((l, i) => {
-      rows.push({ x, l, first: i === 0, showDate: x.sale_date !== lastDate });
+      // the date once per day when the book runs by date; on every sale's first row when sorted by amount
+      rows.push({ x, l, first: i === 0, showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
       lastDate = x.sale_date;
     });
   }
@@ -746,22 +770,31 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   const vatOn = l => Number(l.vat_rate) > 0;
   return (
     <>
-      <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="month">This month</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
-        </select>
-        <span className="pl-help">Orders and invoices; quotations live under Quotations & invoices.</span>
-      </div>
+      <ListToolbar id="book-search" search={search} onSearch={setSearch} placeholder="Search customer, item, site, receipt no., account, phone or #…"
+        sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
+        filters={[
+          { key: 'period', label: 'Period', value: period, onChange: setPeriod,
+            options: [{ value: 'month', label: 'This month' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
+          { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
+            options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
+          { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
+            options: [{ value: '', label: 'All' }, { value: 'owed', label: 'Still owed' }, { value: 'paid', label: 'Paid in full' }] },
+          ...(accounts.length ? [{ key: 'account', label: 'Account', value: account, onChange: setAccount,
+            options: [{ value: '', label: 'All accounts' }, ...accounts.map(a => ({ value: a.id, label: a.name }))] }] : []),
+          { key: 'vat', label: 'VAT', value: vat, onChange: setVat,
+            options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
+        ]} />
+      <p className="pl-help" style={{ margin: '0 0 8px' }}>{{ month: 'This month', 7: 'Last 7 days', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
             <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate</th><th className="num">Amount</th>
               <th className="num">With VAT</th><th className="num">VAT</th><th className="num">Without VAT</th>
               {cols.map(a => <th key={a.id} className="num sb-acc">{a.name}</th>)}{hasOther && <th className="num sb-acc">Other</th>}
-              <th>Receipt no.</th><th>Site</th></tr>
+              <th>Receipt no.</th><th>Site</th><th>Delivered</th></tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={11 + cols.length + (hasOther ? 1 : 0)} className="text-muted">No sales in this period. Record sale adds one.</td></tr>
+            {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
             : rows.map(({ x, l, first, showDate }) => (
               <tr key={l.id} className={`clickable-row${showDate ? ' sb-day' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? x.sale_date : ''}</td>
@@ -777,6 +810,11 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
                 {hasOther && <td className="num">{first && paidTo(x, 'other') > 0 ? money(paidTo(x, 'other')) : ''}</td>}
                 <td>{first ? (x.payments || []).map(pm => pm.receipt_no).filter(Boolean).join(', ') : ''}</td>
                 <td>{first ? x.site ?? '' : ''}</td>
+                {/* has it left the store? (065) — all, part (how much) or not yet */}
+                <td>{(() => { const st = stateOf(x, l); const d = doneOf(x, l.id);
+                  return st === 'done' ? <span className="sb-del is-done">Delivered</span>
+                    : st === 'part' ? <span className="sb-del is-part">Part — {qtyText(r2(d))} of {qtyText(Number(l.quantity))} {per(l.product_id)}</span>
+                    : <span className="sb-del is-not">Not delivered</span>; })()}</td>
               </tr>
             ))}
           </tbody>
@@ -789,7 +827,7 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
               <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? 0 : Number(l.total)))))}</td>
               {cols.map(a => <td key={a.id} className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, a.id) : 0))))}</strong></td>)}
               {hasOther && <td className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, 'other') : 0))))}</strong></td>}
-              <td colSpan={2} />
+              <td colSpan={3} />
             </tr></tfoot>
           )}
         </table>
