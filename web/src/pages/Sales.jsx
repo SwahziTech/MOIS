@@ -937,15 +937,18 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   const per = id => ((refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
   const rows = [];
   let lastDate = null;
+  let saleIdx = 0;   // shading alternates by sale, so a sale's items read as one block (2026-10-26)
   for (const x of inPeriod) {
     const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => lineOk(x, l));
     // paid per item (070): every payment names its item → each row shows its own; else the sale's money is merged across its rows
     const perItem = (x.payments || []).length > 0 && (x.payments || []).every(pm => pm.sale_line_id);
     lines.forEach((l, i) => {
       // the date once per day when the book runs by date; on every sale's first row when sorted by amount
-      rows.push({ x, l, first: i === 0, span: lines.length, perItem, showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
+      rows.push({ x, l, first: i === 0, last: i === lines.length - 1, span: lines.length, perItem, band: saleIdx % 2, multi: lines.length > 1,
+        showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
       lastDate = x.sale_date;
     });
+    if (lines.length) saleIdx += 1;
   }
   const paidTo = (x, accId, lineId) => (x.payments || []).filter(pm => (accId === 'other' ? !pm.account_id : pm.account_id === accId) && (!lineId || pm.sale_line_id === lineId)).reduce((t, pm) => t + Number(pm.amount), 0);
   const slips = (x, lineId) => (x.payments || []).filter(pm => !lineId || pm.sale_line_id === lineId).map(pm => pm.receipt_no).filter(Boolean).join(', ');
@@ -978,10 +981,10 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
           </thead>
           <tbody>
             {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
-            : rows.map(({ x, l, first, span, perItem, showDate }) => (
-              <tr key={l.id} className={`clickable-row${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}`} onClick={() => onOpen(x.id)}>
+            : rows.map(({ x, l, first, last, span, perItem, band, multi, showDate }) => (
+              <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? x.sale_date : ''}</td>
-                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}</td>}
+                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
                 <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
                 <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>
                 <td className="num">{money(r2(Number(l.total) / Number(l.quantity)))}</td>
