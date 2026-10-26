@@ -1007,7 +1007,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
           <thead>
             <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate{cur}</th><th className="num">Amount{cur}</th>
               <th className="num">With VAT{cur}</th><th className="num">VAT{cur}</th><th className="num">Without VAT{cur}</th>
-              {cols.map(a => <th key={a.id} className="num sb-acc">{a.name}</th>)}{hasOther && <th className="num sb-acc">Other</th>}
+              {cols.map((a, i) => <th key={a.id} className={`num sb-acc${i === 0 ? ' sb-acc-start' : ''}`}>{a.name}</th>)}{hasOther && <th className={`num sb-acc${cols.length ? '' : ' sb-acc-start'}`}>Other</th>}
               <th>Receipt no.</th><th>Site</th><th>Delivered</th></tr>
           </thead>
           <tbody>
@@ -1024,12 +1024,12 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
                 <td className="num">{vatOn(l) ? formatAmount(Number(l.vat)) : ''}</td>
                 <td className="num">{vatOn(l) ? '' : formatAmount(Number(l.total))}</td>
                 {perItem ? <>
-                  {cols.map(a => <td key={a.id} className="num">{paidTo(x, a.id, l.id) > 0 ? formatAmount(paidTo(x, a.id, l.id)) : ''}</td>)}
-                  {hasOther && <td className="num">{paidTo(x, 'other', l.id) > 0 ? formatAmount(paidTo(x, 'other', l.id)) : ''}</td>}
+                  {cols.map((a, i) => <td key={a.id} className={`num${i === 0 ? ' sb-acc-start' : ''}`}>{paidTo(x, a.id, l.id) > 0 ? formatAmount(paidTo(x, a.id, l.id)) : ''}</td>)}
+                  {hasOther && <td className={`num${cols.length ? '' : ' sb-acc-start'}`}>{paidTo(x, 'other', l.id) > 0 ? formatAmount(paidTo(x, 'other', l.id)) : ''}</td>}
                   <td>{slips(x, l.id)}</td>
                 </> : first && <>
-                  {cols.map(a => <td key={a.id} rowSpan={span} className="num sb-merge">{paidTo(x, a.id) > 0 ? formatAmount(paidTo(x, a.id)) : ''}</td>)}
-                  {hasOther && <td rowSpan={span} className="num sb-merge">{paidTo(x, 'other') > 0 ? formatAmount(paidTo(x, 'other')) : ''}</td>}
+                  {cols.map((a, i) => <td key={a.id} rowSpan={span} className={`num sb-merge${i === 0 ? ' sb-acc-start' : ''}`}>{paidTo(x, a.id) > 0 ? formatAmount(paidTo(x, a.id)) : ''}</td>)}
+                  {hasOther && <td rowSpan={span} className={`num sb-merge${cols.length ? '' : ' sb-acc-start'}`}>{paidTo(x, 'other') > 0 ? formatAmount(paidTo(x, 'other')) : ''}</td>}
                   <td rowSpan={span} className="sb-merge">{slips(x)}</td>
                 </>}
                 {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
@@ -1048,8 +1048,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
               <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? Number(l.total) : 0))))}</td>
               <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? Number(l.vat) : 0))))}</td>
               <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? 0 : Number(l.total)))))}</td>
-              {cols.map(a => <td key={a.id} className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, a.id) : 0))))}</strong></td>)}
-              {hasOther && <td className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, 'other') : 0))))}</strong></td>}
+              {cols.map((a, i) => <td key={a.id} className={`num${i === 0 ? ' sb-acc-start' : ''}`}><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, a.id) : 0))))}</strong></td>)}
+              {hasOther && <td className={`num${cols.length ? '' : ' sb-acc-start'}`}><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, 'other') : 0))))}</strong></td>}
               <td colSpan={3} />
             </tr></tfoot>
           )}
