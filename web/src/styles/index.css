@@ -2200,3 +2200,8 @@ tr.cp-over td { background: var(--bg-warning); }
 .sb-del.is-done { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); }
 .sb-del.is-part { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
 .sb-del.is-not { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 12%, transparent); }
+
+/* Sales rules (069) */
+.sl-discount { font-size: var(--text-xs); font-weight: 600; color: var(--color-warning); }
+.sl-promote { display: flex; flex-direction: column; gap: 8px; }
+.sl-efd { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-warning); border-radius: var(--radius-md); }

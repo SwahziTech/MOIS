@@ -85,6 +85,26 @@ export default function Sales() {
   }, [sales, search, stage, branchId, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSell = branchId && canAt('sales.create', branchId, null);
+  // what sells most at the branch (sale lines, last 90 days) — the product search lists it first (2026-10-26)
+  const soldCount = useMemo(() => {
+    const since = new Date(new Date(`${today}T00:00:00Z`).getTime() - 90 * 864e5).toISOString().slice(0, 10);
+    const c = {};
+    for (const x of sales || []) if (x.branch_id === branchId && x.stage !== 'cancelled' && x.stage !== 'quotation' && x.sale_date >= since)
+      for (const l of x.lines || []) c[l.product_id] = (c[l.product_id] || 0) + 1;
+    return c;
+  }, [sales, branchId, today]);
+  // walk-in buyers seen before: one entry per phone (digits), else per name — with how many sales
+  const walkIns = useMemo(() => {
+    const m = {};
+    for (const x of sales || []) {
+      if (x.customer_id || x.stage === 'cancelled' || !(x.walk_in_name || x.walk_in_phone)) continue;
+      const k = (x.walk_in_phone || '').replace(/\D/g, '') || `n:${(x.walk_in_name || '').trim().toLowerCase()}`;
+      const e = (m[k] ||= { key: k, name: x.walk_in_name || '', phone: x.walk_in_phone || '', count: 0, site: x.site || '' });
+      e.count += 1;
+      if (!e.name && x.walk_in_name) e.name = x.walk_in_name;
+    }
+    return Object.values(m).sort((a, b) => b.count - a.count);
+  }, [sales]);
   const branchAccounts = accounts.filter(a => a.branch_id === branchId);
   const open = (sales || []).find(s => s.id === viewing);
 
@@ -140,7 +160,7 @@ export default function Sales() {
       )}
 
       {editing && refs && (
-        <SaleEditor sale={editing.id ? editing : null} book={!!editing.book} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
+        <SaleEditor sale={editing.id ? editing : null} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
           onClose={() => setEditing(null)} onSaved={async id => { setEditing(null); await load(); setViewing(id); }} />
       )}
@@ -159,13 +179,22 @@ export default function Sales() {
  * the money went (account, amount, receipt no.); saved as an invoice with its
  * payments in one go (record_sale, 067).
  */
-function SaleEditor({ sale, book = false, accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
+function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id ? 'customer' : 'walkin');
   const [customerId, setCustomerId] = useState(sale?.customer_id ?? '');
   const [walkName, setWalkName] = useState(sale?.walk_in_name ?? '');
   const [walkPhone, setWalkPhone] = useState(sale?.walk_in_phone ?? '');
   const [newCust, setNewCust] = useState(null);   // { name, phone, tin } while adding one
+  const [promote, setPromote] = useState(null);   // { name, phone, tin, address } — a walk-in buyer's third purchase (069)
+  const digits = v => (v || '').replace(/\D/g, '');
+  const seen = () => walkIns.find(w => (digits(walkPhone) && digits(w.phone) === digits(walkPhone)) || (!digits(walkPhone) && walkName.trim() && w.key === `n:${walkName.trim().toLowerCase()}`));
+  const known = !sale && seen();
+  function pickWalkIn(v, field) {
+    const w = walkIns.find(x => (field === 'name' ? x.name : x.phone) === v);
+    if (field === 'name') setWalkName(v); else setWalkPhone(v);
+    if (w) { setWalkName(w.name); setWalkPhone(w.phone); if (!site && w.site) setSite(w.site); }
+  }
   const [date, setDate] = useState(sale?.sale_date ?? today);
   const [validUntil, setValidUntil] = useState(sale?.valid_until ?? '');
   const [notes, setNotes] = useState(sale?.notes ?? '');
@@ -217,8 +246,11 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
     const inc = num(l.price) ?? listInc;
     const q = num(l.quantity) ?? 0;
     if (inc == null) return { listInc, inc: null, total: null };
+    // a price other than the list's is a discount, sold without VAT (069)
+    const off = listInc == null || inc !== listInc;
+    const rate = off ? 0 : pr.rate;
     const total = r2(q * inc);
-    return { listInc, inc, total, ex: r2(total / (1 + pr.rate / 100)), rate: pr.rate };
+    return { listInc, inc, total, ex: r2(total / (1 + rate / 100)), rate, off, discount: listInc != null && inc < listInc ? r2((listInc - inc) * q) : 0 };
   };
   const totals = lines.reduce((t, l) => { const p = preview(l); if (p?.total != null) { t.total += p.total; t.ex += p.ex; } return t; }, { total: 0, ex: 0 });
   const set = (i, patch) => setLines(ls => ls.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -236,7 +268,18 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
       if (err) { setError(dbErrorMessage(err)); return; }
       cust = data.id;
     }
+    // the third purchase of a walk-in buyer: make them a customer first (their earlier sales follow)
+    if (buyer === 'walkin' && promote) {
+      if (!promote.name.trim()) { setError('Enter the customer\'s name.'); return; }
+      setBusy(true);
+      const { data, error: err } = await supabase.rpc('promote_walk_in', { p: { ...promote, match_name: walkName, match_phone: walkPhone } });
+      setBusy(false);
+      if (err) { setError(dbErrorMessage(err)); return; }
+      cust = data;
+    }
     if (buyer === 'customer' && !cust) { setError('Choose the customer, or sell to a walk-in buyer.'); return; }
+    const noReason = lines.find(l => preview(l)?.off && preview(l)?.listInc != null && !l.reason.trim());
+    if (noReason) { setError(`${refs.items[`p:${noReason.productId}`]?.name}: give the reason for the price change.`); return; }
     const payload = {
       id: sale?.id, branch_id: branchId, sale_date: date, valid_until: validUntil || null, notes,
       ...(cust ? { customer_id: cust } : { walk_in_name: walkName, walk_in_phone: walkPhone }),
@@ -244,12 +287,13 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
         const pr = prices[key(l)];
         const inc = num(l.price);
         return { product_id: l.productId, color_id: l.colorId || null, quantity: num(l.quantity),
-          ...(inc != null && pr ? { price: inc / (1 + pr.rate / 100), discount_reason: l.reason } : {}) };
+          ...(inc != null && pr ? { price: inc, discount_reason: l.reason } : {}) };   // the price charged a unit (069)
       }),
     };
     if (book) {
       const ps = pays.map(x => ({ ...x, value: x.auto && pays.length === 1 ? r2(totals.total) : num(x.amount) })).filter(x => x.value > 0);
-      if (ps.some(x => activeAccounts.length && !x.accountId)) { setError('Choose the account each payment went into.'); return; }
+      if (ps.some(x => !x.accountId) && activeAccounts.length) { setError('Choose the account each payment went into — it is required.'); return; }
+      if (ps.length && !activeAccounts.length) { setError('Add the receiving accounts first (Sales ⚙) — a payment must name its account.'); return; }
       if (r2(ps.reduce((t, x) => t + x.value, 0)) > r2(totals.total) + 0.01) { setError('The payments are more than the total.'); return; }
       payload.site = site; payload.efd_receipt_no = efd;
       payload.payments = ps.map(x => ({ account_id: x.accountId || null, amount: x.value, receipt_no: x.receiptNo, ...(x.accountId ? {} : { method: 'cash' }) }));
@@ -279,10 +323,29 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
         </div>
         {buyer === 'walkin' ? (
           <div className="form-row">
-            <label className="pe-field"><span>Name (optional)</span><input className="form-input" value={walkName} onChange={e => setWalkName(e.target.value)} /></label>
-            <label className="pe-field"><span>Phone (optional)</span><input className="form-input" inputMode="tel" value={walkPhone} onChange={e => setWalkPhone(e.target.value)} /></label>
+            <label className="pe-field"><span>Name (optional)</span><input className="form-input" list="walkin-names" value={walkName} onChange={e => pickWalkIn(e.target.value, 'name')} /></label>
+            <label className="pe-field"><span>Phone (optional)</span><input className="form-input" list="walkin-phones" inputMode="tel" value={walkPhone} onChange={e => pickWalkIn(e.target.value, 'phone')} /></label>
+            <datalist id="walkin-names">{walkIns.filter(w => w.name).map(w => <option key={w.key} value={w.name}>{w.phone}</option>)}</datalist>
+            <datalist id="walkin-phones">{walkIns.filter(w => w.phone).map(w => <option key={w.key} value={w.phone}>{w.name}</option>)}</datalist>
           </div>
-        ) : newCust ? (
+        ) : null}
+        {buyer === 'walkin' && known && (
+          known.count >= 2 ? (
+            <div className="alert alert-info sl-promote">
+              <strong>{known.name || known.phone} is buying for the {known.count + 1}{known.count + 1 === 3 ? 'rd' : 'th'} time</strong> — save them as a customer (their {known.count} earlier sale{known.count === 1 ? '' : 's'} move with them).
+              {promote ? (
+                <div className="form-row">
+                  <label className="pe-field"><span>Name</span><input className="form-input" value={promote.name} onChange={e => setPromote({ ...promote, name: e.target.value })} /></label>
+                  <label className="pe-field"><span>Phone</span><input className="form-input" value={promote.phone} onChange={e => setPromote({ ...promote, phone: e.target.value })} /></label>
+                  <label className="pe-field"><span>TIN (optional)</span><input className="form-input" value={promote.tin} onChange={e => setPromote({ ...promote, tin: e.target.value })} /></label>
+                  <label className="pe-field"><span>Address (optional)</span><input className="form-input" value={promote.address} onChange={e => setPromote({ ...promote, address: e.target.value })} /></label>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPromote(null)}>Not now</button>
+                </div>
+              ) : <button type="button" className="btn btn-outline btn-sm" onClick={() => setPromote({ name: walkName || known.name, phone: walkPhone || known.phone, tin: '', address: '' })}>Add their details</button>}
+            </div>
+          ) : <p className="pl-help">Bought before ({known.count} sale) — details filled in.</p>
+        )}
+        {buyer === 'walkin' ? null : newCust ? (
           <div className="form-row">
             <label className="pe-field"><span>New customer</span><input className="form-input" autoFocus value={newCust.name} onChange={e => setNewCust({ ...newCust, name: e.target.value })} /></label>
             <label className="pe-field"><span>Phone</span><input className="form-input" inputMode="tel" value={newCust.phone} onChange={e => setNewCust({ ...newCust, phone: e.target.value })} /></label>
@@ -332,6 +395,8 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
                       : canDiscount ? (<>
                         <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} placeholder={p.listInc != null ? String(p.listInc) : 'No price'} value={l.price} onChange={e => set(i, { price: e.target.value })} />
                         <div className="pl-help">{p.listInc != null ? `list ${money(p.listInc)} /${per(l.productId)}` : 'no list price'}</div>
+                        {p.off && p.discount > 0 && <div className="sl-discount">discount {money(p.discount)} · no VAT</div>}
+                        {p.off && !(p.discount > 0) && <div className="pl-help">not the list price · no VAT</div>}
                         {changed && <input className="form-input" placeholder="Reason for the price (required)" value={l.reason} onChange={e => set(i, { reason: e.target.value })} />}
                       </>) : (p.listInc != null
                         ? <><strong>{money(p.listInc)}</strong> <span className="pl-help">/{per(l.productId)}</span></>
@@ -357,7 +422,7 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
             {activeAccounts.length === 0 && <p className="pl-help">No receiving accounts set for this branch yet — a manager adds them under Sales ⚙. Until then a payment is recorded as cash.</p>}
             {pays.map((x, i) => (
               <div key={i} className="form-row" style={{ alignItems: 'flex-end' }}>
-                {activeAccounts.length > 0 && <label className="pe-field"><span>Into account</span>
+                {activeAccounts.length > 0 && <label className="pe-field"><span>Into account (required)</span>
                   <select className="form-input" value={x.accountId} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, accountId: e.target.value } : y)))}>
                     <option value="">Choose…</option>
                     {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -380,7 +445,7 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
         <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
       </div>
       {picking && (
-        <ProductPicker title="Add a product" items={carried} cats={cats} onClose={() => setPicking(false)}
+        <ProductPicker title="Add a product" items={carried} cats={cats} usage={sold} usageLabel={['sale', 'sales']} onClose={() => setPicking(false)}
           onPick={id => { setPicking(false); setLines(ls => [...ls, { productId: id, colorId: '', quantity: '', price: '', reason: '' }]); }} />
       )}
     </Modal>
@@ -545,7 +610,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
           <div className="modal-form">
             <div className="flex items-center gap-8" role="group" aria-label="Paid by">
               {activeAccounts.length > 0 ? (
-                <label className="pe-field" style={{ flex: 1 }}><span>Into account</span>
+                <label className="pe-field" style={{ flex: 1 }}><span>Into account (required)</span>
                   <select className="form-input" value={pay.account_id} onChange={e => setPay({ ...pay, account_id: e.target.value })}>
                     <option value="">Choose…</option>
                     {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -557,6 +622,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={pay.paid_on} onChange={e => setPay({ ...pay, paid_on: e.target.value })} /></label>
             </div>
             <label className="pe-field"><span>Receipt no. (optional)</span><input className="form-input" value={pay.receipt_no} onChange={e => setPay({ ...pay, receipt_no: e.target.value })} /></label>
+            {activeAccounts.length > 0 && !pay.account_id && <p className="text-xs text-warning">Choose the account — it is required.</p>}
             {!activeAccounts.length && pay.method !== 'cash' && <label className="pe-field"><span>{pay.method === 'bank' ? 'Bank' : 'Mobile money'} reference (required)</span><input className="form-input" value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} /></label>}
             {error && <p className="text-xs text-error">{error}</p>}
           </div>
@@ -582,7 +648,19 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
   const unitInc = l => Number(l.total) / Number(l.quantity);
   const [kind, setKind] = useState('collection');
-  const [qty, setQty] = useState(() => Object.fromEntries(lines.map(l => [l.id, ''])));
+  // filled in from the start: everything still to deliver, as far as the payments cover it (2026-10-26)
+  const [qty, setQty] = useState(() => {
+    let room = canLeave; const next = {};
+    for (const l of lines) {
+      const unit = Number(l.total) / Number(l.quantity);
+      const q = Math.max(0, Math.min(l.left, Math.floor((room / unit) * 100) / 100));
+      next[l.id] = q > 0 ? String(q) : ''; room -= Math.round(unit * q * 100) / 100;
+    }
+    return next;
+  });
+  const needEfd = Number(sale.vat) > 0;
+  const [efdNo, setEfdNo] = useState(sale.efd_receipt_no ?? '');
+  const [checked, setChecked] = useState(false);
   const [receivedBy, setReceivedBy] = useState(sale.walk_in_name ?? '');
   const [vehicle, setVehicle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -603,8 +681,10 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     setError('');
     if (value <= 0) { setError('Enter what leaves.'); return; }
     if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
+    if (needEfd && !efdNo.trim()) { setError('This sale carries VAT — enter the EFD receipt number.'); return; }
+    if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle,
+    const { error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
       lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
@@ -639,6 +719,13 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
           <span style={{ marginLeft: 'auto' }}><strong>{money(r2(value))}</strong> leaving</span>
         </div>
         <div className="form-row">
+          {needEfd && (
+            <div className="sl-efd">
+              <label className="pe-field"><span>EFD receipt no. (required — this sale carries VAT)</span><input className="form-input" value={efdNo} onChange={e => setEfdNo(e.target.value)} /></label>
+              <p className="text-sm">Check the EFD receipt shows: total <strong>{money(Number(sale.total))}</strong> · VAT <strong>{money(Number(sale.vat))}</strong> · without VAT <strong>{money(Number(sale.subtotal))}</strong></p>
+              <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} /> The EFD receipt shows these amounts</label>
+            </div>
+          )}
           <label className="pe-field"><span>Received by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>
           {kind === 'delivery' && <label className="pe-field"><span>Vehicle / driver (optional)</span><input className="form-input" value={vehicle} onChange={e => setVehicle(e.target.value)} /></label>}
         </div>
@@ -884,7 +971,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
     if (efd !== (sale.efd_receipt_no ?? '')) ch.efd_receipt_no = efd;
     const lc = lines.filter(x => x.remove || num(x.quantity) !== Number(x.l.quantity) || num(x.price) !== inc(x.l))
       .map(x => (x.remove ? { id: x.l.id, remove: true }
-        : { id: x.l.id, product_id: x.l.product_id, color_id: x.l.color_id, quantity: num(x.quantity), price: num(x.price) / (1 + Number(x.l.vat_rate) / 100) }));
+        : { id: x.l.id, product_id: x.l.product_id, color_id: x.l.color_id, quantity: num(x.quantity), price: num(x.price) }));   // the price charged a unit (069)
     if (lc.length) ch.lines = lc;
     const pc = pays.filter(x => x.remove || num(x.amount) !== Number(x.pm.amount) || x.account_id !== (x.pm.account_id ?? '') || x.paid_on !== x.pm.paid_on || x.receipt_no !== (x.pm.receipt_no ?? ''))
       .map(x => (x.remove ? { id: x.pm.id, remove: true } : { id: x.pm.id, amount: num(x.amount), ...(x.account_id ? { account_id: x.account_id } : {}), paid_on: x.paid_on, receipt_no: x.receipt_no }));
