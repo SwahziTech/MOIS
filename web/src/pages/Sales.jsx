@@ -56,6 +56,8 @@ export default function Sales() {
         refs ? Promise.resolve(refs) : loadInventoryRefs(),
         (async () => {
           const q = cols => supabase.from('sales').select(cols).order('sale_date', { ascending: false }).order('sale_no', { ascending: false }).limit(500);
+          const withCorrections = await q('*, lines:sale_lines(*), payments:sale_payments(*), deliveries:sale_deliveries(*, lines:sale_delivery_lines(*)), corrections:sale_corrections(*)');
+          if (!withCorrections.error) return withCorrections;   // 068
           const withDeliveries = await q('*, lines:sale_lines(*), payments:sale_payments(*), deliveries:sale_deliveries(*, lines:sale_delivery_lines(*))');
           return withDeliveries.error ? q('*, lines:sale_lines(*), payments:sale_payments(*)') : withDeliveries;   // before 065
         })(),
@@ -395,6 +397,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
   const [askEfd, setAskEfd] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [handing, setHanding] = useState(false);   // a delivery or collection being recorded (065)
+  const [correcting, setCorrecting] = useState(false);   // a correction (068): Technical admin at once, managers through Approvals
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -433,6 +436,8 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
         {sale.stage !== 'cancelled' && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
           <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
         {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
+        {!editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) &&
+          <button type="button" className="btn btn-ghost" onClick={() => setCorrecting(true)}>Correct…</button>}
         {sale.stage !== 'cancelled' && paid === 0 && canAt('sales.create', br, null) && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) &&
           <button type="button" className="btn btn-ghost" onClick={() => setCancelling(true)}>Cancel sale</button>}
         {sale.stage === 'quotation' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
@@ -515,6 +520,14 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
           </div>
         )}
         {sale.notes && <p className="text-sm"><span className="pl-label">Note</span> {sale.notes}</p>}
+        {(sale.corrections || []).length > 0 && (
+          <section>
+            <h3 className="modal-section-title">Corrections</h3>
+            {[...sale.corrections].sort((a, b) => b.applied_at.localeCompare(a.applied_at)).map(c => (
+              <p key={c.id} className="text-sm">{c.applied_at.slice(0, 10)} — {c.reason}</p>
+            ))}
+          </section>
+        )}
       </div>
 
       {askEfd && (
@@ -551,6 +564,8 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
       )}
       {handing && <DeliveryModal sale={sale} refs={refs} money={money} doneOf={doneOf} canLeave={r2(Math.max(paid - given, 0))} per={per}
         onClose={() => setHanding(false)} onSaved={async () => { setHanding(false); await onChanged(); }} />}
+      {correcting && <CorrectModal sale={sale} refs={refs} accounts={accounts} money={money} today={today} per={per} direct={canAt('system.manage', br, null)}
+        onClose={() => setCorrecting(false)} onDone={async () => { setCorrecting(false); await onChanged(); }} />}
       {cancelling && (
         <Modal title={`Cancel #${sale.sale_no}?`} onClose={() => setCancelling(false)}
           footer={<><button type="button" className="btn btn-outline" onClick={() => setCancelling(false)}>Back</button>
@@ -833,5 +848,114 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
         </table>
       </div></div>
     </>
+  );
+}
+
+/**
+ * Correct a sale (068): date, buyer, site, EFD receipt, notes; each line's
+ * quantity and price (not below what was delivered; undelivered lines can be
+ * removed); each payment's amount, account, date and receipt no. (or remove
+ * it). A reason always. The Technical admin's applies at once; a manager's
+ * goes to Approvals. Figures are worked out in the database.
+ */
+function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose, onDone }) {
+  const doneOf = id => (sale.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === id).reduce((u, y) => u + Number(y.quantity), 0), 0);
+  const inc = l => r2(Number(l.price) * (1 + Number(l.vat_rate) / 100));
+  const [date, setDate] = useState(sale.sale_date);
+  const [name, setName] = useState(sale.walk_in_name ?? '');
+  const [phone, setPhone] = useState(sale.walk_in_phone ?? '');
+  const [site, setSite] = useState(sale.site ?? '');
+  const [efd, setEfd] = useState(sale.efd_receipt_no ?? '');
+  const [lines, setLines] = useState(() => [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no)
+    .map(l => ({ l, quantity: String(+l.quantity), price: String(inc(l)), remove: false, done: doneOf(l.id) })));
+  const [pays, setPays] = useState(() => (sale.payments || []).map(pm => ({ pm, amount: String(+pm.amount), account_id: pm.account_id ?? '', paid_on: pm.paid_on, receipt_no: pm.receipt_no ?? '', remove: false })));
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+
+  async function save() {
+    setError('');
+    if (!reason.trim()) { setError('Give the reason for the correction.'); return; }
+    const ch = {};
+    if (date !== sale.sale_date) ch.sale_date = date;
+    if (!sale.customer_id && (name !== (sale.walk_in_name ?? '') || phone !== (sale.walk_in_phone ?? ''))) { ch.walk_in_name = name; ch.walk_in_phone = phone; }
+    if (site !== (sale.site ?? '')) ch.site = site;
+    if (efd !== (sale.efd_receipt_no ?? '')) ch.efd_receipt_no = efd;
+    const lc = lines.filter(x => x.remove || num(x.quantity) !== Number(x.l.quantity) || num(x.price) !== inc(x.l))
+      .map(x => (x.remove ? { id: x.l.id, remove: true }
+        : { id: x.l.id, product_id: x.l.product_id, color_id: x.l.color_id, quantity: num(x.quantity), price: num(x.price) / (1 + Number(x.l.vat_rate) / 100) }));
+    if (lc.length) ch.lines = lc;
+    const pc = pays.filter(x => x.remove || num(x.amount) !== Number(x.pm.amount) || x.account_id !== (x.pm.account_id ?? '') || x.paid_on !== x.pm.paid_on || x.receipt_no !== (x.pm.receipt_no ?? ''))
+      .map(x => (x.remove ? { id: x.pm.id, remove: true } : { id: x.pm.id, amount: num(x.amount), ...(x.account_id ? { account_id: x.account_id } : {}), paid_on: x.paid_on, receipt_no: x.receipt_no }));
+    if (pc.length) ch.payments = pc;
+    if (!Object.keys(ch).length) { setError('Nothing has changed.'); return; }
+    setBusy(true);
+    const { data, error: err } = await supabase.rpc('correct_sale', { p_sale: sale.id, p_changes: ch, p_reason: reason.trim() });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err, "We couldn't correct this sale. Please try again.")); return; }
+    if (data?.request_id) setSent(true); else onDone();
+  }
+
+  if (sent) return (
+    <Modal title={`Correction of #${sale.sale_no}`} onClose={onDone} footer={<button type="button" className="btn btn-primary" onClick={onDone}>Done</button>}>
+      <p className="text-sm">Sent for approval — the sale changes once an admin approves it under <strong>Approvals</strong>.</p>
+    </Modal>
+  );
+  return (
+    <Modal title={`Correct #${sale.sale_no}`} onClose={onClose} size="xl"
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{direct ? 'Correct' : 'Send for approval'}</button></>}>
+      <div className="modal-form">
+        <p className="text-xs text-muted">{direct ? 'As Technical admin the correction applies at once.' : 'A manager\'s correction waits for an admin under Approvals.'} It is kept with the sale as it was before.</p>
+        <div className="form-row">
+          <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label className="pe-field"><span>Site</span><input className="form-input" value={site} onChange={e => setSite(e.target.value)} /></label>
+          <label className="pe-field"><span>EFD receipt</span><input className="form-input" value={efd} onChange={e => setEfd(e.target.value)} /></label>
+        </div>
+        {!sale.customer_id && (
+          <div className="form-row">
+            <label className="pe-field"><span>Buyer</span><input className="form-input" value={name} onChange={e => setName(e.target.value)} /></label>
+            <label className="pe-field"><span>Phone</span><input className="form-input" value={phone} onChange={e => setPhone(e.target.value)} /></label>
+          </div>
+        )}
+        <table className="rd-table">
+          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th>Delivered</th><th /></tr></thead>
+          <tbody>{lines.map((x, i) => (
+            <tr key={x.l.id} className={x.remove ? 'text-muted' : ''}>
+              <td><strong>{refs.items[`p:${x.l.product_id}`]?.name}{x.l.color_id ? ` ${refs.colorById[x.l.color_id]?.name ?? ''}` : ''}</strong></td>
+              <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} disabled={x.remove} value={x.quantity}
+                onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {per(x.l.product_id)}</td>
+              <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.price}
+                onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)))} /></td>
+              <td className="pl-help">{x.done > 0 ? `${qtyText(x.done)} ${per(x.l.product_id)} delivered — can't go below` : 'none'}</td>
+              <td>{x.done === 0 && <label className="text-xs flex items-center gap-4"><input type="checkbox" checked={x.remove} onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, remove: e.target.checked } : y)))} /> remove</label>}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {pays.length > 0 && (
+          <table className="rd-table">
+            <thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into</th><th>Date</th><th>Receipt no.</th><th /></tr></thead>
+            <tbody>{pays.map((x, i) => (
+              <tr key={x.pm.id} className={x.remove ? 'text-muted' : ''}>
+                <td>{x.pm.paid_on}</td>
+                <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.amount}
+                  onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value } : y)))} /></td>
+                <td>{accounts.length ? (
+                  <select className="form-input" disabled={x.remove} value={x.account_id} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, account_id: e.target.value } : y)))}>
+                    <option value="">{METHODS[x.pm.method]}</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>) : METHODS[x.pm.method]}</td>
+                <td><input type="date" className="form-input" max={today} disabled={x.remove} value={x.paid_on} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, paid_on: e.target.value } : y)))} /></td>
+                <td><input className="form-input" style={{ width: 100 }} disabled={x.remove} value={x.receipt_no} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, receipt_no: e.target.value } : y)))} /></td>
+                <td><label className="text-xs flex items-center gap-4"><input type="checkbox" checked={x.remove} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, remove: e.target.checked } : y)))} /> remove</label></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+        <label className="pe-field"><span>Reason (required)</span><input className="form-input" value={reason} placeholder="e.g. quantity typed wrong" onChange={e => setReason(e.target.value)} /></label>
+      </div>
+    </Modal>
   );
 }

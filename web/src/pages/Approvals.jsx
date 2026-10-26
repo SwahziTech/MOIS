@@ -18,6 +18,7 @@ const KIND = {
   price:          { label: 'Price change',     perm: 'products.manage' },
   color_rule:     { label: 'Colour pricing',   perm: 'products.manage' },
   production_day: { label: 'Production (earlier date)', perm: 'inventory.adjust' },
+  sale_correction: { label: 'Sale correction', perm: 'inventory.adjust' },
   stock_movement: { label: 'Stock correction', perm: 'inventory.adjust' },
   stock_reversal: { label: 'Reversal',         perm: 'inventory.adjust' },
   stock_import:   { label: 'Opening stock',    perm: 'inventory.adjust' },

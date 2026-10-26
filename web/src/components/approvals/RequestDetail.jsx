@@ -43,6 +43,7 @@ function Body({ r, refs }) {
   if (r.kind === 'purchase') return <Purchase p={p} refs={refs} />;
   if (r.kind === 'stock_movement') return <Movement p={p} refs={refs} />;
   if (r.kind === 'stock_reversal') return <Reversal p={p} refs={refs} />;
+  if (r.kind === 'sale_correction') return <SaleCorrection p={p} refs={refs} />;
   return <Fields value={p} refs={refs} />;
 }
 
@@ -51,6 +52,31 @@ const itemName = (refs, x) => refs.items[x.product_id ? `p:${x.product_id}` : `m
 const colour = (refs, id) => (id ? refs.colorById[id]?.name ?? '—' : '');
 const unit = (refs, id) => refs.unitById[id]?.symbol ?? '';
 const store = (refs, id) => { const w = refs.warehouses.find(x => x.id === id); return w ? warehouseLabel(w) : '—'; };
+
+// A correction of a sale (068): the reason and what changes
+function SaleCorrection({ p, refs }) {
+  const c = p.changes || {};
+  const head = [['Date', c.sale_date], ['Customer', c.walk_in_name], ['Site', c.site], ['EFD receipt', c.efd_receipt_no], ['Notes', c.notes]].filter(([, v]) => v !== undefined);
+  return (
+    <section className="rd-sec">
+      <p className="text-sm">Sale <strong>#{p.sale_no}</strong> — reason: <strong>{p.reason}</strong></p>
+      {head.length > 0 && <table className="rd-table"><tbody>{head.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v || '— (cleared)'}</td></tr>)}</tbody></table>}
+      {(c.lines || []).length > 0 && (
+        <table className="rd-table"><thead><tr><th>Line</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price (without VAT)</th></tr></thead>
+          <tbody>{c.lines.map((l, i) => (
+            <tr key={i}><td>{l.remove ? 'Remove ' : ''}{itemName(refs, l)}{l.color_id ? ` ${colour(refs, l.color_id)}` : ''}</td>
+              <td style={{ textAlign: 'right' }}>{l.remove ? '—' : money(l.quantity)}</td><td style={{ textAlign: 'right' }}>{l.remove || l.price == null ? '—' : money(l.price)}</td></tr>
+          ))}</tbody></table>
+      )}
+      {(c.payments || []).length > 0 && (
+        <table className="rd-table"><thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Date</th><th>Receipt no.</th></tr></thead>
+          <tbody>{c.payments.map((x, i) => (
+            <tr key={i}><td>{x.remove ? 'Remove this payment' : 'Change'}</td><td style={{ textAlign: 'right' }}>{x.amount != null ? money(x.amount) : '—'}</td><td>{x.paid_on ?? '—'}</td><td>{x.receipt_no ?? '—'}</td></tr>
+          ))}</tbody></table>
+      )}
+    </section>
+  );
+}
 
 const sortOuts = b => [...(b.outputs || [])].sort((x, y) => (y.primary ? 1 : 0) - (x.primary ? 1 : 0));
 
