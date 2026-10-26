@@ -3,7 +3,7 @@ import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatAmount } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
@@ -122,7 +122,7 @@ export default function Sales() {
             <button type="button" className={`filter-chip${view === 'overview' ? ' is-on' : ''}`} onClick={() => setView('overview')}>Overview</button>
           </div>
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
-            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
+            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} today={today} buyerOf={buyerOf} />}
           {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
@@ -927,7 +927,9 @@ function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
  * under the account that received it (on the sale's first row); receipt no.;
  * site. Click a row for the sale. Totals at the foot.
  */
-function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
+function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onOpen }) {
+  // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
+  const cur = currency ? ` (${currency})` : '';
   const [period, setPeriod] = useState('month');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
@@ -1003,8 +1005,8 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
-            <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate</th><th className="num">Amount</th>
-              <th className="num">With VAT</th><th className="num">VAT</th><th className="num">Without VAT</th>
+            <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate{cur}</th><th className="num">Amount{cur}</th>
+              <th className="num">With VAT{cur}</th><th className="num">VAT{cur}</th><th className="num">Without VAT{cur}</th>
               {cols.map(a => <th key={a.id} className="num sb-acc">{a.name}</th>)}{hasOther && <th className="num sb-acc">Other</th>}
               <th>Receipt no.</th><th>Site</th><th>Delivered</th></tr>
           </thead>
@@ -1016,18 +1018,18 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
                 <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
                 <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>
-                <td className="num">{money(r2(Number(l.total) / Number(l.quantity)))}</td>
-                <td className="num">{money(Number(l.total))}</td>
-                <td className="num">{vatOn(l) ? money(Number(l.total)) : ''}</td>
-                <td className="num">{vatOn(l) ? money(Number(l.vat)) : ''}</td>
-                <td className="num">{vatOn(l) ? '' : money(Number(l.total))}</td>
+                <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
+                <td className="num">{formatAmount(Number(l.total))}</td>
+                <td className="num">{vatOn(l) ? formatAmount(Number(l.total)) : ''}</td>
+                <td className="num">{vatOn(l) ? formatAmount(Number(l.vat)) : ''}</td>
+                <td className="num">{vatOn(l) ? '' : formatAmount(Number(l.total))}</td>
                 {perItem ? <>
-                  {cols.map(a => <td key={a.id} className="num">{paidTo(x, a.id, l.id) > 0 ? money(paidTo(x, a.id, l.id)) : ''}</td>)}
-                  {hasOther && <td className="num">{paidTo(x, 'other', l.id) > 0 ? money(paidTo(x, 'other', l.id)) : ''}</td>}
+                  {cols.map(a => <td key={a.id} className="num">{paidTo(x, a.id, l.id) > 0 ? formatAmount(paidTo(x, a.id, l.id)) : ''}</td>)}
+                  {hasOther && <td className="num">{paidTo(x, 'other', l.id) > 0 ? formatAmount(paidTo(x, 'other', l.id)) : ''}</td>}
                   <td>{slips(x, l.id)}</td>
                 </> : first && <>
-                  {cols.map(a => <td key={a.id} rowSpan={span} className="num sb-merge">{paidTo(x, a.id) > 0 ? money(paidTo(x, a.id)) : ''}</td>)}
-                  {hasOther && <td rowSpan={span} className="num sb-merge">{paidTo(x, 'other') > 0 ? money(paidTo(x, 'other')) : ''}</td>}
+                  {cols.map(a => <td key={a.id} rowSpan={span} className="num sb-merge">{paidTo(x, a.id) > 0 ? formatAmount(paidTo(x, a.id)) : ''}</td>)}
+                  {hasOther && <td rowSpan={span} className="num sb-merge">{paidTo(x, 'other') > 0 ? formatAmount(paidTo(x, 'other')) : ''}</td>}
                   <td rowSpan={span} className="sb-merge">{slips(x)}</td>
                 </>}
                 {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
