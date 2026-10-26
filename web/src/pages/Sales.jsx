@@ -304,7 +304,7 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
         </div>
 
         <table className="rd-table sl-table">
-          <thead><tr><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price with VAT</th><th style={{ textAlign: 'right' }}>Total</th><th /></tr></thead>
+          <thead><tr><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th style={{ textAlign: 'right' }}>Total</th><th /></tr></thead>
           <tbody>
             {lines.map((l, i) => {
               const it = refs.items[`p:${l.productId}`];
@@ -329,10 +329,10 @@ function SaleEditor({ sale, book = false, accounts = [], branchId, refs, custome
                     {p === null ? <span className="pl-help">{it?.colorIds?.length && !l.colorId ? 'pick a colour' : '…'}</span>
                       : canDiscount ? (<>
                         <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} placeholder={p.listInc != null ? String(p.listInc) : 'No price'} value={l.price} onChange={e => set(i, { price: e.target.value })} />
-                        <div className="pl-help">{p.listInc != null ? `list ${money(p.listInc)} /${per(l.productId)}` : 'no list price'}{p.rate === 0 ? ' · no VAT' : ''}</div>
+                        <div className="pl-help">{p.listInc != null ? `list ${money(p.listInc)} /${per(l.productId)}` : 'no list price'}</div>
                         {changed && <input className="form-input" placeholder="Reason for the price (required)" value={l.reason} onChange={e => set(i, { reason: e.target.value })} />}
                       </>) : (p.listInc != null
-                        ? <><strong>{money(p.listInc)}</strong> <span className="pl-help">/{per(l.productId)}{p.rate === 0 ? ' · no VAT' : ''}</span></>
+                        ? <><strong>{money(p.listInc)}</strong> <span className="pl-help">/{per(l.productId)}</span></>
                         : <span className="text-warning text-xs">No price — set it in Pricing</span>)}
                   </td>
                   <td style={{ textAlign: 'right' }}>{p?.total != null ? <strong>{money(p.total)}</strong> : '—'}</td>
@@ -449,7 +449,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
           {sale.stage === 'cancelled' ? ` · cancelled (was ${STAGES[sale.cancelled_from]}): ${sale.cancel_reason}` : ''}
         </p>
         <table className="rd-table">
-          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price with VAT</th><th style={{ textAlign: 'right' }}>Without VAT</th><th style={{ textAlign: 'right' }}>VAT</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
+          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th style={{ textAlign: 'right' }}>Without VAT</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>VAT</th></tr></thead>
           <tbody>
             {[...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
               const it = refs.items[`p:${l.product_id}`];
@@ -459,14 +459,15 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
                   <td><strong>{it?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{it?.category}</div>
                     {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))} · {l.discount_reason}</div>}</td>
                   <td style={{ textAlign: 'right' }}>{qtyText(Number(l.quantity))} {per(l.product_id)}</td>
-                  <td style={{ textAlign: 'right' }}>{money(inc)}{Number(l.vat_rate) === 0 && <div className="pl-help">no VAT</div>}</td>
+                  <td style={{ textAlign: 'right' }}>{money(inc)}</td>
                   <td style={{ textAlign: 'right' }}>{money(Number(l.amount))}</td>
-                  <td style={{ textAlign: 'right' }}>{money(Number(l.vat))}</td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(l.total))}</strong></td>
+                  {/* VAT last (2026-10-26): whether a line carries VAT shows at the end */}
+                  <td style={{ textAlign: 'right' }}>{Number(l.vat_rate) === 0 ? <span className="pl-help">no VAT</span> : money(Number(l.vat))}</td>
                 </tr>
               );
             })}
-            <tr><td colSpan={3} style={{ textAlign: 'right' }}><strong>Totals</strong></td><td style={{ textAlign: 'right' }}>{money(Number(sale.subtotal))}</td><td style={{ textAlign: 'right' }}>{money(Number(sale.vat))}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(sale.total))}</strong></td></tr>
+            <tr><td colSpan={3} style={{ textAlign: 'right' }}><strong>Totals</strong></td><td style={{ textAlign: 'right' }}>{money(Number(sale.subtotal))}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(sale.total))}</strong></td><td style={{ textAlign: 'right' }}>{Number(sale.vat) === 0 ? <span className="pl-help">no VAT</span> : money(Number(sale.vat))}</td></tr>
           </tbody>
         </table>
 

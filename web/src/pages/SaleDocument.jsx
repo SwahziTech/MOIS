@@ -132,7 +132,7 @@ export default function SaleDocument() {
         ) : (
           <section>
             <table className="doc-table">
-              <thead><tr><th>#</th><th>Product</th><th className="num">Quantity</th><th className="num">Unit price{hasVat ? ' (incl. VAT)' : ''}</th><th className="num">Amount</th></tr></thead>
+              <thead><tr><th>#</th><th>Product</th><th className="num">Quantity</th><th className="num">Price</th><th className="num">Amount</th></tr></thead>
               <tbody>
                 {lines.map(l => (
                   <tr key={l.id}>
