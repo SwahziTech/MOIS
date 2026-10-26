@@ -10,8 +10,9 @@ import { productOrder } from '../../lib/categories';
  * come first (by batches recorded), then the agreed category order, size, name.
  * items: products to choose from; usage: product id → batches; wastani: product id → pcs per bag
  * capacity (planner only): product id → the branch's molds / bags a day; shown on each card when given
+ * metaOf (sales): item → the card's detail line instead of size and wastani (available, unit price)
  */
-export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, usageLabel = ['batch', 'batches'], wastani = {}, capacity = null, onPick, onClose }) {
+export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, usageLabel = ['batch', 'batches'], wastani = {}, capacity = null, metaOf = null, onPick, onClose }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   // chips in the organization's category order
@@ -46,7 +47,7 @@ export default function ProductPicker({ title = 'Select primary product', items,
                 {usage[i.id] > 0 && <span className="pp-used">{usage[i.id]} {usage[i.id] === 1 ? usageLabel[0] : usageLabel[1]}</span>}</span>
               <span className="pp-cat">{i.category}</span>{/* products: name on top, category below (locked 2026-10-25) */}
               <span className="pp-meta">
-                {[i.size && `Size: ${i.size}`, wastani[i.id] > 0 ? `Wastani: ${+wastani[i.id]} pcs/bag` : 'No wastani set'].filter(Boolean).join(' • ')}
+                {metaOf ? metaOf(i) : [i.size && `Size: ${i.size}`, wastani[i.id] > 0 ? `Wastani: ${+wastani[i.id]} pcs/bag` : 'No wastani set'].filter(Boolean).join(' • ')}
               </span>
             </button>
           ))}

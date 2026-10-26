@@ -208,6 +208,7 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
     productId: l.product_id, colorId: l.color_id ?? '', quantity: String(+l.quantity),
     price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' })));
   const [prices, setPrices] = useState({});        // `${product}|${colour}` → { ex, rate, source }
+  const [listPrices, setListPrices] = useState({}); // product id → the price list's prices as the customer pays them (the picker)
   const [avail, setAvail] = useState({});          // `${product}|${colour}` → available
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -221,6 +222,22 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
   const per = id => (unitOf(id).toUpperCase() === 'SQM' ? 'm²' : 'pc');
   const key = l => `${l.productId}|${l.colorId || ''}`;
 
+  // the picker shows each product's price (as paid, per m² or piece) — the lowest of its colours, 'from' when they differ
+  useEffect(() => {
+    supabase.from('product_branch_pricing').select('product_id, price_per_sqm_inclusive, price_per_unit_inclusive, is_available').eq('branch_id', branchId)
+      .then(({ data }) => {
+        const m = {};
+        for (const x of data || []) {
+          if (!x.is_available) continue;
+          const sqm = (refs.unitById[refs.items[`p:${x.product_id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM';
+          const v = Number(sqm ? x.price_per_sqm_inclusive : x.price_per_unit_inclusive);
+          if (!(v > 0)) continue;
+          const e = (m[x.product_id] ||= { min: v, max: v });
+          e.min = Math.min(e.min, v); e.max = Math.max(e.max, v);
+        }
+        setListPrices(m);
+      });
+  }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     supabase.rpc('sales_availability', { p_branch_id: branchId }).then(({ data }) =>
       setAvail(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.available)]))));
@@ -497,6 +514,13 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
       </div>
       {picking && (
         <ProductPicker title="Add a product" items={carried} cats={cats} usage={sold} usageLabel={['sale', 'sales']} onClose={() => setPicking(false)}
+          metaOf={i => {
+            // sales: what is available (all colours) and the price, not the wastani (2026-10-26)
+            const av = Object.entries(avail).filter(([k]) => k.startsWith(`${i.id}|`)).reduce((t, [, v]) => t + Math.max(v, 0), 0);
+            const lp = listPrices[i.id];
+            return [`${qtyText(r2(av))} ${unitOf(i.id).toUpperCase() === 'SQM' ? 'm²' : 'pcs'} available`,
+              lp ? `${lp.min !== lp.max || (i.colorIds?.length ?? 0) > 1 ? 'from ' : ''}${money(lp.min)} /${per(i.id)}` : 'no price'].join(' • ');
+          }}
           onPick={id => { setPicking(false); setLines(ls => [...ls, { productId: id, colorId: '', quantity: '', price: '', reason: '' }]); }} />
       )}
     </Modal>
