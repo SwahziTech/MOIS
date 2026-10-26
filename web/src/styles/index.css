@@ -2212,8 +2212,8 @@ tr.cp-over td { background: var(--bg-warning); }
 
 /* sales book: each sale one block — shading by sale, an accent bar and "N items" on sales with several products (2026-10-26) */
 /* shading only on sales with several products (2026-10-26) */
-.sb-table tr.sb-multi td { background: color-mix(in srgb, var(--color-khaki, var(--accent)) 9%, transparent); }
+.sb-table tr.sb-shade td { background: color-mix(in srgb, var(--color-khaki, var(--accent)) 9%, transparent); }
 .sb-table tr.sb-first td { border-top: 2px solid var(--border); }
 .sb-table tr.sb-multi:not(.sb-last) td { border-bottom-color: transparent; }
-.sb-table tr.sb-multi > td:first-child { box-shadow: inset 4px 0 0 var(--color-accent-khaki, var(--accent)); }
+.sb-table tr.sb-shade > td:first-child { box-shadow: inset 4px 0 0 var(--color-accent-khaki, var(--accent)); }
 .sb-items { display: block; margin-top: 1px; font-size: 10px; font-weight: 400; color: var(--text-muted); opacity: .7; }   /* very small and faint */

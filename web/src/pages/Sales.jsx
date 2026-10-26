@@ -961,14 +961,19 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
   const per = id => ((refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
   const rows = [];
   let lastDate = null;
-  let saleIdx = 0;   // shading alternates by sale, so a sale's items read as one block (2026-10-26)
+  let saleIdx = 0;
+  // sales with several products are shaded; when they follow one another, every other one stays plain so each
+  // block stands apart (2026-10-26); a run starts shaded again after a single-item sale
+  let prevShaded = false;
   for (const x of inPeriod) {
     const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => lineOk(x, l));
+    const shade = lines.length > 1 && !prevShaded;
+    if (lines.length) prevShaded = shade;
     // paid per item (070): every payment names its item → each row shows its own; else the sale's money is merged across its rows
     const perItem = (x.payments || []).length > 0 && (x.payments || []).every(pm => pm.sale_line_id);
     lines.forEach((l, i) => {
       // the date once per day when the book runs by date; on every sale's first row when sorted by amount
-      rows.push({ x, l, first: i === 0, last: i === lines.length - 1, span: lines.length, perItem, band: saleIdx % 2, multi: lines.length > 1,
+      rows.push({ x, l, first: i === 0, last: i === lines.length - 1, span: lines.length, perItem, band: saleIdx % 2, multi: lines.length > 1, shade,
         showDate: sortBy === 'amount' ? i === 0 : x.sale_date !== lastDate });
       lastDate = x.sale_date;
     });
@@ -1005,8 +1010,8 @@ function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
           </thead>
           <tbody>
             {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
-            : rows.map(({ x, l, first, last, span, perItem, band, multi, showDate }) => (
-              <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}`} onClick={() => onOpen(x.id)}>
+            : rows.map(({ x, l, first, last, span, perItem, band, multi, shade, showDate }) => (
+              <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? x.sale_date : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
                 <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
