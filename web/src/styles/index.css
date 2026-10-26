@@ -678,14 +678,12 @@ ul, ol { list-style: none; }
    TABLE
 ---------------------------------------------------------------- */
 /* Long lists keep their header in view (2026-10-26, every page): the page scrolls as usual, so what is
-   above a table scrolls away; the table scrolls inside its own box (at most the screen's height) with
-   the header row fixed at the box's top and the totals at its foot — plain CSS sticky, no movement. */
+   above a table scrolls away and the header row sticks at the top of the screen, the totals at the
+   bottom — plain CSS sticky, no scrolling inside the table (2026-10-26, the user). */
 .table-container {
-  overflow: auto;
-  max-height: 100vh;
-  max-height: 100dvh;
+  overflow: visible;   /* no scrolling inside the table: the header sticks to the top of the screen */
 }
-.modal .table-container { max-height: 60vh; }
+.modal .table-container { overflow: auto; max-height: 60vh; }   /* in a window the list scrolls inside it */
 
 table {
   width: 100%;
