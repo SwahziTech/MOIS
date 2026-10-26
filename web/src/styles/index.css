@@ -2186,3 +2186,11 @@ tr.cp-over td { background: var(--bg-warning); }
 
 /* Sales overview (2026-10-26) */
 .so-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); align-items: start; }
+
+/* The sales book (2026-10-26) */
+.sb-table { font-size: var(--text-sm); }
+.sb-table th, .sb-table td { white-space: nowrap; padding: 6px 8px; }
+.sb-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.sb-table tr.sb-day td { border-top: 2px solid var(--border-strong, var(--border)); }
+.sb-table th.sb-acc { background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
+.sb-table tfoot td { border-top: 2px solid var(--border); font-weight: 600; }

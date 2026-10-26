@@ -37,8 +37,9 @@ export default function SaleDocument() {
         supabase.from('products').select('id, canonical_name, unit:units(symbol)').in('id', ids),
         supabase.from('color_palette').select('id, name'),
       ]);
+      const ac = await supabase.from('payment_accounts').select('id, name').eq('branch_id', sale.branch_id);   // 067
       setD({ sale, org: org.data, branch: br.data, customer: cust.data,
-        product: Object.fromEntries((prods.data || []).map(p => [p.id, p])), colour: Object.fromEntries((cols.data || []).map(c => [c.id, c.name])) });
+        product: Object.fromEntries((prods.data || []).map(p => [p.id, p])), colour: Object.fromEntries((cols.data || []).map(c => [c.id, c.name])), account: Object.fromEntries((ac.data || []).map(a => [a.id, a.name])) });
     })();
   }, [id, session]);
 
@@ -47,7 +48,7 @@ export default function SaleDocument() {
   if (error) return <div className="doc-msg">{error}</div>;
   if (!d) return <div className="doc-msg">Loading…</div>;
 
-  const { sale, org, branch, customer, product, colour } = d;
+  const { sale, org, branch, customer, product, colour, account } = d;
   const money = v => formatMoney(v, org?.currency_code);
   const nameOf = l => `${product[l.product_id]?.canonical_name ?? '—'}${l.color_id ? ` ${colour[l.color_id] ?? ''}` : ''}`;
   const per = l => ((product[l.product_id]?.unit?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
@@ -88,6 +89,7 @@ export default function SaleDocument() {
             <div>Date: {date}</div>
             {doc === 'quotation' && sale.valid_until && <div>Valid until: {sale.valid_until}</div>}
             {(doc === 'invoice' || doc === 'receipt') && sale.efd_receipt_no && <div>EFD receipt: {sale.efd_receipt_no}</div>}
+            {doc === 'receipt' && payment.receipt_no && <div>Receipt book no.: {payment.receipt_no}</div>}
             {(doc === 'receipt' || doc === 'delivery') && <div>For {sale.stage === 'invoice' ? 'invoice' : 'order'} #{sale.sale_no}</div>}
           </div>
         </header>
@@ -97,11 +99,12 @@ export default function SaleDocument() {
           <strong>{buyer.name}</strong>
           {buyer.address && <div>{buyer.address}</div>}
           <div>{[buyer.phone, buyer.tin && `TIN ${buyer.tin}`, buyer.vrn && `VRN ${buyer.vrn}`].filter(Boolean).join(' · ')}</div>
+          {sale.site && <div>Site: {sale.site}</div>}
         </section>
 
         {doc === 'receipt' ? (
           <section className="doc-receipt">
-            <p>Received with thanks the sum of <strong>{money(Number(payment.amount))}</strong> by {METHODS[payment.method]}{payment.reference ? ` (ref. ${payment.reference})` : ''}.</p>
+            <p>Received with thanks the sum of <strong>{money(Number(payment.amount))}</strong> into {account[payment.account_id] ?? METHODS[payment.method]}{payment.reference ? ` (ref. ${payment.reference})` : ''}.</p>
             <table className="doc-table"><tbody>
               <tr><td>Total of {sale.stage === 'invoice' ? 'invoice' : 'order'} #{sale.sale_no}</td><td className="num">{money(Number(sale.total))}</td></tr>
               <tr><td>Paid up to and including this receipt</td><td className="num">{money(r2(sale.payments.filter(p => p.created_at <= payment.created_at).reduce((t, p) => t + Number(p.amount), 0)))}</td></tr>

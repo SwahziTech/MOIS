@@ -14,6 +14,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import NumberInput from '../components/NumberInput';
 import ProductPicker from '../components/production/ProductPicker';
+import SalesSettings from '../components/sales/SalesSettings';
 
 const LOAD_ERROR = "We couldn't load sales. Please try again.";
 const STAGES = { quotation: 'Quotation', order: 'Order', invoice: 'Invoice', cancelled: 'Cancelled' };
@@ -44,7 +45,9 @@ export default function Sales() {
   const [stage, setStage] = useState('');
   const [editing, setEditing] = useState(null);   // a sale (or {} for new)
   const [viewing, setViewing] = useState(null);   // a sale id
-  const [view, setView] = useState('list');       // list | overview
+  const [view, setView] = useState('book');       // book | list | overview (the book first — 2026-10-26)
+  const [accounts, setAccounts] = useState([]);   // receiving accounts (067)
+  const [showSettings, setShowSettings] = useState(false);
 
   async function load() {
     setError('');
@@ -58,6 +61,8 @@ export default function Sales() {
         })(),
         supabase.from('customers').select('*').order('name'),
       ]);
+      const ac = await supabase.from('payment_accounts').select('*').order('display_order').order('name');
+      setAccounts(ac.error ? [] : ac.data || []);
       if (s.error) throw s.error;
       setRefs(r);
       setSales(s.data || []);
@@ -78,18 +83,24 @@ export default function Sales() {
   }, [sales, search, stage, branchId, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSell = branchId && canAt('sales.create', branchId, null);
+  const branchAccounts = accounts.filter(a => a.branch_id === branchId);
   const open = (sales || []).find(s => s.id === viewing);
 
   return (
     <PageShell title="Sales" subtitle="Sales & Costing"
-      description={branchId ? `Quotations, orders and invoices at ${branchName}, with their payments.` : 'Quotations, orders and invoices at every branch.'}
-      primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New sale</button>}>
+      description={branchId ? `The sales book at ${branchName}: each sale, where the money went, and where the goods went.` : 'The sales book at every branch.'}
+      onSettings={() => setShowSettings(true)}
+      actions={canSell && <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button>}
+      primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
           <div className="filter-chips" style={{ marginBottom: 8 }}>
-            <button type="button" className={`filter-chip${view === 'list' ? ' is-on' : ''}`} onClick={() => setView('list')}>Sales</button>
+            <button type="button" className={`filter-chip${view === 'book' ? ' is-on' : ''}`} onClick={() => setView('book')}>Sales book</button>
+            <button type="button" className={`filter-chip${view === 'list' ? ' is-on' : ''}`} onClick={() => setView('list')}>Quotations & invoices</button>
             <button type="button" className={`filter-chip${view === 'overview' ? ' is-on' : ''}`} onClick={() => setView('overview')}>Overview</button>
           </div>
+          {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
+            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} today={today} buyerOf={buyerOf} />}
           {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
@@ -127,20 +138,26 @@ export default function Sales() {
       )}
 
       {editing && refs && (
-        <SaleEditor sale={editing.id ? editing : null} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
+        <SaleEditor sale={editing.id ? editing : null} book={!!editing.book} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
           onClose={() => setEditing(null)} onSaved={async id => { setEditing(null); await load(); setViewing(id); }} />
       )}
       {open && refs && !editing && (
-        <SaleView sale={open} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
+        <SaleView sale={open} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
           onEdit={() => setEditing(open)} onClose={() => setViewing(null)} onChanged={load} />
       )}
+      {showSettings && <SalesSettings onClose={() => { setShowSettings(false); load(); }} />}
     </PageShell>
   );
 }
 
-/** A quotation or order: buyer, lines priced from the price list, a preview of the totals */
-function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
+/**
+ * A quotation or order — or, from Record sale (book), a sale written straight
+ * into the book: buyer, site, lines priced from the price list, then where
+ * the money went (account, amount, receipt no.); saved as an invoice with its
+ * payments in one go (record_sale, 067).
+ */
+function SaleEditor({ sale, book = false, accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id ? 'customer' : 'walkin');
   const [customerId, setCustomerId] = useState(sale?.customer_id ?? '');
@@ -150,6 +167,10 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
   const [date, setDate] = useState(sale?.sale_date ?? today);
   const [validUntil, setValidUntil] = useState(sale?.valid_until ?? '');
   const [notes, setNotes] = useState(sale?.notes ?? '');
+  const [site, setSite] = useState(sale?.site ?? '');
+  const [efd, setEfd] = useState('');
+  const activeAccounts = accounts.filter(a => a.status === 'active');
+  const [pays, setPays] = useState([{ accountId: '', amount: '', receiptNo: '', auto: true }]);   // auto: follows the total until typed
   const [lines, setLines] = useState(() => (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({
     productId: l.product_id, colorId: l.color_id ?? '', quantity: String(+l.quantity),
     price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' })));
@@ -224,19 +245,30 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
           ...(inc != null && pr ? { price: inc / (1 + pr.rate / 100), discount_reason: l.reason } : {}) };
       }),
     };
+    if (book) {
+      const ps = pays.map(x => ({ ...x, value: x.auto && pays.length === 1 ? r2(totals.total) : num(x.amount) })).filter(x => x.value > 0);
+      if (ps.some(x => activeAccounts.length && !x.accountId)) { setError('Choose the account each payment went into.'); return; }
+      if (r2(ps.reduce((t, x) => t + x.value, 0)) > r2(totals.total) + 0.01) { setError('The payments are more than the total.'); return; }
+      payload.site = site; payload.efd_receipt_no = efd;
+      payload.payments = ps.map(x => ({ account_id: x.accountId || null, amount: x.value, receipt_no: x.receiptNo, ...(x.accountId ? {} : { method: 'cash' }) }));
+    } else payload.site = site;
     setBusy(true);
-    const { data, error: err } = await supabase.rpc('save_sale', { p: payload });
+    const { data, error: err } = book
+      ? await supabase.rpc('record_sale', { p: payload })
+      : await supabase.rpc('save_sale', { p: payload });
+    if (!err && !book && site !== (sale?.site ?? '') && sale?.id) await supabase.rpc('set_sale_site', { p_sale: sale.id, p_site: site });
+    if (!err && !book && !sale?.id && site) await supabase.rpc('set_sale_site', { p_sale: data, p_site: site });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't save this sale. Please try again.")); return; }
     onSaved(data);
   }
 
   return (
-    <Modal title={sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : 'New sale'} onClose={onClose} size="xl"
+    <Modal title={sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{sale ? 'Save' : 'Save quotation'}</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
       </>}>
       <div className="modal-form">
         <div className="flex items-center gap-8" role="group" aria-label="Buyer">
@@ -267,7 +299,8 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
         )}
         <div className="form-row">
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
-          {(!sale || sale.stage === 'quotation') && <label className="pe-field"><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>}
+          <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
+          {!book && (!sale || sale.stage === 'quotation') && <label className="pe-field"><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>}
         </div>
 
         <table className="rd-table sl-table">
@@ -316,6 +349,32 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
             <strong>Total {money(r2(totals.total))}</strong>
           </span>
         </div>
+        {book && (
+          <section>
+            <h3 className="modal-section-title">Paid</h3>
+            {activeAccounts.length === 0 && <p className="pl-help">No receiving accounts set for this branch yet — a manager adds them under Sales ⚙. Until then a payment is recorded as cash.</p>}
+            {pays.map((x, i) => (
+              <div key={i} className="form-row" style={{ alignItems: 'flex-end' }}>
+                {activeAccounts.length > 0 && <label className="pe-field"><span>Into account</span>
+                  <select className="form-input" value={x.accountId} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, accountId: e.target.value } : y)))}>
+                    <option value="">Choose…</option>
+                    {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select></label>}
+                <label className="pe-field"><span>Amount</span>
+                  <NumberInput step="any" min="0" className="form-input" value={x.auto && pays.length === 1 ? String(r2(totals.total)) : x.amount}
+                    onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value, auto: false } : y)))} /></label>
+                <label className="pe-field"><span>Receipt no. (optional)</span>
+                  <input className="form-input" value={x.receiptNo} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, receiptNo: e.target.value } : y)))} /></label>
+                {pays.length > 1 && <button type="button" className="icon-btn" aria-label="Remove payment" onClick={() => setPays(ps => ps.filter((_, j) => j !== i))}><Trash2 size={14} /></button>}
+              </div>
+            ))}
+            <div className="flex items-center gap-8">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPays(ps => [...ps.map(y => ({ ...y, amount: y.auto ? String(r2(totals.total)) : y.amount, auto: false })), { accountId: '', amount: '', receiptNo: '', auto: false }])}><Plus size={13} /> Split into another account</button>
+              <span className="pl-help" style={{ marginLeft: 'auto' }}>Nothing paid yet? Set the amount to 0 — it stays owed.</span>
+            </div>
+            <label className="pe-field"><span>EFD receipt no. (optional)</span><input className="form-input" value={efd} onChange={e => setEfd(e.target.value)} /></label>
+          </section>
+        )}
         <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
       </div>
       {picking && (
@@ -327,9 +386,11 @@ function SaleEditor({ sale, branchId, refs, customers, money, today, canDiscount
 }
 
 /** One sale: its lines and totals, payments, and what can be done next */
-function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
+function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
   const [paying, setPaying] = useState(false);
-  const [pay, setPay] = useState({ amount: '', method: 'cash', reference: '', paid_on: today });
+  const [pay, setPay] = useState({ amount: '', method: 'cash', reference: '', paid_on: today, account_id: '', receipt_no: '' });
+  const activeAccounts = accounts.filter(a => a.status === 'active');
+  const accountName = id => accounts.find(a => a.id === id)?.name;
   const [efd, setEfd] = useState(sale.efd_receipt_no ?? '');
   const [askEfd, setAskEfd] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -383,7 +444,7 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
         <p className="text-sm text-muted">
           <span className={`badge ${STAGE_BADGE[sale.stage]}`}>{STAGES[sale.stage]}</span> {sale.sale_date}
           {customer ? ` · ${customer.phone ?? ''}${customer.tin ? ` · TIN ${customer.tin}` : ''}` : sale.walk_in_phone ? ` · ${sale.walk_in_phone}` : ''}
-          {sale.valid_until && sale.stage === 'quotation' ? ` · valid until ${sale.valid_until}` : ''}
+          {sale.valid_until && sale.stage === 'quotation' ? ` · valid until ${sale.valid_until}` : ''}{sale.site ? ` · site: ${sale.site}` : ''}
           {sale.invoiced_on ? ` · invoiced ${sale.invoiced_on}` : ''}{sale.efd_receipt_no ? ` · EFD ${sale.efd_receipt_no}` : ''}
           {sale.stage === 'cancelled' ? ` · cancelled (was ${STAGES[sale.cancelled_from]}): ${sale.cancel_reason}` : ''}
         </p>
@@ -415,7 +476,7 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
             {(sale.payments || []).length === 0 ? <p className="pl-help">No payment yet.</p> : (
               <table className="rd-table"><tbody>
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
-                  <tr key={p.id}><td>{p.paid_on}</td><td>{METHODS[p.method]}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
+                  <tr key={p.id}><td>{p.paid_on}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · receipt ${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
                     <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
                 ))}
               </tbody></table>
@@ -469,13 +530,20 @@ function SaleView({ sale, refs, buyer, customer, money, today, canAt, onEdit, on
             <button type="button" className="btn btn-primary" disabled={busy} onClick={async () => { if (await run(() => supabase.rpc('record_sale_payment', { p_sale: sale.id, p: pay }))) setPaying(false); }}>Record {num(pay.amount) ? money(num(pay.amount)) : ''}</button></>}>
           <div className="modal-form">
             <div className="flex items-center gap-8" role="group" aria-label="Paid by">
-              {Object.entries(METHODS).map(([k, v]) => <button type="button" key={k} className={`filter-chip${pay.method === k ? ' is-on' : ''}`} onClick={() => setPay({ ...pay, method: k })}>{v}</button>)}
+              {activeAccounts.length > 0 ? (
+                <label className="pe-field" style={{ flex: 1 }}><span>Into account</span>
+                  <select className="form-input" value={pay.account_id} onChange={e => setPay({ ...pay, account_id: e.target.value })}>
+                    <option value="">Choose…</option>
+                    {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select></label>
+              ) : Object.entries(METHODS).map(([k, v]) => <button type="button" key={k} className={`filter-chip${pay.method === k ? ' is-on' : ''}`} onClick={() => setPay({ ...pay, method: k })}>{v}</button>)}
             </div>
             <div className="form-row">
               <label className="pe-field"><span>Amount (up to {money(owed)})</span><NumberInput step="any" min="0" className="form-input" value={pay.amount} onChange={e => setPay({ ...pay, amount: e.target.value })} /></label>
               <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={pay.paid_on} onChange={e => setPay({ ...pay, paid_on: e.target.value })} /></label>
             </div>
-            {pay.method !== 'cash' && <label className="pe-field"><span>{pay.method === 'bank' ? 'Bank' : 'Mobile money'} reference (required)</span><input className="form-input" value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} /></label>}
+            <label className="pe-field"><span>Receipt no. (optional)</span><input className="form-input" value={pay.receipt_no} onChange={e => setPay({ ...pay, receipt_no: e.target.value })} /></label>
+            {!activeAccounts.length && pay.method !== 'cash' && <label className="pe-field"><span>{pay.method === 'bank' ? 'Bank' : 'Mobile money'} reference (required)</span><input className="form-input" value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} /></label>}
             {error && <p className="text-xs text-error">{error}</p>}
           </div>
         </Modal>
@@ -643,6 +711,88 @@ function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
           </table></div>
         </section>
       </div>
+    </>
+  );
+}
+
+/**
+ * The sales book (2026-10-26), as the tenant keeps it: newest day on top, the
+ * date once per day; one row per item — customer, item, quantity, rate,
+ * amount; the amount under With VAT (and its VAT) or Without VAT; the money
+ * under the account that received it (on the sale's first row); receipt no.;
+ * site. Click a row for the sale. Totals at the foot.
+ */
+function SalesBook({ sales, refs, accounts, money, today, buyerOf, onOpen }) {
+  const [period, setPeriod] = useState('month');
+  const monthStart = today.slice(0, 8) + '01';
+  const from = period === 'month' ? monthStart : period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
+  const inPeriod = sales.filter(x => x.sale_date >= from).sort((a, b) => b.sale_date.localeCompare(a.sale_date) || b.sale_no - a.sale_no);
+  // account columns: the branch's accounts, plus "Other" for payments without one
+  const cols = [...accounts.filter(a => a.status === 'active' || inPeriod.some(x => (x.payments || []).some(pm => pm.account_id === a.id)))];
+  const hasOther = inPeriod.some(x => (x.payments || []).some(pm => !pm.account_id));
+  const per = id => ((refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
+  const rows = [];
+  let lastDate = null;
+  for (const x of inPeriod) {
+    const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no);
+    lines.forEach((l, i) => {
+      rows.push({ x, l, first: i === 0, showDate: x.sale_date !== lastDate });
+      lastDate = x.sale_date;
+    });
+  }
+  const paidTo = (x, accId) => (x.payments || []).filter(pm => (accId === 'other' ? !pm.account_id : pm.account_id === accId)).reduce((t, pm) => t + Number(pm.amount), 0);
+  const sum = f => rows.reduce((t, row) => t + f(row), 0);
+  const vatOn = l => Number(l.vat_rate) > 0;
+  return (
+    <>
+      <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
+          <option value="month">This month</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
+        </select>
+        <span className="pl-help">Orders and invoices; quotations live under Quotations & invoices.</span>
+      </div>
+      <div className="card"><div className="table-container">
+        <table className="sb-table">
+          <thead>
+            <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate</th><th className="num">Amount</th>
+              <th className="num">With VAT</th><th className="num">VAT</th><th className="num">Without VAT</th>
+              {cols.map(a => <th key={a.id} className="num sb-acc">{a.name}</th>)}{hasOther && <th className="num sb-acc">Other</th>}
+              <th>Receipt no.</th><th>Site</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? <tr><td colSpan={11 + cols.length + (hasOther ? 1 : 0)} className="text-muted">No sales in this period. Record sale adds one.</td></tr>
+            : rows.map(({ x, l, first, showDate }) => (
+              <tr key={l.id} className={`clickable-row${showDate ? ' sb-day' : ''}`} onClick={() => onOpen(x.id)}>
+                <td>{showDate ? x.sale_date : ''}</td>
+                <td>{first ? buyerOf(x) : ''}</td>
+                <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
+                <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>
+                <td className="num">{money(r2(Number(l.total) / Number(l.quantity)))}</td>
+                <td className="num">{money(Number(l.total))}</td>
+                <td className="num">{vatOn(l) ? money(Number(l.total)) : ''}</td>
+                <td className="num">{vatOn(l) ? money(Number(l.vat)) : ''}</td>
+                <td className="num">{vatOn(l) ? '' : money(Number(l.total))}</td>
+                {cols.map(a => <td key={a.id} className="num">{first && paidTo(x, a.id) > 0 ? money(paidTo(x, a.id)) : ''}</td>)}
+                {hasOther && <td className="num">{first && paidTo(x, 'other') > 0 ? money(paidTo(x, 'other')) : ''}</td>}
+                <td>{first ? (x.payments || []).map(pm => pm.receipt_no).filter(Boolean).join(', ') : ''}</td>
+                <td>{first ? x.site ?? '' : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot><tr>
+              <td colSpan={5}><strong>Total</strong></td>
+              <td className="num"><strong>{money(r2(sum(({ l }) => Number(l.total))))}</strong></td>
+              <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? Number(l.total) : 0))))}</td>
+              <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? Number(l.vat) : 0))))}</td>
+              <td className="num">{money(r2(sum(({ l }) => (vatOn(l) ? 0 : Number(l.total)))))}</td>
+              {cols.map(a => <td key={a.id} className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, a.id) : 0))))}</strong></td>)}
+              {hasOther && <td className="num"><strong>{money(r2(sum(({ x, first }) => (first ? paidTo(x, 'other') : 0))))}</strong></td>}
+              <td colSpan={2} />
+            </tr></tfoot>
+          )}
+        </table>
+      </div></div>
     </>
   );
 }
