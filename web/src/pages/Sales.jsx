@@ -255,6 +255,15 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
     return { listInc, inc, total, ex: r2(total / (1 + rate / 100)), rate, off, discount: listInc != null && inc < listInc ? r2((listInc - inc) * q) : 0 };
   };
   const totals = lines.reduce((t, l) => { const p = preview(l); if (p?.total != null) { t.total += p.total; t.ex += p.ex; } return t; }, { total: 0, ex: 0 });
+  // not enough stock (2026-10-26): what is available (finished goods less what open orders hold — this sale's own hold given back
+  // when it is being edited) set against all its lines for the same product and colour. A warning only: goods may come out of curing first.
+  const ownHeld = {};
+  if (sale && ['order', 'invoice'].includes(sale.stage)) for (const l of sale.lines || []) ownHeld[`${l.product_id}|${l.color_id ?? ''}`] = (ownHeld[`${l.product_id}|${l.color_id ?? ''}`] || 0) + Number(l.quantity);
+  const availOf = k => (avail[k] === undefined ? undefined : avail[k] + (ownHeld[k] || 0));
+  const wanted = {};
+  for (const l of lines) if (l.productId && num(l.quantity) > 0) wanted[key(l)] = (wanted[key(l)] || 0) + num(l.quantity);
+  const short = Object.entries(wanted).filter(([k, q]) => availOf(k) !== undefined && q > availOf(k) + 1e-9)
+    .map(([k, q]) => { const [pid, cid] = k.split('|'); return { name: `${refs.items[`p:${pid}`]?.name ?? ''}${cid ? ` ${refs.colorById[cid]?.name ?? ''}` : ''}`, q, av: Math.max(availOf(k), 0), unit: per(pid) }; });
   const set = (i, patch) => setLines(ls => ls.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   async function save() {
@@ -378,6 +387,12 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
           {!book && (!sale || sale.stage === 'quotation') && <label className="pe-field"><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>}
         </div>
 
+        {short.length > 0 && (
+          <div className="alert alert-warning" role="alert">
+            <strong>Not enough in stock:</strong> {short.map(x => `${x.name} — ${qtyText(r2(x.q))} ${x.unit} ordered, ${qtyText(r2(x.av))} available`).join('; ')}.
+            <span className="pl-help"> You can still record it, but the goods can't leave until the stock is there.</span>
+          </div>
+        )}
         <table className="rd-table sl-table">
           <thead><tr><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th style={{ textAlign: 'right' }}>Total</th><th /></tr></thead>
           <tbody>
@@ -398,7 +413,7 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
                     <span className="flex items-center gap-4" style={{ justifyContent: 'flex-end' }}>
                       <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /> {per(l.productId)}
                     </span>
-                    {av !== undefined && <div className={`pl-help${av < (num(l.quantity) ?? 0) ? ' text-warning' : ''}`}>{qtyText(r2(av))} {unitOf(l.productId)} available</div>}
+                    {availOf(key(l)) !== undefined && <div className={`pl-help${(wanted[key(l)] ?? 0) > availOf(key(l)) + 1e-9 ? ' text-warning' : ''}`}>{qtyText(r2(Math.max(availOf(key(l)), 0)))} {unitOf(l.productId)} available</div>}
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     {p === null ? <span className="pl-help">{it?.colorIds?.length && !l.colorId ? 'pick a colour' : '…'}</span>
@@ -688,6 +703,12 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
 
 /** Hand goods over: line by line what leaves, up to what is still to deliver and the value paid */
 function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSaved }) {
+  // what is in the finished-goods store now, per product and colour (2026-10-26)
+  const [inStore, setInStore] = useState(null);
+  useEffect(() => {
+    supabase.rpc('sales_availability', { p_branch_id: sale.branch_id }).then(({ data }) =>
+      setInStore(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.on_hand)]))));
+  }, [sale.branch_id]);
   const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
   const unitInc = l => Number(l.total) / Number(l.quantity);
   const [kind, setKind] = useState('collection');
@@ -709,6 +730,13 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const value = lines.reduce((t, l) => t + r2(unitInc(l) * (num(qty[l.id]) ?? 0)), 0);
+  const stockKey = l => `${l.product_id}|${l.color_id ?? ''}`;
+  const leaving = {};
+  for (const l of lines) leaving[stockKey(l)] = (leaving[stockKey(l)] || 0) + (num(qty[l.id]) ?? 0);
+  const tooMuch = inStore ? Object.entries(leaving).filter(([k, q]) => q > (inStore[k] ?? 0) + 1e-9).map(([k, q]) => {
+    const l = lines.find(y => stockKey(y) === k);
+    return { k, q, store: Math.max(inStore[k] ?? 0, 0), name: `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` };
+  }) : [];
   // fill what the payments cover, line by line in order
   function fillPaid() {
     let room = canLeave;
@@ -723,6 +751,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   async function save() {
     setError('');
     if (value <= 0) { setError('Enter what leaves.'); return; }
+    if (tooMuch.length) { setError(`Not enough in the store: ${tooMuch.map(x => `${x.name} — ${qtyText(x.q)} leaving, ${qtyText(x.store)} in store`).join('; ')}.`); return; }
     if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
     if (needEfd && !efdNo.trim()) { setError('This sale carries VAT — enter the EFD receipt number.'); return; }
     if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
@@ -737,7 +766,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     <Modal title={`Goods leaving on #${sale.sale_no}`} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record {value > 0 ? money(r2(value)) : ''}</button></>}>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || tooMuch.length > 0 || inStore === null} onClick={save}>Record {value > 0 ? money(r2(value)) : ''}</button></>}>
       <div className="modal-form">
         <div className="flex items-center gap-8" role="group" aria-label="How it leaves">
           <button type="button" className={`filter-chip${kind === 'collection' ? ' is-on' : ''}`} onClick={() => setKind('collection')}>Collected by the customer</button>
@@ -745,18 +774,24 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
           <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
         </div>
         <table className="rd-table">
-          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
+          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>In store</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
           <tbody>
             {lines.map(l => (
               <tr key={l.id}>
                 <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong></td>
                 <td style={{ textAlign: 'right' }}>{qtyText(l.left)} {per(l.product_id)}</td>
+                <td style={{ textAlign: 'right' }} className={tooMuch.some(x => x.k === stockKey(l)) ? 'text-error' : ''}>{inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} ${per(l.product_id)}` : '…'}</td>
                 <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>
                 <td style={{ textAlign: 'right' }}>{num(qty[l.id]) > 0 ? money(r2(unitInc(l) * num(qty[l.id]))) : '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        {tooMuch.length > 0 && (
+          <div className="alert alert-error" role="alert">
+            <strong>Not enough in the store</strong> — {tooMuch.map(x => `${x.name}: ${qtyText(r2(x.q))} leaving, ${qtyText(r2(x.store))} in store`).join('; ')}. Lower the quantity, or wait for stock (curing to be released).
+          </div>
+        )}
         <div className="flex items-center gap-8">
           <button type="button" className="btn btn-ghost btn-sm" onClick={fillPaid}>Fill what is paid for</button>
           <span style={{ marginLeft: 'auto' }}><strong>{money(r2(value))}</strong> leaving</span>
