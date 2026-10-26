@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Building2, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Sidebar from './Sidebar';
 import AuthBrand from './AuthBrand';
+import { startFrozenHeads } from '../lib/frozenHeads';
 import { BranchProvider } from '../hooks/useBranch';
 
 // Full-screen spinner shown during auth session resolution
@@ -61,6 +63,7 @@ export function ProtectedLayout() {
 
   return (
     <BranchProvider>
+      <FrozenHeads />
       <Sidebar />
       <div className="main-wrapper">
         <Outlet />
@@ -77,4 +80,10 @@ export function AuthLayout() {
   if (isAuthenticated) return <Navigate to={recovering ? '/reset-password' : '/'} replace />;
 
   return <Outlet />;
+}
+
+/** Table headers that hold at the top of the screen once they would leave it (lib/frozenHeads) */
+function FrozenHeads() {
+  useEffect(() => startFrozenHeads(), []);
+  return null;
 }
