@@ -677,13 +677,15 @@ ul, ol { list-style: none; }
 /* ----------------------------------------------------------------
    TABLE
 ---------------------------------------------------------------- */
-/* Long lists keep their header in view (2026-10-26, every page): the page scrolls as usual and the
-   header row holds at the top of the screen once it would leave it — moved by lib/frozenHeads.js —
-   with the totals row held at the bottom the same way. The box scrolls only sideways. */
+/* Long lists keep their header in view (2026-10-26, every page): the page scrolls as usual, so what is
+   above a table scrolls away; the table scrolls inside its own box (at most the screen's height) with
+   the header row fixed at the box's top and the totals at its foot — plain CSS sticky, no movement. */
 .table-container {
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
+  max-height: 100vh;
+  max-height: 100dvh;
 }
+.modal .table-container { max-height: 60vh; }
 
 table {
   width: 100%;
@@ -692,7 +694,8 @@ table {
 }
 
 thead th {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 3;
   padding: 10px 14px;
   background: var(--bg-canvas);
@@ -2225,8 +2228,8 @@ tr.cp-over td { background: var(--bg-warning); }
 .sb-items { display: block; margin-top: 1px; font-size: 10px; font-weight: 400; color: var(--text-muted); opacity: .7; }   /* very small and faint */
 
 /* frozen header and totals (2026-10-26) */
-.table-container tfoot td { position: relative; z-index: 3; background: var(--bg-surface); }
-thead.is-frozen th { box-shadow: 0 2px 0 var(--border-strong); }
-tfoot.is-frozen td { box-shadow: 0 -2px 0 var(--border-strong); }
-@media print { thead th, .table-container tfoot td { transform: none !important; } .table-container { overflow: visible; } }
+.table-container tfoot td { position: sticky; bottom: 0; z-index: 3; background: var(--bg-surface); }
+thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
+.table-container tfoot td { box-shadow: inset 0 1px 0 var(--border-strong); }
+@media print { thead th, .table-container tfoot td { position: static; } .table-container { max-height: none; overflow: visible; } }
 .sb-table th.sb-acc { background: linear-gradient(color-mix(in srgb, var(--color-warning) 14%, transparent), color-mix(in srgb, var(--color-warning) 14%, transparent)), var(--bg-canvas); }   /* solid, so frozen rows do not show through */
