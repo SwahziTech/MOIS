@@ -11,6 +11,7 @@ import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
+import ElectricityPanel from '../components/purchases/ElectricityPanel';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -206,10 +207,10 @@ export default function Purchases() {
         </button>
       )}>
       <PageTabs value={tab} onChange={setTab}
-        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses']] : []), ['costs', 'Material costs']]} />
+        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs']]} />
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
-      <div className="card">
+      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {tab === 'waiting' && (
@@ -370,7 +371,7 @@ export default function Purchases() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
@@ -400,7 +401,7 @@ export default function Purchases() {
         );
       })()}
       {expSettings && (
-        <Modal title="Expenses settings" onClose={() => setExpSettings(false)} size="lg"
+        <Modal title="Purchases & expenses settings" onClose={() => setExpSettings(false)} size="lg"
           footer={<button type="button" className="btn btn-outline" onClick={() => setExpSettings(false)}>Close</button>}>
           <PowerMetersCard />
         </Modal>

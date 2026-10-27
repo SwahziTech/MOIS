@@ -7,8 +7,7 @@ import { loadInventoryRefs, qtyText } from '../lib/inventory';
 import { formatMoney } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
-import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
-import ElectricityUse from '../components/costing/ElectricityUse';
+import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -36,7 +35,6 @@ export default function Costing() {
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState('');
   const [sortBy, setSortBy] = useState('order');
-  const [view, setView] = useState('products');   // products | electricity (072)
   const [open, setOpen] = useState(null);
   const money = v => formatMoney(v, organization?.currency_code);
 
@@ -92,10 +90,8 @@ export default function Costing() {
       description={branchId ? `Material cost, price without VAT and margin per product at ${branchName}; finished stock at cost.` : 'Pick a branch in the sidebar to see its costing.'}>
       {!branchId ? (
         <div className="card"><EmptyState icon={Calculator} title="Pick a branch" description="Costs, prices and stock are per branch." /></div>
-      ) : (
+      ) : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
-          <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity']]} value={view} onChange={setView} />
-          {view === 'electricity' ? <ElectricityUse branchId={branchId} /> : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
               <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
@@ -103,7 +99,7 @@ export default function Costing() {
             <div className="mm-stat"><span className="pl-label">Products</span><strong>{items.length}</strong><span className="pl-help">made or in stock here</span></div>
             <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">not valued — set it in Pricing</span></div>
           </div>
-          <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Labour (casuals × day rate) and electricity are added per batch once entered; diesel and other expenses come later.</p>
+          <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
 
           <ListToolbar id="costing-search" search={search} onSearch={setSearch} placeholder="Search product (e.g. Buibui, 600R)…"
             sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }] }} />
@@ -141,7 +137,6 @@ export default function Costing() {
               );
             })}
           </section>
-          </>}
         </>
       )}
 

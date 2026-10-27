@@ -211,14 +211,21 @@ PRD sections: 4.11 (Sales/CRM), 4.12 (Documents), 4.13 (Costing)
 - Customers added to master data here (mirrors suppliers in 1b)
 
 Added to 1e (SwahziTech, 2026-10-27):
-- Electricity cost split. Godown meter: 100% direct production (vibro, plus
-  the well pump feeding the production water tank). Makina meter: split
-  daily by the high-low method. A branch setting "Makina baseline units/day"
-  (editable; tenant figure entered in the app) is the office/period share;
-  units above it that day are direct production (press).
-- Labour placeholder per batch: casual labourers on the batch × a day rate
-  (a setting entered in the app), so unit cost carries a real labour figure
-  until the Staff (HR) phase replaces it. Not payroll.
+- **Production pages stay raw materials only.** Team and machine are still
+  recorded there. Costing pulls everything else from where it is recorded.
+- **Electricity sits under Expenses** (Purchases › Electricity):
+  - LUKU meters and the machines each feeds (Purchases ⚙).
+  - Tokens are entered as Electricity expenses (meter, units, token no.).
+  - Each meter is read morning and evening, as in the daily report.
+  - Day use (morning → evening) is charged by Costing to that day's batches
+    on the meter's machines, by cement bags.
+  - Night use (evening → next morning) is lights, a running cost.
+  - Units are priced oldest token first.
+  - No fixed office share. The days are tracked against production (units
+    a cement bag, working vs idle days, nights) to learn what the use is
+    made of.
+- **Labour in costing waits for Staff (HR):** casuals separated from the
+  employed staff on production teams.
 
 ## Staff (HR) — next phase after 1e
 **Status: not started** (queued by SwahziTech, 2026-10-27; same dry-run and
@@ -255,6 +262,17 @@ PRD sections: 4.15 (Dashboards & Reports), 7 (AI Features — V1 slice only:
 Ask MOIS, basic authorized queries, basic analysis, AI-assisted document
 drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 
+- **Daily report, two-way** (queued by SwahziTech, 2026-10-27; sample:
+  Dodoma's handwritten day report).
+  - MOIS writes the report from what is recorded:
+    - production per product: pieces, cement, wastani, leftovers (mabaki),
+      team people;
+    - cement left in store;
+    - each meter's morning, evening and used units.
+  - Or the report is written or pasted in and MOIS reads it (units, cement
+    count), then compares it with what the system holds.
+  - In Swahili as written today.
+  - No night shift any more.
 - Input already waiting: `review_flags.admin_explanation` (migration 029) — admins' free-text notes on Review-queue flags, saved as-is since 1b, deliberately not interpreted yet (AI proposing stock-affecting actions from it was considered for earlier and declined on 2026-10-14).
 
 ## 1g — Billing
