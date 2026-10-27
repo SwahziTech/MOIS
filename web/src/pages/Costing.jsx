@@ -10,6 +10,7 @@ import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
 import ElectricityCosting from '../components/costing/ElectricityCosting';
 import OverheadsCosting from '../components/costing/OverheadsCosting';
+import MaterialsCosting from '../components/costing/MaterialsCosting';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -45,7 +46,7 @@ export default function Costing() {
   const [benchEdit, setBenchEdit] = useState(false);
   const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
   const [ohView, setOhView] = useState('electricity');   // Overheads: electricity | other
-  const [view, setView] = useState('products');        // products | overheads (electricity, other — pulled from Purchases and Production)
+  const [view, setView] = useState('products');        // products | materials | overheads (electricity, other — pulled from Purchases and Production)
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -107,7 +108,7 @@ export default function Costing() {
   }, [items]);
 
   // page order (locked, 2026-10-27): heading → tabs → the tab's summary → search → categories → list
-  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
+  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['materials', 'Materials'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
@@ -118,7 +119,8 @@ export default function Costing() {
         <>
           {pageTabs}
           {/* overheads (2026-10-27): electricity — metered, by day and machine — then the other production overheads */}
-          {view === 'overheads' ? <>
+          {view === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+          : view === 'overheads' ? <>
             <PageTabs nested tabs={[['electricity', 'Electricity'], ['other', 'Other overheads']]} value={ohView} onChange={setOhView} />
             {ohView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
               : <OverheadsCosting branchId={branchId} currency={organization?.currency_code} />}
