@@ -19,7 +19,7 @@ const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10)
  * the meter's machines by cement bags (as batch_power_cost, 073), and within
  * a batch over its products by cement taken. Nights are a running cost.
  */
-export default function ElectricityCosting({ branchId, refs, currency }) {
+export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
   const money = v => formatMoney(v, currency);
   const [period, setPeriod] = useState('30');
   const [view, setView] = useState('days');
@@ -77,9 +77,9 @@ export default function ElectricityCosting({ branchId, refs, currency }) {
     }).sort((a, b) => b.cost - a.cost);
   }, [days, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
-  if (data === null) return <div className="card"><span className="skeleton" /></div>;
-  if (data.meters.length === 0) return <div className="card"><EmptyState icon={Zap} title="No meters yet" description="Electricity is recorded under Purchases: meters (⚙), tokens (Record expense → Electricity) and morning/evening readings." /></div>;
+  if (error) return <>{tabs}<div className="card"><ErrorState message={error} onRetry={load} /></div></>;
+  if (data === null) return <>{tabs}<div className="card"><span className="skeleton" /></div></>;
+  if (data.meters.length === 0) return <>{tabs}<div className="card"><EmptyState icon={Zap} title="No meters yet" description="Electricity is recorded under Purchases: meters (⚙), tokens (Record expense → Electricity) and morning/evening readings." /></div></>;
   const tot = days.reduce((t, d) => ({ units: t.units + Number(d.day_units || 0), cost: t.cost + Number(d.day_cost || 0), night: t.night + Number(d.night_cost || 0),
     unused: t.unused + (d.bags > 0 ? 0 : Number(d.day_cost || 0)) }), { units: 0, cost: 0, night: 0, unused: 0 });
 
@@ -91,6 +91,7 @@ export default function ElectricityCosting({ branchId, refs, currency }) {
         <div className="mm-stat"><span className="pl-label">Nights (lights)</span><strong>{money(r2(tot.night))}</strong><span className="pl-help">running cost</span></div>
         <div className="mm-stat"><span className="pl-label">Day units</span><strong>{units(tot.units)}</strong><span className="pl-help">{days.length} meter-days</span></div>
       </div>
+      {tabs}
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <PageTabs tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
         <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>

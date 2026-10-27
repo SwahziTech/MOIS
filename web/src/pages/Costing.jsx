@@ -104,6 +104,9 @@ export default function Costing() {
     return { value, est, prod: value - est, sales, unpriced: items.filter(x => x.price == null).length };
   }, [items]);
 
+  // page order (locked): heading → summary cards → these tabs → search → categories
+  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity']]} value={view} onChange={setView} />;
+
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
       description={branchId ? `Material cost, price without VAT and margin per product at ${branchName}; finished stock at cost.` : 'Pick a branch in the sidebar to see its costing.'}>
@@ -111,9 +114,8 @@ export default function Costing() {
         <div className="card"><EmptyState icon={Calculator} title="Pick a branch" description="Costs, prices and stock are per branch." /></div>
       ) : (
         <>
-          <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity']]} value={view} onChange={setView} />
-          {view === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
-          : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : <>
+          {view === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={pageTabs} />
+          : error ? <>{pageTabs}<div className="card"><ErrorState message={error} onRetry={load} /></div></> : <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
               <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
@@ -125,6 +127,7 @@ export default function Costing() {
                 <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
             )}
           </div>
+          {pageTabs}
           <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
 
           <ListToolbar id="costing-search" search={search} onSearch={setSearch} placeholder="Search product (e.g. Buibui, 600R)…"
