@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -8,7 +7,8 @@ import { loadInventoryRefs, qtyText } from '../lib/inventory';
 import { formatMoney } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
-import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListControls';
+import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
+import ElectricityCosting from '../components/costing/ElectricityCosting';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -44,7 +44,7 @@ export default function Costing() {
   const [benchEdit, setBenchEdit] = useState(false);
   const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
   const [power, setPower] = useState(null);             // this month's electricity at the branch (072), from Purchases › Electricity
-  const navigate = useNavigate();
+  const [view, setView] = useState('products');        // products | electricity (direct cost, from Purchases and Production)
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -113,8 +113,11 @@ export default function Costing() {
       description={branchId ? `Material cost, price without VAT and margin per product at ${branchName}; finished stock at cost.` : 'Pick a branch in the sidebar to see its costing.'}>
       {!branchId ? (
         <div className="card"><EmptyState icon={Calculator} title="Pick a branch" description="Costs, prices and stock are per branch." /></div>
-      ) : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
+      ) : (
         <>
+          <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity']]} value={view} onChange={setView} />
+          {view === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+          : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
               <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
@@ -126,8 +129,8 @@ export default function Costing() {
                 <strong className={items.some(belowBag) ? 'text-warning' : ''}>{bench.target != null ? `${items.filter(belowBag).length} below` : '—'}</strong>
                 <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
             )}
-            <div className="mm-stat mm-click" role="button" tabIndex={0} title="Open Purchases › Electricity" onClick={() => navigate('/purchases?tab=electricity')}
-              onKeyDown={e => { if (e.key === 'Enter') navigate('/purchases?tab=electricity'); }}>
+            <div className="mm-stat mm-click" role="button" tabIndex={0} title="Electricity in production cost" onClick={() => setView('electricity')}
+              onKeyDown={e => { if (e.key === 'Enter') setView('electricity'); }}>
               <span className="pl-label">Electricity · this month</span>
               <strong>{power ? money(round(power.day, 0)) : '—'}</strong>
               <span className="pl-help">{power ? `into products · ${money(round(power.other, 0))} nights` : 'meters and readings in Purchases'}</span></div>
@@ -173,6 +176,7 @@ export default function Costing() {
               );
             })}
           </section>
+          </>}
         </>
       )}
 

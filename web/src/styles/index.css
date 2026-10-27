@@ -2256,3 +2256,6 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .mm-stat.mm-click { cursor: pointer; }
 .mm-stat.mm-click:hover { border-color: var(--border-strong); }
 .mm-stat.mm-click.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Costing › Electricity: a day's batches under it */
+.ec-sub td { background: var(--bg-canvas); font-size: var(--text-xs); padding-top: 5px; padding-bottom: 5px; }
