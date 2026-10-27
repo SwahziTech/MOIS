@@ -10,6 +10,7 @@ import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, 
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
+import PowerMetersCard from '../components/settings/PowerMetersCard';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -73,6 +74,7 @@ export default function Purchases() {
   const [expReady,  setExpReady]  = useState(false);  // false until migration 041 is live
   const [expChip,   setExpChip]   = useState('');
   const [editingExpense, setEditingExpense] = useState(null);   // 'new' | an expense
+  const [expSettings, setExpSettings] = useState(false);        // ⚙: LUKU meters (072)
 
   async function load() {
     setError('');
@@ -191,7 +193,7 @@ export default function Purchases() {
     .map(t => `${qtyText(t.entered_quantity)} ${refs?.unitById[t.entered_unit_id]?.symbol ?? ''} ${refs?.items[`m:${t.material_id}`]?.name ?? ''}`).join(', ');
 
   return (
-    <PageShell title="Purchases" subtitle="Inventory"
+    <PageShell title="Purchases" subtitle="Inventory" onSettings={() => setExpSettings(true)}
       description="The money side of materials received: supplier, cost, payment — and each branch's material costs."
       actions={expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
         <button type="button" className="btn btn-outline" onClick={() => setEditingExpense('new')}>
@@ -397,6 +399,12 @@ export default function Purchases() {
             onClose={() => setHistoryOf(null)} />
         );
       })()}
+      {expSettings && (
+        <Modal title="Expenses settings" onClose={() => setExpSettings(false)} size="lg"
+          footer={<button type="button" className="btn btn-outline" onClick={() => setExpSettings(false)}>Close</button>}>
+          <PowerMetersCard />
+        </Modal>
+      )}
     </PageShell>
   );
 }

@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, HardHat, Zap,
+  Calculator, Receipt, Contact,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -54,8 +54,6 @@ const NAV = [
       { label: 'Production',    to: '/production', icon: Factory,       perm: 'production.view' },
       // every confirmed production day, by period and stage (2026-10-21)
       { label: 'Production ledger', to: '/production/ledger', icon: BookOpen, perm: 'production.view' },
-      // LUKU meters: readings, tokens, use and cost by day (1e, migration 072)
-      { label: 'Electricity', to: '/power', icon: Zap, perm: 'production.view' },
     ],
   },
   {
@@ -66,8 +64,6 @@ const NAV = [
       { label: 'Customers', to: '/customers', icon: Contact, perm: 'sales.view' },
       // cost, price without VAT, margin, finished stock at cost (1e, migration 058)
       { label: 'Costing', to: '/costing', icon: Calculator, perm: 'products.manage' },
-      // staff, attendance, pay sheets → Wages expenses (1e, migration 071)
-      { label: 'Staff & pay', to: '/staff', icon: HardHat, perm: 'staff.view' },
     ],
   },
   {

@@ -4,6 +4,7 @@ import { Plus, Trash2, AlertTriangle, Pencil, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
+import { formatMoney } from '../../lib/format';
 import { qtyText, warehouseLabel, byMaterialOrder, materialShortName, breakdownMaterials, estimateBatchCosts } from '../../lib/inventory';
 import NumberInput from '../NumberInput';
 import ProductPicker from './ProductPicker';
@@ -66,6 +67,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
   const [confirming, setConfirming] = useState(false);
+  // labour placeholder (073): the day's casual labourers × the branch's day rate; undefined = not available (before 073)
+  const [casuals, setCasuals] = useState('');
+  const [dayRate, setDayRate] = useState(undefined);
   const [already, setAlready] = useState([]);      // staged batches that look already saved (or waiting for approval) for this date
 
   // Before saving: the same product, colour and bags already recorded (or sent for approval) on this date
@@ -78,6 +82,15 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     setEstimates(null);
     setConfirming(true);
     estimateBatchCosts(refs, branchId, staged.map(costInput)).then(setEstimates).catch(() => setEstimates(null));
+    Promise.all([
+      supabase.from('production_day_labour').select('casual_labourers').eq('branch_id', branchId).eq('day', date).maybeSingle(),
+      supabase.from('branches').select('casual_day_rate').eq('id', branchId).single(),
+    ]).then(([l, r]) => {
+      if (l.error || r.error) { setDayRate(undefined); return; }
+      setDayRate(r.data?.casual_day_rate != null ? Number(r.data.casual_day_rate) : null);
+      const people = daySummary().people;
+      setCasuals(l.data ? String(l.data.casual_labourers) : people != null ? String(people) : '');
+    });
     const [bt, pc] = await Promise.all([
       supabase.from('production_batches').select('product_id, color_id, cement_bags, created_at').eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void'),
       supabase.from('pending_changes').select('payload, requested_at').eq('kind', 'production_day').eq('status', 'pending'),
@@ -359,15 +372,22 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     setBusy(false);
     setConfirming(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't save these batches. Please try again.")); loadStock(); return; }
+    // the day's casual labourers (073) — kept for the day; batches waiting for approval pick them up when recorded
+    let labourNote = '';
+    if (dayRate != null && casuals.trim() !== '') {
+      const { error: lErr } = await supabase.rpc('set_day_labour', { p_branch: branchId, p_day: date, p_count: Math.round(Number(casuals)) });
+      if (lErr) labourNote = ` The casual labourers weren't saved: ${dbErrorMessage(lErr)}`;
+    }
     setStaged([]);
     try { localStorage.removeItem(key); } catch { /* ignore */ }
     loadStock();
     if (viaApproval) {
       window.dispatchEvent(new Event('mois:approvals-changed'));
-      setSentNote(`Sent for approval — ${date}'s batches are recorded once an admin approves (Approvals).`);
+      setSentNote(`Sent for approval — ${date}'s batches are recorded once an admin approves (Approvals).${labourNote}`);
       return;
     }
     loadOrders();
+    if (labourNote) setSentNote(labourNote.trim());
     onSaved();
   }
 
@@ -656,6 +676,17 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                 {already.map((a, i) => <li key={i}>{a.label} · {qtyText(a.bags)} bags — {a.how} {new Date(a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</li>)}
               </ul>
               <span className="pl-help">Check Production › Curing or Approvals first. Save anyway only if these are genuinely extra batches.</span>
+            </div>
+          )}
+          {dayRate !== undefined && (
+            <div className="dl-labour">
+              <label className="flex items-center gap-8 text-sm">
+                <strong>Casual labourers today</strong>
+                <NumberInput step="1" min="0" className="form-input" style={{ width: 80 }} value={casuals} onChange={e => setCasuals(e.target.value)} aria-label="Casual labourers today" />
+              </label>
+              {dayRate == null
+                ? <span className="pl-help text-warning">Set the casual day rate (Production ⚙) to count labour in product cost.</span>
+                : casuals.trim() !== '' && <span className="pl-help">× {formatMoney(dayRate, organization?.currency_code)} a day = <strong>{formatMoney(Math.round(Number(casuals)) * dayRate, organization?.currency_code)}</strong>, shared over the day's batches by cement bags.</span>}
             </div>
           )}
           <DaySummary day={daySummary()} currency={organization?.currency_code} />

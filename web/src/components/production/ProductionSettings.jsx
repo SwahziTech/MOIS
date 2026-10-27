@@ -2,12 +2,12 @@ import Modal from '../Modal';
 import { useAuth } from '../../hooks/useAuth';
 import { RejectReasonsCard, CuringDays, MinCuringDays } from '../settings/PurchaseSettings';
 import ProductionTeamsCard from '../settings/ProductionTeamsCard';
-import PowerMetersCard from '../settings/PowerMetersCard';
+import CasualDayRateCard from '../settings/CasualDayRateCard';
 
 /**
  * Production settings (2026-10-25, the user: "the production settings
  * should be on the production page") — opened from the ⚙ beside the
- * Production heading: curing, reject reasons, teams and machines, electricity meters (072).
+ * Production heading: curing, reject reasons, teams and machines, the casual day rate (073).
  */
 export default function ProductionSettings({ onClose }) {
   const { canManage } = useAuth();
@@ -23,7 +23,7 @@ export default function ProductionSettings({ onClose }) {
           </div>
         </section>
         <ProductionTeamsCard />
-        <PowerMetersCard />
+        <CasualDayRateCard />
         <RejectReasonsCard />
       </div>
     </Modal>
