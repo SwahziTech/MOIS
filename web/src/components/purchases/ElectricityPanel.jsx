@@ -75,21 +75,17 @@ export default function ElectricityPanel({ branchId, tabs }) {
 
   return (
     <>
-      <section className="sk">
+      {/* each meter a summary card, side by side: units a cement bag, its working and idle days, nights */}
+      <div className="mm-stats">
         {learnt.map(x => (
-          <div key={x.m.id} className="sk-card lk-card">
-            <div className="sk-name"><strong>{x.m.name}</strong><span className="pl-help">last 60 days · {x.workN} working, {x.idleN} idle days</span></div>
-            <div className="sk-total">
-              <span><strong>{x.perBag != null ? units(x.perBag) : '—'}</strong></span>
-              <span className="sk-sub">units a cement bag</span>
-            </div>
-            <div className="co-details">
-              <span>{x.workDay != null ? `${units(x.workDay)} units a working day` : 'no working day yet'}</span>
-              <span className="pl-help">{x.idleDay != null ? `${units(x.idleDay)} on idle days · ` : ''}{x.night != null ? `${units(x.night)} a night (lights)` : ''}</span>
-            </div>
+          <div key={x.m.id} className="mm-stat">
+            <span className="pl-label">{x.m.name}</span>
+            <strong>{x.perBag != null ? `${units(x.perBag)} units a bag` : '—'}</strong>
+            <span className="pl-help">{x.workDay != null ? `${units(x.workDay)} a working day` : 'no working day yet'}{x.idleDay != null ? ` · ${units(x.idleDay)} idle day` : ''}{x.night != null ? ` · ${units(x.night)} a night` : ''}</span>
+            <span className="pl-help">last 60 days · {x.workN} working, {x.idleN} idle days</span>
           </div>
         ))}
-      </section>
+      </div>
       {tabs}
       <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
