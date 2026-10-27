@@ -210,6 +210,44 @@ PRD sections: 4.11 (Sales/CRM), 4.12 (Documents), 4.13 (Costing)
 - Material cost, batch cost, unit cost, basic profitability
 - Customers added to master data here (mirrors suppliers in 1b)
 
+Added to 1e (SwahziTech, 2026-10-27):
+- Electricity cost split. Godown meter: 100% direct production (vibro, plus
+  the well pump feeding the production water tank). Makina meter: split
+  daily by the high-low method. A branch setting "Makina baseline units/day"
+  (editable; tenant figure entered in the app) is the office/period share;
+  units above it that day are direct production (press).
+- Labour placeholder per batch: casual labourers on the batch × a day rate
+  (a setting entered in the app), so unit cost carries a real labour figure
+  until the Staff (HR) phase replaces it. Not payroll.
+
+## Staff (HR) — next phase after 1e
+**Status: not started** (queued by SwahziTech, 2026-10-27; same dry-run and
+approval process as every phase)
+
+Its own sidebar section, with four parts:
+- **Employees.** The master record: name, role, branch, employment type,
+  salary or day rate, NSSF number, start date and status.
+- **Attendance / Labour.**
+  - Daily casual attendance.
+  - The batch labour link from 1e, upgraded to pull from real employee
+    records instead of a flat number.
+- **Payroll.** Monthly runs for salaried staff and weekly runs for casuals.
+  Statutory figures:
+  - NSSF: 10% employee + 10% employer.
+  - WCF: 0.5%, employer.
+  - SDL: 3.5%, employer, once there are 10+ employees. Confirm whether
+    casuals count toward that threshold.
+  - PAYE, 2025/26 bands: 0% to 270k, 8% to 520k, 20% to 760k, 25% to 1M,
+    30% above.
+- **Payslips.**
+
+**Before building:** flag to SwahziTech that the PAYE, NSSF, WCF and SDL
+rates must be verified against TRA before real deductions go live.
+
+**Starting point:** a first draft of staff, attendance and pay sheets
+(proposed migration 071, not applied) was written on 2026-10-27 and will be
+reworked here.
+
 ## 1f — Reports & AI v1
 **Status: not started**
 
