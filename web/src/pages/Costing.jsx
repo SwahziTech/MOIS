@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator } from 'lucide-react';
+import { Calculator, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -41,6 +42,9 @@ export default function Costing() {
   const [open, setOpen] = useState(null);
   const [bench, setBench] = useState({ target: null, perBag: {} });   // Technical admin only
   const [benchEdit, setBenchEdit] = useState(false);
+  const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
+  const [power, setPower] = useState(null);             // this month's electricity at the branch (072), from Purchases › Electricity
+  const navigate = useNavigate();
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -51,6 +55,9 @@ export default function Costing() {
       if (c.error) throw c.error;
       setRefs(r);
       setRows(c.data || []);
+      const monthStart = new Date().toISOString().slice(0, 8) + '01';
+      supabase.from('power_daily').select('day_cost, night_cost, gap_cost').eq('branch_id', branchId).gte('day', monthStart)
+        .then(({ data, error: pErr }) => setPower(pErr ? null : (data || []).reduce((t, d) => ({ day: t.day + Number(d.day_cost || 0), other: t.other + Number(d.night_cost || 0) + Number(d.gap_cost || 0) }), { day: 0, other: 0 })));
       if (isTech) {
         const [t, y] = await Promise.all([
           supabase.from('tech_admin_settings').select('revenue_per_bag_target').maybeSingle(),
@@ -85,11 +92,11 @@ export default function Costing() {
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     const inChip = x => !chip || x.it.categoryId === chip || cats.byId[x.it.categoryId]?.parent_category_id === chip;
-    const list = items.filter(x => inChip(x) && (!q || `${x.it.name} ${x.colour ?? ''} ${x.it.category}`.toLowerCase().includes(q)));
+    const list = items.filter(x => inChip(x) && (!belowOnly || belowBag(x)) && (!q || `${x.it.name} ${x.colour ?? ''} ${x.it.category}`.toLowerCase().includes(q)));
     const pctOf = x => (x.margin != null && x.price > 0 ? x.margin / x.price : -Infinity);
     return list.sort((a, b) => (sortBy === 'bag' ? (a.bag ?? Infinity) - (b.bag ?? Infinity) : sortBy === 'margin' ? pctOf(a) - pctOf(b) : sortBy === 'value' ? (Number(b.value) || 0) - (Number(a.value) || 0) : 0)
       || order(a.it, b.it) || String(a.colour ?? '').localeCompare(String(b.colour ?? '')));
-  }, [items, search, chip, sortBy, cats, order]);
+  }, [items, search, chip, sortBy, cats, order, belowOnly, bench]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = useMemo(() => {
     let value = 0, est = 0, sales = 0;
@@ -114,10 +121,16 @@ export default function Costing() {
             <div className="mm-stat"><span className="pl-label">Stock at price</span><strong className="mm-money">{rows ? money(totals.sales) : '—'}</strong><span className="pl-help">without VAT</span></div>
             <div className="mm-stat"><span className="pl-label">Products</span><strong>{items.length}</strong><span className="pl-help">made or in stock here</span></div>
             {isTech && (
-              <div className="mm-stat" title="Seen by the Technical admin only"><span className="pl-label">A bag · target</span>
+              <div className={`mm-stat mm-click${belowOnly ? ' is-on' : ''}`} role="button" tabIndex={0} title="Show the products below the target — seen by the Technical admin only"
+                onClick={() => bench.target != null && setBelowOnly(v => !v)} onKeyDown={e => { if (e.key === 'Enter' && bench.target != null) setBelowOnly(v => !v); }}><span className="pl-label">A bag · target</span>
                 <strong className={items.some(belowBag) ? 'text-warning' : ''}>{bench.target != null ? `${items.filter(belowBag).length} below` : '—'}</strong>
-                <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={() => setBenchEdit(true)}>{bench.target != null ? 'change' : 'set'}</button></span></div>
+                <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
             )}
+            <div className="mm-stat mm-click" role="button" tabIndex={0} title="Open Purchases › Electricity" onClick={() => navigate('/purchases?tab=electricity')}
+              onKeyDown={e => { if (e.key === 'Enter') navigate('/purchases?tab=electricity'); }}>
+              <span className="pl-label">Electricity · this month</span>
+              <strong>{power ? money(round(power.day, 0)) : '—'}</strong>
+              <span className="pl-help">{power ? `into products · ${money(round(power.other, 0))} nights` : 'meters and readings in Purchases'}</span></div>
             <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">not valued — set it in Pricing</span></div>
           </div>
           <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
@@ -126,6 +139,7 @@ export default function Costing() {
             sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }, ...(isTech ? [{ value: 'bag', label: 'Lowest a bag first' }] : [])] }} />
           {refs && <ChipRow value={chip} onChange={setChip} items={categoryChipItems(cats, c => c.status === 'active')} />}
 
+          {belowOnly && <div className="flex items-center gap-8" style={{ marginBottom: 8 }}><button type="button" className="filter-chip is-on" onClick={() => setBelowOnly(false)}>Below the bag target <X size={12} /></button></div>}
           <section className="sk">
             <div className="sk-head"><span>Products ({shown.length})</span><span className="pl-help">per {`m² or piece`}, without VAT</span></div>
             {rows === null ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)

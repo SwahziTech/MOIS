@@ -117,7 +117,7 @@ export default function Purchases() {
       setAwaiting(aw.data || []);
       setPendingReq(pr.data || []);
       setTxByMove(byMove);
-      setTab(t => t ?? ((aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'purchases'));
+      setTab(t => t ?? (params.get('tab') || ((aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'purchases')));   // ?tab= from other pages (Costing › Electricity)
       // Branch VAT rates and expenses (041): the page still works without them
       const [vr, ec, ex] = await Promise.all([
         supabase.from('branches').select('id, vat_rate'),
