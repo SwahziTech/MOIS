@@ -47,6 +47,7 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
   const [meterId, setMeterId] = useState('');
   const [loadedTime, setLoadedTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [token, setToken] = useState(null);     // the token this expense came from
+  const [receipt, setReceipt] = useState({ vat: '', ewura: '', rea: '', debt: '', ref: '' });   // from the token's receipt (074)
   useEffect(() => {
     if (!branch) return;
     supabase.from('power_meters').select('id, name, status').eq('branch_id', branch).eq('status', 'active').order('name')
@@ -80,7 +81,8 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
       setBusy(true);
       const { error: err } = await supabase.rpc('record_power_token', { p: {
         meter_id: meterId, units: num(qty), amount: total, loaded_at: new Date(`${date}T${loadedTime || '12:00'}`).toISOString(),
-        token_no: notes.trim() || null, paid_from: method.trim() || 'cash' } });
+        token_no: notes.trim() || null, paid_from: method.trim() || 'cash',
+        vat_amount: num(receipt.vat), ewura_levy: num(receipt.ewura), rea_levy: num(receipt.rea), debt_deducted: num(receipt.debt), receipt_ref: receipt.ref.trim() || null } });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't save this token. Please try again.")); return; }
       onSaved();
@@ -166,6 +168,21 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
             </div>
           </div>
         )}
+        {isElectricity && (
+          <div className="form-row">
+            {[['vat', 'VAT'], ['ewura', 'EWURA levy'], ['rea', 'REA levy'], ['debt', 'Old debt taken off']].map(([k, label]) => (
+              <div key={k} className="form-group">
+                <label className="form-label" htmlFor={`ex-r-${k}`}>{label}</label>
+                <NumberInput id={`ex-r-${k}`} step="any" min="0" className="form-input" placeholder="—" value={receipt[k]} onChange={e => setReceipt(r => ({ ...r, [k]: e.target.value }))} />
+              </div>
+            ))}
+            <div className="form-group">
+              <label className="form-label" htmlFor="ex-r-ref">Receipt / transaction ref.</label>
+              <input id="ex-r-ref" className="form-input" value={receipt.ref} onChange={e => setReceipt(r => ({ ...r, ref: e.target.value }))} />
+            </div>
+          </div>
+        )}
+        {isElectricity && <span className="form-hint">As printed on the token receipt. An old debt taken off is not part of these units' price.</span>}
         {token && <div className="alert alert-info">LUKU token: {Number(token.units)} units on its meter. To change it, void it and enter it again.</div>}
         <div className="form-group">
           <label className="form-label" htmlFor="ex-what">What was it?</label>

@@ -140,14 +140,16 @@ export default function ElectricityPanel({ branchId }) {
           </table>
         ) : (
           <table>
-            <thead><tr><th>Loaded</th><th>Meter</th><th className="num">Units</th><th className="num">Paid (TZS)</th><th className="num">A unit (TZS)</th><th>Token no.</th></tr></thead>
+            <thead><tr><th>Loaded</th><th>Meter</th><th className="num">Units</th><th className="num">Paid (TZS)</th><th className="num">VAT (TZS)</th><th className="num">EWURA (TZS)</th><th className="num">REA (TZS)</th><th className="num">Old debt (TZS)</th><th className="num">A unit (TZS)</th><th>Token no.</th></tr></thead>
             <tbody>
-              {data.tokens.length === 0 ? <tr><td colSpan={6} className="text-muted">No tokens yet — Record expense → Electricity.</td></tr>
+              {data.tokens.length === 0 ? <tr><td colSpan={10} className="text-muted">No tokens yet — Record expense → Electricity.</td></tr>
               : data.tokens.map(t => (
                 <tr key={t.id} className={t.status === 'void' ? 'is-inactive' : ''}>
                   <td>{when(t.loaded_at)}</td><td>{meterName(t.meter_id)}</td><td className="num">{units(Number(t.units))}</td>
-                  <td className="num">{formatAmount(Number(t.amount))}</td><td className="num">{formatAmount(Number(t.amount) / Number(t.units))}</td>
-                  <td>{t.status === 'void' ? <span className="text-muted">Void — {t.void_reason}</span> : t.token_no || ''}</td>
+                  <td className="num">{formatAmount(Number(t.amount))}</td>
+                  {['vat_amount', 'ewura_levy', 'rea_levy', 'debt_deducted'].map(k => <td key={k} className="num">{t[k] != null ? formatAmount(Number(t[k])) : ''}</td>)}
+                  <td className="num">{formatAmount((Number(t.amount) - Number(t.debt_deducted || 0)) / Number(t.units))}</td>
+                  <td>{t.status === 'void' ? <span className="text-muted">Void — {t.void_reason}</span> : [t.token_no, t.receipt_ref].filter(Boolean).join(' · ')}</td>
                 </tr>
               ))}
             </tbody>

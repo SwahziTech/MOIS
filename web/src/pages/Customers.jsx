@@ -1,30 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Plus } from 'lucide-react';
+import { Users, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatAmount } from '../lib/format';
+import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
+import { loadOwing, ageByBuyer, statementLines, owedSince, AGE_BUCKETS } from '../lib/receivables';
 import PageShell from '../components/PageShell';
-import { ListToolbar } from '../components/ListControls';
+import { ListToolbar, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 
 const LOAD_ERROR = "We couldn't load customers. Please try again.";
-const r2 = n => Math.round(n * 100) / 100;
 
 /*
- * Customers (1e, migration 064): shared by the organization's branches —
- * name, phone, TIN/VRN, and what each owes across its orders and invoices.
+ * Customers (1e, migrations 064, 2026-10-27): shared by the organization's
+ * branches — name, phone, TIN/VRN; who owes what and for how long (walk-in
+ * buyers by name); each customer's history and statement of account.
  * Click shows the details; double-click or Edit changes them.
  */
 export default function Customers() {
   const { organization, canAnywhere, can } = useAuth();
-  const { branchId } = useBranch();
+  const { branchId, inBranch } = useBranch();
   const money = v => formatMoney(v, organization?.currency_code);
+  const today = orgToday(organization?.timezone);
+  const [tab, setTab] = useState('customers');
   const [rows, setRows] = useState(null);
-  const [balances, setBalances] = useState([]);
+  const [sales, setSales] = useState([]);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
@@ -33,76 +37,147 @@ export default function Customers() {
 
   async function load() {
     setError('');
-    const [c, b] = await Promise.all([
-      supabase.from('customers').select('*').order('name'),
-      supabase.from('sale_balances').select('*'),
-    ]);
-    if (c.error) { console.error(c.error); setError(LOAD_ERROR); return; }
-    setRows(c.data || []);
-    setBalances(b.data || []);
+    try {
+      const [c, s] = await Promise.all([supabase.from('customers').select('*').order('name'), loadOwing()]);
+      if (c.error) throw c.error;
+      setRows(c.data || []);
+      setSales(s);
+    } catch (e) { console.error(e); setError(LOAD_ERROR); }
   }
   useEffect(() => { load(); }, []);
 
-  const statsOf = id => {
-    const mine = balances.filter(b => b.customer_id === id && b.stage !== 'cancelled');
-    return { sales: mine.length, owed: r2(mine.filter(b => b.stage !== 'quotation').reduce((t, b) => t + Number(b.balance), 0)) };
-  };
+  // owed across the organization's branches for a customer; the "Who owes" list follows the branch picked
+  const buyersAll = useMemo(() => ageByBuyer(sales, rows, today), [sales, rows, today]);
+  const statsOf = id => buyersAll.find(b => b.key === id) ?? { owed: 0, sales: 0 };
+  const owing = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return ageByBuyer(sales.filter(s => inBranch(s.branch_id)), rows, today)
+      .filter(b => b.owed > 0 && (!q || `${b.name} ${b.phone ?? ''}`.toLowerCase().includes(q)))
+      .sort((a, b) => b.owed - a.owed);
+  }, [sales, rows, today, inBranch, search]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (rows || []).filter(c => !q || `${c.name} ${c.phone ?? ''} ${c.tin ?? ''}`.toLowerCase().includes(q));
   }, [rows, search]);
+  const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
 
   return (
-    <PageShell title="Customers" subtitle="Sales & Costing" description="Customers shared by every branch, and what each owes."
+    <PageShell title="Customers" subtitle="Sales & Costing" description="Customers shared by every branch, what each owes and for how long, their history and statements."
       primaryAction={canEdit && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New customer</button>}>
+      <PageTabs tabs={[['customers', 'Customers'], ['owing', `Who owes${owing.length ? ` (${owing.length})` : ''}`]]} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
           <ListToolbar id="customers-search" search={search} onSearch={setSearch} placeholder="Search name, phone or TIN…" />
-          <section className="sk">
-            <div className="sk-head"><span>Customers ({shown.length})</span></div>
-            {rows === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
-            : shown.length === 0 ? <div className="card"><EmptyState icon={Users} title="No customers yet" description="Add them here or while making a sale. Walk-in buyers need no record." /></div>
-            : shown.map(c => {
-              const st = statsOf(c.id);
-              return (
-                <div key={c.id} className={`sk-card lk-card${c.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(c)}
-                  onDoubleClick={() => { if (canEdit) { setViewing(null); setEditing(c); } }} title="Click for details · double-click to edit">
-                  <div className="sk-name">
-                    <strong>{c.name}</strong>
-                    <span className="pl-help">{[c.phone, c.tin && `TIN ${c.tin}`].filter(Boolean).join(' · ') || 'no phone'}</span>
+          {tab === 'customers' ? (
+            <section className="sk">
+              <div className="sk-head"><span>Customers ({shown.length})</span></div>
+              {rows === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
+              : shown.length === 0 ? <div className="card"><EmptyState icon={Users} title="No customers yet" description="Add them here or while making a sale. Walk-in buyers need no record." /></div>
+              : shown.map(c => {
+                const st = statsOf(c.id);
+                return (
+                  <div key={c.id} className={`sk-card lk-card${c.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(c)}
+                    onDoubleClick={() => { if (canEdit) { setViewing(null); setEditing(c); } }} title="Click for details · double-click to edit">
+                    <div className="sk-name">
+                      <strong>{c.name}</strong>
+                      <span className="pl-help">{[c.phone, c.tin && `TIN ${c.tin}`].filter(Boolean).join(' · ') || 'no phone'}</span>
+                    </div>
+                    <div className="sk-total">
+                      <span><strong className={st.owed > 0 ? 'text-warning' : ''}>{money(st.owed)}</strong></span>
+                      <span className="sk-sub">owed</span>
+                    </div>
+                    <div className="co-details">
+                      <span>{st.sales} sale{st.sales === 1 ? '' : 's'}</span>
+                      {st.oldest && <span className="pl-help">owed since {st.oldest}</span>}
+                      {c.status !== 'active' && <span className="pl-help">not in use</span>}
+                    </div>
                   </div>
-                  <div className="sk-total">
-                    <span><strong className={st.owed > 0 ? 'text-warning' : ''}>{money(st.owed)}</strong></span>
-                    <span className="sk-sub">owed</span>
-                  </div>
-                  <div className="co-details">
-                    <span>{st.sales} sale{st.sales === 1 ? '' : 's'}</span>
-                    {c.status !== 'active' && <span className="pl-help">not in use</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
+                );
+              })}
+            </section>
+          ) : (
+            <div className="card"><div className="table-container">
+              <table>
+                <thead><tr><th>Customer</th><th>Phone</th>{AGE_BUCKETS.map(([, , l]) => <th key={l} className="num">{l} (TZS)</th>)}<th className="num">Owed (TZS)</th><th>Owed since</th><th>Last paid</th></tr></thead>
+                <tbody>
+                  {owing.length === 0 ? <tr><td colSpan={9} className="text-muted">{search ? 'Nobody matches.' : 'Nobody owes anything.'}</td></tr>
+                  : owing.map(b => (
+                    <tr key={b.key} className={b.customer ? 'clickable-row' : ''} onClick={() => b.customer && setViewing(b.customer)}>
+                      <td><strong>{b.name}</strong>{!b.customer && <div className="pl-help">walk-in</div>}</td>
+                      <td>{b.phone || ''}</td>
+                      {b.buckets.map((v, i) => <td key={i} className={`num${i >= 2 && v > 0 ? ' text-warning' : ''}`}>{v ? formatAmount(v) : ''}</td>)}
+                      <td className="num"><strong>{formatAmount(b.owed)}</strong></td>
+                      <td>{b.oldest}</td>
+                      <td>{b.lastPaid || <span className="pl-help">never</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {owing.length > 0 && (
+                  <tfoot><tr><td colSpan={2}><strong>Total</strong></td>
+                    {AGE_BUCKETS.map((_, i) => <td key={i} className="num"><strong>{money(sum(owing, b => b.buckets[i]))}</strong></td>)}
+                    <td className="num"><strong>{money(sum(owing, b => b.owed))}</strong></td><td colSpan={2} /></tr></tfoot>
+                )}
+              </table>
+            </div></div>
+          )}
         </>
       )}
-      {viewing && (
-        <Modal title={viewing.name} onClose={() => setViewing(null)}
-          footer={<>{canEdit && <button type="button" className="btn btn-outline" onClick={() => { setEditing(viewing); setViewing(null); }}>Edit</button>}
-            <button type="button" className="btn btn-primary" onClick={() => setViewing(null)}>Close</button></>}>
-          <dl className="detail-list text-sm">
-            <dt>Phone</dt><dd>{viewing.phone || '—'}</dd>
-            <dt>Email</dt><dd>{viewing.email || '—'}</dd>
-            <dt>TIN</dt><dd>{viewing.tin || '—'}</dd>
-            <dt>VRN</dt><dd>{viewing.vrn || '—'}</dd>
-            <dt>Address</dt><dd>{viewing.address || '—'}</dd>
-            <dt>Owed</dt><dd>{money(statsOf(viewing.id).owed)} across {statsOf(viewing.id).sales} sale(s)</dd>
-            {viewing.notes && <><dt>Notes</dt><dd>{viewing.notes}</dd></>}
-          </dl>
-        </Modal>
-      )}
+      {viewing && <CustomerView customer={viewing} sales={sales.filter(s => s.customer_id === viewing.id)} stats={statsOf(viewing.id)} money={money} today={today}
+        canEdit={canEdit} onEdit={() => { setEditing(viewing); setViewing(null); }} onClose={() => setViewing(null)} />}
       {editing && <CustomerModal customer={editing.id ? editing : null} organizationId={organization?.id} branchId={branchId}
         onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
     </PageShell>
+  );
+}
+
+/* A customer: details, history (orders and invoices with what is paid), and their statement */
+function CustomerView({ customer, sales, stats, money, today, canEdit, onEdit, onClose }) {
+  const [from, setFrom] = useState(() => { const d = new Date(`${today}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 3); return d.toISOString().slice(0, 10); });
+  const [to, setTo] = useState(today);
+  const history = [...sales].sort((a, b) => (owedSince(a) < owedSince(b) ? 1 : -1));
+  const st = statementLines(sales, null, today);
+  const paidOf = s => (s.payments || []).reduce((t, p) => t + Number(p.amount), 0);
+  const openStatement = () => window.open(`/print/statement/${customer.id}?from=${from}&to=${to}`, '_blank', 'noopener');
+  return (
+    <Modal title={customer.name} onClose={onClose} size="lg"
+      footer={<>{canEdit && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
+        <button type="button" className="btn btn-primary" onClick={onClose}>Close</button></>}>
+      <dl className="detail-list text-sm">
+        <dt>Phone</dt><dd>{customer.phone || '—'}</dd>
+        <dt>Email</dt><dd>{customer.email || '—'}</dd>
+        <dt>TIN / VRN</dt><dd>{[customer.tin, customer.vrn].filter(Boolean).join(' / ') || '—'}</dd>
+        <dt>Address</dt><dd>{customer.address || '—'}</dd>
+        <dt>Owed</dt><dd><strong className={stats.owed > 0 ? 'text-warning' : ''}>{money(stats.owed)}</strong>{stats.oldest ? ` — since ${stats.oldest}` : ''} · bought {money(st.charged)}, paid {money(st.paid)} in all</dd>
+        {customer.notes && <><dt>Notes</dt><dd>{customer.notes}</dd></>}
+      </dl>
+
+      <h3 className="modal-section-title">Statement of account</h3>
+      <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+        <label className="pe-field"><span>From</span><input type="date" className="form-input" max={to} value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="pe-field"><span>To</span><input type="date" className="form-input" max={today} value={to} onChange={e => setTo(e.target.value)} /></label>
+        <button type="button" className="btn btn-outline btn-sm" style={{ alignSelf: 'flex-end' }} onClick={openStatement}><FileText size={14} /> Statement</button>
+      </div>
+
+      <h3 className="modal-section-title">History</h3>
+      <div className="table-container">
+        <table>
+          <thead><tr><th>Date</th><th>Sale</th><th className="num">Total (TZS)</th><th className="num">Paid (TZS)</th><th className="num">Balance (TZS)</th><th>Payments</th></tr></thead>
+          <tbody>
+            {history.length === 0 ? <tr><td colSpan={6} className="text-muted">No orders or invoices yet.</td></tr>
+            : history.map(s => (
+              <tr key={s.id} className="clickable-row" onClick={() => window.open(`/print/sale/${s.id}?doc=${s.stage === 'invoice' ? 'invoice' : 'proforma'}`, '_blank', 'noopener')} title="Open the document">
+                <td>{owedSince(s)}</td>
+                <td>{s.stage === 'invoice' ? 'Invoice' : 'Order'} #{s.sale_no}</td>
+                <td className="num">{formatAmount(Number(s.total))}</td>
+                <td className="num">{formatAmount(paidOf(s))}</td>
+                <td className={`num${Number(s.total) - paidOf(s) > 0.004 ? ' text-warning' : ''}`}><strong>{formatAmount(Number(s.total) - paidOf(s))}</strong></td>
+                <td className="pl-help">{(s.payments || []).sort((a, b) => (a.paid_on < b.paid_on ? -1 : 1)).map(p => `${p.paid_on}: ${formatAmount(Number(p.amount))}`).join(' · ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
   );
 }
 
