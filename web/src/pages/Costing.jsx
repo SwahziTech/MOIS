@@ -43,7 +43,6 @@ export default function Costing() {
   const [bench, setBench] = useState({ target: null, perBag: {} });   // Technical admin only
   const [benchEdit, setBenchEdit] = useState(false);
   const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
-  const [power, setPower] = useState(null);             // this month's electricity at the branch (072), from Purchases › Electricity
   const [view, setView] = useState('products');        // products | electricity (direct cost, from Purchases and Production)
   const money = v => formatMoney(v, organization?.currency_code);
 
@@ -55,9 +54,6 @@ export default function Costing() {
       if (c.error) throw c.error;
       setRefs(r);
       setRows(c.data || []);
-      const monthStart = new Date().toISOString().slice(0, 8) + '01';
-      supabase.from('power_daily').select('day_cost, night_cost, gap_cost').eq('branch_id', branchId).gte('day', monthStart)
-        .then(({ data, error: pErr }) => setPower(pErr ? null : (data || []).reduce((t, d) => ({ day: t.day + Number(d.day_cost || 0), other: t.other + Number(d.night_cost || 0) + Number(d.gap_cost || 0) }), { day: 0, other: 0 })));
       if (isTech) {
         const [t, y] = await Promise.all([
           supabase.from('tech_admin_settings').select('revenue_per_bag_target').maybeSingle(),
@@ -122,19 +118,12 @@ export default function Costing() {
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
               <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
             <div className="mm-stat"><span className="pl-label">Stock at price</span><strong className="mm-money">{rows ? money(totals.sales) : '—'}</strong><span className="pl-help">without VAT</span></div>
-            <div className="mm-stat"><span className="pl-label">Products</span><strong>{items.length}</strong><span className="pl-help">made or in stock here</span></div>
             {isTech && (
               <div className={`mm-stat mm-click${belowOnly ? ' is-on' : ''}`} role="button" tabIndex={0} title="Show the products below the target — seen by the Technical admin only"
                 onClick={() => bench.target != null && setBelowOnly(v => !v)} onKeyDown={e => { if (e.key === 'Enter' && bench.target != null) setBelowOnly(v => !v); }}><span className="pl-label">A bag · target</span>
                 <strong className={items.some(belowBag) ? 'text-warning' : ''}>{bench.target != null ? `${items.filter(belowBag).length} below` : '—'}</strong>
                 <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
             )}
-            <div className="mm-stat mm-click" role="button" tabIndex={0} title="Electricity in production cost" onClick={() => setView('electricity')}
-              onKeyDown={e => { if (e.key === 'Enter') setView('electricity'); }}>
-              <span className="pl-label">Electricity · this month</span>
-              <strong>{power ? money(round(power.day, 0)) : '—'}</strong>
-              <span className="pl-help">{power ? `into products · ${money(round(power.other, 0))} nights` : 'meters and readings in Purchases'}</span></div>
-            <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">not valued — set it in Pricing</span></div>
           </div>
           <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
 
