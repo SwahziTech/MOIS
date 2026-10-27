@@ -85,7 +85,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
 
   return (
     <>
-      <div className="mm-stats mm-slim">
+      <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Into products</span><strong>{money(r2(tot.cost - tot.unused))}</strong><span className="pl-help">day use on days with batches</span></div>
         <div className="mm-stat"><span className="pl-label">Day use, no batches</span><strong className={tot.unused > 0 ? 'text-warning' : ''}>{money(r2(tot.unused))}</strong><span className="pl-help">idle days — not charged</span></div>
         <div className="mm-stat"><span className="pl-label">Nights (lights)</span><strong>{money(r2(tot.night))}</strong><span className="pl-help">running cost</span></div>

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { loadInventoryRefs, qtyText } from '../lib/inventory';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatMoneyShort } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
@@ -104,7 +104,7 @@ export default function Costing() {
     return { value, est, prod: value - est, sales, unpriced: items.filter(x => x.price == null).length };
   }, [items]);
 
-  // page order (on trial here, 2026-10-27): heading → these tabs → the tab's summary → search → categories
+  // page order (locked, 2026-10-27): heading → tabs → the tab's summary → search → categories → list
   const pageTabs = <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity']]} value={view} onChange={setView} />;
 
   return (
@@ -117,18 +117,17 @@ export default function Costing() {
           {pageTabs}
           {view === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
           : error ? <><div className="card"><ErrorState message={error} onRetry={load} /></div></> : <>
-          <div className="mm-stats mm-slim">
+          <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
-              <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
+              <span className="pl-help">{formatMoneyShort(totals.prod, organization?.currency_code)} made · <span className="co-est-txt">{formatMoneyShort(totals.est, organization?.currency_code)} estimated</span></span></div>
             <div className="mm-stat"><span className="pl-label">Stock at price</span><strong className="mm-money">{rows ? money(totals.sales) : '—'}</strong><span className="pl-help">without VAT</span></div>
             {isTech && (
               <div className={`mm-stat mm-click${belowOnly ? ' is-on' : ''}`} role="button" tabIndex={0} title="Show the products below the target — seen by the Technical admin only"
                 onClick={() => bench.target != null && setBelowOnly(v => !v)} onKeyDown={e => { if (e.key === 'Enter' && bench.target != null) setBelowOnly(v => !v); }}><span className="pl-label">A bag · target</span>
                 <strong className={items.some(belowBag) ? 'text-warning' : ''}>{bench.target != null ? `${items.filter(belowBag).length} below` : '—'}</strong>
-                <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
+                <span className="pl-help">{bench.target != null ? `target ${formatMoneyShort(bench.target, organization?.currency_code)} a bag` : 'no target set'} · <button type="button" className="link-btn" onClick={e => { e.stopPropagation(); setBenchEdit(true); }}>{bench.target != null ? 'change' : 'set'}</button></span></div>
             )}
           </div>
-          <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
 
           <ListToolbar id="costing-search" search={search} onSearch={setSearch} placeholder="Search product (e.g. Buibui, 600R)…"
             sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }, ...(isTech ? [{ value: 'bag', label: 'Lowest a bag first' }] : [])] }} />
@@ -136,7 +135,7 @@ export default function Costing() {
 
           {belowOnly && <div className="flex items-center gap-8" style={{ marginBottom: 8 }}><button type="button" className="filter-chip is-on" onClick={() => setBelowOnly(false)}>Below the bag target <X size={12} /></button></div>}
           <section className="sk">
-            <div className="sk-head"><span>Products ({shown.length})</span><span className="pl-help">per {`m² or piece`}, without VAT</span></div>
+            <div className="sk-head"><span>Products ({shown.length})</span><span className="pl-help" title="Production cost = materials of the latest batch (VAT included) + its electricity. Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Labour comes with HR; diesel and other expenses later.">per m² or piece, without VAT ⓘ</span></div>
             {rows === null ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
             : shown.length === 0 ? <div className="card"><EmptyState icon={Calculator} title="Nothing to show" description="Products this branch has made or holds appear here." /></div>
             : shown.map(x => {

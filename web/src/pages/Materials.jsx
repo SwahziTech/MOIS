@@ -206,14 +206,16 @@ export default function Materials() {
         </button>
       )}
     >
+      <PageTabs value={tab} onChange={setTab}
+        tabs={[['materials', 'Materials'], ['categories', 'Material categories'], ['units', 'Units']]} />
       {tab === 'materials' && !error && (
         <>
           <div className="mm-stats">
-            <div className="mm-stat"><span className="pl-label">Materials</span><strong>{inViewMaterials.filter(m => m.status === 'active').length} items</strong></div>
+            <div className="mm-stat"><span className="pl-label">Materials</span><strong>{inViewMaterials.filter(m => m.status === 'active').length}</strong><span className="pl-help">in use</span></div>
             <div className="mm-stat"><span className="pl-label">Stock value</span><strong className="mm-money">{branchId ? money(total) : '—'}</strong>
               <span className="pl-help">{branchId ? (uncosted ? `${uncosted} without a cost` : 'oldest stock used first') : 'Pick a branch'}</span></div>
-            <div className="mm-stat"><span className="pl-label">Out of stock</span><strong className={out.length ? 'text-error' : ''}>{out.length}</strong></div>
-            <div className="mm-stat"><span className="pl-label">Opening stock</span><strong className={noOpening.length ? 'text-warning' : ''}>{noOpening.length ? `${noOpening.length} not set` : 'All set'}</strong></div>
+            <div className="mm-stat"><span className="pl-label">Out of stock</span><strong className={out.length ? 'text-error' : ''}>{out.length}</strong><span className="pl-help">{out.length ? 'need intake' : 'all in stock'}</span></div>
+            <div className="mm-stat"><span className="pl-label">Opening stock</span><strong className={noOpening.length ? 'text-warning' : ''}>{noOpening.length ? noOpening.length : 'All set'}</strong><span className="pl-help">{noOpening.length ? 'not set yet' : 'every material counted'}</span></div>
           </div>
           {noOpening.length > 0 && (
             <div className="mm-banner">
@@ -223,8 +225,6 @@ export default function Materials() {
           )}
         </>
       )}
-      <PageTabs value={tab} onChange={setTab}
-        tabs={[['materials', 'Materials'], ['categories', 'Material categories'], ['units', 'Units']]} />
       {tab === 'materials' && (
         <>
           <ListToolbar id="materials-search" search={search} onSearch={setSearch} placeholder="Search materials…"

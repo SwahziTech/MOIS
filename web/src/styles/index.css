@@ -2260,8 +2260,9 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 /* Costing › Electricity: a day's batches under it */
 .ec-sub td { background: var(--bg-canvas); font-size: var(--text-xs); padding-top: 5px; padding-bottom: 5px; }
 
-/* slim summary cards (trial on Costing, 2026-10-27): label and figure on one line, the note below */
-.mm-stats.mm-slim .mm-stat { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 10px; row-gap: 0; padding: 6px 12px; }
-.mm-stats.mm-slim .mm-stat .pl-label { grid-column: 1; }
-.mm-stats.mm-slim .mm-stat strong { grid-column: 2; justify-self: end; font-size: var(--text-base); }
-.mm-stats.mm-slim .mm-stat .pl-help { grid-column: 1 / -1; font-size: var(--text-xs); }
+
+/* summary cards, everywhere (locked 2026-10-27): three short lines — label, the figure, a short note */
+.mm-stat { padding: 8px 12px; gap: 1px; }
+.mm-stat .pl-label { font-size: var(--text-xs); }
+.mm-stat strong { font-size: var(--text-lg); line-height: 1.25; font-variant-numeric: tabular-nums; }
+.mm-stat .pl-help { font-size: var(--text-xs); }

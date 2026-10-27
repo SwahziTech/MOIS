@@ -211,11 +211,11 @@ export default function Purchases() {
           <Plus size={14} /> Record Goods + Purchase
         </button>
       )}>
-      {/* page order (locked): heading → summary → tabs → search/filters → list */}
+      {/* page order (locked): heading → tabs → summary → search/filters → list */}
+      {purchaseTabs}
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
-      {tab !== 'electricity' && purchaseTabs}
 
-      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} tabs={purchaseTabs} /> : <div className="card">
+      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {tab === 'waiting' && (

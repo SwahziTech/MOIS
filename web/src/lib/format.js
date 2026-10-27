@@ -37,3 +37,11 @@ export function formatAmount(value) {
   if (value == null) return '—';
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 }
+
+/** Money in short, for the note under a summary figure (2026-10-27): "Tsh 29.3M", "Tsh 845K" */
+export function formatMoneyShort(value, currencyCode) {
+  if (value == null) return '—';
+  const a = Math.abs(value);
+  const n = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}M` : a >= 1e4 ? `${Math.round(a / 1e3)}K` : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(a);
+  return `${value < 0 ? '−' : ''}${LOCAL_SYMBOL[currencyCode] ?? currencyCode ?? ''} ${n.replace('.0', '')}`.trim();
+}

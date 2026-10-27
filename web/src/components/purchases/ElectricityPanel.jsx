@@ -80,9 +80,8 @@ export default function ElectricityPanel({ branchId, tabs }) {
         {learnt.map(x => (
           <div key={x.m.id} className="mm-stat">
             <span className="pl-label">{x.m.name}</span>
-            <strong>{x.perBag != null ? `${units(x.perBag)} units a bag` : '—'}</strong>
-            <span className="pl-help">{x.workDay != null ? `${units(x.workDay)} a working day` : 'no working day yet'}{x.idleDay != null ? ` · ${units(x.idleDay)} idle day` : ''}{x.night != null ? ` · ${units(x.night)} a night` : ''}</span>
-            <span className="pl-help">last 60 days · {x.workN} working, {x.idleN} idle days</span>
+            <strong>{x.perBag != null ? `${units(x.perBag)} units/bag` : '—'}</strong>
+            <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.idleDay != null ? ` · ${units(x.idleDay)} units an idle day` : ''}`}>{x.workDay != null ? `${units(x.workDay)} a working day` : 'no working day yet'}{x.night != null ? ` · ${units(x.night)} a night` : ''}</span>
           </div>
         ))}
       </div>
