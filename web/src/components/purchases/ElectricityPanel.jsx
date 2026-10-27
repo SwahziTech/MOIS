@@ -90,7 +90,7 @@ export default function ElectricityPanel({ branchId, tabs }) {
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
         <span className="pl-help">Morning (asubuhi) and evening (jioni) on each meter. Tokens: Record expense → Electricity.</span>
       </div>
-      <PageTabs tabs={[['days', 'Days'], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
+      <PageTabs nested tabs={[['days', 'Days'], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
       <div className="card"><div className="table-container">
         {tab === 'days' ? (
           <table>

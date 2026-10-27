@@ -119,10 +119,23 @@ export function categoryChipItems(cats, keep = () => true) {
     .map(c => ({ id: c.id, label: c.name, children: cats.isGroup(c.id) ? cats.childrenOf(c.id).map(k => ({ id: k.id, label: k.name })) : undefined }));
 }
 
-/** A page's own tabs (e.g. Materials · Material categories · Units) — kept apart from category chips */
-export function PageTabs({ tabs, value, onChange }) {
+/**
+ * A page's own tabs (e.g. Materials · Material categories · Units) — kept apart from category chips.
+ * The page's tabs hold at the top of the screen once scrolled up to it (2026-10-27), with table headers
+ * holding just below them; `nested` tabs inside a tab (e.g. Days · Readings) scroll away as usual.
+ */
+export function PageTabs({ tabs, value, onChange, nested = false }) {
+  const ref = useRef(null);
+  // the tabs' height, so frozen table headers sit just under them (the row can wrap on a narrow screen)
+  useEffect(() => {
+    if (nested || !ref.current || typeof ResizeObserver === 'undefined') return undefined;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(([e]) => root.style.setProperty('--page-tabs-h', `${Math.ceil(e.target.getBoundingClientRect().height)}px`));
+    ro.observe(ref.current);
+    return () => { ro.disconnect(); root.style.removeProperty('--page-tabs-h'); };
+  }, [nested]);
   return (
-    <div className="page-tabs" role="tablist">
+    <div ref={ref} className={`page-tabs${nested ? '' : ' is-page'}`} role="tablist">
       {tabs.map(([key, label]) => (
         <button key={key} type="button" role="tab" aria-selected={value === key}
           className={`page-tab${value === key ? ' is-on' : ''}`} onClick={() => onChange(key)}>{label}</button>

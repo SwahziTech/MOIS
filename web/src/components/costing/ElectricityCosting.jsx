@@ -93,7 +93,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
       </div>
       {tabs}
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-        <PageTabs tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
+        <PageTabs nested tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
         <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
           <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
         </select>
