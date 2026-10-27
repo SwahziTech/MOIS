@@ -196,7 +196,30 @@ PRD sections: 4.7 (Production), 4.8 (Recipes/BOMs — activation),
   gets used for scheduling/targets — not before
 
 ## 1e — Sales & Costing
-**Status: CURRENT** (from 2026-10-25, on SwahziTech's instruction, after 1d)
+**Status: DONE** (2026-10-27, on SwahziTech's instruction; started 2026-10-25 after 1d)
+
+Built:
+- **Sales:** quotation → order → invoice; part and per-item payments into named
+  accounts; deliveries capped by paid value and stock; corrections; walk-ins
+  promoted to customers; the sales book.
+- **Documents:** A4 quotation, proforma, invoice, receipt and delivery note.
+- **Customers:** who owes by age, history and statement of account.
+- **Costing:** Products, Materials and Overheads.
+  - Electricity: LUKU meters, tokens with their receipt breakdown, morning and
+    evening readings, day use charged to batches.
+  - Other overheads: expense categories ticked as production costs, shared
+    monthly by cement bags and by machine.
+  - The Technical-admin bag target.
+- **Layout:** the locked page order (tabs, then 3-line summary cards, then
+  search, then categories) and frozen page tabs and table headers.
+
+Open when closed:
+- Migration 076 (overheads) is waiting to be applied by SwahziTech.
+- Live testing of electricity and overheads continues in use.
+- Labour cost moves to Staff (HR).
+- The two-way daily report moves to 1f.
+- Supplier balances, purchase requests and approvals, and POs are still
+  "Not yet".
 
 Carried in from 1d (SwahziTech, 2026-10-25): stock at cost (a product's cost
 across batches), margins, and full production cost — labour (teams, who
@@ -228,7 +251,7 @@ Added to 1e (SwahziTech, 2026-10-27):
   employed staff on production teams.
 
 ## Staff (HR) — next phase after 1e
-**Status: not started** (queued by SwahziTech, 2026-10-27; same dry-run and
+**Status: NEXT** (1e closed 2026-10-27; not started until SwahziTech authorizes it) (queued by SwahziTech, 2026-10-27; same dry-run and
 approval process as every phase)
 
 Its own sidebar section, with four parts:
