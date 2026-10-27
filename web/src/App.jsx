@@ -27,6 +27,7 @@ import ProductionLedger from './pages/ProductionLedger';
 import Costing from './pages/Costing';
 import Sales from './pages/Sales';
 import Customers from './pages/Customers';
+import Staff from './pages/Staff';
 import SaleDocument from './pages/SaleDocument';
 
 export default function App() {
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/costing" element={<Costing />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/staff" element={<Staff />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />

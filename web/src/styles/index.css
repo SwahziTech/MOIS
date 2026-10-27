@@ -2235,3 +2235,14 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .table-container tfoot td { box-shadow: inset 0 1px 0 var(--border-strong); }
 @media print { thead th, .table-container tfoot td { position: static; } .table-container { max-height: none; overflow: visible; } }
 .sb-table th.sb-acc { background: linear-gradient(color-mix(in srgb, var(--color-warning) 14%, transparent), color-mix(in srgb, var(--color-warning) 14%, transparent)), var(--bg-canvas); }   /* solid, so frozen rows do not show through */
+
+/* staff attendance week (2026-10-27): a day per column, click to cycle full → half → none */
+.at-table th.at-day { text-align: center; }
+.at-fill { display: block; margin: 2px auto 0; padding: 0; border: 0; background: none; font-size: 10px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--accent-text); cursor: pointer; opacity: .8; }
+.at-fill:hover { opacity: 1; text-decoration: underline; }
+.at-table td.at-cell { text-align: center; padding: 6px; }
+.at-mark { width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-primary); font-weight: 700; cursor: pointer; }
+.at-mark:disabled { cursor: default; opacity: .6; }
+.at-mark.is-full { background: color-mix(in srgb, var(--color-success) 22%, transparent); border-color: var(--color-success); color: var(--color-success); }
+.at-mark.is-half { background: color-mix(in srgb, var(--color-warning) 18%, transparent); border-color: var(--color-warning); color: var(--color-warning); }
+.ps-table td .form-input { padding: 4px 6px; }

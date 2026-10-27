@@ -210,6 +210,11 @@ PRD sections: 4.11 (Sales/CRM), 4.12 (Documents), 4.13 (Costing)
 - Material cost, batch cost, unit cost, basic profitability
 - Customers added to master data here (mirrors suppliers in 1b)
 
+Added to 1e by SwahziTech (2026-10-27), for full production cost — not in the PRD as features:
+- Staff & pay (071): staff list per branch (employed/casual, pay, team), weekly attendance, pay sheets (casual day rate weekly; employed monthly salary paid every 2 weeks), approved and paid → one Wages expense. Pay seen by Technical admin, director, branch manager, secretary.
+- Electricity (LUKU) per meter/zone: token purchases, daily meter readings, units × price → the machines on that meter; office use stays a running cost.
+- Expenses tagged to a machine/line, a production tick and weekly/monthly sharing per category (Costing ⚙); shared over the machine's batches by cement bags.
+
 ## 1f — Reports & AI v1
 **Status: not started**
 
