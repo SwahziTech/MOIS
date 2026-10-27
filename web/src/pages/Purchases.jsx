@@ -11,6 +11,7 @@ import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
+import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
 import ElectricityPanel from '../components/purchases/ElectricityPanel';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
@@ -121,7 +122,7 @@ export default function Purchases() {
       // Branch VAT rates and expenses (041): the page still works without them
       const [vr, ec, ex] = await Promise.all([
         supabase.from('branches').select('id, vat_rate'),
-        supabase.from('expense_categories').select('id, name, status, display_order').order('display_order').order('name'),
+        supabase.from('expense_categories').select('*').order('display_order').order('name'),
         byBranch(supabase.from('expenses').select('*')).order('expense_date', { ascending: false }).order('created_at', { ascending: false }).limit(500),
       ]);
       setVatRates(vr.error ? {} : Object.fromEntries((vr.data || []).map(b => [b.id, Number(b.vat_rate)])));
@@ -409,6 +410,7 @@ export default function Purchases() {
         <Modal title="Purchases & expenses settings" onClose={() => setExpSettings(false)} size="lg"
           footer={<button type="button" className="btn btn-outline" onClick={() => setExpSettings(false)}>Close</button>}>
           <PowerMetersCard />
+          <OverheadCategoriesCard onChanged={load} />
         </Modal>
       )}
     </PageShell>

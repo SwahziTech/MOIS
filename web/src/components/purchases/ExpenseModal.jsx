@@ -47,6 +47,13 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
   const [meterId, setMeterId] = useState('');
   const [loadedTime, setLoadedTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [token, setToken] = useState(null);     // the token this expense came from
+  // production overheads (076): the machine/line an expense is for; none = the whole branch
+  const [machines, setMachines] = useState([]);
+  const [machineId, setMachineId] = useState(expense?.machine_id ?? '');
+  useEffect(() => {
+    if (!branch) return;
+    supabase.from('machines').select('id, name, status').eq('branch_id', branch).order('name').then(({ data }) => setMachines((data || []).filter(m => m.status === 'active' || m.id === expense?.machine_id)));
+  }, [branch]); // eslint-disable-line react-hooks/exhaustive-deps
   const [receipt, setReceipt] = useState({ vat: '', ewura: '', rea: '', debt: '', ref: '' });   // from the token's receipt (074)
   useEffect(() => {
     if (!branch) return;
@@ -66,7 +73,8 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
   const total = computed ?? num(amount);
   const vat = vatShown && total != null ? round2(total * rate / (100 + rate)) : null;
   const activeCats = categories.filter(c => c.status === 'active' || c.id === expense?.category_id);
-  const isElectricity = isNew && meters.length > 0 && /^\s*electricity\s*$/i.test(categories.find(c => c.id === category)?.name ?? '');
+  const isOverhead = !!categories.find(c => c.id === category)?.in_production_cost;
+  const isElectricity = isNew && meters.length > 0 && /^\s*electricity\b/i.test(categories.find(c => c.id === category)?.name ?? '');
   const activeSuppliers = suppliers.filter(s => s.status === 'active' || s.id === expense?.supplier_id);
 
   async function save(e) {
@@ -101,11 +109,15 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
       paid_on: num(paid) > 0 ? paidOn || null : null, notes: notes.trim() || null,
     };
     setBusy(true);
-    const { error: err } = isNew
+    const res = isNew
       ? await supabase.rpc('record_expense', { p })
       : await supabase.rpc('update_expense', { p_id: expense.id, p });
+    if (!res.error && (isOverhead || expense?.machine_id) && (machineId || null) !== (expense?.machine_id ?? null)) {
+      const r2 = await supabase.rpc('set_expense_machine', { p_id: isNew ? res.data : expense.id, p_machine: isOverhead ? machineId || null : null });
+      if (r2.error) res.error = r2.error;
+    }
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err, "We couldn't save this expense. Please try again.")); return; }
+    if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save this expense. Please try again.")); return; }
     onSaved();
   }
 
@@ -206,6 +218,15 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
             {computed != null && <span className="form-hint">Quantity × price.</span>}
           </div>
         </div>
+        {isOverhead && !isElectricity && (
+          <div className="form-group">
+            <label className="form-label" htmlFor="ex-machine">For machine / line</label>
+            <select id="ex-machine" className="form-input" value={machineId} onChange={e => setMachineId(e.target.value)}>
+              <option value="">The whole branch</option>{machines.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <span className="form-hint">A production cost: Costing shares it over this month's batches on the machine (or all the branch's), by cement bags.</span>
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="ex-sup">Supplier (optional)</label>
