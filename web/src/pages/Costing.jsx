@@ -44,7 +44,8 @@ export default function Costing() {
   const [bench, setBench] = useState({ target: null, perBag: {} });   // Technical admin only
   const [benchEdit, setBenchEdit] = useState(false);
   const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
-  const [view, setView] = useState('products');        // products | electricity (direct cost, from Purchases and Production)
+  const [ohView, setOhView] = useState('electricity');   // Overheads: electricity | other
+  const [view, setView] = useState('products');        // products | overheads (electricity, other — pulled from Purchases and Production)
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -106,7 +107,7 @@ export default function Costing() {
   }, [items]);
 
   // page order (locked, 2026-10-27): heading → tabs → the tab's summary → search → categories → list
-  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['electricity', 'Electricity'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
+  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
@@ -116,8 +117,12 @@ export default function Costing() {
       ) : (
         <>
           {pageTabs}
-          {view === 'overheads' ? <OverheadsCosting branchId={branchId} currency={organization?.currency_code} />
-          : view === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
+          {/* overheads (2026-10-27): electricity — metered, by day and machine — then the other production overheads */}
+          {view === 'overheads' ? <>
+            <PageTabs nested tabs={[['electricity', 'Electricity'], ['other', 'Other overheads']]} value={ohView} onChange={setOhView} />
+            {ohView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
+              : <OverheadsCosting branchId={branchId} currency={organization?.currency_code} />}
+          </>
           : error ? <><div className="card"><ErrorState message={error} onRetry={load} /></div></> : <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Finished stock at cost</span><strong className="mm-money">{rows ? money(totals.value) : '—'}</strong>
