@@ -11,6 +11,8 @@ import { ListToolbar, ChipRow, categoryChipItems } from '../components/ListContr
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
+import NumberInput from '../components/NumberInput';
+import { dbErrorMessage } from '../lib/masterData';
 
 const LOAD_ERROR = "We couldn't load costing. Please try again.";
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
@@ -27,7 +29,8 @@ const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
  * (margin), details right; click shows the stock layers.
  */
 export default function Costing() {
-  const { organization } = useAuth();
+  const { organization, can } = useAuth();
+  const isTech = can('system.manage');   // the Technical admin's benchmark (075) — no one else sees it
   const { branchId, branchName } = useBranch();
   const [refs, setRefs] = useState(null);
   const [rows, setRows] = useState(null);
@@ -36,6 +39,8 @@ export default function Costing() {
   const [chip, setChip] = useState('');
   const [sortBy, setSortBy] = useState('order');
   const [open, setOpen] = useState(null);
+  const [bench, setBench] = useState({ target: null, perBag: {} });   // Technical admin only
+  const [benchEdit, setBenchEdit] = useState(false);
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -46,6 +51,14 @@ export default function Costing() {
       if (c.error) throw c.error;
       setRefs(r);
       setRows(c.data || []);
+      if (isTech) {
+        const [t, y] = await Promise.all([
+          supabase.from('tech_admin_settings').select('revenue_per_bag_target').maybeSingle(),
+          supabase.rpc('product_yield_per_unit', { p_branch_id: branchId }),
+        ]);
+        setBench({ target: t.data?.revenue_per_bag_target != null ? Number(t.data.revenue_per_bag_target) : null,
+          perBag: Object.fromEntries((y.data || []).map(x => [x.product_id, x.units_per_bag != null ? Number(x.units_per_bag) : null])) });
+      }
     } catch (e) {
       console.error(e);
       setError(LOAD_ERROR);
@@ -62,16 +75,19 @@ export default function Costing() {
     const it = refs?.items[`p:${r.product_id}`];
     const cost = r.last_batch_cost != null ? Number(r.last_batch_cost) : null;
     const price = r.price_ex_vat != null ? Number(r.price_ex_vat) : null;
+    const per = isTech ? bench.perBag[r.product_id] : null;
     return { ...r, it, cost, price, margin: cost != null && price != null ? price - cost : null,
+      bag: price != null && per ? price * per : null,
       colour: r.color_id ? refs?.colorById[r.color_id]?.name : null };
-  }).filter(x => x.it && (Number(x.on_hand) !== 0 || x.batches > 0)), [rows, refs]);
+  }).filter(x => x.it && (Number(x.on_hand) !== 0 || x.batches > 0)), [rows, refs, bench, isTech]);
+  const belowBag = x => bench.target != null && x.bag != null && x.bag < bench.target;
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     const inChip = x => !chip || x.it.categoryId === chip || cats.byId[x.it.categoryId]?.parent_category_id === chip;
     const list = items.filter(x => inChip(x) && (!q || `${x.it.name} ${x.colour ?? ''} ${x.it.category}`.toLowerCase().includes(q)));
     const pctOf = x => (x.margin != null && x.price > 0 ? x.margin / x.price : -Infinity);
-    return list.sort((a, b) => (sortBy === 'margin' ? pctOf(a) - pctOf(b) : sortBy === 'value' ? (Number(b.value) || 0) - (Number(a.value) || 0) : 0)
+    return list.sort((a, b) => (sortBy === 'bag' ? (a.bag ?? Infinity) - (b.bag ?? Infinity) : sortBy === 'margin' ? pctOf(a) - pctOf(b) : sortBy === 'value' ? (Number(b.value) || 0) - (Number(a.value) || 0) : 0)
       || order(a.it, b.it) || String(a.colour ?? '').localeCompare(String(b.colour ?? '')));
   }, [items, search, chip, sortBy, cats, order]);
 
@@ -97,12 +113,17 @@ export default function Costing() {
               <span className="pl-help">{money(totals.prod)} production cost · <span className="co-est-txt">{money(totals.est)} estimated</span></span></div>
             <div className="mm-stat"><span className="pl-label">Stock at price</span><strong className="mm-money">{rows ? money(totals.sales) : '—'}</strong><span className="pl-help">without VAT</span></div>
             <div className="mm-stat"><span className="pl-label">Products</span><strong>{items.length}</strong><span className="pl-help">made or in stock here</span></div>
+            {isTech && (
+              <div className="mm-stat" title="Seen by the Technical admin only"><span className="pl-label">A bag · target</span>
+                <strong className={items.some(belowBag) ? 'text-warning' : ''}>{bench.target != null ? `${items.filter(belowBag).length} below` : '—'}</strong>
+                <span className="pl-help">{bench.target != null ? `target ${money(bench.target)} a cement bag` : 'no target set'} · <button type="button" className="link-btn" onClick={() => setBenchEdit(true)}>{bench.target != null ? 'change' : 'set'}</button></span></div>
+            )}
             <div className="mm-stat"><span className="pl-label">No price</span><strong className={totals.unpriced ? 'text-warning' : ''}>{totals.unpriced}</strong><span className="pl-help">not valued — set it in Pricing</span></div>
           </div>
           <p className="pl-help" style={{ margin: '0 0 8px' }}>Production cost = materials of the latest batch (VAT included). Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Electricity: the day use of the batch's machine meter (Purchases › Electricity). Labour comes with HR; diesel and other expenses later.</p>
 
           <ListToolbar id="costing-search" search={search} onSearch={setSearch} placeholder="Search product (e.g. Buibui, 600R)…"
-            sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }] }} />
+            sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'order', label: 'Category order' }, { value: 'margin', label: 'Lowest margin first' }, { value: 'value', label: 'Highest stock value first' }, ...(isTech ? [{ value: 'bag', label: 'Lowest a bag first' }] : [])] }} />
           {refs && <ChipRow value={chip} onChange={setChip} items={categoryChipItems(cats, c => c.status === 'active')} />}
 
           <section className="sk">
@@ -126,6 +147,7 @@ export default function Costing() {
                   <div className="co-details">
                     <span>{x.cost != null ? <>production cost <strong>{money(round(x.cost))}</strong> /{per(x.it)}<span className="pl-help"> · {x.last_batch_date}</span></>
                       : <>cost <span className="co-est-txt">estimated at price</span></>}</span>
+                    {isTech && x.bag != null && <span className={belowBag(x) ? 'text-warning' : ''} title="Price without VAT × yield a cement bag — Technical admin only">a bag <strong>{money(round(x.bag, 0))}</strong>{belowBag(x) ? ' · below target' : ''}</span>}
                     <span>price <strong>{x.price != null ? money(round(x.price)) : '—'}</strong> /{per(x.it)}{x.price == null && x.price_source ? <span className="pl-help"> · {x.price_source}</span> : ''}</span>
                     <span>stock {qtyText(round(Number(x.on_hand)))} {unitOf(x.it)}{x.value != null ? <> · at cost <strong>{money(round(Number(x.value)))}</strong></> : ''}
                       {Number(x.estimated_value) > 0 && Number(x.estimated_value) < Number(x.value) - 0.5 && <span className="co-est" title="Part with no production cost, estimated at the price without VAT"> {money(round(Number(x.estimated_value)))} estimated</span>}
@@ -140,6 +162,8 @@ export default function Costing() {
         </>
       )}
 
+      {benchEdit && <BenchModal target={bench.target} organizationId={organization?.id} money={money}
+        onClose={() => setBenchEdit(false)} onSaved={async () => { setBenchEdit(false); await load(); }} />}
       {open && (
         <Modal title={`${open.it.name}${open.colour ? ` ${open.colour}` : ''} — stock at cost`} onClose={() => setOpen(null)}
           footer={<button type="button" className="btn btn-outline" onClick={() => setOpen(null)}>Close</button>}>
@@ -175,5 +199,35 @@ function LayerList({ branchId, row, unit, money }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/* The Technical admin's target a cement bag (075): price without VAT × yield a bag, per product */
+function BenchModal({ target, organizationId, money, onClose, onSaved }) {
+  const [value, setValue] = useState(target != null ? String(target) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    setError('');
+    const n = value.trim() === '' ? null : Number(value);
+    if (n !== null && !(n >= 0)) { setError('Enter the amount as a number.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.from('tech_admin_settings')
+      .upsert({ organization_id: organizationId, revenue_per_bag_target: n }, { onConflict: 'organization_id' });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+  return (
+    <Modal title="Target a cement bag" onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Save</button></>}>
+      <div className="modal-form">
+        <label className="pe-field"><span>Revenue a cement bag (TZS)</span>
+          <NumberInput step="any" min="0" className="form-input" autoFocus value={value} onChange={e => setValue(e.target.value)} /></label>
+        <p className="pl-help">Each product: its price without VAT × its yield a bag (m² or pieces). Products below this show in amber. Seen by the Technical admin only.{target != null ? ` Now: ${money(target)}.` : ''}</p>
+      </div>
+    </Modal>
   );
 }

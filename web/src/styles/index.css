@@ -2246,3 +2246,6 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .at-mark.is-full { background: color-mix(in srgb, var(--color-success) 22%, transparent); border-color: var(--color-success); color: var(--color-success); }
 .at-mark.is-half { background: color-mix(in srgb, var(--color-warning) 18%, transparent); border-color: var(--color-warning); color: var(--color-warning); }
 .ps-table td .form-input { padding: 4px 6px; }
+
+/* a button that reads as a link (Costing: the bag target) */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-text); text-decoration: underline; cursor: pointer; }
