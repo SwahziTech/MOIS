@@ -8,7 +8,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
-import { ListToolbar, ChipRow } from '../components/ListControls';
+import { ListToolbar, ChipRow, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -108,6 +108,9 @@ export default function Sales() {
   const branchAccounts = accounts.filter(a => a.branch_id === branchId);
   const open = (sales || []).find(s => s.id === viewing);
 
+  // page order (locked): heading → summary cards → these tabs → search/filters → list
+  const salesTabs = <PageTabs tabs={[['book', 'Sales book'], ['list', 'Quotations & invoices'], ['overview', 'Overview']]} value={view} onChange={setView} />;
+
   return (
     <PageShell title="Sales" subtitle="Sales & Costing"
       description={branchId ? `The sales book at ${branchName}: each sale, where the money went, and where the goods went.` : 'The sales book at every branch.'}
@@ -116,14 +119,10 @@ export default function Sales() {
       primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
-          <div className="filter-chips" style={{ marginBottom: 8 }}>
-            <button type="button" className={`filter-chip${view === 'book' ? ' is-on' : ''}`} onClick={() => setView('book')}>Sales book</button>
-            <button type="button" className={`filter-chip${view === 'list' ? ' is-on' : ''}`} onClick={() => setView('list')}>Quotations & invoices</button>
-            <button type="button" className={`filter-chip${view === 'overview' ? ' is-on' : ''}`} onClick={() => setView('overview')}>Overview</button>
-          </div>
+          {view !== 'overview' && salesTabs}
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
             refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
-          {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} today={today} buyerOf={buyerOf} />}
+          {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} today={today} buyerOf={buyerOf} tabs={salesTabs} />}
           {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
           <ChipRow value={stage} onChange={setStage} items={Object.entries(STAGES).map(([id, label]) => ({ id, label }))} />
@@ -842,7 +841,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
  * (without VAT less the stock's cost; the estimated part marked) — by
  * product and by customer. Figures as saved; nothing re-priced here.
  */
-function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
+function SalesOverview({ sales, refs, customers, money, today, buyerOf, tabs }) {
   const [period, setPeriod] = useState('30');
   const from = period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
   const live = sales.filter(x => x.stage === 'order' || x.stage === 'invoice');
@@ -873,18 +872,19 @@ function SalesOverview({ sales, refs, customers, money, today, buyerOf }) {
   const pct = (a, b) => (b > 0 ? ` · ${Math.round((a / b) * 100)}%` : '');
   return (
     <>
-      <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
-        </select>
-        <span className="pl-help">Orders and invoices by their date; payments and deliveries by theirs. Owed is everything still open.</span>
-      </div>
       <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Sold</span><strong className="mm-money">{money(sum(sold, x => Number(x.total)))}</strong><span className="pl-help">{sold.length} order{sold.length === 1 ? '' : 's'}/invoice{sold.length === 1 ? '' : 's'} · with VAT</span></div>
         <div className="mm-stat"><span className="pl-label">Paid in</span><strong className="mm-money">{money(sum(payments, pm => Number(pm.amount)))}</strong><span className="pl-help">{payments.length} payment{payments.length === 1 ? '' : 's'}</span></div>
         <div className="mm-stat"><span className="pl-label">Owed now</span><strong className={`mm-money${owed > 0.004 ? ' text-warning' : ''}`}>{money(Math.max(owed, 0))}</strong><span className="pl-help">on open orders and invoices</span></div>
         <div className="mm-stat"><span className="pl-label">Delivered</span><strong className="mm-money">{money(delivered.value)}</strong>
           <span className="pl-help">margin {money(delivered.ex - delivered.cost)}{pct(delivered.ex - delivered.cost, delivered.ex)}{delivered.est > 0.5 ? ` · ${money(delivered.est)} of cost estimated` : ''}</span></div>
+      </div>
+      {tabs}
+      <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
+        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
+          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
+        </select>
+        <span className="pl-help">Orders and invoices by their date; payments and deliveries by theirs. Owed is everything still open.</span>
       </div>
       {queued.length > 0 && <p className="pl-help" style={{ margin: '0 0 8px' }}>{queued.length} quotation{queued.length === 1 ? '' : 's'} in the period, worth {money(sum(queued, x => Number(x.total)))}, not yet ordered.</p>}
       <div className="so-grid">

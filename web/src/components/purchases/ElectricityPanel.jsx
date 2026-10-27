@@ -24,7 +24,7 @@ const avg = xs => (xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : null)
  * idle days, nights, and units per cement bag on its machines. Costing
  * charges day use to the batches on the meter's machines (073).
  */
-export default function ElectricityPanel({ branchId }) {
+export default function ElectricityPanel({ branchId, tabs }) {
   const { organization, canAt } = useAuth();
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
@@ -67,18 +67,14 @@ export default function ElectricityPanel({ branchId }) {
     });
   }, [data]);
 
-  if (!branchId) return <div className="card"><EmptyState icon={Zap} title="Pick a branch" description="Meters are per branch — pick one in the sidebar." /></div>;
-  if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
-  if (data === null) return <div className="card"><span className="skeleton" /></div>;
-  if (data.meters.length === 0) return <div className="card"><EmptyState icon={Zap} title="No meters yet" description="Add the branch's LUKU meters under ⚙ (beside the heading), with the machines each one feeds." /></div>;
+  if (!branchId) return <>{tabs}<div className="card"><EmptyState icon={Zap} title="Pick a branch" description="Meters are per branch — pick one in the sidebar." /></div></>;
+  if (error) return <>{tabs}<div className="card"><ErrorState message={error} onRetry={load} /></div></>;
+  if (data === null) return <>{tabs}<div className="card"><span className="skeleton" /></div></>;
+  if (data.meters.length === 0) return <>{tabs}<div className="card"><EmptyState icon={Zap} title="No meters yet" description="Add the branch's LUKU meters under ⚙ (beside the heading), with the machines each one feeds." /></div></>;
   const meterName = id => data.meters.find(m => m.id === id)?.name ?? '';
 
   return (
     <>
-      <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
-        {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
-        <span className="pl-help">Morning (asubuhi) and evening (jioni) on each meter. Tokens: Record expense → Electricity.</span>
-      </div>
       <section className="sk">
         {learnt.map(x => (
           <div key={x.m.id} className="sk-card lk-card">
@@ -94,6 +90,11 @@ export default function ElectricityPanel({ branchId }) {
           </div>
         ))}
       </section>
+      {tabs}
+      <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
+        {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
+        <span className="pl-help">Morning (asubuhi) and evening (jioni) on each meter. Tokens: Record expense → Electricity.</span>
+      </div>
       <PageTabs tabs={[['days', 'Days'], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
       <div className="card"><div className="table-container">
         {tab === 'days' ? (

@@ -193,6 +193,11 @@ export default function Purchases() {
   const describeLines = lines => (lines || []).filter(t => t.material_id)
     .map(t => `${qtyText(t.entered_quantity)} ${refs?.unitById[t.entered_unit_id]?.symbol ?? ''} ${refs?.items[`m:${t.material_id}`]?.name ?? ''}`).join(', ');
 
+  const purchaseTabs = (
+    <PageTabs value={tab} onChange={setTab}
+      tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs']]} />
+  );
+
   return (
     <PageShell title="Purchases" subtitle="Inventory" onSettings={() => setExpSettings(true)}
       description="The money side of materials received: supplier, cost, payment — and each branch's material costs."
@@ -206,11 +211,11 @@ export default function Purchases() {
           <Plus size={14} /> Record Goods + Purchase
         </button>
       )}>
-      <PageTabs value={tab} onChange={setTab}
-        tabs={[['waiting', `Waiting for details (${waitingHere.length})`], ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs']]} />
+      {/* page order (locked): heading → summary → tabs → search/filters → list */}
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
+      {tab !== 'electricity' && purchaseTabs}
 
-      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
+      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} tabs={purchaseTabs} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {tab === 'waiting' && (
