@@ -461,6 +461,9 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   const [prices, setPrices] = useState(Object.fromEntries(receiptLines.map(t => [t.id, priceOf[t.id] ?? (mode === 'complete' ? filledPrice(t) : '')])));
 
   const activeSuppliers = refs.suppliers.filter(s => s.status === 'active' || s.id === purchase?.supplier_id);
+  // who supplied these materials before (purchase history at this branch) — offered first, never assumed for other materials
+  const lineMaterials = (isNew ? newLines.map(l => l.materialId) : receiptLines.map(t => t.material_id)).filter(Boolean);
+  const suppliedBefore = new Set(lineMaterials.flatMap(m => pastOf(recBranch, m).map(p => p.supplierId)).filter(Boolean));
   const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? fromOrder?.supplierId ?? firstPast?.[0].supplierId ?? '');
   // received against a purchase order (077): the supplier's open orders at this branch
   const [orderId, setOrderId] = useState(purchase?.purchase_order_id ?? fromOrder?.orderId ?? '');
@@ -708,7 +711,8 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
             <label className="form-label" htmlFor="pu-sup">Supplier</label>
             <select id="pu-sup" className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
               <option value="">{mode === 'edit' ? 'Choose…' : 'New supplier…'}</option>
-              {activeSuppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {suppliedBefore.size > 0 && <optgroup label="Supplied these before">{activeSuppliers.filter(s => suppliedBefore.has(s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>}
+              <optgroup label={suppliedBefore.size ? 'Other suppliers' : 'Suppliers'}>{activeSuppliers.filter(s => !suppliedBefore.has(s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>
             </select>
             {!supplierId && mode !== 'edit' && (
               <input className="form-input mt-4" aria-label="New supplier name" placeholder="Supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />

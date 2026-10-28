@@ -383,15 +383,38 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
   const [expected, setExpected] = useState('');
   const [notes, setNotes] = useState('');
   const [sent, setSent] = useState(false);
+  // LUKU is bought from TANESCO only (083)
+  const isLuku = expenseLines.some(l => l.meterId);
+  const tanesco = (refs?.suppliers || []).find(x => /tanesco/i.test(x.name));
+  // who supplied these before: materials (purchases) and expense kinds (expenses) — offered first, preselected when one stands out
+  const [past, setPast] = useState({ byMaterial: {}, byCategory: {} });
+  useEffect(() => {
+    if (isLuku) return;
+    Promise.all([
+      supabase.from('purchases').select('supplier_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material_id))').eq('status', 'recorded').eq('branch_id', branchId),
+      supabase.from('expenses').select('supplier_id, category_id, expense_date').eq('status', 'recorded').not('supplier_id', 'is', null).eq('branch_id', branchId),
+    ]).then(([p, e]) => {
+      const byMaterial = {}; const byCategory = {};
+      for (const x of p.data || []) for (const l of x.lines || []) if (l.tx?.material_id) (byMaterial[l.tx.material_id] ||= []).push({ s: x.supplier_id, d: x.purchase_date });
+      for (const x of e.data || []) (byCategory[x.category_id] ||= []).push({ s: x.supplier_id, d: x.expense_date });
+      setPast({ byMaterial, byCategory });
+    });
+  }, [branchId, isLuku]);
+  const score = {};
+  for (const l of lines) for (const h of past.byMaterial[l.materialId] || []) { const x = score[h.s] ||= { n: 0, d: '' }; x.n += 1; if (h.d > x.d) x.d = h.d; }
+  for (const l of expenseLines) for (const h of past.byCategory[l.categoryId] || []) { const x = score[h.s] ||= { n: 0, d: '' }; x.n += 1; if (h.d > x.d) x.d = h.d; }
+  const suggested = Object.entries(score).sort((a, b) => b[1].n - a[1].n || (a[1].d < b[1].d ? 1 : -1)).map(([id]) => id);
+  const active = (refs?.suppliers || []).filter(x => x.status === 'active');
+  useEffect(() => { if (!supplierId && suggested.length) setSupplierId(suggested[0]); }, [suggested.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function save() {
     setError('');
-    if (!supplierId || (supplierId === '__new' && !newSupplier.trim())) { setError('Choose the supplier, or name a new one.'); return; }
+    if (!isLuku && (!supplierId || (supplierId === '__new' && !newSupplier.trim()))) { setError('Choose the supplier, or name a new one.'); return; }
     if (lines.some(l => !l.materialId || !(num(l.quantity) > 0) || !l.unitId)) { setError('Each material line needs a material, a quantity above zero and a unit.'); return; }
     if (!lines.length && !expenseLines.length) { setError('Add what is ordered.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, ...(supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : { supplier_id: supplierId }),
+    const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, ...(isLuku ? (tanesco ? { supplier_id: tanesco.id } : { new_supplier_name: 'TANESCO' }) : supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : { supplier_id: supplierId }),
       request_id: request?.id ?? null, expected_on: expected || null, notes, sent_to_supplier: sent,
       lines: [...lines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })),
         ...expenseLines.map(l => ({ kind: 'expense', category_id: l.categoryId, meter_id: l.meterId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount), request_line_id: l.requestLineId }))] } });
@@ -406,12 +429,18 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Make order</button></>}>
       <div className="modal-form">
         <div className="form-row">
+          {isLuku ? (
+            <div className="pe-field"><span>Supplier</span><strong className="text-sm" style={{ padding: '8px 0' }}>{tanesco?.name ?? 'TANESCO'}</strong><span className="pl-help">LUKU is bought from TANESCO only.</span></div>
+          ) : (
           <label className="pe-field"><span>Supplier</span>
             <select className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-              <option value="">Choose…</option>{(refs?.suppliers || []).filter(s => s.status === 'active').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="">Choose…</option>
+              {suggested.length > 0 && <optgroup label="Supplied these before">{suggested.map(id => active.find(x => x.id === id)).filter(Boolean).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>}
+              <optgroup label={suggested.length ? 'Other suppliers' : 'Suppliers'}>{active.filter(x => !suggested.includes(x.id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
               <option value="__new">New supplier…</option>
             </select>
-            {supplierId === '__new' && <input className="form-input mt-4" placeholder="e.g. the LUKU seller" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
+            {supplierId === '__new' && <input className="form-input mt-4" placeholder="The supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
+          )}
           <label className="pe-field"><span>Expected (optional)</span><input type="date" className="form-input" value={expected} onChange={e => setExpected(e.target.value)} /></label>
         </div>
         {(lines.length > 0 || !request) && <MaterialLines refs={refs} branchId={branchId} lines={lines} setLines={setLines} withPrice />}
