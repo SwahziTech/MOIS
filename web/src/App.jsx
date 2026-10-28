@@ -33,6 +33,7 @@ import PurchaseOrderDocument from './pages/PurchaseOrderDocument';
 import WeeklyCash from './pages/WeeklyCash';
 import Staff from './pages/Staff';
 import DailyReport from './pages/DailyReport';
+import Reports from './pages/Reports';
 import PayslipDocument from './pages/PayslipDocument';
 
 export default function App() {
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/weekly-cash" element={<WeeklyCash />} />
             <Route path="/staff" element={<Staff />} />
             <Route path="/daily-report" element={<DailyReport />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />

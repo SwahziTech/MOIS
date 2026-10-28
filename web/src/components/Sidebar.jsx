@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, Wallet, HardHat, FileText,
+  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -71,6 +71,8 @@ const NAV = [
     items: [
       // the day's report, written from MOIS or a written one checked against it (1f)
       { label: 'Daily report', to: '/daily-report', icon: FileText, perm: 'production.view' },
+      // production, sales, spending, materials, profit, branches for a date range (PRD 4.15) — managers, like Costing
+      { label: 'Reports', to: '/reports', icon: BarChart3, perm: 'products.manage' },
     ],
   },
   {
