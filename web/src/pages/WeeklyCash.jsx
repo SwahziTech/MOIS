@@ -28,7 +28,8 @@ const approvedOf = r => (r.lines || []).reduce((t, l) => t + Number(l.approved_a
  * approved and sent by the branch manager, approved by the directors (who
  * may trim lines), paid to the branch in one payment. Last week's summary is
  * read from what was recorded (expenses and payments to suppliers paid that
- * week): balance brought forward + cash sent − spent = balance. A request
+ * week): balance brought forward + cash sent − spent = balance. Where the
+ * money is sent (bank, account number and name) is written on the request. A request
  * can be imported from the branch's Excel sheet or filled here, and exported
  * in the same layout.
  */
@@ -45,11 +46,10 @@ export default function WeeklyCash() {
     setError('');
     if (!branchId) { setData(null); return; }
     const since = addDays(today, -400);
-    const [rq, ex, pp, ac, cats, refs] = await Promise.all([
+    const [rq, ex, pp, cats, refs] = await Promise.all([
       supabase.from('cash_requests').select('*, lines:cash_request_lines(*)').eq('branch_id', branchId).order('week_ending', { ascending: false }),
       supabase.from('expenses').select('id, paid_on, expense_date, amount_paid, description, quantity, unit_price, category_id, status').eq('branch_id', branchId).eq('status', 'recorded').gt('amount_paid', 0).gte('paid_on', since),
       supabase.from('purchase_payments').select('id, paid_on, amount, purchase:purchases!inner(branch_id, supplier_id, status, movement_id)').eq('purchase.branch_id', branchId).eq('purchase.status', 'recorded').gte('paid_on', since),
-      supabase.from('payment_accounts').select('*').eq('branch_id', branchId).order('display_order'),
       supabase.from('expense_categories').select('id, name, status').order('display_order').order('name'),
       loadInventoryRefs(),
     ]);
@@ -57,7 +57,7 @@ export default function WeeklyCash() {
     // what was bought with each purchase payment: its materials, from the receipt
     const moveIds = [...new Set((pp.data || []).map(p => p.purchase.movement_id))];
     const tx = moveIds.length ? (await supabase.from('inventory_transactions').select('movement_id, material_id, entered_quantity, entered_unit_id').in('movement_id', moveIds)).data || [] : [];
-    setData({ requests: rq.data || [], expenses: ex.data || [], payments: pp.data || [], accounts: (ac.data || []).filter(a => a.status === 'active'), cats: cats.data || [], refs, tx });
+    setData({ requests: rq.data || [], expenses: ex.data || [], payments: pp.data || [], cats: cats.data || [], refs, tx });
   }
   useEffect(() => { setData(null); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -151,7 +151,8 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
   const editable = isNew || request.status === 'draft';
   const prevLive = data.requests.filter(r => !['cancelled', 'rejected'].includes(r.status) && r.id !== request?.id).sort((a, b) => (a.week_ending < b.week_ending ? 1 : -1))[0];
   const [week, setWeek] = useState(request?.week_ending ?? saturdayOf(today));
-  const [accountId, setAccountId] = useState(request?.account_id ?? data.accounts.find(a => a.receives_weekly_cash)?.id ?? '');
+  // where the money is sent: written on the request, carried from the previous week's
+  const [payTo, setPayTo] = useState({ bank: request?.pay_bank ?? prevLive?.pay_bank ?? '', no: request?.pay_account_no ?? prevLive?.pay_account_no ?? '', name: request?.pay_account_name ?? prevLive?.pay_account_name ?? '' });
   const [opening, setOpening] = useState(request?.opening_balance != null ? String(Number(request.opening_balance)) : '');
   const [notes, setNotes] = useState(request?.notes ?? '');
   const [source, setSource] = useState(request?.source ?? 'app');
@@ -168,7 +169,6 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
   const total = lines.reduce((t, l) => t + (num(l.amount) ?? 0), 0);
   const approvedTotal = lines.reduce((t, l) => t + (num(l.approved) ?? num(l.amount) ?? 0), 0);
   const lastWeek = ledger[addDays(week, -7)];
-  const acc = data.accounts.find(a => a.id === accountId);
   const step = async (name, p = {}) => {
     setError(''); setBusy(true);
     const { error: err } = await supabase.rpc('cash_request_step', { p_id: request.id, p_step: name, p });
@@ -182,7 +182,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
     if (!ls.length) { setError('Add what is needed.'); return; }
     if (ls.some(l => !l.description.trim() || num(l.amount) == null)) { setError('Each line needs what it is for and an amount.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? null, branch_id: branchId, week_ending: week, account_id: accountId || null,
+    const { error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
       opening_balance: firstEver ? num(opening) : null, notes, source,
       lines: ls.map(l => ({ description: l.description, quantity: num(l.quantity), unit: l.unit, amount: num(l.amount), category_id: l.categoryId || null })) } });
     setBusy(false);
@@ -207,7 +207,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
       lines: (() => { let b = lastWeek.opening + lastWeek.sent; return lastWeek.lines.map(l => { b = r2(b - l.amount); return { ...l, balance: b }; }); })() } : null,
     needsTitle: `MAHITAJI YA WIKI HII (${longDate(week)})`,
     needs: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(request && ['approved', 'paid'].includes(request.status) ? (l.approved || l.amount) : l.amount) ?? 0 })),
-    account: acc ? { bank: acc.name, number: acc.account_no ?? '', holder: acc.account_name ?? '' } : null,
+    account: payTo.bank || payTo.no || payTo.name ? { bank: payTo.bank, number: payTo.no, holder: payTo.name } : null,
   });
 
   const st = request?.status ?? 'draft';
@@ -248,10 +248,6 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
         <h3 className="modal-section-title">This week's needs</h3>
         <div className="form-row">
           <label className="pe-field"><span>Week ending (Saturday)</span><input type="date" className="form-input" disabled={!editable} value={week} onChange={e => setWeek(saturdayOf(e.target.value))} /></label>
-          <label className="pe-field"><span>Paid into</span>
-            <select className="form-input" disabled={!editable} value={accountId} onChange={e => setAccountId(e.target.value)}>
-              <option value="">Choose…</option>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.account_no ? ` · ${a.account_no}` : ''}</option>)}
-            </select></label>
           {firstEver && <label className="pe-field"><span>Balance brought forward (first week)</span><NumberInput step="any" className="form-input" disabled={!editable} value={opening} onChange={e => setOpening(e.target.value)} /></label>}
         </div>
         {editable && (
@@ -285,8 +281,13 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
             <td /><td /><td className="num"><strong>{money(total)}</strong></td>{!isNew && st !== 'draft' && <td className="num"><strong>{money(approvedTotal)}</strong></td>}<td colSpan={2} />
           </tr></tfoot>
         </table>
-        {acc && <p className="text-sm">Paid into <strong>{acc.name}</strong>{acc.account_no ? ` · ${acc.account_no}` : ''}{acc.account_name ? ` · ${acc.account_name}` : ''}</p>}
         <label className="pe-field"><span>Notes (optional)</span><input className="form-input" disabled={!editable} value={notes} onChange={e => setNotes(e.target.value)} /></label>
+        {/* the end of the request: where the money is sent (as on the sheet) */}
+        <div className="form-row">
+          <label className="pe-field"><span>Bank</span><input className="form-input" disabled={!editable} placeholder="e.g. the bank's name" value={payTo.bank} onChange={e => setPayTo({ ...payTo, bank: e.target.value })} /></label>
+          <label className="pe-field"><span>Account number</span><input className="form-input" disabled={!editable} value={payTo.no} onChange={e => setPayTo({ ...payTo, no: e.target.value })} /></label>
+          <label className="pe-field"><span>Account name (jina)</span><input className="form-input" disabled={!editable} value={payTo.name} onChange={e => setPayTo({ ...payTo, name: e.target.value })} /></label>
+        </div>
         {!isNew && st === 'with_directors' && canAt('cash.approve', branchId) && (
           <label className="pe-field"><span>Directors' note (needed to turn down)</span><input className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
         )}
