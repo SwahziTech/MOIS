@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
+import { parseLukuReceipt } from '../../lib/lukuReceipt';
 import { PageTabs } from '../ListControls';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
@@ -345,6 +346,16 @@ export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
     onSaved();
   }
   const field = (k, label, extra = {}) => <label className="pe-field"><span>{label}</span><NumberInput step="any" min="0" className="form-input" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} {...extra} /></label>;
+  // the LUKU message pasted in fills the fields; all stay editable
+  const [pasted, setPasted] = useState('');
+  const fromMessage = text => {
+    setPasted(text);
+    const r = parseLukuReceipt(text);
+    if (!r) return;
+    const v = x => (x == null ? undefined : String(x));
+    setF(old => ({ ...old, ...Object.fromEntries(Object.entries({ units: v(r.units), amount: v(r.total), token_no: r.token ?? undefined, vat: v(r.vat), ewura: v(r.ewura),
+      rea: v(r.rea), debt: v(r.debt), ref: r.ref ?? undefined, date: r.date && r.date <= today ? r.date : undefined, time: r.time ?? undefined }).filter(([, x]) => x !== undefined)) }));
+  };
   return (
     <Modal title={`LUKU bought — ${meterName}`} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
@@ -352,7 +363,9 @@ export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record and top up</button></>}>
       <div className="modal-form">
         <p className="pl-help">Asked {q.requested_on}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units, an Electricity expense is made and the order closes.</p>
-        <div className="form-row">{field('units', 'Units bought', { autoFocus: true })}{field('amount', 'Paid (TZS)')}
+        <label className="pe-field"><span>Paste the LUKU message (optional — fills the form)</span>
+          <textarea className="form-input" rows={3} placeholder="Malipo yamekamilika… TOKEN … KWH Cost … VAT … TOTAL TZS …" value={pasted} onChange={e => fromMessage(e.target.value)} /></label>
+        <div className="form-row">{field('units', 'Units bought (kWh)', { autoFocus: true })}{field('amount', 'Paid (TZS)')}
           <label className="pe-field"><span>Token number</span><input className="form-input" value={f.token_no} onChange={e => setF({ ...f, token_no: e.target.value })} /></label></div>
         <div className="form-row">{field('vat', 'VAT')}{field('ewura', 'EWURA levy')}{field('rea', 'REA levy')}{field('debt', 'Old debt taken off')}</div>
         <div className="form-row">

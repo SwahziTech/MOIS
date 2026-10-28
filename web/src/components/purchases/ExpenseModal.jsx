@@ -4,6 +4,7 @@ import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
 import { formatMoney } from '../../lib/format';
 import { orgToday } from '../../lib/inventory';
+import { parseLukuReceipt } from '../../lib/lukuReceipt';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
 
@@ -56,6 +57,21 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
     supabase.from('machines').select('id, name, status').eq('branch_id', branch).order('name').then(({ data }) => setMachines((data || []).filter(m => m.status === 'active' || m.id === expense?.machine_id)));
   }, [branch]); // eslint-disable-line react-hooks/exhaustive-deps
   const [receipt, setReceipt] = useState({ vat: '', ewura: '', rea: '', debt: '', ref: '' });   // from the token's receipt (074)
+  const [pasted, setPasted] = useState('');
+  // the LUKU message pasted in fills the token's fields (editable)
+  const fromMessage = text => {
+    setPasted(text);
+    const r = parseLukuReceipt(text);
+    if (!r) return;
+    if (r.units != null) setQty(String(r.units));
+    if (r.total != null) { setAmount(String(r.total)); setPrice(''); }
+    if (r.token) setNotes(r.token);
+    if (r.date && r.date <= today) setDate(r.date);
+    if (r.time) setLoadedTime(r.time);
+    setReceipt(x => ({ vat: r.vat != null ? String(r.vat) : x.vat, ewura: r.ewura != null ? String(r.ewura) : x.ewura, rea: r.rea != null ? String(r.rea) : x.rea,
+      debt: r.debt != null ? String(r.debt) : x.debt, ref: r.ref ?? x.ref }));
+    if (r.total != null) { setPaid(String(r.total)); }
+  };
   useEffect(() => {
     if (!branch) return;
     supabase.from('power_meters').select('id, name, status').eq('branch_id', branch).eq('status', 'active').order('name')
@@ -174,6 +190,12 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
             </select>
           </div>
         </div>
+        {isElectricity && (
+          <div className="form-group">
+            <label className="form-label" htmlFor="ex-luku-msg">Paste the LUKU message (optional — fills the form)</label>
+            <textarea id="ex-luku-msg" className="form-input" rows={3} placeholder="Malipo yamekamilika… TOKEN … KWH Cost … VAT … TOTAL TZS …" value={pasted} onChange={e => fromMessage(e.target.value)} />
+          </div>
+        )}
         {isElectricity && (
           <div className="form-row">
             <div className="form-group">
