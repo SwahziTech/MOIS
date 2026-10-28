@@ -167,13 +167,20 @@ function DecideModal({ r, decision, onClose, onDone }) {
 }
 
 /* ---------- Orders ---------- */
-export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedRequest, money }) {
+export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedRequest, money, canReceive = () => false, onReceive }) {
   const { canAt } = useAuth();
   const [rows, setRows] = useState(null);
   const [got, setGot] = useState({});           // order line id → received (stock unit)
   const [error, setError] = useState('');
   const [making, setMaking] = useState(null);   // {} or { request }
   const [closing, setClosing] = useState(null); // { po, cancel }
+  const [viewing, setViewing] = useState(null); // an order opened for review
+  // what is still to come on an order, in its own units, ready for the purchase form
+  const remainingOf = po => [...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
+    const f = Number(l.stock_quantity) / Number(l.quantity);
+    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
+  }).filter(l => Number(l.quantity) > 0);
+  const receive = po => { setViewing(null); onReceive?.({ orderId: po.id, supplierId: po.supplier_id, lines: remainingOf(po) }); };
   async function load() {
     const [o, rc] = await Promise.all([
       supabase.from('purchase_orders').select('*, lines:purchase_order_lines(*)').order('order_date', { ascending: false }).order('po_no', { ascending: false }),
@@ -213,7 +220,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
             : here.map(po => {
               const st = stateOf(po);
               return (
-                <tr key={po.id}>
+                <tr key={po.id} className="clickable-row" onClick={() => setViewing(po)} title="Open the order">
                   <td>#{po.po_no}{po.sent_to_supplier && <div className="pl-help">sent</div>}</td>
                   <td>{po.order_date}{po.expected_on && <div className="pl-help">expected {po.expected_on}</div>}</td>
                   <td>{supplierName(po.supplier_id)}</td>
@@ -224,7 +231,8 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
                   <td className="num">{valueOf(po) ? formatAmount(valueOf(po)) : ''}</td>
                   <td><span className={`badge ${st === 'received' ? 'badge-success' : st === 'part' ? 'badge-warning' : PO[po.status]?.[1] ?? 'badge-info'}`}>{st === 'received' ? 'Received' : st === 'part' ? 'Part received' : PO[po.status][0]}</span>
                     {po.close_reason && <div className="pl-help">{po.close_reason}</div>}</td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                    {po.status === 'open' && st !== 'received' && canReceive(po.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => receive(po)}>Receive goods</button>}
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => window.open(`/print/po/${po.id}`, '_blank', 'noopener')}><Printer size={13} /> Print</button>
                     {po.status === 'open' && canAt('procurement.order', po.branch_id) && <>
                       {!po.sent_to_supplier && <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { const { error: err } = await supabase.rpc('mark_purchase_order_sent', { p_id: po.id }); if (err) setError(dbErrorMessage(err)); else load(); }}>Mark sent</button>}
@@ -239,7 +247,55 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
       </div></div>
       {making && <OrderModal refs={refs} branchId={making.request?.branch_id ?? branchId} request={making.request} onClose={() => setMaking(null)} onSaved={async () => { setMaking(null); await load(); }} />}
       {closing && <CloseModal {...closing} onClose={() => setClosing(null)} onDone={async () => { setClosing(null); await load(); }} />}
+      {viewing && <OrderView po={viewing} refs={refs} got={got} money={money} supplierName={supplierName(viewing.supplier_id)} state={stateOf(viewing)}
+        canReceive={viewing.status === 'open' && stateOf(viewing) !== 'received' && canReceive(viewing.branch_id)} onReceive={() => receive(viewing)} onClose={() => setViewing(null)} />}
     </>
+  );
+}
+
+/* An order opened for review: what was ordered and what has come, the purchases received against it */
+function OrderView({ po, refs, got, money, supplierName, state, canReceive, onReceive, onClose }) {
+  const [purchases, setPurchases] = useState([]);
+  useEffect(() => {
+    supabase.from('purchases').select('id, purchase_date, invoice_reference, amount_paid, status').eq('purchase_order_id', po.id).eq('status', 'recorded').order('purchase_date')
+      .then(({ data }) => setPurchases(data || []));
+  }, [po.id]);
+  const lines = [...(po.lines || [])].sort((a, b) => a.line_no - b.line_no);
+  const total = lines.reduce((t, l) => t + (l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
+  return (
+    <Modal title={`Purchase order #${po.po_no} — ${supplierName}`} onClose={onClose} size="lg"
+      footer={<>
+        <button type="button" className="btn btn-ghost" onClick={() => window.open(`/print/po/${po.id}`, '_blank', 'noopener')}><Printer size={14} /> Print</button>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
+        {canReceive && <button type="button" className="btn btn-primary" onClick={onReceive}>Receive goods</button>}
+      </>}>
+      <div className="modal-form">
+        <p className="text-sm">Ordered {po.order_date}{po.expected_on ? ` · expected ${po.expected_on}` : ''} · {po.sent_to_supplier ? 'sent to the supplier' : 'kept in MOIS'} · <strong>{state === 'received' ? 'received in full' : state === 'part' ? 'part received' : po.status === 'open' ? 'nothing received yet' : po.status}</strong></p>
+        <table className="rd-table">
+          <thead><tr><th>Material</th><th className="num">Ordered</th><th className="num">Received</th><th className="num">To come</th><th className="num">Price (TZS)</th></tr></thead>
+          <tbody>
+            {lines.map(l => {
+              const f = Number(l.stock_quantity) / Number(l.quantity); const u = refs?.unitById[l.unit_id]?.symbol ?? '';
+              const rec = (got[l.id] ?? 0) / f;
+              return (
+                <tr key={l.id}>
+                  <td><span className="pl-help">{refs?.items[`m:${l.material_id}`]?.materialCategory ?? ''}</span><div><strong>{refs?.items[`m:${l.material_id}`]?.name ?? '—'}</strong></div></td>
+                  <td className="num">{qtyText(Number(l.quantity))} {u}</td>
+                  <td className="num">{qtyText(r2(rec))} {u}</td>
+                  <td className="num"><strong>{qtyText(r2(Math.max(Number(l.quantity) - rec, 0)))}</strong> {u}</td>
+                  <td className="num">{l.unit_price != null ? formatAmount(Number(l.unit_price)) : ''}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {total > 0 && <tfoot><tr><td colSpan={4}><strong>Order value</strong></td><td className="num"><strong>{money(total)}</strong></td></tr></tfoot>}
+        </table>
+        {po.notes && <p className="pl-help">{po.notes}</p>}
+        <h3 className="modal-section-title">Received against it</h3>
+        {purchases.length === 0 ? <p className="pl-help">Nothing yet — use Receive goods when they arrive.</p>
+          : <p className="text-sm">{purchases.map(p => `${p.purchase_date}${p.invoice_reference ? ` (${p.invoice_reference})` : ''}`).join(' · ')}</p>}
+      </div>
+    </Modal>
   );
 }
 

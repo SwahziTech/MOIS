@@ -223,7 +223,8 @@ export default function Purchases() {
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
       {tab === 'requests' ? <RequestsPanel refs={refs} branchId={branchId} inBranch={inBranch} people={people} onOrder={r => { setOrderFrom(r); setTab('orders'); }} />
-      : tab === 'orders' ? <OrdersPanel refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money} />
+      : tab === 'orders' ? <OrdersPanel refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money}
+          canReceive={b => canRecordAt(b)} onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })} />
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
@@ -430,7 +431,7 @@ export default function Purchases() {
   );
 }
 
-function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, vatRateOf = () => DEFAULT_VAT, onClose, onSaved }) {
+function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, materials, txByMove, organization, branchId, canAt, canManage, goods, history = {}, vatRateOf = () => DEFAULT_VAT, onClose, onSaved }) {
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const isNew = mode === 'new';
@@ -442,7 +443,8 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
   const stores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId
     && canAt('inventory.receive', w.branch_id, w.id) && canAt('procurement.receive', w.branch_id, w.id));
   const [warehouseId, setWarehouseId] = useState(stores.find(w => w.type === 'raw_materials')?.id ?? stores[0]?.id ?? '');
-  const [newLines, setNewLines] = useState([{ materialId: '', quantity: '', unitId: '', price: '' }]);
+  // goods arriving against a purchase order (077): its lines still to come, at the agreed prices
+  const [newLines, setNewLines] = useState(fromOrder?.lines?.length ? fromOrder.lines : [{ materialId: '', quantity: '', unitId: '', price: '' }]);
   const recBranch = receipt?.branch_id ?? branchId;
   const pastOf = (b, materialId) => history[`${b}|${materialId}`] || [];
   // the latest purchase's price, when it was bought in the same unit
@@ -451,9 +453,9 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
   const [prices, setPrices] = useState(Object.fromEntries(receiptLines.map(t => [t.id, priceOf[t.id] ?? (mode === 'complete' ? filledPrice(t) : '')])));
 
   const activeSuppliers = refs.suppliers.filter(s => s.status === 'active' || s.id === purchase?.supplier_id);
-  const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? firstPast?.[0].supplierId ?? '');
+  const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? fromOrder?.supplierId ?? firstPast?.[0].supplierId ?? '');
   // received against a purchase order (077): the supplier's open orders at this branch
-  const [orderId, setOrderId] = useState(purchase?.purchase_order_id ?? '');
+  const [orderId, setOrderId] = useState(purchase?.purchase_order_id ?? fromOrder?.orderId ?? '');
   const [openOrders, setOpenOrders] = useState([]);
   useEffect(() => {
     if (!supplierId) { setOpenOrders([]); return; }
