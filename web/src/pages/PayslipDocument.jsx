@@ -93,6 +93,7 @@ export default function PayslipDocument() {
                 {row('NSSF (employee)', l.nssf_employee, true)}
                 {row('PAYE', l.paye, true)}
                 {row(`Other deductions${l.note ? ` (${l.note})` : ''}`, l.deductions, true)}
+                {row('Advance / loan taken back', l.advance_deductions, true)}
                 <tr className="doc-grand"><td>Net pay</td><td className="num">{money(Number(l.amount))}</td></tr>
               </tbody></table>
               {Number(l.nssf_employer) > 0 && <p className="pl-help" style={{ marginTop: 10 }}>The employer also pays NSSF {formatAmount(Number(l.nssf_employer))} for you.</p>}

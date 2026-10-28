@@ -13,6 +13,8 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import NumberInput from '../components/NumberInput';
 import StatutoryRatesCard, { RATE_NAME } from '../components/staff/StatutoryRatesCard';
+import AdvancesPanel from '../components/staff/AdvancesPanel';
+import StatutoryReturns from '../components/staff/StatutoryReturns';
 
 const LOAD_ERROR = "We couldn't load staff. Please try again.";
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
@@ -43,6 +45,8 @@ const WORK_DAYS_DEFAULT = 26;
  * staff member — teams change day to day, so who worked is ticked on each batch.
  * Part 2 (088): pay sheets with NSSF, PAYE, WCF and SDL from the statutory
  * rates (⚙, confirmed by the Technical admin or a director), and payslips.
+ * 090: Advances (taken back on the sheets) and Returns (PAYE, NSSF, SDL, WCF
+ * of the month's paid sheets).
  * 089: pay sheets make themselves from attendance — everyone paid by the days
  * attended (a salary ÷ working days a month); they are approved and paid.
  */
@@ -116,9 +120,13 @@ export default function Staff() {
     <PageShell title="Staff" subtitle="HR" onSettings={() => setSettings(true)}
       description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
       primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
-      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance'], ['pay', 'Pay sheets']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
+      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance'], ['pay', 'Pay sheets'], ['advances', 'Advances'], ['returns', 'Returns']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
-      : tab === 'pay' ? (
+      : tab === 'advances' ? (
+        <AdvancesPanel staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
+      ) : tab === 'returns' ? (
+        <StatutoryReturns staff={staff || []} today={today} currency={organization?.currency_code} inBranch={inBranch} />
+      ) : tab === 'pay' ? (
         <PaySheets staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
       ) : tab !== 'attendance' ? (
         <>
@@ -486,7 +494,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   const setVal = (l, k, v) => setEdits(m => ({ ...m, [l.id]: { ...(m[l.id] || {}), [k]: v } }));
   // net as typed: NSSF and PAYE as last worked out (they follow the additions once saved)
   const grossOf = l => Number(l.base) + (num(val(l, 'additions')) || 0);
-  const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0), 0);
+  const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0) - Number(l.advance_deductions || 0), 0);
   const total = lines.reduce((t, l) => t + amountOf(l), 0);
   const sorted = [...lines].sort((a, b) => (a.pay_basis === b.pay_basis ? nameOf(a.staff_id).localeCompare(nameOf(b.staff_id)) : a.pay_basis === 'daily' ? -1 : 1));
   const missing = lines.filter(l => l.rate == null);
@@ -510,9 +518,9 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={11} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={12} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
                   <td><strong>{nameOf(l.staff_id)}</strong></td>
@@ -528,12 +536,13 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
                   <td className="num">{draft && canRecord
                     ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'deductions')} onChange={e => setVal(l, 'deductions', e.target.value)} />
                     : Number(l.deductions) ? formatAmount(Number(l.deductions)) : ''}</td>
+                  <td className="num" title="Advances and loans taken back (Advances tab)">{Number(l.advance_deductions) ? formatAmount(Number(l.advance_deductions)) : ''}</td>
                   <td className="num"><strong>{formatAmount(amountOf(l))}</strong></td>
                   <td>{draft && canRecord ? <input className="form-input" style={{ width: 140 }} placeholder="e.g. advance" value={val(l, 'note')} onChange={e => setVal(l, 'note', e.target.value)} /> : l.note || ''}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
+            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
           </table>
         </div>
         {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (

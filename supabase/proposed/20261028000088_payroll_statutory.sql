@@ -249,7 +249,7 @@ BEGIN
   SELECT * INTO r_wcf FROM public.statutory_rates WHERE organization_id = s.organization_id AND code = 'wcf' AND status = 'active' AND effective_from <= s.period_end ORDER BY effective_from DESC LIMIT 1;
   SELECT * INTO r_sdl FROM public.statutory_rates WHERE organization_id = s.organization_id AND code = 'sdl' AND status = 'active' AND effective_from <= s.period_end ORDER BY effective_from DESC LIMIT 1;
 
-  UPDATE public.pay_sheet_lines l SET statutory = coalesce(st.statutory, st.kind = 'employed'), gross = l.base + l.additions
+  UPDATE public.pay_sheet_lines l SET statutory = coalesce(st.statutory, st.kind = 'employed', false), gross = l.base + l.additions
   FROM public.staff st WHERE st.id = l.staff_id AND l.sheet_id = s.id;
 
   -- SDL: the employer's staff over the period (all branches), casuals only when they count
@@ -257,7 +257,7 @@ BEGIN
   WHERE st.organization_id = s.organization_id
     AND (st.started_on IS NULL OR st.started_on <= s.period_end)
     AND (st.status = 'active' OR st.left_on >= s.period_start)
-    AND (coalesce(st.statutory, st.kind = 'employed') OR coalesce(r_sdl.count_casuals, false));
+    AND (coalesce(st.statutory, st.kind = 'employed', false) OR coalesce(r_sdl.count_casuals, false));
   sdl_on := r_sdl.id IS NOT NULL AND heads >= coalesce(r_sdl.min_employees, 0);
 
   UPDATE public.pay_sheet_lines l SET
