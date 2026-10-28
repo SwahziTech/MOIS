@@ -133,7 +133,8 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
               {data.days.length === 0 ? <tr><td colSpan={9} className="text-muted">Days show once a meter has two readings.</td></tr>
               : data.days.map(d => (
                 <tr key={`${d.meter_id}|${d.day}`}>
-                  <td>{d.day}{d.gap_units != null && <div className="pl-help text-warning">a reading missing: {units(Number(d.gap_units))} units not split</div>}</td>
+                  <td>{d.day}{d.gap_units != null && <div className="pl-help text-warning">a reading missing: {units(Number(d.gap_units))} units not split</div>}
+                    {d.token_missing && <div className="pl-help text-warning">the meter went up — a token not recorded yet</div>}</td>
                   <td>{d.meter_name}</td>
                   <td className="num"><strong>{d.day_units != null ? units(Number(d.day_units)) : ''}</strong></td>
                   <td className="num">{d.day_cost != null ? formatAmount(Number(d.day_cost)) : ''}</td>
