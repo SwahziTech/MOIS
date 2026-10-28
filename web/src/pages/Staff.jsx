@@ -55,6 +55,11 @@ export default function Staff() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [settings, setSettings] = useState(false);   // ⚙: statutory rates (088)
+  const [att, setAtt] = useState({});   // `${staff_id}|${date}` → day fraction, this week and month (the cards)
+  const [attBusy, setAttBusy] = useState('');
+  const monday = mondayOf(today);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const attFrom = [monday, `${today.slice(0, 7)}-01`].sort()[0];
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
   const canApprove = !!branchId && canAt('payroll.approve', branchId);
@@ -66,6 +71,22 @@ export default function Staff() {
     setStaff(s.data || []);
   }
   useEffect(() => { load(); }, []);
+  async function loadAtt() {
+    const { data } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction').gte('work_date', attFrom).lte('work_date', addDays(monday, 6));
+    setAtt(Object.fromEntries((data || []).map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
+  }
+  useEffect(() => { if (tab === 'employed' || tab === 'casual') loadAtt(); }, [tab, attFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a day on the card: ✓ full → ½ half → empty (as on Attendance)
+  async function markDay(e, sid, d) {
+    e.stopPropagation();
+    const k = `${sid}|${d}`; const v = att[k]; const fr = v === 1 ? 0.5 : v === 0.5 ? 0 : 1;
+    setAttBusy(k); setError('');
+    const { error: err } = await supabase.rpc('set_attendance', { p: { staff_id: sid, work_date: d, day_fraction: fr } });
+    setAttBusy('');
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setAtt(m => { const n = { ...m }; if (fr) n[k] = fr; else delete n[k]; return n; });
+  }
+  const daysIn = (sid, from, to) => Object.entries(att).reduce((t, [k, v]) => { const [id, d] = k.split('|'); return id === sid && d >= from && d <= to ? t + v : t; }, 0);
 
   const here = useMemo(() => (staff || []).filter(s => inBranch(s.branch_id)), [staff, inBranch]);
   // Employees: employed; Casuals: casual, and anyone whose kind isn't set yet (they're paid by the day until it is)
@@ -110,7 +131,7 @@ export default function Staff() {
             : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title={tab === 'employed' ? 'No employees yet' : 'No casual labourers yet'}
                 description={tab === 'employed' ? 'Add employed staff — monthly salary, paid every 2 weeks.' : 'Add casual labourers — a day rate, paid weekly. People added on a production batch appear here.'} /></div>
             : shown.map(s => (
-              <div key={s.id} className={`sk-card lk-card${s.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(s)}
+              <div key={s.id} className={`sk-card lk-card st-card${s.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(s)}
                 onDoubleClick={() => { if (canManage) { setViewing(null); setEditing(s); } }} title="Click for details · double-click to edit">
                 <div className="sk-name">
                   <strong>{s.full_name}</strong>
@@ -124,6 +145,21 @@ export default function Staff() {
                   <span>{s.kind ? KIND[s.kind] : <span className="text-warning">Employed or casual?</span>}</span>
                   <span className="pl-help">paid {CYCLE[cycleOf(s)].toLowerCase()}</span>
                   {s.status !== 'active' && <span className="pl-help">left{s.left_on ? ` ${s.left_on}` : ''}</span>}
+                </div>
+                <div className="st-att" onDoubleClick={e => e.stopPropagation()}>
+                  <div className="st-week">
+                    {week.map(d => {
+                      const k = `${s.id}|${d}`; const v = att[k];
+                      return (
+                        <button key={d} type="button" className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}`}
+                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dayName(d)}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
+                          onClick={e => markDay(e, s.id, d)}>
+                          <span className="st-dname">{dayName(d)}</span>{v === 1 ? '✓' : v === 0.5 ? '½' : d > today ? '' : '·'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week · {daysIn(s.id, `${today.slice(0, 7)}-01`, today)} this month</span>
                 </div>
               </div>
             ))}
