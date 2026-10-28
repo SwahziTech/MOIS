@@ -196,7 +196,7 @@ export default function ElectricityPanel({ branchId, tabs }) {
 }
 
 /* A day's readings: morning and evening for each meter (either can wait until later) */
-function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
+export function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
   const [day, setDay] = useState(today);
   const [vals, setVals] = useState({});       // `${meter}|${slot}` → text
   const [busy, setBusy] = useState(false);

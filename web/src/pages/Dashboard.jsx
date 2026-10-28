@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useBranch } from '../hooks/useBranch';
 import { loadFlagBranches } from '../lib/flagBranch';
 import PageShell from '../components/PageShell';
+import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
 
 /*
  * One card per master-data table, counted for the branch picked in the
@@ -92,6 +93,9 @@ export default function Dashboard() {
       {error && (
         <div className="alert alert-error mb-16" role="alert">{error}</div>
       )}
+
+      {/* today's jobs first: the meters read morning and evening (secretary, branch manager) */}
+      <MeterReadingsTask branchId={branchId} />
 
       <section className="stat-grid mb-24" aria-label="Master data summary">
         {cards.map(s => (
