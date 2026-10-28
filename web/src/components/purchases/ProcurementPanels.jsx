@@ -100,13 +100,14 @@ const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '',
  * ordered → open it again to edit the order or confirm what was bought
  * (goods received, expenses or LUKU tokens recorded) → done.
  */
-export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v, onReceive, onRecordExpense, onRecordToken }) {
+export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v, onReceive, onRecordExpense, onRecordToken, openFirst, onOpened }) {
   const { canAt } = useAuth();
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [asking, setAsking] = useState(false);
   const [cats, setCats] = useState([]);
-  const [openId, setOpenId] = useState(null);
+  const [openId, setOpenId] = useState(openFirst ?? null);   // a request opened from elsewhere (Electricity › Top-ups)
+  useEffect(() => { if (openFirst) onOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function load() {
     const [q, c] = await Promise.all([
       supabase.from('purchase_requests').select('*, lines:purchase_request_lines(*)').order('requested_on', { ascending: false }).order('request_no', { ascending: false }),

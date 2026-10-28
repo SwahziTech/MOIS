@@ -69,6 +69,8 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
         night: avg(ds.filter(d => d.night_units != null).map(d => Number(d.night_units))),
         perBag: working.length ? working.reduce((t, d) => t + Number(d.day_units), 0) / working.reduce((t, d) => t + Number(d.cement_bags), 0) : null,
         workN: working.length, idleN: idle.length,
+        last: data.readings.find(r => r.meter_id === m.id && r.status === 'recorded'),
+        loadedSince: (() => { const l = data.readings.find(r => r.meter_id === m.id && r.status === 'recorded'); return data.tokens.filter(t => t.meter_id === m.id && t.status === 'recorded' && (!l || t.loaded_at > l.read_at)).reduce((t, k) => t + Number(k.units), 0); })(),
       };
     });
   }, [data]);
@@ -86,8 +88,9 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
         {learnt.map(x => (
           <div key={x.m.id} className="mm-stat">
             <span className="pl-label">{x.m.name}</span>
-            <strong>{x.perBag != null ? `${units(x.perBag)} units/bag` : '—'}</strong>
-            <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.idleDay != null ? ` · ${units(x.idleDay)} units an idle day` : ''}`}>{x.workDay != null ? `${units(x.workDay)} a working day` : 'no working day yet'}{x.night != null ? ` · ${units(x.night)} a night` : ''}</span>
+            <strong>{x.last ? `${units(Number(x.last.reading))} units left` : 'no reading yet'}</strong>
+            <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.workDay != null ? ` · ${units(x.workDay)} a working day` : ''}${x.idleDay != null ? ` · ${units(x.idleDay)} an idle day` : ''}${x.night != null ? ` · ${units(x.night)} a night` : ''}`}>
+              {x.last ? `${x.last.read_on} ${x.last.slot === 'morning' ? 'morning' : 'evening'}` : ''}{x.loadedSince > 0 ? ` · +${units(x.loadedSince)} token since` : ''}{x.perBag != null ? ` · ${units(x.perBag)} units/bag` : ''}</span>
           </div>
         ))}
       </div>
