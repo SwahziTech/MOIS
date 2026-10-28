@@ -32,9 +32,6 @@ const basisOf = s => s.pay_basis || (s.kind === 'employed' ? 'monthly' : 'daily'
 const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'weekly');
 // a monthly salary counted by the day: 26 working days a month
 const WORK_DAYS_A_MONTH = 26;
-// the start of the pay period that holds a day, as pay sheets are prepared (weekly Mon–Sun, 1–15 / 16–end, the month)
-const periodStartOf = (cycle, d) => (cycle === 'weekly' ? mondayOf(d) : cycle === 'monthly' ? `${d.slice(0, 7)}-01`
-  : `${d.slice(0, 7)}-${Number(d.slice(8)) <= 15 ? '01' : '16'}`);
 
 /*
  * Staff & pay (1e, migration 071): the branch's staff — employed and casual —
@@ -144,14 +141,13 @@ export default function Staff() {
                 </div>
                 <div className="sk-total">
                   {s.pay_rate == null ? <span className="text-warning">Pay not set</span> : (() => {
-                    // earned so far this pay period: days attended × the day rate (a salary ÷ 26 working days a day)
-                    const from = periodStartOf(cycleOf(s), today);
-                    const days = daysIn(s.id, from, today);
+                    // earned so far: casuals this week (days × day rate); employed this month (days × salary ÷ 26 working days)
                     const daily = basisOf(s) === 'daily';
+                    const days = daysIn(s.id, daily ? monday : `${today.slice(0, 7)}-01`, today);
                     const due = days * Number(s.pay_rate) / (daily ? 1 : WORK_DAYS_A_MONTH);
                     return <>
-                      <strong title={`${days} day${days === 1 ? '' : 's'} attended since ${from}${daily ? '' : ` × salary ÷ ${WORK_DAYS_A_MONTH} working days`}`}>{money(Math.round(due))}</strong>
-                      <span className="sk-sub">due · {days} day{days === 1 ? '' : 's'} since {dayName(from)}</span>
+                      <strong title={daily ? 'Days this week × day rate' : `Days this month × salary ÷ ${WORK_DAYS_A_MONTH} working days`}>{money(Math.round(due))}</strong>
+                      <span className="sk-sub">{days} day{days === 1 ? '' : 's'} this {daily ? 'week' : 'month'}</span>
                       <span className="sk-sub">{money(s.pay_rate)} {daily ? 'a day' : 'a month'}</span>
                     </>;
                   })()}
