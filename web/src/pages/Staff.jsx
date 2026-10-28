@@ -75,10 +75,10 @@ export default function Staff() {
   const payText = s => (s.pay_rate == null ? null : `${money(s.pay_rate)} ${basisOf(s) === 'daily' ? 'a day' : 'a month'}`);
 
   return (
-    <PageShell title="Staff & pay" subtitle="Sales & Costing"
-      description={branchId ? `Staff at ${branchName}, their attendance and pay sheets.` : 'Staff at every branch — choose a branch to add staff, mark attendance or prepare pay.'}
+    <PageShell title="Staff" subtitle="HR"
+      description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
       primaryAction={tab === 'staff' && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New staff member</button>}>
-      <PageTabs tabs={[['staff', 'Staff'], ['attendance', 'Attendance'], ['pay', 'Pay sheets']]} value={tab} onChange={setTab} />
+      <PageTabs tabs={[['staff', 'Employees'], ['attendance', 'Attendance']]} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : tab === 'staff' ? (
         <>
@@ -107,10 +107,8 @@ export default function Staff() {
             ))}
           </section>
         </>
-      ) : tab === 'attendance' ? (
-        <AttendanceWeek staff={here.filter(s => s.status === 'active')} branchId={branchId} today={today} canRecord={canRecord} />
       ) : (
-        <PaySheets staff={staff || []} branchId={branchId} today={today} money={money} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
+        <AttendanceWeek staff={here.filter(s => s.status === 'active')} branchId={branchId} today={today} canRecord={canRecord} />
       )}
 
       {viewing && (
@@ -124,6 +122,7 @@ export default function Staff() {
             <dt>Pay</dt><dd>{payText(viewing) || 'Not set'}, paid {CYCLE[cycleOf(viewing)].toLowerCase()}</dd>
             <dt>In product cost</dt><dd>{viewing.in_production_cost ? 'Yes' : 'No — a running cost'}</dd>
             <dt>Phone</dt><dd>{viewing.phone || '—'}</dd>
+            <dt>NSSF no.</dt><dd>{viewing.nssf_no || '—'}</dd>
             <dt>Started</dt><dd>{viewing.started_on || '—'}</dd>
             {viewing.status !== 'active' && <><dt>Left</dt><dd>{viewing.left_on || 'yes'}</dd></>}
             {viewing.notes && <><dt>Notes</dt><dd>{viewing.notes}</dd></>}
@@ -142,7 +141,7 @@ function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved 
     full_name: person?.full_name ?? '', phone: person?.phone ?? '', kind: person?.kind ?? '', job_title: person?.job_title ?? '',
     team_id: person?.team_id ?? '', pay_basis: person?.pay_basis ?? '', pay_rate: person?.pay_rate ?? '', pay_cycle: person?.pay_cycle ?? '',
     in_production_cost: person?.in_production_cost ?? true, started_on: person?.started_on ?? '', left_on: person?.left_on ?? '',
-    notes: person?.notes ?? '', status: person?.status ?? 'active',
+    notes: person?.notes ?? '', status: person?.status ?? 'active', nssf_no: person?.nssf_no ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -158,7 +157,7 @@ function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved 
       full_name: f.full_name.trim(), phone: f.phone.trim() || null, kind: f.kind || null, job_title: f.job_title.trim() || null,
       team_id: f.team_id || null, pay_basis: f.pay_basis || null, pay_rate: num(f.pay_rate), pay_cycle: f.pay_cycle || null,
       in_production_cost: f.in_production_cost, started_on: f.started_on || null, left_on: f.status === 'left' ? f.left_on : null,
-      notes: f.notes.trim() || null, status: f.status,
+      notes: f.notes.trim() || null, status: f.status, nssf_no: f.nssf_no.trim() || null,
     };
     setBusy(true);
     const { error: err } = person
@@ -202,6 +201,7 @@ function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved 
               <option value="">No team</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select></label>
           <label className="pe-field"><span>Phone</span><input className="form-input" inputMode="tel" value={f.phone} onChange={e => set({ phone: e.target.value })} /></label>
+          <label className="pe-field"><span>NSSF no.</span><input className="form-input" value={f.nssf_no} onChange={e => set({ nssf_no: e.target.value })} /></label>
           <label className="pe-field"><span>Started</span><input type="date" className="form-input" value={f.started_on} onChange={e => set({ started_on: e.target.value })} /></label>
         </div>
         <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={f.in_production_cost} onChange={e => set({ in_production_cost: e.target.checked })} /> Their pay is part of product cost (untick for office/running staff)</label>

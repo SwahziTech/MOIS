@@ -11,6 +11,7 @@ import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components
 import ElectricityCosting from '../components/costing/ElectricityCosting';
 import OverheadsCosting from '../components/costing/OverheadsCosting';
 import MaterialsCosting from '../components/costing/MaterialsCosting';
+import LabourCosting from '../components/costing/LabourCosting';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -108,7 +109,7 @@ export default function Costing() {
   }, [items]);
 
   // page order (locked, 2026-10-27): heading → tabs → the tab's summary → search → categories → list
-  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['materials', 'Materials'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
+  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['materials', 'Materials'], ['labour', 'Labour'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
@@ -119,7 +120,8 @@ export default function Costing() {
         <>
           {pageTabs}
           {/* overheads (2026-10-27): electricity — metered, by day and machine — then the other production overheads */}
-          {view === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+          {view === 'labour' ? <LabourCosting branchId={branchId} currency={organization?.currency_code} />
+          : view === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
           : view === 'overheads' ? <>
             <PageTabs nested tabs={[['electricity', 'Electricity'], ['other', 'Other overheads']]} value={ohView} onChange={setOhView} />
             {ohView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
@@ -144,7 +146,7 @@ export default function Costing() {
 
           {belowOnly && <div className="flex items-center gap-8" style={{ marginBottom: 8 }}><button type="button" className="filter-chip is-on" onClick={() => setBelowOnly(false)}>Below the bag target <X size={12} /></button></div>}
           <section className="sk">
-            <div className="sk-head"><span>Products ({shown.length})</span><span className="pl-help" title="Production cost = materials of the latest batch (VAT included) + its electricity + its share of the month's production overheads. Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Labour comes with HR.">per m² or piece, without VAT ⓘ</span></div>
+            <div className="sk-head"><span>Products ({shown.length})</span><span className="pl-help" title="Production cost = materials of the latest batch (VAT included) + its electricity + its share of the month's production overheads. Stock with no production cost is estimated at its price without VAT. Margin = price without VAT − production cost. Labour: casual days and production salaries from HR (Staff).">per m² or piece, without VAT ⓘ</span></div>
             {rows === null ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
             : shown.length === 0 ? <div className="card"><EmptyState icon={Calculator} title="Nothing to show" description="Products this branch has made or holds appear here." /></div>
             : shown.map(x => {

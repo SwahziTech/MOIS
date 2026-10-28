@@ -31,6 +31,7 @@ import SaleDocument from './pages/SaleDocument';
 import StatementDocument from './pages/StatementDocument';
 import PurchaseOrderDocument from './pages/PurchaseOrderDocument';
 import WeeklyCash from './pages/WeeklyCash';
+import Staff from './pages/Staff';
 
 export default function App() {
   return (
@@ -71,6 +72,7 @@ export default function App() {
             <Route path="/sales" element={<Sales />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/weekly-cash" element={<WeeklyCash />} />
+            <Route path="/staff" element={<Staff />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />
