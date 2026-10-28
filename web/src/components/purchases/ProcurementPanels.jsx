@@ -10,7 +10,7 @@ import NumberInput from '../NumberInput';
 
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const r2 = n => Math.round(n * 100) / 100;
-const REQ = { waiting: ['Waiting', 'badge-warning'], approved: ['Approved', 'badge-info'], rejected: ['Turned down', 'badge-error'], ordered: ['Ordered', 'badge-success'], cancelled: ['Cancelled', 'badge-neutral'] };
+const REQ = { waiting: ['Waiting', 'badge-warning'], approved: ['Approved', 'badge-info'], rejected: ['Turned down', 'badge-error'], ordered: ['Ordered', 'badge-success'], done: ['Bought', 'badge-success'], cancelled: ['Cancelled', 'badge-neutral'] };
 const PO = { open: ['Open', 'badge-info'], closed: ['Closed', 'badge-neutral'], cancelled: ['Cancelled', 'badge-neutral'] };
 
 /*
@@ -145,7 +145,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, onOrder, onRec
                   <td>{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => (
                     <div key={l.id}>{lineText(refs, l, cats, money)}
                       {l.kind === 'expense' && done[l.id] != null && <span className="pl-help"> · recorded {money(done[l.id])}</span>}
-                      {l.kind === 'expense' && done[l.id] == null && ['approved', 'ordered'].includes(r.status) && onRecordExpense && (
+                      {l.kind === 'expense' && !l.meter_id && done[l.id] == null && ['approved', 'ordered'].includes(r.status) && onRecordExpense && (
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRecordExpense(l)}>Record expense</button>)}
                     </div>))}{r.notes && <div className="pl-help">{r.notes}</div>}</td>
                   <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>

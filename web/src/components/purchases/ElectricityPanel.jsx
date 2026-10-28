@@ -15,6 +15,7 @@ const units = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const when = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const avg = xs => (xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : null);
+const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], approved: ['Approved — directors to buy', 'badge-info'], done: ['Bought', 'badge-success'], rejected: ['Turned down', 'badge-error'], cancelled: ['Cancelled', 'badge-neutral'] };
 
 /*
  * Electricity under Expenses (1e, migration 072): each LUKU meter read in
@@ -32,20 +33,24 @@ export default function ElectricityPanel({ branchId, tabs }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
+  const [asking, setAsking] = useState(false);     // a LUKU top-up for a meter (081)
+  const [buying, setBuying] = useState(null);      // a top-up the directors are recording
+  const [deciding, setDeciding] = useState(null);  // { q, decision }
   const [voiding, setVoiding] = useState(null);
   const canRecord = !!branchId && (canAt('procurement.receive', branchId) || canAt('production.create', branchId));
 
   async function load() {
     setError('');
     if (!branchId) { setData(null); return; }
-    const [m, d, r, t] = await Promise.all([
+    const [m, d, r, t, up] = await Promise.all([
       supabase.from('power_meters').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('power_daily').select('*').eq('branch_id', branchId).order('day', { ascending: false }).limit(400),
       supabase.from('power_readings').select('*').eq('branch_id', branchId).order('read_at', { ascending: false }).limit(400),
       supabase.from('power_tokens').select('*').eq('branch_id', branchId).order('loaded_at', { ascending: false }).limit(200),
+      supabase.from('purchase_requests').select('*, lines:purchase_request_lines!inner(*)').eq('branch_id', branchId).not('lines.meter_id', 'is', null).order('requested_on', { ascending: false }).limit(100),
     ]);
     if (m.error) { console.error(m.error); setError("We couldn't load electricity. Please try again."); return; }
-    setData({ meters: m.data || [], days: d.data || [], readings: r.data || [], tokens: t.data || [] });
+    setData({ meters: m.data || [], days: d.data || [], readings: r.data || [], tokens: t.data || [], topups: up.error ? [] : up.data || [] });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -88,11 +93,38 @@ export default function ElectricityPanel({ branchId, tabs }) {
       {tabs}
       <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
-        <span className="pl-help">Morning (asubuhi) and evening (jioni) on each meter. Tokens: Record expense → Electricity.</span>
+        {canAt('procurement.request', branchId) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setAsking(true)}>Request top-up</button>}
+        <span className="pl-help">Readings morning (asubuhi) and evening (jioni). A top-up: ask for a meter → the branch manager approves → the directors buy it and record the token, which tops the meter up.</span>
       </div>
-      <PageTabs nested tabs={[['days', 'Days'], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
+      <PageTabs nested tabs={[['days', 'Days'], ['topups', `Top-ups${data.topups.some(q => ['waiting', 'approved'].includes(q.status)) ? ` (${data.topups.filter(q => ['waiting', 'approved'].includes(q.status)).length})` : ''}`], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
       <div className="card"><div className="table-container">
-        {tab === 'days' ? (
+        {tab === 'topups' ? (
+          <table>
+            <thead><tr><th>Asked</th><th>Meter</th><th className="num">Amount (TZS)</th><th className="num">Units</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {data.topups.length === 0 ? <tr><td colSpan={6} className="text-muted">No top-ups yet — Request top-up when a meter runs low.</td></tr>
+              : data.topups.map(q => {
+                const l = q.lines[0];
+                const tok = data.tokens.find(t => t.expense_id && q.status === 'done' && t.meter_id === l.meter_id && t.loaded_at.slice(0, 10) >= q.requested_on);
+                return (
+                  <tr key={q.id}>
+                    <td>{q.requested_on}{q.notes && <div className="pl-help">{q.notes}</div>}</td>
+                    <td>{meterName(l.meter_id)}</td>
+                    <td className="num">{l.amount != null ? formatAmount(Number(l.amount)) : ''}</td>
+                    <td className="num">{l.quantity != null ? units(Number(l.quantity)) : ''}{tok && <div className="pl-help">got {units(Number(tok.units))}</div>}</td>
+                    <td><span className={`badge ${TOPUP[q.status]?.[1] ?? 'badge-neutral'}`}>{TOPUP[q.status]?.[0] ?? q.status}</span>{q.decision_note && <div className="pl-help">{q.decision_note}</div>}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {q.status === 'waiting' && canAt('procurement.approve', q.branch_id) && <>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => setDeciding({ q, decision: 'approved' })}>Approve</button>{' '}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeciding({ q, decision: 'rejected' })}>Turn down…</button></>}
+                      {q.status === 'approved' && canAt('cash.approve', q.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setBuying(q)}>Bought — record token</button>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : tab === 'days' ? (
           <table>
             <thead><tr><th>Day</th><th>Meter</th><th className="num">Day use</th><th className="num">Day (TZS)</th><th className="num">Night use</th><th className="num">Night (TZS)</th><th className="num">Batches</th><th className="num">Cement bags</th><th className="num">Units a bag</th></tr></thead>
             <tbody>
@@ -155,6 +187,9 @@ export default function ElectricityPanel({ branchId, tabs }) {
       <p className="pl-help" style={{ marginTop: 8 }}>Day use = morning − evening; night use = evening − next morning (lights). Tokens loaded in between are added. Units are priced oldest token first. Costing charges day use to that day's batches on the meter's machines, by cement bags; nights are a running cost.</p>
       {reading && <ReadingsModal meters={data.meters.filter(m => m.status === 'active')} readings={data.readings} today={today}
         onClose={() => setReading(false)} onSaved={async () => { setReading(false); await load(); }} />}
+      {asking && <TopupModal meters={data.meters.filter(m => m.status === 'active')} onClose={() => setAsking(false)} onSaved={async () => { setAsking(false); setTab('topups'); await load(); }} />}
+      {buying && <BuyModal q={buying} meterName={meterName(buying.lines[0].meter_id)} today={today} money={money} onClose={() => setBuying(null)} onSaved={async () => { setBuying(null); await load(); }} />}
+      {deciding && <TopupDecision {...deciding} onClose={() => setDeciding(null)} onDone={async () => { setDeciding(null); await load(); }} />}
       {voiding && <VoidModal row={voiding} onClose={() => setVoiding(null)} onDone={async () => { setVoiding(null); await load(); }} />}
     </>
   );
@@ -229,6 +264,102 @@ function VoidModal({ row, onClose, onDone }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className="btn btn-danger" disabled={busy || !reason.trim()} onClick={go}>Void</button></>}>
       <label className="pe-field"><span>Why?</span><input className="form-input" autoFocus value={reason} onChange={e => setReason(e.target.value)} /></label>
+    </Modal>
+  );
+}
+
+/* Ask for a LUKU top-up for a meter (081) */
+function TopupModal({ meters, onClose, onSaved }) {
+  const [f, setF] = useState({ meter_id: meters.length === 1 ? meters[0].id : '', amount: '', units: '', note: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    setError('');
+    if (!f.meter_id) { setError('Choose the meter.'); return; }
+    if (!(num(f.amount) > 0)) { setError('Enter how much LUKU to buy.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.rpc('request_power_topup', { p: { meter_id: f.meter_id, amount: num(f.amount), units: num(f.units), note: f.note } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+  return (
+    <Modal title="Request a LUKU top-up" onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send for approval</button></>}>
+      <div className="modal-form">
+        <label className="pe-field"><span>Meter</span>
+          <select className="form-input" autoFocus value={f.meter_id} onChange={e => setF({ ...f, meter_id: e.target.value })}>
+            <option value="">Choose…</option>{meters.map(m => <option key={m.id} value={m.id}>{m.name}{m.meter_no ? ` · ${m.meter_no}` : ''}</option>)}
+          </select></label>
+        <div className="form-row">
+          <label className="pe-field"><span>Amount (TZS)</span><NumberInput step="any" min="0" className="form-input" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value })} /></label>
+          <label className="pe-field"><span>About how many units (optional)</span><NumberInput step="any" min="0" className="form-input" value={f.units} onChange={e => setF({ ...f, units: e.target.value })} /></label>
+        </div>
+        <label className="pe-field"><span>Note (optional)</span><input className="form-input" placeholder="e.g. units left this morning" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></label>
+      </div>
+    </Modal>
+  );
+}
+
+function TopupDecision({ q, decision, onClose, onDone }) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function go() {
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.rpc('decide_purchase_request', { p_id: q.id, p_decision: decision, p_note: note || null });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onDone();
+  }
+  return (
+    <Modal title={decision === 'approved' ? 'Approve the top-up' : 'Turn down the top-up'} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={decision === 'approved' ? 'btn btn-primary' : 'btn btn-danger'} disabled={busy || (decision === 'rejected' && !note.trim())} onClick={go}>{decision === 'approved' ? 'Approve' : 'Turn down'}</button></>}>
+      <label className="pe-field"><span>{decision === 'approved' ? 'Note (optional)' : 'Why?'}</span><input className="form-input" autoFocus value={note} onChange={e => setNote(e.target.value)} /></label>
+    </Modal>
+  );
+}
+
+/* The directors bought the token: record it — the meter is topped up and the expense made (081) */
+function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
+  const l = q.lines[0];
+  const [f, setF] = useState({ units: l.quantity != null ? String(Number(l.quantity)) : '', amount: l.amount != null ? String(Number(l.amount)) : '', token_no: '', vat: '', ewura: '', rea: '', debt: '', ref: '',
+    date: today, time: new Date().toTimeString().slice(0, 5) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    setError('');
+    if (!(num(f.units) > 0)) { setError('Enter the units bought.'); return; }
+    if (!(num(f.amount) >= 0)) { setError('Enter what was paid.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.rpc('buy_power_topup', { p_request: q.id, p: { units: num(f.units), amount: num(f.amount), token_no: f.token_no,
+      vat_amount: num(f.vat), ewura_levy: num(f.ewura), rea_levy: num(f.rea), debt_deducted: num(f.debt), receipt_ref: f.ref,
+      loaded_at: new Date(`${f.date}T${f.time || '12:00'}`).toISOString() } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+  const field = (k, label, extra = {}) => <label className="pe-field"><span>{label}</span><NumberInput step="any" min="0" className="form-input" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} {...extra} /></label>;
+  return (
+    <Modal title={`LUKU bought — ${meterName}`} onClose={onClose} size="lg"
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record and top up</button></>}>
+      <div className="modal-form">
+        <p className="pl-help">Asked {q.requested_on}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units and an Electricity expense is made.</p>
+        <div className="form-row">{field('units', 'Units bought', { autoFocus: true })}{field('amount', 'Paid (TZS)')}
+          <label className="pe-field"><span>Token number</span><input className="form-input" value={f.token_no} onChange={e => setF({ ...f, token_no: e.target.value })} /></label></div>
+        <div className="form-row">{field('vat', 'VAT')}{field('ewura', 'EWURA levy')}{field('rea', 'REA levy')}{field('debt', 'Old debt taken off')}</div>
+        <div className="form-row">
+          <label className="pe-field"><span>Bought on</span><input type="date" className="form-input" max={today} value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
+          <label className="pe-field"><span>At</span><input type="time" className="form-input" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></label>
+          <label className="pe-field"><span>Receipt / transaction ref.</span><input className="form-input" value={f.ref} onChange={e => setF({ ...f, ref: e.target.value })} /></label>
+        </div>
+      </div>
     </Modal>
   );
 }
