@@ -94,77 +94,209 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
 const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '', categoryId: '', description: '', unitText: '', amount: '' };
 
 /* ---------- Requests ---------- */
-export function RequestsPanel({ refs, branchId, inBranch, people, onOrder, onRecordExpense, money = v => v }) {
+/*
+ * One flow for every request (2026-10-28, migration 084), from its row:
+ * waiting → the branch manager approves → approved → an order is made →
+ * ordered → open it again to edit the order or confirm what was bought
+ * (goods received, expenses or LUKU tokens recorded) → done.
+ */
+export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v, onReceive, onRecordExpense, onRecordToken }) {
   const { canAt } = useAuth();
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [asking, setAsking] = useState(false);
-  const [deciding, setDeciding] = useState(null);   // { r, decision }
   const [cats, setCats] = useState([]);
-  const [done, setDone] = useState({});      // expense request line → recorded amount
+  const [openId, setOpenId] = useState(null);
   async function load() {
-    const [q, c, e] = await Promise.all([
+    const [q, c] = await Promise.all([
       supabase.from('purchase_requests').select('*, lines:purchase_request_lines(*)').order('requested_on', { ascending: false }).order('request_no', { ascending: false }),
       supabase.from('expense_categories').select('id, name, status').order('display_order').order('name'),
-      supabase.from('expenses').select('request_line_id, amount').not('request_line_id', 'is', null).eq('status', 'recorded'),
     ]);
     if (q.error) { console.error(q.error); setError("We couldn't load purchase requests."); return; }
     setRows(q.data || []);
     setCats(c.data || []);
-    setDone((e.data || []).reduce((m, x) => ({ ...m, [x.request_line_id]: (m[x.request_line_id] || 0) + Number(x.amount) }), {}));
   }
   useEffect(() => { load(); }, []);
   const here = (rows || []).filter(r => inBranch(r.branch_id));
   const canAsk = !!branchId && canAt('procurement.request', branchId);
+  const open = here.find(r => r.id === openId);
   return (
     <>
       <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Waiting</span><strong className={here.some(r => r.status === 'waiting') ? 'text-warning' : ''}>{here.filter(r => r.status === 'waiting').length}</strong><span className="pl-help">for the branch manager</span></div>
         <div className="mm-stat"><span className="pl-label">Approved</span><strong>{here.filter(r => r.status === 'approved').length}</strong><span className="pl-help">to order</span></div>
-        <div className="mm-stat"><span className="pl-label">Ordered</span><strong>{here.filter(r => r.status === 'ordered').length}</strong><span className="pl-help">a purchase order made</span></div>
+        <div className="mm-stat"><span className="pl-label">Ordered</span><strong>{here.filter(r => r.status === 'ordered').length}</strong><span className="pl-help">to confirm when bought</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
         {canAsk && <button type="button" className="btn btn-primary btn-sm" onClick={() => setAsking(true)}><Plus size={14} /> Ask for materials or expenses</button>}
-        <span className="pl-help">Materials or expenses (LUKU, tools, transport…). Asked by the storekeeper or secretary; the branch manager approves; then materials go on a purchase order and expenses are recorded when bought.</span>
+        <span className="pl-help">Open a request to approve it, order it, then confirm what was bought.</span>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>Materials</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>What</th><th>Status</th></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
-            : here.length === 0 ? <tr><td colSpan={7} className="text-muted">No purchase requests yet.</td></tr>
-            : here.map(r => {
-              const canDecide = r.status === 'waiting' && canAt('procurement.approve', r.branch_id);
-              return (
-                <tr key={r.id}>
-                  <td>#{r.request_no}</td>
-                  <td>{r.requested_on}</td>
-                  <td>{people[r.requested_by] ?? ''}</td>
-                  <td>{r.needed_by ?? ''}</td>
-                  <td>{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => (
-                    <div key={l.id}>{lineText(refs, l, cats, money)}
-                      {l.kind === 'expense' && done[l.id] != null && <span className="pl-help"> · recorded {money(done[l.id])}</span>}
-                      {l.kind === 'expense' && !l.meter_id && done[l.id] == null && r.status === 'approved' && onRecordExpense && (
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRecordExpense(l)}>Record expense</button>)}
-                    </div>))}{r.notes && <div className="pl-help">{r.notes}</div>}</td>
-                  <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {canDecide && <>
-                      <button type="button" className="btn btn-primary btn-sm" onClick={() => setDeciding({ r, decision: 'approved' })}>Approve</button>{' '}
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeciding({ r, decision: 'rejected' })}>Turn down…</button>
-                    </>}
-                    {r.status === 'approved' && canAt('procurement.order', r.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => onOrder(r)}>Make order</button>}
-                  </td>
-                </tr>
-              );
-            })}
+            {rows === null ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
+            : here.length === 0 ? <tr><td colSpan={6} className="text-muted">No purchase requests yet.</td></tr>
+            : here.map(r => (
+              <tr key={r.id} className="clickable-row" onClick={() => setOpenId(r.id)} title="Open the request">
+                <td>#{r.request_no}</td>
+                <td>{r.requested_on}</td>
+                <td>{people[r.requested_by] ?? ''}</td>
+                <td>{r.needed_by ?? ''}</td>
+                <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
+                <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div></div>
       {asking && <AskModal refs={refs} branchId={branchId} cats={cats} onClose={() => setAsking(false)} onSaved={async () => { setAsking(false); await load(); }} />}
-      {deciding && <DecideModal {...deciding} onClose={() => setDeciding(null)} onDone={async () => { setDeciding(null); await load(); }} />}
+      {open && <RequestView r={open} refs={refs} cats={cats} people={people} money={money} onChanged={load} onClose={() => setOpenId(null)}
+        onReceive={x => { setOpenId(null); onReceive?.(x); }} onRecordExpense={x => { setOpenId(null); onRecordExpense?.(x); }} onRecordToken={x => { setOpenId(null); onRecordToken?.(x); }} />}
     </>
+  );
+}
+
+/* A request, start to end: decide; order; edit the order or confirm what was bought */
+function RequestView({ r, refs, cats, people, money, onChanged, onClose, onReceive, onRecordExpense, onRecordToken }) {
+  const { canAt } = useAuth();
+  const [po, setPo] = useState(null);           // the request's order (latest, not cancelled)
+  const [got, setGot] = useState({});
+  const [paidFor, setPaidFor] = useState({});
+  const [mode, setMode] = useState(null);       // 'order' | 'edit' | 'close'
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function loadOrder() {
+    const { data } = await supabase.from('purchase_orders').select('*, lines:purchase_order_lines(*)').eq('request_id', r.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(1);
+    const o = data?.[0] ?? null;
+    setPo(o);
+    if (o) {
+      const [rc, ex] = await Promise.all([
+        supabase.from('purchase_order_receipts').select('order_line_id, received').eq('order_id', o.id),
+        supabase.from('expenses').select('order_line_id, amount').in('order_line_id', o.lines.map(l => l.id)).eq('status', 'recorded'),
+      ]);
+      setGot(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
+      setPaidFor((ex.data || []).reduce((m, x) => ({ ...m, [x.order_line_id]: (m[x.order_line_id] || 0) + Number(x.amount) }), {}));
+    }
+  }
+  useEffect(() => { loadOrder(); }, [r.id, r.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const supplierName = id => refs?.suppliers.find(x => x.id === id)?.name ?? '—';
+  const decide = async decision => {
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.rpc('decide_purchase_request', { p_id: r.id, p_decision: decision, p_note: note || null });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setNote(''); onChanged();
+  };
+  const lineDone = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
+  const lines = [...(po?.lines || [])].sort((a, b) => a.line_no - b.line_no);
+  const goodsLeft = lines.filter(l => l.kind !== 'expense' && !lineDone(l)).map(l => {
+    const f = Number(l.stock_quantity) / Number(l.quantity);
+    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
+  });
+  const nothingYet = po && !lines.some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0));
+  const canConfirm = po && po.status === 'open' && (canAt('procurement.receive', r.branch_id) || canAt('cash.approve', r.branch_id));
+  return (
+    <Modal title={`Request #${r.request_no}`} onClose={onClose} size="lg"
+      footer={<>
+        {error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {['waiting', 'approved'].includes(r.status) && (r.requested_by === undefined || canAt('procurement.request', r.branch_id)) && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => decide('cancelled')}>Cancel request</button>}
+        {r.status === 'waiting' && canAt('procurement.approve', r.branch_id) && <>
+          <button type="button" className="btn btn-outline" disabled={busy || !note.trim()} onClick={() => decide('rejected')}>Turn down</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => decide('approved')}>Approve</button>
+        </>}
+        {r.status === 'approved' && canAt('procurement.order', r.branch_id) && <button type="button" className="btn btn-primary" onClick={() => setMode('order')}>Make order</button>}
+        {r.status === 'ordered' && po?.status === 'open' && <>
+          <button type="button" className="btn btn-ghost" onClick={() => window.open(`/print/po/${po.id}`, '_blank', 'noopener')}><Printer size={14} /> Print order</button>
+          {canAt('procurement.order', r.branch_id) && nothingYet && <button type="button" className="btn btn-outline" onClick={() => setMode('edit')}>Edit order</button>}
+          {canAt('procurement.order', r.branch_id) && <button type="button" className="btn btn-outline" onClick={() => setMode('close')}>{nothingYet ? 'Cancel order…' : 'Close order…'}</button>}
+        </>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
+      </>}>
+      <div className="modal-form">
+        <p className="text-sm"><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span> · asked {r.requested_on}{people[r.requested_by] ? ` by ${people[r.requested_by]}` : ''}{r.needed_by ? ` · needed by ${r.needed_by}` : ''}{r.decision_note ? ` · ${r.decision_note}` : ''}</p>
+        {r.notes && <p className="pl-help">{r.notes}</p>}
+        {!po && (
+          <table className="rd-table">
+            <thead><tr><th>Asked for</th></tr></thead>
+            <tbody>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <tr key={l.id}><td>{lineText(refs, l, cats, money)}</td></tr>)}</tbody>
+          </table>
+        )}
+        {r.status === 'waiting' && canAt('procurement.approve', r.branch_id) && (
+          <label className="pe-field"><span>Note (needed to turn down)</span><input className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
+        )}
+        {po && <>
+          <h3 className="modal-section-title">Order #{po.po_no} — {supplierName(po.supplier_id)}{po.expected_on ? ` · expected ${po.expected_on}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
+          <table className="rd-table">
+            <thead><tr><th>What</th><th className="num">Ordered</th><th className="num">Price (TZS)</th><th>Bought</th></tr></thead>
+            <tbody>{lines.map(l => {
+              const isExp = l.kind === 'expense'; const u = isExp ? l.unit_text ?? '' : refs?.unitById[l.unit_id]?.symbol ?? '';
+              const f = isExp ? 1 : Number(l.stock_quantity) / Number(l.quantity);
+              return (
+                <tr key={l.id}>
+                  <td><strong>{isExp ? l.description : refs?.items[`m:${l.material_id}`]?.name ?? '—'}</strong></td>
+                  <td className="num">{l.quantity != null ? `${qtyText(Number(l.quantity))} ${u}` : ''}</td>
+                  <td className="num">{isExp ? (l.amount != null ? formatAmount(Number(l.amount)) : '') : l.unit_price != null ? formatAmount(Number(l.unit_price)) : ''}</td>
+                  <td>{lineDone(l)
+                    ? <span className="badge badge-success">{isExp ? `Recorded ${money(paidFor[l.id])}` : 'Received'}</span>
+                    : isExp
+                      ? canConfirm && <button type="button" className="btn btn-primary btn-sm" onClick={() => (l.meter_id
+                          ? onRecordToken({ id: r.id, requested_on: r.requested_on, meterName: (l.description || '').replace(/^LUKU top-up — /, ''), lines: [{ meter_id: l.meter_id, quantity: l.quantity, amount: l.amount }] })
+                          : onRecordExpense({ category_id: l.category_id, description: l.description, quantity: l.quantity, amount: l.amount, order_line_id: l.id, request_line_id: l.request_line_id }))}>{l.meter_id ? 'Record token bought' : 'Record expense'}</button>
+                      : <span className="pl-help">{qtyText(r2((got[l.id] ?? 0) / f))} of {qtyText(Number(l.quantity))} {u}</span>}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive({ orderId: po.id, supplierId: po.supplier_id, lines: goodsLeft })}>Receive goods</button>}
+        </>}
+      </div>
+      {mode === 'order' && <OrderModal refs={refs} branchId={r.branch_id} request={r} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}
+      {mode === 'edit' && po && <EditOrderModal po={po} refs={refs} onClose={() => setMode(null)} onSaved={async () => { setMode(null); await loadOrder(); }} />}
+      {mode === 'close' && po && <CloseModal po={po} cancel={nothingYet} onClose={() => setMode(null)} onDone={async () => { setMode(null); onChanged(); await loadOrder(); }} />}
+    </Modal>
+  );
+}
+
+/* Change an order before anything comes: expected date, notes, quantities, prices */
+function EditOrderModal({ po, refs, onClose, onSaved }) {
+  const [expected, setExpected] = useState(po.expected_on ?? '');
+  const [notes, setNotes] = useState(po.notes ?? '');
+  const [ls, setLs] = useState(() => [...po.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, kind: l.kind, name: l.kind === 'expense' ? l.description : refs?.items[`m:${l.material_id}`]?.name ?? '—',
+    unit: l.kind === 'expense' ? l.unit_text ?? '' : refs?.unitById[l.unit_id]?.symbol ?? '', quantity: l.quantity != null ? String(Number(l.quantity)) : '',
+    price: l.kind === 'expense' ? (l.amount != null ? String(Number(l.amount)) : '') : l.unit_price != null ? String(Number(l.unit_price)) : '' })));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.rpc('update_purchase_order', { p_id: po.id, p: { expected_on: expected || null, notes,
+      lines: ls.map(l => ({ id: l.id, quantity: num(l.quantity), ...(l.kind === 'expense' ? { amount: num(l.price) } : { unit_price: num(l.price) }) })) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onSaved();
+  }
+  return (
+    <Modal title={`Edit order #${po.po_no}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Save</button></>}>
+      <div className="modal-form">
+        <table className="rd-table">
+          <thead><tr><th>What</th><th className="num">Quantity</th><th className="num">Price / amount (TZS)</th></tr></thead>
+          <tbody>{ls.map((l, i) => (
+            <tr key={l.id}><td><strong>{l.name}</strong></td>
+              <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={l.quantity} onChange={e => setLs(x => x.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {l.unit}</td>
+              <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} value={l.price} onChange={e => setLs(x => x.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)))} /></td></tr>))}
+          </tbody>
+        </table>
+        <div className="form-row">
+          <label className="pe-field"><span>Expected</span><input type="date" className="form-input" value={expected} onChange={e => setExpected(e.target.value)} /></label>
+          <label className="pe-field" style={{ flex: 2 }}><span>Notes</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -203,26 +335,6 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
   );
 }
 
-function DecideModal({ r, decision, onClose, onDone }) {
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function go() {
-    setError(''); setBusy(true);
-    const { error: err } = await supabase.rpc('decide_purchase_request', { p_id: r.id, p_decision: decision, p_note: note || null });
-    setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return; }
-    onDone();
-  }
-  return (
-    <Modal title={`${decision === 'approved' ? 'Approve' : 'Turn down'} request #${r.request_no}`} onClose={onClose}
-      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
-        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={decision === 'approved' ? 'btn btn-primary' : 'btn btn-danger'} disabled={busy || (decision === 'rejected' && !note.trim())} onClick={go}>{decision === 'approved' ? 'Approve' : 'Turn down'}</button></>}>
-      <label className="pe-field"><span>{decision === 'approved' ? 'Note (optional)' : 'Why?'}</span><input className="form-input" autoFocus value={note} onChange={e => setNote(e.target.value)} /></label>
-    </Modal>
-  );
-}
 
 /* ---------- Orders ---------- */
 export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedRequest, money, canReceive = () => false, onReceive, onRecordExpense, onRecordToken }) {
