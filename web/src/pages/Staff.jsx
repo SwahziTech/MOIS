@@ -21,7 +21,6 @@ const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Numb
 const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const mondayOf = d => { const w = new Date(`${d}T00:00:00Z`).getUTCDay(); return addDays(d, -((w + 6) % 7)); };
 const dayName = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
-const monthEnd = d => { const x = new Date(`${d.slice(0, 7)}-01T00:00:00Z`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return x.toISOString().slice(0, 10); };
 
 const KIND = { employed: 'Employed', casual: 'Casual' };
 const CYCLE = { weekly: 'Weekly', fortnightly: 'Every 2 weeks', monthly: 'Monthly' };
@@ -30,8 +29,8 @@ const STATUS_BADGE = { draft: 'badge-neutral', approved: 'badge-info', paid: 'ba
 // unset kind/pay follow the kind (as the pay sheet does, 071)
 const basisOf = s => s.pay_basis || (s.kind === 'employed' ? 'monthly' : 'daily');
 const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'weekly');
-// a monthly salary counted by the day: 26 working days a month
-const WORK_DAYS_A_MONTH = 26;
+// a monthly salary counted by the day: working days a month (089 setting; 26 until set)
+const WORK_DAYS_DEFAULT = 26;
 
 /*
  * Staff & pay (1e, migration 071): the branch's staff — employed and casual —
@@ -44,6 +43,8 @@ const WORK_DAYS_A_MONTH = 26;
  * staff member — teams change day to day, so who worked is ticked on each batch.
  * Part 2 (088): pay sheets with NSSF, PAYE, WCF and SDL from the statutory
  * rates (⚙, confirmed by the Technical admin or a director), and payslips.
+ * 089: pay sheets make themselves from attendance — everyone paid by the days
+ * attended (a salary ÷ working days a month); they are approved and paid.
  */
 export default function Staff() {
   const { organization, canAt } = useAuth();
@@ -59,6 +60,11 @@ export default function Staff() {
   const [settings, setSettings] = useState(false);   // ⚙: statutory rates (088)
   const [att, setAtt] = useState({});   // `${staff_id}|${date}` → day fraction, this week and month (the cards)
   const [attBusy, setAttBusy] = useState('');
+  const [workDays, setWorkDays] = useState(WORK_DAYS_DEFAULT);
+  useEffect(() => {
+    supabase.from('payroll_settings').select('work_days_a_month').maybeSingle()
+      .then(({ data }) => { if (data?.work_days_a_month) setWorkDays(Number(data.work_days_a_month)); });
+  }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
   const attFrom = [monday, `${today.slice(0, 7)}-01`].sort()[0];
@@ -144,9 +150,9 @@ export default function Staff() {
                     // earned so far: casuals this week (days × day rate); employed this month (days × salary ÷ 26 working days)
                     const daily = basisOf(s) === 'daily';
                     const days = daysIn(s.id, daily ? monday : `${today.slice(0, 7)}-01`, today);
-                    const due = days * Number(s.pay_rate) / (daily ? 1 : WORK_DAYS_A_MONTH);
+                    const due = days * Number(s.pay_rate) / (daily ? 1 : workDays);
                     return <>
-                      <strong title={daily ? 'Days this week × day rate' : `Days this month × salary ÷ ${WORK_DAYS_A_MONTH} working days`}>{money(Math.round(due))}</strong>
+                      <strong title={daily ? 'Days this week × day rate' : `Days this month × salary ÷ ${workDays} working days`}>{money(Math.round(due))}</strong>
                       <span className="sk-sub">{days} day{days === 1 ? '' : 's'} this {daily ? 'week' : 'month'}</span>
                       <span className="sk-sub">{money(s.pay_rate)} {daily ? 'a day' : 'a month'}</span>
                     </>;
@@ -202,6 +208,7 @@ export default function Staff() {
         <Modal title="Staff & payroll settings" onClose={() => setSettings(false)} size="lg"
           footer={<button type="button" className="btn btn-outline" onClick={() => setSettings(false)}>Close</button>}>
           <StatutoryRatesCard />
+          <WorkDaysCard />
         </Modal>
       )}
       {editing && <StaffModal person={editing.id ? editing : null} kind={editing.id ? undefined : editing.kind} organizationId={organization?.id} branchId={editing.branch_id || branchId}
@@ -376,7 +383,6 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
 function PaySheets({ staff, branchId, today, money, currency, canRecord, canApprove, inBranch }) {
   const [sheets, setSheets] = useState(null);
   const [error, setError] = useState('');
-  const [preparing, setPreparing] = useState(false);
   const [openId, setOpenId] = useState(null);
   async function load() {
     setError('');
@@ -405,8 +411,7 @@ function PaySheets({ staff, branchId, today, money, currency, canRecord, canAppr
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPreparing(true)}><Plus size={14} /> Prepare pay sheet</button>}
-        <span className="pl-help" title="Casuals: days worked × day rate. Employed: the salary's share for the period. NSSF and PAYE come off gross pay; the employer adds NSSF, WCF and SDL. Paid: net pay is one Wages expense, the statutory amounts one Statutory contributions expense (owed until remitted).">Pay from attendance and salaries; NSSF, PAYE, WCF and SDL from the rates (⚙).</span>
+        <span className="pl-help" title="Marking attendance keeps the period's draft up to date: casuals weekly (Mon–Sun), employed every 2 weeks (1–15, 16–end). Casuals: days × day rate. Employed: days × salary ÷ working days a month (⚙). NSSF and PAYE come off gross pay; the employer adds NSSF, WCF and SDL. Paid: net pay is one Wages expense, the statutory amounts one Statutory contributions expense (owed until remitted).">Made automatically from attendance — open a sheet to approve and pay it. NSSF, PAYE, WCF and SDL from the rates (⚙).</span>
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="card"><div className="table-container">
@@ -434,51 +439,9 @@ function PaySheets({ staff, branchId, today, money, currency, canRecord, canAppr
           )}
         </table>
       </div></div>
-      {preparing && <PrepareModal branchId={branchId} today={today} onClose={() => setPreparing(false)}
-        onMade={async id => { setPreparing(false); await load(); setOpenId(id); }} />}
       {openId && <SheetModal id={openId} staff={staff} money={money} today={today} canRecord={canRecord} canApprove={canApprove}
         onClose={() => setOpenId(null)} onChanged={load} />}
     </>
-  );
-}
-
-function PrepareModal({ branchId, today, onClose, onMade }) {
-  const periodOf = (cycle, d) => {
-    if (cycle === 'weekly') { const m = mondayOf(d); return [m, addDays(m, 6)]; }
-    if (cycle === 'monthly') return [`${d.slice(0, 7)}-01`, monthEnd(d)];
-    return Number(d.slice(8)) <= 15 ? [`${d.slice(0, 7)}-01`, `${d.slice(0, 7)}-15`] : [`${d.slice(0, 7)}-16`, monthEnd(d)];
-  };
-  const [cycle, setCycle] = useState('weekly');
-  const [[start, end], setPeriod] = useState(() => periodOf('weekly', today));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function make() {
-    setError(''); setBusy(true);
-    const { data, error: err } = await supabase.rpc('prepare_pay_sheet', { p_branch: branchId, p_cycle: cycle, p_start: start, p_end: end });
-    setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return; }
-    onMade(data);
-  }
-  return (
-    <Modal title="Prepare pay sheet" onClose={onClose}
-      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
-        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !branchId} onClick={make}>Prepare</button></>}>
-      <div className="modal-form">
-        {!branchId && <div className="alert alert-warning">Choose a branch first.</div>}
-        <label className="pe-field"><span>Who it pays</span>
-          <select className="form-input" value={cycle} onChange={e => { setCycle(e.target.value); setPeriod(periodOf(e.target.value, today)); }}>
-            <option value="weekly">Weekly — staff paid weekly (casuals)</option>
-            <option value="fortnightly">Every 2 weeks — staff paid every 2 weeks (employed)</option>
-            <option value="monthly">Monthly — staff paid monthly</option>
-          </select></label>
-        <div className="form-row">
-          <label className="pe-field"><span>From</span><input type="date" className="form-input" value={start} onChange={e => setPeriod([e.target.value, end])} /></label>
-          <label className="pe-field"><span>To</span><input type="date" className="form-input" value={end} onChange={e => setPeriod([start, e.target.value])} /></label>
-        </div>
-        <p className="pl-help">Everyone paid {CYCLE[cycle].toLowerCase()} is put on it: day-rate staff with the days marked in Attendance, salaried staff with their share of the salary. You can add or deduct amounts before approving.</p>
-      </div>
-    </Modal>
   );
 }
 
@@ -535,7 +498,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {sheet.status !== 'void' && (sheet.status === 'draft' ? canRecord : canApprove) && voidReason === null &&
           <button type="button" className="btn btn-ghost" onClick={() => setVoidReason('')}>Void…</button>}
-        {draft && canRecord && <button type="button" className="btn btn-outline" disabled={busy} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('refresh_pay_sheet', { p_sheet: id })); }}><RefreshCw size={14} /> Refresh from attendance</button>}
+        {draft && canRecord && <button type="button" className="btn btn-outline" disabled={busy} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('refresh_pay_sheet', { p_sheet: id })); }}><RefreshCw size={14} /> Refresh</button>}
         {draft && canRecord && Object.keys(edits).length > 0 && <button type="button" className="btn btn-outline" disabled={busy} onClick={saveEdits}>Save changes</button>}
         {draft && canApprove && <button type="button" className="btn btn-primary" disabled={busy || missing.length > 0 || unverified.length > 0} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('approve_pay_sheet', { p_sheet: id })); }}>Approve {money(total)}</button>}
         {sheet.status === 'approved' && canApprove && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => run(() => supabase.rpc('pay_pay_sheet', { p_sheet: id, p: pay }))}>Mark paid {money(Number(sheet.total))}</button>}
@@ -549,7 +512,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
           <table className="ps-table">
             <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={11} className="text-muted">No one on this sheet — mark attendance or set staff pay, then Refresh.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={11} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
                   <td><strong>{nameOf(l.staff_id)}</strong></td>
@@ -595,5 +558,40 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         )}
       </div>
     </Modal>
+  );
+}
+
+/* Working days a month (089): a salary by the day — days attended × salary ÷ these days */
+function WorkDaysCard() {
+  const { can } = useAuth();
+  const canSet = can('payroll.rates');
+  const [days, setDays] = useState(null);
+  const [text, setText] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    supabase.from('payroll_settings').select('work_days_a_month').maybeSingle().then(({ data, error }) => {
+      if (error) { setDays(false); return; }
+      const v = Number(data?.work_days_a_month ?? WORK_DAYS_DEFAULT); setDays(v); setText(String(v));
+    });
+  }, []);
+  if (days === false || days === null) return null;   // before 089
+  async function save() {
+    setMsg('');
+    const { error } = await supabase.rpc('set_work_days_a_month', { p_days: Number(text) });
+    if (error) { setMsg(dbErrorMessage(error)); return; }
+    setDays(Number(text)); setMsg('Saved — draft pay sheets updated.');
+  }
+  return (
+    <section className="card" style={{ marginTop: 12 }}>
+      <div className="card-header"><h2 className="card-title">Working days a month</h2></div>
+      <div className="card-body" style={{ paddingTop: 6 }}>
+        <p className="text-xs text-muted mb-8">Employed staff are paid by the days attended: salary ÷ this number × days. 26 = Monday to Saturday.</p>
+        <div className="flex items-center gap-8">
+          <input className="form-input" style={{ width: 90 }} inputMode="decimal" aria-label="Working days a month" value={text} disabled={!canSet} onChange={e => setText(e.target.value)} />
+          {canSet && <button type="button" className="btn btn-primary btn-sm" disabled={!text || Number(text) === days} onClick={save}>Save</button>}
+          {msg && <span className="pl-help">{msg}</span>}
+        </div>
+      </div>
+    </section>
   );
 }
