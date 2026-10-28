@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, Wallet, HardHat,
+  Calculator, Receipt, Contact, Wallet, HardHat, FileText,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -64,6 +64,13 @@ const NAV = [
       { label: 'Customers', to: '/customers', icon: Contact, perm: 'sales.view' },
       // cost, price without VAT, margin, finished stock at cost (1e, migration 058)
       { label: 'Costing', to: '/costing', icon: Calculator, perm: 'products.manage' },
+    ],
+  },
+  {
+    section: 'Reports',
+    items: [
+      // the day's report, written from MOIS or a written one checked against it (1f)
+      { label: 'Daily report', to: '/daily-report', icon: FileText, perm: 'production.view' },
     ],
   },
   {
