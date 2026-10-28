@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import NumberInput from '../components/NumberInput';
+import StatutoryRatesCard, { RATE_NAME } from '../components/staff/StatutoryRatesCard';
 
 const LOAD_ERROR = "We couldn't load staff. Please try again.";
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
@@ -39,6 +40,8 @@ const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'we
  *
  * 2026-10-28 (087): Employees and Casuals on their own tabs; no team on a
  * staff member — teams change day to day, so who worked is ticked on each batch.
+ * Part 2 (088): pay sheets with NSSF, PAYE, WCF and SDL from the statutory
+ * rates (⚙, confirmed by the Technical admin or a director), and payslips.
  */
 export default function Staff() {
   const { organization, canAt } = useAuth();
@@ -51,6 +54,7 @@ export default function Staff() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
+  const [settings, setSettings] = useState(false);   // ⚙: statutory rates (088)
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
   const canApprove = !!branchId && canAt('payroll.approve', branchId);
@@ -80,12 +84,14 @@ export default function Staff() {
   const payText = s => (s.pay_rate == null ? null : `${money(s.pay_rate)} ${basisOf(s) === 'daily' ? 'a day' : 'a month'}`);
 
   return (
-    <PageShell title="Staff" subtitle="HR"
+    <PageShell title="Staff" subtitle="HR" onSettings={() => setSettings(true)}
       description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
-      primaryAction={tab !== 'attendance' && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
-      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
+      primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
+      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance'], ['pay', 'Pay sheets']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
-      : tab !== 'attendance' ? (
+      : tab === 'pay' ? (
+        <PaySheets staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
+      ) : tab !== 'attendance' ? (
         <>
           {staff !== null && (
             <div className="mm-stats">
@@ -135,6 +141,7 @@ export default function Staff() {
             <dt>Kind</dt><dd>{viewing.kind ? KIND[viewing.kind] : 'Not set'}</dd>
             <dt>Job</dt><dd>{viewing.job_title || '—'}</dd>
             <dt>Pay</dt><dd>{payText(viewing) || 'Not set'}, paid {CYCLE[cycleOf(viewing)].toLowerCase()}</dd>
+            <dt>Statutory deductions</dt><dd>{(viewing.statutory ?? viewing.kind === 'employed') ? 'NSSF, PAYE (employer: NSSF, WCF, SDL)' : 'None'}{viewing.statutory == null ? ' — as for their kind' : ''}</dd>
             <dt>In product cost</dt><dd>{viewing.in_production_cost ? 'Yes' : 'No — a running cost'}</dd>
             <dt>Phone</dt><dd>{viewing.phone || '—'}</dd>
             <dt>NSSF no.</dt><dd>{viewing.nssf_no || '—'}</dd>
@@ -142,6 +149,12 @@ export default function Staff() {
             {viewing.status !== 'active' && <><dt>Left</dt><dd>{viewing.left_on || 'yes'}</dd></>}
             {viewing.notes && <><dt>Notes</dt><dd>{viewing.notes}</dd></>}
           </dl>
+        </Modal>
+      )}
+      {settings && (
+        <Modal title="Staff & payroll settings" onClose={() => setSettings(false)} size="lg"
+          footer={<button type="button" className="btn btn-outline" onClick={() => setSettings(false)}>Close</button>}>
+          <StatutoryRatesCard />
         </Modal>
       )}
       {editing && <StaffModal person={editing.id ? editing : null} kind={editing.id ? undefined : editing.kind} organizationId={organization?.id} branchId={editing.branch_id || branchId}
@@ -156,6 +169,7 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
     pay_basis: person?.pay_basis ?? '', pay_rate: person?.pay_rate ?? '', pay_cycle: person?.pay_cycle ?? '',
     in_production_cost: person?.in_production_cost ?? true, started_on: person?.started_on ?? '', left_on: person?.left_on ?? '',
     notes: person?.notes ?? '', status: person?.status ?? 'active', nssf_no: person?.nssf_no ?? '',
+    statutory: person?.statutory == null ? '' : person.statutory ? 'yes' : 'no',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -172,6 +186,7 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
       pay_basis: f.pay_basis || null, pay_rate: num(f.pay_rate), pay_cycle: f.pay_cycle || null,
       in_production_cost: f.in_production_cost, started_on: f.started_on || null, left_on: f.status === 'left' ? f.left_on : null,
       notes: f.notes.trim() || null, status: f.status, nssf_no: f.nssf_no.trim() || null,
+      ...(f.statutory !== '' || person?.statutory != null ? { statutory: f.statutory === '' ? null : f.statutory === 'yes' } : {}),
     };
     setBusy(true);
     const { error: err } = person
@@ -214,6 +229,11 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
           <label className="pe-field"><span>NSSF no.</span><input className="form-input" value={f.nssf_no} onChange={e => set({ nssf_no: e.target.value })} /></label>
           <label className="pe-field"><span>Started</span><input type="date" className="form-input" value={f.started_on} onChange={e => set({ started_on: e.target.value })} /></label>
         </div>
+        <label className="pe-field"><span>Statutory deductions (NSSF, PAYE; employer WCF, SDL)</span>
+          <select className="form-input" value={f.statutory} onChange={e => set({ statutory: e.target.value })}>
+            <option value="">{f.kind === 'employed' ? 'Yes' : 'No'} — as for {f.kind === 'employed' ? 'employed staff' : 'casuals'} (usual)</option>
+            <option value="yes">Yes</option><option value="no">No</option>
+          </select></label>
         <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={f.in_production_cost} onChange={e => set({ in_production_cost: e.target.checked })} /> Their pay is part of product cost (untick for office/running staff)</label>
         <label className="pe-field"><span>Notes</span><input className="form-input" value={f.notes} onChange={e => set({ notes: e.target.value })} /></label>
         {person && (
@@ -306,7 +326,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
 }
 
 /* Pay sheets: prepared from the staff list and attendance, then approved and paid */
-function PaySheets({ staff, branchId, today, money, canRecord, canApprove, inBranch }) {
+function PaySheets({ staff, branchId, today, money, currency, canRecord, canApprove, inBranch }) {
   const [sheets, setSheets] = useState(null);
   const [error, setError] = useState('');
   const [preparing, setPreparing] = useState(false);
@@ -320,32 +340,50 @@ function PaySheets({ staff, branchId, today, money, canRecord, canApprove, inBra
   }
   useEffect(() => { load(); }, []);
   const here = (sheets || []).filter(s => inBranch(s.branch_id));
+  const month = today.slice(0, 7);
+  const paidMonth = here.filter(s => s.status === 'paid' && (s.paid_on || '').startsWith(month));
+  const sum = (list, f) => list.reduce((t, s) => t + Number(s[f] || 0), 0);
+  const waiting = here.filter(s => s.status === 'draft' || s.status === 'approved');
+  const short = v => formatMoneyShort(v, currency);
   return (
     <>
+      {sheets !== null && (
+        <div className="mm-stats">
+          <div className="mm-stat"><span className="pl-label">Paid this month</span><strong>{short(sum(paidMonth, 'total'))}</strong>
+            <span className="pl-help" title="Net pay handed to staff on sheets paid this month">net · gross {short(sum(paidMonth, 'gross_total'))}</span></div>
+          <div className="mm-stat"><span className="pl-label">Statutory this month</span><strong>{short(sum(paidMonth, 'employee_statutory') + sum(paidMonth, 'employer_statutory'))}</strong>
+            <span className="pl-help" title="PAYE and NSSF taken from pay, plus the employer's NSSF, WCF and SDL — recorded as a Statutory contributions expense, owed until remitted">PAYE · NSSF · WCF · SDL to remit</span></div>
+          <div className="mm-stat"><span className="pl-label">Waiting</span><strong className={waiting.length ? 'text-warning' : ''}>{waiting.length}</strong>
+            <span className="pl-help">{waiting.length ? `${waiting.filter(s => s.status === 'draft').length} to approve · ${waiting.filter(s => s.status === 'approved').length} to pay` : 'nothing waiting'}</span></div>
+        </div>
+      )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPreparing(true)}><Plus size={14} /> Prepare pay sheet</button>}
-        <span className="pl-help">Casuals: days worked × day rate, weekly. Employed: half the monthly salary every 2 weeks. A paid sheet is recorded as one Wages expense.</span>
+        <span className="pl-help" title="Casuals: days worked × day rate. Employed: the salary's share for the period. NSSF and PAYE come off gross pay; the employer adds NSSF, WCF and SDL. Paid: net pay is one Wages expense, the statutory amounts one Statutory contributions expense (owed until remitted).">Pay from attendance and salaries; NSSF, PAYE, WCF and SDL from the rates (⚙).</span>
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Period</th><th>Pay</th><th className="num">People</th><th className="num">Total (TZS)</th><th>Status</th><th>Paid on</th></tr></thead>
+          <thead><tr><th>Period</th><th>Pay</th><th className="num">People</th><th className="num">Gross (TZS)</th><th className="num">PAYE + NSSF (TZS)</th><th className="num">Net (TZS)</th><th>Status</th><th>Paid on</th></tr></thead>
           <tbody>
-            {sheets === null ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
-            : here.length === 0 ? <tr><td colSpan={6} className="text-muted">No pay sheets yet.</td></tr>
+            {sheets === null ? <tr><td colSpan={8}><span className="skeleton" /></td></tr>
+            : here.length === 0 ? <tr><td colSpan={8} className="text-muted">No pay sheets yet.</td></tr>
             : here.map(s => (
               <tr key={s.id} className={`clickable-row${s.status === 'void' ? ' is-inactive' : ''}`} onClick={() => setOpenId(s.id)}>
                 <td>{s.period_start} – {s.period_end}</td>
                 <td>{CYCLE[s.cycle]}</td>
                 <td className="num">{s.pay_sheet_lines?.[0]?.count ?? ''}</td>
-                <td className="num">{formatAmount(Number(s.total))}</td>
-                <td><span className={`badge ${STATUS_BADGE[s.status]}`}>{STATUS[s.status]}</span></td>
+                <td className="num">{formatAmount(Number(s.gross_total || s.total))}</td>
+                <td className="num">{Number(s.employee_statutory) ? formatAmount(Number(s.employee_statutory)) : ''}</td>
+                <td className="num"><strong>{formatAmount(Number(s.total))}</strong></td>
+                <td><span className={`badge ${STATUS_BADGE[s.status]}`}>{STATUS[s.status]}</span>
+                  {s.status === 'draft' && s.rates_unverified?.length > 0 && <div className="pl-help text-warning">rates to verify</div>}</td>
                 <td>{s.paid_on || ''}</td>
               </tr>
             ))}
           </tbody>
           {here.some(s => s.status === 'paid') && (
-            <tfoot><tr><td colSpan={3}><strong>Paid</strong></td><td className="num"><strong>{money(here.filter(s => s.status === 'paid').reduce((t, s) => t + Number(s.total), 0))}</strong></td><td colSpan={2} /></tr></tfoot>
+            <tfoot><tr><td colSpan={5}><strong>Paid</strong></td><td className="num"><strong>{money(here.filter(s => s.status === 'paid').reduce((t, s) => t + Number(s.total), 0))}</strong></td><td colSpan={2} /></tr></tfoot>
           )}
         </table>
       </div></div>
@@ -436,10 +474,14 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   }
   const val = (l, k) => edits[l.id]?.[k] ?? (k === 'note' ? l.note ?? '' : String(Number(l[k]) || ''));
   const setVal = (l, k, v) => setEdits(m => ({ ...m, [l.id]: { ...(m[l.id] || {}), [k]: v } }));
-  const amountOf = l => Math.max(Number(l.base) + (num(val(l, 'additions')) || 0) - (num(val(l, 'deductions')) || 0), 0);
+  // net as typed: NSSF and PAYE as last worked out (they follow the additions once saved)
+  const grossOf = l => Number(l.base) + (num(val(l, 'additions')) || 0);
+  const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0), 0);
   const total = lines.reduce((t, l) => t + amountOf(l), 0);
   const sorted = [...lines].sort((a, b) => (a.pay_basis === b.pay_basis ? nameOf(a.staff_id).localeCompare(nameOf(b.staff_id)) : a.pay_basis === 'daily' ? -1 : 1));
   const missing = lines.filter(l => l.rate == null);
+  const unverified = sheet?.rates_unverified || [];
+  const tot = f => lines.reduce((t, l) => t + Number(l[f] || 0), 0);
   if (!sheet) return <Modal title="Pay sheet" onClose={onClose}>{error ? <div className="alert alert-error">{error}</div> : <span className="skeleton" />}</Modal>;
   return (
     <Modal title={`${CYCLE[sheet.cycle]} pay · ${sheet.period_start} – ${sheet.period_end}`} onClose={onClose} size="lg"
@@ -448,38 +490,45 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
           <button type="button" className="btn btn-ghost" onClick={() => setVoidReason('')}>Void…</button>}
         {draft && canRecord && <button type="button" className="btn btn-outline" disabled={busy} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('refresh_pay_sheet', { p_sheet: id })); }}><RefreshCw size={14} /> Refresh from attendance</button>}
         {draft && canRecord && Object.keys(edits).length > 0 && <button type="button" className="btn btn-outline" disabled={busy} onClick={saveEdits}>Save changes</button>}
-        {draft && canApprove && <button type="button" className="btn btn-primary" disabled={busy || missing.length > 0} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('approve_pay_sheet', { p_sheet: id })); }}>Approve {money(total)}</button>}
+        {draft && canApprove && <button type="button" className="btn btn-primary" disabled={busy || missing.length > 0 || unverified.length > 0} onClick={async () => { if (await saveEdits()) run(() => supabase.rpc('approve_pay_sheet', { p_sheet: id })); }}>Approve {money(total)}</button>}
         {sheet.status === 'approved' && canApprove && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => run(() => supabase.rpc('pay_pay_sheet', { p_sheet: id, p: pay }))}>Mark paid {money(Number(sheet.total))}</button>}
+        {lines.length > 0 && <a className="btn btn-outline" href={`/print/payslips/${id}`} target="_blank" rel="noreferrer">Payslips</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
       <div className="modal-form">
-        <p className="text-sm">Status: <strong>{STATUS[sheet.status]}</strong>{sheet.paid_on ? ` on ${sheet.paid_on} — recorded as a Wages expense` : ''}{sheet.void_reason ? ` — ${sheet.void_reason}` : ''}</p>
+        <p className="text-sm">Status: <strong>{STATUS[sheet.status]}</strong>{sheet.paid_on ? ` on ${sheet.paid_on} — net pay recorded as a Wages expense${sheet.statutory_expense_id ? ', PAYE/NSSF/WCF/SDL as a Statutory contributions expense (owed until remitted)' : ''}` : ''}{sheet.void_reason ? ` — ${sheet.void_reason}` : ''}</p>
+        {draft && unverified.length > 0 && <div className="alert alert-warning">Rates to verify: {unverified.map(c => RATE_NAME[c]).join(', ')}. The Technical admin or a director checks them with TRA / NSSF / WCF and confirms them under ⚙ — then Refresh and approve.</div>}
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Deduct (TZS)</th><th className="num">Amount (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={8} className="text-muted">No one on this sheet — mark attendance or set staff pay, then Refresh.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={11} className="text-muted">No one on this sheet — mark attendance or set staff pay, then Refresh.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
                   <td><strong>{nameOf(l.staff_id)}</strong></td>
                   <td className="num">{l.pay_basis === 'daily' ? Number(l.days || 0) : <span className="pl-help">salary</span>}</td>
                   <td className="num">{l.rate == null ? <span className="text-warning">not set</span> : <>{formatAmount(Number(l.rate))}<span className="pl-help"> {l.pay_basis === 'daily' ? '/day' : '/month'}</span></>}</td>
                   <td className="num">{formatAmount(Number(l.base))}</td>
-                  {draft && canRecord ? <>
-                    <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'additions')} onChange={e => setVal(l, 'additions', e.target.value)} /></td>
-                    <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'deductions')} onChange={e => setVal(l, 'deductions', e.target.value)} /></td>
-                  </> : <>
-                    <td className="num">{Number(l.additions) ? formatAmount(Number(l.additions)) : ''}</td>
-                    <td className="num">{Number(l.deductions) ? formatAmount(Number(l.deductions)) : ''}</td>
-                  </>}
+                  <td className="num">{draft && canRecord
+                    ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'additions')} onChange={e => setVal(l, 'additions', e.target.value)} />
+                    : Number(l.additions) ? formatAmount(Number(l.additions)) : ''}</td>
+                  <td className="num">{formatAmount(grossOf(l))}</td>
+                  <td className="num">{Number(l.nssf_employee) ? formatAmount(Number(l.nssf_employee)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
+                  <td className="num">{Number(l.paye) ? formatAmount(Number(l.paye)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
+                  <td className="num">{draft && canRecord
+                    ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'deductions')} onChange={e => setVal(l, 'deductions', e.target.value)} />
+                    : Number(l.deductions) ? formatAmount(Number(l.deductions)) : ''}</td>
                   <td className="num"><strong>{formatAmount(amountOf(l))}</strong></td>
                   <td>{draft && canRecord ? <input className="form-input" style={{ width: 140 }} placeholder="e.g. advance" value={val(l, 'note')} onChange={e => setVal(l, 'note', e.target.value)} /> : l.note || ''}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={6}><strong>Total</strong></td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
+            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
           </table>
         </div>
+        {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (
+          <p className="pl-help">Employer on top of pay: NSSF {formatAmount(tot('nssf_employer'))} · WCF {formatAmount(tot('wcf'))} · SDL {formatAmount(tot('sdl'))} — with PAYE and employee NSSF, {money(tot('nssf_employer') + tot('wcf') + tot('sdl') + tot('nssf_employee') + tot('paye'))} to remit.</p>
+        )}
         {sheet.status === 'approved' && canApprove && (
           <div className="form-row">
             <label className="pe-field"><span>Paid on</span><input type="date" className="form-input" max={today} value={pay.paid_on} onChange={e => setPay({ ...pay, paid_on: e.target.value })} /></label>

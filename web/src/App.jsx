@@ -32,6 +32,7 @@ import StatementDocument from './pages/StatementDocument';
 import PurchaseOrderDocument from './pages/PurchaseOrderDocument';
 import WeeklyCash from './pages/WeeklyCash';
 import Staff from './pages/Staff';
+import PayslipDocument from './pages/PayslipDocument';
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
           {/* A sale's printable documents: a tab of their own, no sidebar (signed-in check inside) */}
           <Route path="/print/sale/:id" element={<SaleDocument />} />
           <Route path="/print/statement/:id" element={<StatementDocument />} />
+          <Route path="/print/payslips/:id" element={<PayslipDocument />} />
           <Route path="/print/po/:id" element={<PurchaseOrderDocument />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}

@@ -2281,3 +2281,12 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .mr-due { color: var(--color-warning); font-weight: 600; }
 .mr-ok { color: var(--color-success); }
 .mr-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+
+/* payslips (088): one a page; signature line */
+.doc-slip + .doc-slip { margin-top: 16px; }
+@media print { .doc-slip { break-after: page; min-height: auto; } .doc-slip:last-child { break-after: auto; } }
+.doc-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 10px; }
+.doc-sign span { border-top: 1px solid #999; padding-top: 4px; color: #666; font-size: 11px; }
+/* statutory rates form (088) */
+.sr-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); }
+.sr-bands { display: flex; flex-direction: column; gap: 6px; }
