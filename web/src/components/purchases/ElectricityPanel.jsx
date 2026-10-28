@@ -15,7 +15,7 @@ const units = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const when = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const avg = xs => (xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : null);
-const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], approved: ['Approved — directors to buy', 'badge-info'], done: ['Bought', 'badge-success'], rejected: ['Turned down', 'badge-error'], cancelled: ['Cancelled', 'badge-neutral'] };
+const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], approved: ['Approved — to order', 'badge-info'], ordered: ['Ordered — to buy', 'badge-info'], done: ['Bought', 'badge-success'], rejected: ['Turned down', 'badge-error'], cancelled: ['Cancelled', 'badge-neutral'] };
 
 /*
  * Electricity under Expenses (1e, migration 072): each LUKU meter read in
@@ -25,7 +25,7 @@ const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], ap
  * idle days, nights, and units per cement bag on its machines. Costing
  * charges day use to the batches on the meter's machines (073).
  */
-export default function ElectricityPanel({ branchId, tabs }) {
+export default function ElectricityPanel({ branchId, tabs, onOrder }) {
   const { organization, canAt } = useAuth();
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
@@ -94,9 +94,9 @@ export default function ElectricityPanel({ branchId, tabs }) {
       <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
         {canAt('procurement.request', branchId) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setAsking(true)}>Request top-up</button>}
-        <span className="pl-help">Readings morning (asubuhi) and evening (jioni). A top-up: ask for a meter → the branch manager approves → the directors buy it and record the token, which tops the meter up.</span>
+        <span className="pl-help">Readings morning (asubuhi) and evening (jioni). A top-up: ask for a meter → the branch manager approves → an order → when bought, the token is recorded (directors, or the secretary or branch manager) and the meter is topped up.</span>
       </div>
-      <PageTabs nested tabs={[['days', 'Days'], ['topups', `Top-ups${data.topups.some(q => ['waiting', 'approved'].includes(q.status)) ? ` (${data.topups.filter(q => ['waiting', 'approved'].includes(q.status)).length})` : ''}`], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
+      <PageTabs nested tabs={[['days', 'Days'], ['topups', `Top-ups${data.topups.some(q => ['waiting', 'approved', 'ordered'].includes(q.status)) ? ` (${data.topups.filter(q => ['waiting', 'approved', 'ordered'].includes(q.status)).length})` : ''}`], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
       <div className="card"><div className="table-container">
         {tab === 'topups' ? (
           <table>
@@ -117,7 +117,8 @@ export default function ElectricityPanel({ branchId, tabs }) {
                       {q.status === 'waiting' && canAt('procurement.approve', q.branch_id) && <>
                         <button type="button" className="btn btn-primary btn-sm" onClick={() => setDeciding({ q, decision: 'approved' })}>Approve</button>{' '}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeciding({ q, decision: 'rejected' })}>Turn down…</button></>}
-                      {q.status === 'approved' && canAt('cash.approve', q.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setBuying(q)}>Bought — record token</button>}
+                      {q.status === 'approved' && onOrder && canAt('procurement.order', q.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => onOrder(q)}>Make order</button>}{' '}
+                      {['approved', 'ordered'].includes(q.status) && (canAt('cash.approve', q.branch_id) || canAt('procurement.receive', q.branch_id)) && <button type="button" className={`btn ${q.status === 'ordered' ? 'btn-primary' : 'btn-ghost'} btn-sm`} onClick={() => setBuying(q)}>Bought — record token</button>}
                     </td>
                   </tr>
                 );
@@ -325,7 +326,7 @@ function TopupDecision({ q, decision, onClose, onDone }) {
 }
 
 /* The directors bought the token: record it — the meter is topped up and the expense made (081) */
-function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
+export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
   const l = q.lines[0];
   const [f, setF] = useState({ units: l.quantity != null ? String(Number(l.quantity)) : '', amount: l.amount != null ? String(Number(l.amount)) : '', token_no: '', vat: '', ewura: '', rea: '', debt: '', ref: '',
     date: today, time: new Date().toTimeString().slice(0, 5) });
@@ -350,7 +351,7 @@ function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record and top up</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Asked {q.requested_on}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units and an Electricity expense is made.</p>
+        <p className="pl-help">Asked {q.requested_on}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units, an Electricity expense is made and the order closes.</p>
         <div className="form-row">{field('units', 'Units bought', { autoFocus: true })}{field('amount', 'Paid (TZS)')}
           <label className="pe-field"><span>Token number</span><input className="form-input" value={f.token_no} onChange={e => setF({ ...f, token_no: e.target.value })} /></label></div>
         <div className="form-row">{field('vat', 'VAT')}{field('ewura', 'EWURA levy')}{field('rea', 'REA levy')}{field('debt', 'Old debt taken off')}</div>

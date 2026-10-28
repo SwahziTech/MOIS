@@ -145,7 +145,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, onOrder, onRec
                   <td>{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => (
                     <div key={l.id}>{lineText(refs, l, cats, money)}
                       {l.kind === 'expense' && done[l.id] != null && <span className="pl-help"> · recorded {money(done[l.id])}</span>}
-                      {l.kind === 'expense' && !l.meter_id && done[l.id] == null && ['approved', 'ordered'].includes(r.status) && onRecordExpense && (
+                      {l.kind === 'expense' && !l.meter_id && done[l.id] == null && r.status === 'approved' && onRecordExpense && (
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRecordExpense(l)}>Record expense</button>)}
                     </div>))}{r.notes && <div className="pl-help">{r.notes}</div>}</td>
                   <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
@@ -154,7 +154,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, onOrder, onRec
                       <button type="button" className="btn btn-primary btn-sm" onClick={() => setDeciding({ r, decision: 'approved' })}>Approve</button>{' '}
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeciding({ r, decision: 'rejected' })}>Turn down…</button>
                     </>}
-                    {r.status === 'approved' && canAt('procurement.order', r.branch_id) && (r.lines || []).some(l => l.kind !== 'expense') && <button type="button" className="btn btn-primary btn-sm" onClick={() => onOrder({ ...r, lines: r.lines.filter(l => l.kind !== 'expense') })}>Make order</button>}
+                    {r.status === 'approved' && canAt('procurement.order', r.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => onOrder(r)}>Make order</button>}
                   </td>
                 </tr>
               );
@@ -225,37 +225,42 @@ function DecideModal({ r, decision, onClose, onDone }) {
 }
 
 /* ---------- Orders ---------- */
-export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedRequest, money, canReceive = () => false, onReceive }) {
+export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedRequest, money, canReceive = () => false, onReceive, onRecordExpense, onRecordToken }) {
   const { canAt } = useAuth();
   const [rows, setRows] = useState(null);
   const [got, setGot] = useState({});           // order line id → received (stock unit)
+  const [paidFor, setPaidFor] = useState({});   // expense order line id → recorded amount (082)
   const [error, setError] = useState('');
   const [making, setMaking] = useState(null);   // {} or { request }
   const [closing, setClosing] = useState(null); // { po, cancel }
   const [viewing, setViewing] = useState(null); // an order opened for review
   // what is still to come on an order, in its own units, ready for the purchase form
-  const remainingOf = po => [...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
+  const remainingOf = po => [...(po.lines || [])].filter(l => l.kind !== 'expense').sort((a, b) => a.line_no - b.line_no).map(l => {
     const f = Number(l.stock_quantity) / Number(l.quantity);
     return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
   }).filter(l => Number(l.quantity) > 0);
   const receive = po => { setViewing(null); onReceive?.({ orderId: po.id, supplierId: po.supplier_id, lines: remainingOf(po) }); };
   async function load() {
-    const [o, rc] = await Promise.all([
+    const [o, rc, ex] = await Promise.all([
       supabase.from('purchase_orders').select('*, lines:purchase_order_lines(*)').order('order_date', { ascending: false }).order('po_no', { ascending: false }),
       supabase.from('purchase_order_receipts').select('order_line_id, received'),
+      supabase.from('expenses').select('order_line_id, amount').not('order_line_id', 'is', null).eq('status', 'recorded'),
     ]);
     if (o.error) { console.error(o.error); setError("We couldn't load purchase orders."); return; }
     setRows(o.data || []);
     setGot(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
+    setPaidFor((ex.data || []).reduce((m, x) => ({ ...m, [x.order_line_id]: (m[x.order_line_id] || 0) + Number(x.amount) }), {}));
   }
   useEffect(() => { load(); }, []);
   useEffect(() => { if (fromRequest) { setMaking({ request: fromRequest }); onUsedRequest(); } }, [fromRequest]); // eslint-disable-line react-hooks/exhaustive-deps
   const here = (rows || []).filter(r => inBranch(r.branch_id));
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
-  const fullyIn = po => (po.lines || []).every(l => (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
-  const stateOf = po => (po.status !== 'open' ? po.status : fullyIn(po) ? 'received' : (po.lines || []).some(l => (got[l.id] ?? 0) > 0) ? 'part' : 'open');
+  const lineIn = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
+  const fullyIn = po => (po.lines || []).every(lineIn);
+  const stateOf = po => (po.status !== 'open' ? po.status : fullyIn(po) ? 'received' : (po.lines || []).some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0)) ? 'part' : 'open');
+  const hasGoodsToCome = po => (po.lines || []).some(l => l.kind !== 'expense' && !lineIn(l));
   const canMake = !!branchId && canAt('procurement.order', branchId);
-  const valueOf = po => (po.lines || []).reduce((t, l) => t + (l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
+  const valueOf = po => (po.lines || []).reduce((t, l) => t + (l.kind === 'expense' ? Number(l.amount || 0) : l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
   const open = here.filter(p => p.status === 'open');
   return (
     <>
@@ -271,7 +276,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>PO</th><th>Date</th><th>Supplier</th><th>Materials · received / ordered</th><th className="num">Value (TZS)</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>PO</th><th>Date</th><th>Supplier</th><th>What · received / ordered</th><th className="num">Value (TZS)</th><th>Status</th><th /></tr></thead>
           <tbody>
             {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
             : here.length === 0 ? <tr><td colSpan={7} className="text-muted">No purchase orders yet.</td></tr>
@@ -282,7 +287,12 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
                   <td>#{po.po_no}{po.sent_to_supplier && <div className="pl-help">sent</div>}</td>
                   <td>{po.order_date}{po.expected_on && <div className="pl-help">expected {po.expected_on}</div>}</td>
                   <td>{supplierName(po.supplier_id)}</td>
-                  <td>{[...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
+                  <td onClick={e => { if (e.target.closest('button')) e.stopPropagation(); }}>{[...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
+                    if (l.kind === 'expense') return (
+                      <div key={l.id}>{l.description}{l.amount != null && <span className="pl-help"> · {money(Number(l.amount))}</span>}
+                        {paidFor[l.id] != null ? <span className="pl-help text-success"> · recorded {money(paidFor[l.id])}</span>
+                          : po.status === 'open' && canReceive(po.branch_id) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => (l.meter_id ? onRecordToken?.(po, l) : onRecordExpense?.(l))}>{l.meter_id ? 'Bought — record token' : 'Record expense'}</button>}
+                      </div>);
                     const it = refs?.items[`m:${l.material_id}`]; const f = Number(l.stock_quantity) / Number(l.quantity);
                     return <div key={l.id}>{it?.name ?? '—'} <span className="pl-help">{qtyText(r2((got[l.id] ?? 0) / f))} / {qtyText(Number(l.quantity))} {refs?.unitById[l.unit_id]?.symbol ?? ''}</span></div>;
                   })}</td>
@@ -290,7 +300,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
                   <td><span className={`badge ${st === 'received' ? 'badge-success' : st === 'part' ? 'badge-warning' : PO[po.status]?.[1] ?? 'badge-info'}`}>{st === 'received' ? 'Received' : st === 'part' ? 'Part received' : PO[po.status][0]}</span>
                     {po.close_reason && <div className="pl-help">{po.close_reason}</div>}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                    {po.status === 'open' && st !== 'received' && canReceive(po.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => receive(po)}>Receive goods</button>}
+                    {po.status === 'open' && hasGoodsToCome(po) && canReceive(po.branch_id) && <button type="button" className="btn btn-primary btn-sm" onClick={() => receive(po)}>Receive goods</button>}
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => window.open(`/print/po/${po.id}`, '_blank', 'noopener')}><Printer size={13} /> Print</button>
                     {po.status === 'open' && canAt('procurement.order', po.branch_id) && <>
                       {!po.sent_to_supplier && <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { const { error: err } = await supabase.rpc('mark_purchase_order_sent', { p_id: po.id }); if (err) setError(dbErrorMessage(err)); else load(); }}>Mark sent</button>}
@@ -306,7 +316,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
       {making && <OrderModal refs={refs} branchId={making.request?.branch_id ?? branchId} request={making.request} onClose={() => setMaking(null)} onSaved={async () => { setMaking(null); await load(); }} />}
       {closing && <CloseModal {...closing} onClose={() => setClosing(null)} onDone={async () => { setClosing(null); await load(); }} />}
       {viewing && <OrderView po={viewing} refs={refs} got={got} money={money} supplierName={supplierName(viewing.supplier_id)} state={stateOf(viewing)}
-        canReceive={viewing.status === 'open' && stateOf(viewing) !== 'received' && canReceive(viewing.branch_id)} onReceive={() => receive(viewing)} onClose={() => setViewing(null)} />}
+        canReceive={viewing.status === 'open' && hasGoodsToCome(viewing) && canReceive(viewing.branch_id)} onReceive={() => receive(viewing)} onClose={() => setViewing(null)} />}
     </>
   );
 }
@@ -319,7 +329,7 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
       .then(({ data }) => setPurchases(data || []));
   }, [po.id]);
   const lines = [...(po.lines || [])].sort((a, b) => a.line_no - b.line_no);
-  const total = lines.reduce((t, l) => t + (l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
+  const total = lines.reduce((t, l) => t + (l.kind === 'expense' ? Number(l.amount || 0) : l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
   return (
     <Modal title={`Purchase order #${po.po_no} — ${supplierName}`} onClose={onClose} size="lg"
       footer={<>
@@ -333,6 +343,9 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
           <thead><tr><th>Material</th><th className="num">Ordered</th><th className="num">Received</th><th className="num">To come</th><th className="num">Price (TZS)</th></tr></thead>
           <tbody>
             {lines.map(l => {
+              if (l.kind === 'expense') return (
+                <tr key={l.id}><td><strong>{l.description}</strong></td><td className="num">{l.quantity != null ? `${qtyText(Number(l.quantity))} ${l.unit_text ?? ''}` : ''}</td>
+                  <td className="num" colSpan={2} /><td className="num">{l.amount != null ? formatAmount(Number(l.amount)) : ''}</td></tr>);
               const f = Number(l.stock_quantity) / Number(l.quantity); const u = refs?.unitById[l.unit_id]?.symbol ?? '';
               const rec = (got[l.id] ?? 0) / f;
               return (
@@ -359,9 +372,14 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
 
 function OrderModal({ refs, branchId, request, onClose, onSaved }) {
   const [supplierId, setSupplierId] = useState('');
-  const [lines, setLines] = useState(() => (request?.lines?.length
-    ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ materialId: l.material_id, quantity: String(Number(l.quantity)), unitId: l.unit_id, price: '' }))
-    : [{ materialId: '', quantity: '', unitId: '', price: '' }]));
+  const [newSupplier, setNewSupplier] = useState('');
+  const reqMaterials = [...(request?.lines || [])].filter(l => l.kind !== 'expense').sort((a, b) => a.line_no - b.line_no);
+  const [lines, setLines] = useState(() => (reqMaterials.length
+    ? reqMaterials.map(l => ({ materialId: l.material_id, quantity: String(Number(l.quantity)), unitId: l.unit_id, price: '' }))
+    : request ? [] : [{ materialId: '', quantity: '', unitId: '', price: '' }]));
+  // the request's expense lines (LUKU top-up, tools…): what it is and about how much
+  const [expenseLines, setExpenseLines] = useState(() => [...(request?.lines || [])].filter(l => l.kind === 'expense').sort((a, b) => a.line_no - b.line_no)
+    .map(l => ({ requestLineId: l.id, categoryId: l.category_id, meterId: l.meter_id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unitText: l.unit_text ?? '', amount: l.amount != null ? String(Number(l.amount)) : '' })));
   const [expected, setExpected] = useState('');
   const [notes, setNotes] = useState('');
   const [sent, setSent] = useState(false);
@@ -369,12 +387,14 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
   const [error, setError] = useState('');
   async function save() {
     setError('');
-    if (!supplierId) { setError('Choose the supplier.'); return; }
-    if (lines.some(l => !l.materialId || !(num(l.quantity) > 0) || !l.unitId)) { setError('Each line needs a material, a quantity above zero and a unit.'); return; }
+    if (!supplierId || (supplierId === '__new' && !newSupplier.trim())) { setError('Choose the supplier, or name a new one.'); return; }
+    if (lines.some(l => !l.materialId || !(num(l.quantity) > 0) || !l.unitId)) { setError('Each material line needs a material, a quantity above zero and a unit.'); return; }
+    if (!lines.length && !expenseLines.length) { setError('Add what is ordered.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, supplier_id: supplierId, request_id: request?.id ?? null,
-      expected_on: expected || null, notes, sent_to_supplier: sent,
-      lines: lines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
+    const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, ...(supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : { supplier_id: supplierId }),
+      request_id: request?.id ?? null, expected_on: expected || null, notes, sent_to_supplier: sent,
+      lines: [...lines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })),
+        ...expenseLines.map(l => ({ kind: 'expense', category_id: l.categoryId, meter_id: l.meterId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount), request_line_id: l.requestLineId }))] } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
@@ -389,10 +409,23 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
           <label className="pe-field"><span>Supplier</span>
             <select className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
               <option value="">Choose…</option>{(refs?.suppliers || []).filter(s => s.status === 'active').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select></label>
+              <option value="__new">New supplier…</option>
+            </select>
+            {supplierId === '__new' && <input className="form-input mt-4" placeholder="e.g. the LUKU seller" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
           <label className="pe-field"><span>Expected (optional)</span><input type="date" className="form-input" value={expected} onChange={e => setExpected(e.target.value)} /></label>
         </div>
-        <MaterialLines refs={refs} branchId={branchId} lines={lines} setLines={setLines} withPrice />
+        {(lines.length > 0 || !request) && <MaterialLines refs={refs} branchId={branchId} lines={lines} setLines={setLines} withPrice />}
+        {expenseLines.length > 0 && (
+          <table className="rd-table">
+            <thead><tr><th>Expense</th><th className="num">Quantity</th><th className="num">Amount (TZS)</th></tr></thead>
+            <tbody>{expenseLines.map((l, i) => (
+              <tr key={i}>
+                <td><strong>{l.description}</strong></td>
+                <td className="num">{l.quantity ? `${l.quantity} ${l.unitText}` : ''}</td>
+                <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} value={l.amount} onChange={e => setExpenseLines(ls => ls.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} /></td>
+              </tr>))}</tbody>
+          </table>
+        )}
         <label className="pe-field"><span>Notes (optional — printed on the order)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={sent} onChange={e => setSent(e.target.checked)} /> Sent to the supplier (print it from the list); leave unticked to keep it in MOIS only</label>
       </div>

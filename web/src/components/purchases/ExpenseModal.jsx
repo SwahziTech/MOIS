@@ -94,9 +94,11 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
         vat_amount: num(receipt.vat), ewura_levy: num(receipt.ewura), rea_levy: num(receipt.rea), debt_deducted: num(receipt.debt), receipt_ref: receipt.ref.trim() || null } });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't save this token. Please try again.")); return; }
-      if (prefill?.request_line_id && tokenId) {
+      if ((prefill?.order_line_id || prefill?.request_line_id) && tokenId) {
         const { data: tk } = await supabase.from('power_tokens').select('expense_id').eq('id', tokenId).maybeSingle();
-        if (tk?.expense_id) await supabase.rpc('link_expense_to_request', { p_expense: tk.expense_id, p_line: prefill.request_line_id });
+        if (tk?.expense_id) await (prefill.order_line_id
+          ? supabase.rpc('link_expense_to_order_line', { p_expense: tk.expense_id, p_line: prefill.order_line_id })
+          : supabase.rpc('link_expense_to_request', { p_expense: tk.expense_id, p_line: prefill.request_line_id }));
       }
       onSaved();
       return;
@@ -117,7 +119,8 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
     const res = isNew
       ? await supabase.rpc('record_expense', { p })
       : await supabase.rpc('update_expense', { p_id: expense.id, p });
-    if (!res.error && isNew && prefill?.request_line_id && res.data) await supabase.rpc('link_expense_to_request', { p_expense: res.data, p_line: prefill.request_line_id });
+    if (!res.error && isNew && prefill?.order_line_id && res.data) await supabase.rpc('link_expense_to_order_line', { p_expense: res.data, p_line: prefill.order_line_id });
+    else if (!res.error && isNew && prefill?.request_line_id && res.data) await supabase.rpc('link_expense_to_request', { p_expense: res.data, p_line: prefill.request_line_id });
     if (!res.error && (isOverhead || expense?.machine_id) && (machineId || null) !== (expense?.machine_id ?? null)) {
       const r2 = await supabase.rpc('set_expense_machine', { p_id: isNew ? res.data : expense.id, p_machine: isOverhead ? machineId || null : null });
       if (r2.error) res.error = r2.error;

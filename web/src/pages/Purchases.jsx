@@ -12,7 +12,7 @@ import { PageTabs, ChipRow } from '../components/ListControls';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
 import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
-import ElectricityPanel from '../components/purchases/ElectricityPanel';
+import ElectricityPanel, { BuyModal } from '../components/purchases/ElectricityPanel';
 import { RequestsPanel, OrdersPanel, PayPurchaseModal } from '../components/purchases/ProcurementPanels';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
@@ -83,7 +83,9 @@ export default function Purchases() {
   const [expChip,   setExpChip]   = useState('');
   const [editingExpense, setEditingExpense] = useState(null);   // 'new' | an expense
   const [expSettings, setExpSettings] = useState(false);        // ⚙: LUKU meters (072)
-  const [expensePrefill, setExpensePrefill] = useState(null);   // a new expense for an approved request line (080)
+  const [expensePrefill, setExpensePrefill] = useState(null);   // a new expense for an approved request line (080) or an order line (082)
+  const [ordersKey, setOrdersKey] = useState(0);                // refreshes the Orders list after a token is recorded
+  const [tokenFor, setTokenFor] = useState(null);               // a LUKU order line being recorded as bought (082)
 
   async function load() {
     setError('');
@@ -225,9 +227,11 @@ export default function Purchases() {
 
       {tab === 'requests' ? <RequestsPanel refs={refs} branchId={branchId} inBranch={inBranch} people={people} money={money} onOrder={r => { setOrderFrom(r); setTab('orders'); }}
           onRecordExpense={l => { setExpensePrefill({ category_id: l.category_id, description: l.description, quantity: l.quantity, amount: l.amount, request_line_id: l.id }); setEditingExpense('new'); }} />
-      : tab === 'orders' ? <OrdersPanel refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money}
-          canReceive={b => canRecordAt(b)} onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })} />
-      : tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
+      : tab === 'orders' ? <OrdersPanel key={ordersKey} refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money}
+          canReceive={b => canRecordAt(b) || canAt('cash.approve', b)} onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })}
+          onRecordExpense={l => { setExpensePrefill({ category_id: l.category_id, description: l.description, quantity: l.quantity, amount: l.amount, order_line_id: l.id, request_line_id: l.request_line_id }); setEditingExpense('new'); }}
+          onRecordToken={(po, l) => setTokenFor({ id: po.request_id, requested_on: po.order_date, meterName: (l.description || '').replace(/^LUKU top-up — /, ''), lines: [{ meter_id: l.meter_id, quantity: l.quantity, amount: l.amount }] })} />
+      : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('orders'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {tab === 'waiting' && (
@@ -403,8 +407,10 @@ export default function Purchases() {
         <ExpenseModal expense={editingExpense === 'new' ? null : editingExpense} prefill={editingExpense === 'new' ? expensePrefill : null} branchId={branchId} categories={expCats}
           suppliers={refs.suppliers} vatRateOf={vatRateOf} organization={organization} canRecordAt={canRecordAt}
           onClose={() => { setEditingExpense(null); setExpensePrefill(null); }}
-          onSaved={async () => { const fromRequest = !!expensePrefill; setEditingExpense(null); setExpensePrefill(null); setTab(fromRequest ? 'requests' : 'expenses'); await load(); }} />
+          onSaved={async () => { const from = expensePrefill?.order_line_id ? 'orders' : expensePrefill ? 'requests' : 'expenses'; setEditingExpense(null); setExpensePrefill(null); setOrdersKey(k => k + 1); setTab(from); await load(); }} />
       )}
+      {tokenFor && <BuyModal q={tokenFor} meterName={tokenFor.meterName} today={orgToday(organization?.timezone)} money={money}
+        onClose={() => setTokenFor(null)} onSaved={async () => { setTokenFor(null); setOrdersKey(k => k + 1); await load(); }} />}
       {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
         accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}
       {deleting && (

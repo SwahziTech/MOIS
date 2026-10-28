@@ -24,7 +24,7 @@ export default function PurchaseOrderDocument() {
         supabase.from('organizations').select('*').eq('id', po.organization_id).maybeSingle(),
         supabase.from('branches').select('*').eq('id', po.branch_id).maybeSingle(),
         supabase.from('suppliers').select('*').eq('id', po.supplier_id).maybeSingle(),
-        supabase.from('materials').select('id, name').in('id', po.lines.map(l => l.material_id)),
+        supabase.from('materials').select('id, name').in('id', po.lines.map(l => l.material_id).filter(Boolean)),
         supabase.from('units').select('id, symbol'),
       ]);
       setD({ po, org: org.data, branch: br.data, supplier: sup.data,
@@ -39,8 +39,9 @@ export default function PurchaseOrderDocument() {
   const { po, org, branch, supplier, mat, unit } = d;
   const money = v => formatMoney(v, org?.currency_code);
   const lines = [...po.lines].sort((a, b) => a.line_no - b.line_no);
-  const priced = lines.some(l => l.unit_price != null);
-  const total = lines.reduce((t, l) => t + (l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : 0), 0);
+  const priced = lines.some(l => l.unit_price != null || l.amount != null);
+  const amountOf = l => (l.kind === 'expense' ? (l.amount != null ? Number(l.amount) : null) : l.unit_price != null ? Number(l.unit_price) * Number(l.quantity) : null);
+  const total = lines.reduce((t, l) => t + (amountOf(l) ?? 0), 0);
 
   return (
     <div className="doc-page">
@@ -75,14 +76,14 @@ export default function PurchaseOrderDocument() {
         </section>
         <section>
           <table className="doc-table">
-            <thead><tr><th>#</th><th>Material</th><th className="num">Quantity</th>{priced && <th className="num">Price</th>}{priced && <th className="num">Amount</th>}</tr></thead>
+            <thead><tr><th>#</th><th>Item</th><th className="num">Quantity</th>{priced && <th className="num">Price</th>}{priced && <th className="num">Amount</th>}</tr></thead>
             <tbody>
               {lines.map(l => (
                 <tr key={l.id}>
-                  <td>{l.line_no}</td><td>{mat[l.material_id] ?? '—'}</td>
-                  <td className="num">{qtyText(Number(l.quantity))} {unit[l.unit_id] ?? ''}</td>
-                  {priced && <td className="num">{l.unit_price != null ? money(Number(l.unit_price)) : '—'}</td>}
-                  {priced && <td className="num">{l.unit_price != null ? money(Number(l.unit_price) * Number(l.quantity)) : '—'}</td>}
+                  <td>{l.line_no}</td><td>{l.kind === 'expense' ? l.description : mat[l.material_id] ?? '—'}</td>
+                  <td className="num">{l.quantity != null ? `${qtyText(Number(l.quantity))} ${l.kind === 'expense' ? l.unit_text ?? '' : unit[l.unit_id] ?? ''}` : ''}</td>
+                  {priced && <td className="num">{l.unit_price != null ? money(Number(l.unit_price)) : ''}</td>}
+                  {priced && <td className="num">{amountOf(l) != null ? money(amountOf(l)) : '—'}</td>}
                 </tr>
               ))}
             </tbody>
