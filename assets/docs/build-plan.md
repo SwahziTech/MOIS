@@ -265,8 +265,25 @@ Added to 1e (SwahziTech, 2026-10-27):
   employed staff on production teams.
 
 ## Staff (HR) — next phase after 1e
-**Status: CURRENT** (from 2026-10-28, on SwahziTech's instruction — Part 1 first: employees, attendance, labour into costing) (queued by SwahziTech, 2026-10-27; same dry-run and
-approval process as every phase)
+**Status: DONE** (2026-10-29; built 2026-10-28/29 as migrations 086–090. 087–090 must be applied, and the statutory rates confirmed against TRA/NSSF/WCF, before real pay is approved.)
+(queued by SwahziTech, 2026-10-27; same dry-run and approval process as every phase)
+
+**What was built:**
+- HR › Staff: Employees and Casuals tabs. Each card shows this week's attendance and the pay due so far.
+- Attendance.
+- Who worked is ticked on each production batch. Teams are names only, because the people change from day to day (087).
+- Statutory rates are kept in a dated table filled with the usual figures and marked "to verify". The Technical admin or a director confirms them. A pay sheet can't be approved on unconfirmed rates (088).
+- Pay sheets are made automatically from attendance (089):
+  - casuals weekly, at days × day rate;
+  - employed staff every 2 weeks, at days × salary ÷ working days a month (26, set under ⚙).
+- Deductions: NSSF, PAYE, WCF, SDL and other deductions.
+- Paying a sheet records the net pay as a Wages expense. PAYE, NSSF, WCF and SDL are recorded as one Statutory contributions expense, owed until remitted.
+- Payslips.
+- Advances and loans, taken back automatically on the sheets (090).
+- Returns: the month's PAYE, NSSF, SDL and WCF from paid sheets, with an Excel download (090).
+- Costing › Labour follows attendance the same way pay does, plus the employer's NSSF, WCF and SDL, shared over the day's batches by cement bags (090).
+
+**Open:** whether casuals count toward the SDL threshold — ask TRA. It is a setting on the SDL rate.
 
 Its own sidebar section, with four parts:
 - **Employees.** The master record: name, role, branch, employment type,
@@ -293,7 +310,7 @@ rates must be verified against TRA before real deductions go live.
 reworked here.
 
 ## 1f — Reports & AI v1
-**Status: not started**
+**Status: CURRENT** (from 2026-10-29, on SwahziTech's instruction — two-way daily report first)
 
 PRD sections: 4.15 (Dashboards & Reports), 7 (AI Features — V1 slice only:
 Ask MOIS, basic authorized queries, basic analysis, AI-assisted document
