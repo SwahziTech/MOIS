@@ -29,6 +29,7 @@ import Sales from './pages/Sales';
 import Customers from './pages/Customers';
 import SaleDocument from './pages/SaleDocument';
 import StatementDocument from './pages/StatementDocument';
+import PurchaseOrderDocument from './pages/PurchaseOrderDocument';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           {/* A sale's printable documents: a tab of their own, no sidebar (signed-in check inside) */}
           <Route path="/print/sale/:id" element={<SaleDocument />} />
           <Route path="/print/statement/:id" element={<StatementDocument />} />
+          <Route path="/print/po/:id" element={<PurchaseOrderDocument />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}
           <Route element={<ProtectedLayout />}>

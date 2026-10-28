@@ -13,6 +13,7 @@ import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
 import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
 import ElectricityPanel from '../components/purchases/ElectricityPanel';
+import { RequestsPanel, OrdersPanel, PayPurchaseModal } from '../components/purchases/ProcurementPanels';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -70,6 +71,11 @@ export default function Purchases() {
     setParams({}, { replace: true });
   }, [buyId, refs]); // eslint-disable-line react-hooks/exhaustive-deps
   const [deleting, setDeleting] = useState(null);   // a void purchase the technical admin is deleting
+  // procurement (077): paying a purchase; an approved request being turned into an order; the branch's accounts to pay from
+  const [paying, setPaying] = useState(null);
+  const [orderFrom, setOrderFrom] = useState(null);
+  const [payAccounts, setPayAccounts] = useState([]);
+  useEffect(() => { supabase.from('payment_accounts').select('id, name, branch_id, status').eq('status', 'active').order('display_order').then(({ data }) => setPayAccounts(data || [])); }, []);
   const [vatRates,  setVatRates]  = useState({});     // branch id → VAT rate (041)
   const [expCats,   setExpCats]   = useState([]);
   const [expenses,  setExpenses]  = useState([]);
@@ -196,7 +202,7 @@ export default function Purchases() {
 
   const purchaseTabs = (
     <PageTabs value={tab} onChange={setTab}
-      tabs={[['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Waiting for details (${waitingHere.length})`]]} />
+      tabs={[['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['requests', 'Requests'], ['orders', 'Orders'], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Waiting for details (${waitingHere.length})`]]} />
   );
 
   return (
@@ -216,7 +222,9 @@ export default function Purchases() {
       {purchaseTabs}
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
-      {tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
+      {tab === 'requests' ? <RequestsPanel refs={refs} branchId={branchId} inBranch={inBranch} people={people} onOrder={r => { setOrderFrom(r); setTab('orders'); }} />
+      : tab === 'orders' ? <OrdersPanel refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money} />
+      : tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {tab === 'waiting' && (
@@ -293,6 +301,9 @@ export default function Purchases() {
                           {p.status === 'void' && <div className="text-xs text-muted">{p.void_reason}</div>}
                         </td>
                         <td style={{ textAlign: 'right' }}>
+                          {p.status === 'recorded' && canRecordAt(p.branch_id) && t && Number(t.balance) > 0.004 && (
+                            <button type="button" className="btn btn-primary btn-sm" style={{ marginRight: 6 }} onClick={() => setPaying({ purchase: p, total: t.total })}>Pay…</button>
+                          )}
                           {p.status === 'recorded' && canRecordAt(p.branch_id) && (
                             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ mode: 'edit', purchase: p })}>Open</button>
                           )}
@@ -391,6 +402,8 @@ export default function Purchases() {
           onClose={() => setEditingExpense(null)}
           onSaved={async () => { setEditingExpense(null); setTab('expenses'); await load(); }} />
       )}
+      {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
+        accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}
       {deleting && (
         <Modal title={`Delete the purchase of ${deleting.purchase_date}`} onClose={() => setDeleting(null)}>
           <DeletePurchase purchase={deleting} goods={describeLines(txByMove[deleting.movement_id])}
@@ -439,6 +452,14 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
 
   const activeSuppliers = refs.suppliers.filter(s => s.status === 'active' || s.id === purchase?.supplier_id);
   const [supplierId, setSupplierId] = useState(purchase?.supplier_id ?? receipt?.supplier_id ?? firstPast?.[0].supplierId ?? '');
+  // received against a purchase order (077): the supplier's open orders at this branch
+  const [orderId, setOrderId] = useState(purchase?.purchase_order_id ?? '');
+  const [openOrders, setOpenOrders] = useState([]);
+  useEffect(() => {
+    if (!supplierId) { setOpenOrders([]); return; }
+    supabase.from('purchase_orders').select('id, po_no, order_date, branch_id, status').eq('supplier_id', supplierId).eq('status', 'open').order('order_date', { ascending: false })
+      .then(({ data }) => setOpenOrders(data || []));
+  }, [supplierId]);
   const [newSupplier, setNewSupplier] = useState('');
   const [invoice,   setInvoice]   = useState(purchase?.invoice_reference ?? receipt?.reference ?? '');
   const [transport, setTransport] = useState(purchase?.transport_charge ? String(purchase.transport_charge) : '');
@@ -528,6 +549,10 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
         return;
       }
       res = await supabase.rpc('record_purchase', { p: payload });
+    }
+    if (!res.error && (orderId || purchase?.purchase_order_id) && orderId !== (purchase?.purchase_order_id ?? '')) {
+      const pid = mode === 'edit' ? purchase.id : res.data;
+      if (pid) { const r2 = await supabase.rpc('set_purchase_order', { p_purchase: pid, p_order: orderId || null }); if (r2.error) res = r2; }
     }
     setBusy(false);
     if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save the purchase. Nothing was recorded.")); return; }
@@ -677,6 +702,12 @@ function PurchaseModal({ mode, receipt, purchase, materialId, refs, materials, t
             </select>
             {!supplierId && mode !== 'edit' && (
               <input className="form-input mt-4" aria-label="New supplier name" placeholder="Supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />
+            )}
+            {supplierId && (openOrders.length > 0 || orderId) && (
+              <select className="form-input mt-4" aria-label="Against purchase order" value={orderId} onChange={e => setOrderId(e.target.value)}>
+                <option value="">No purchase order</option>
+                {openOrders.map(o => <option key={o.id} value={o.id}>Against PO #{o.po_no} · {o.order_date}</option>)}
+              </select>
             )}
           </div>
           <div className="form-group">
