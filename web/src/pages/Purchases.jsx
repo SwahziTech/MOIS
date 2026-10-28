@@ -83,6 +83,7 @@ export default function Purchases() {
   const [expChip,   setExpChip]   = useState('');
   const [editingExpense, setEditingExpense] = useState(null);   // 'new' | an expense
   const [expSettings, setExpSettings] = useState(false);        // ⚙: LUKU meters (072)
+  const [expensePrefill, setExpensePrefill] = useState(null);   // a new expense for an approved request line (080)
 
   async function load() {
     setError('');
@@ -222,7 +223,8 @@ export default function Purchases() {
       {purchaseTabs}
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
 
-      {tab === 'requests' ? <RequestsPanel refs={refs} branchId={branchId} inBranch={inBranch} people={people} onOrder={r => { setOrderFrom(r); setTab('orders'); }} />
+      {tab === 'requests' ? <RequestsPanel refs={refs} branchId={branchId} inBranch={inBranch} people={people} money={money} onOrder={r => { setOrderFrom(r); setTab('orders'); }}
+          onRecordExpense={l => { setExpensePrefill({ category_id: l.category_id, description: l.description, quantity: l.quantity, amount: l.amount, request_line_id: l.id }); setEditingExpense('new'); }} />
       : tab === 'orders' ? <OrdersPanel refs={refs} branchId={branchId} inBranch={inBranch} fromRequest={orderFrom} onUsedRequest={() => setOrderFrom(null)} money={money}
           canReceive={b => canRecordAt(b)} onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })} />
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} /> : <div className="card">
@@ -398,10 +400,10 @@ export default function Purchases() {
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
       )}
       {editingExpense && refs && (
-        <ExpenseModal expense={editingExpense === 'new' ? null : editingExpense} branchId={branchId} categories={expCats}
+        <ExpenseModal expense={editingExpense === 'new' ? null : editingExpense} prefill={editingExpense === 'new' ? expensePrefill : null} branchId={branchId} categories={expCats}
           suppliers={refs.suppliers} vatRateOf={vatRateOf} organization={organization} canRecordAt={canRecordAt}
-          onClose={() => setEditingExpense(null)}
-          onSaved={async () => { setEditingExpense(null); setTab('expenses'); await load(); }} />
+          onClose={() => { setEditingExpense(null); setExpensePrefill(null); }}
+          onSaved={async () => { const fromRequest = !!expensePrefill; setEditingExpense(null); setExpensePrefill(null); setTab(fromRequest ? 'requests' : 'expenses'); await load(); }} />
       )}
       {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
         accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}

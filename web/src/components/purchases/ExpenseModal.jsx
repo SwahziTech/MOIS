@@ -16,7 +16,7 @@ export const PAYMENT_METHODS = ['Cash', 'Mobile money', 'Bank transfer', 'Cheque
  * The category comes from the list; what was bought is typed each time —
  * on purpose never offered back as a list to pick from.
  */
-export default function ExpenseModal({ expense, branchId, categories, suppliers, vatRateOf, organization, canRecordAt, onClose, onSaved }) {
+export default function ExpenseModal({ expense, prefill, branchId, categories, suppliers, vatRateOf, organization, canRecordAt, onClose, onSaved }) {
   const { branches } = useBranch();
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, organization?.currency_code);
@@ -25,11 +25,12 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
 
   const [branch,   setBranch]   = useState(expense?.branch_id ?? (canRecordAt(branchId) ? branchId : myBranches[0]?.id ?? ''));
   const [date,     setDate]     = useState(expense?.expense_date ?? today);
-  const [category, setCategory] = useState(expense?.category_id ?? '');
-  const [what,     setWhat]     = useState(expense?.description ?? '');
-  const [qty,      setQty]      = useState(expense?.quantity != null ? String(expense.quantity) : '');
+  // from an approved request line (080): its kind, what it is, quantity and expected amount
+  const [category, setCategory] = useState(expense?.category_id ?? prefill?.category_id ?? '');
+  const [what,     setWhat]     = useState(expense?.description ?? prefill?.description ?? '');
+  const [qty,      setQty]      = useState(expense?.quantity != null ? String(expense.quantity) : prefill?.quantity != null ? String(Number(prefill.quantity)) : '');
   const [price,    setPrice]    = useState(expense?.unit_price != null ? String(expense.unit_price) : '');
-  const [amount,   setAmount]   = useState(expense ? String(expense.amount) : '');
+  const [amount,   setAmount]   = useState(expense ? String(expense.amount) : prefill?.amount != null ? String(Number(prefill.amount)) : '');
   const [supplierId, setSupplierId] = useState(expense?.supplier_id ?? '');
   const [newSupplier, setNewSupplier] = useState('');
   const [vatShown, setVatShown] = useState(expense?.vat_amount != null);
@@ -87,12 +88,16 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
       if (!(num(qty) > 0)) { setError('Enter the units bought.'); return; }
       if (total == null || !(total >= 0)) { setError('Enter what was paid.'); return; }
       setBusy(true);
-      const { error: err } = await supabase.rpc('record_power_token', { p: {
+      const { data: tokenId, error: err } = await supabase.rpc('record_power_token', { p: {
         meter_id: meterId, units: num(qty), amount: total, loaded_at: new Date(`${date}T${loadedTime || '12:00'}`).toISOString(),
         token_no: notes.trim() || null, paid_from: method.trim() || 'cash',
         vat_amount: num(receipt.vat), ewura_levy: num(receipt.ewura), rea_levy: num(receipt.rea), debt_deducted: num(receipt.debt), receipt_ref: receipt.ref.trim() || null } });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't save this token. Please try again.")); return; }
+      if (prefill?.request_line_id && tokenId) {
+        const { data: tk } = await supabase.from('power_tokens').select('expense_id').eq('id', tokenId).maybeSingle();
+        if (tk?.expense_id) await supabase.rpc('link_expense_to_request', { p_expense: tk.expense_id, p_line: prefill.request_line_id });
+      }
       onSaved();
       return;
     }
@@ -112,6 +117,7 @@ export default function ExpenseModal({ expense, branchId, categories, suppliers,
     const res = isNew
       ? await supabase.rpc('record_expense', { p })
       : await supabase.rpc('update_expense', { p_id: expense.id, p });
+    if (!res.error && isNew && prefill?.request_line_id && res.data) await supabase.rpc('link_expense_to_request', { p_expense: res.data, p_line: prefill.request_line_id });
     if (!res.error && (isOverhead || expense?.machine_id) && (machineId || null) !== (expense?.machine_id ?? null)) {
       const r2 = await supabase.rpc('set_expense_machine', { p_id: isNew ? res.data : expense.id, p_machine: isOverhead ? machineId || null : null });
       if (r2.error) res.error = r2.error;
