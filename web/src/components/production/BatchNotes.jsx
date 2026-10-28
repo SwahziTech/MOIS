@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Cog, X } from 'lucide-react';
+import { Users, Cog, UserCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
 
@@ -8,26 +8,37 @@ import { dbErrorMessage } from '../../lib/masterData';
  * (SwahziTech, 2026-10-25): who made it, on what, and the note ("thrown
  * away" was removed the same day). Team and machine are required but start filled — the
  * last team used at the branch, the machine that makes the product — so a
- * normal batch needs no taps. A team is created once and picked after; who
- * worked is recorded only when it differs from the team.
+ * normal batch needs no taps.
  *
- * value: { teamId, workerIds (null = whole team), machineId, notes }
+ * Who worked (087, 2026-10-28): teams change week to week, even day to day,
+ * so a team is a name only and the people are ticked on each batch from the
+ * branch's staff — those marked at work that day first. A team starts with
+ * the people of its last batch; a new labourer added here becomes a casual
+ * in HR › Staff (pay set there).
+ *
+ * value: { teamId, workerIds (staff ids), machineId, notes }
  */
 export function useProductionLists(branchId) {
   const [lists, setLists] = useState(null);   // null = loading; { ready: false } before 056
   async function load() {
     if (!branchId) return;
-    const [t, m, mp] = await Promise.all([
-      supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branchId).order('name'),
+    const [t, m, mp, pp, lb] = await Promise.all([
+      supabase.from('production_teams').select('id, name, status').eq('branch_id', branchId).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
+      supabase.from('production_people').select('id, full_name, kind, job_title, status').eq('branch_id', branchId).order('full_name'),
+      supabase.from('production_batches').select('team_id, worker_ids').eq('branch_id', branchId).neq('status', 'void').not('team_id', 'is', null)
+        .order('created_at', { ascending: false }).limit(200),
     ]);
-    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [], norms: {} }); return; }
+    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [], people: [], lastWorkers: {}, norms: {} }); return; }
     // labour norms (057): bags a person per product at this branch — the screens work without them
     const n = await supabase.from('branch_products').select('product_id, bags_per_person_min, bags_per_person_max').eq('branch_id', branchId);
     const norms = Object.fromEntries((n.error ? [] : n.data || []).filter(x => x.bags_per_person_min != null || x.bags_per_person_max != null)
       .map(x => [x.product_id, { min: Number(x.bags_per_person_min ?? x.bags_per_person_max), max: Number(x.bags_per_person_max ?? x.bags_per_person_min) }]));
-    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], norms });
+    // each team's people on its latest batch: where a new batch of that team starts
+    const lastWorkers = {};
+    for (const b of lb.data || []) if (!lastWorkers[b.team_id] && b.worker_ids?.length) lastWorkers[b.team_id] = b.worker_ids;
+    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], people: pp.error ? [] : pp.data || [], lastWorkers, norms });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   return [lists, load];
@@ -37,11 +48,9 @@ const lastKey = (kind, branchId, extra = '') => `mois.batchnotes.${kind}.${branc
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
 const recall = k => { try { return localStorage.getItem(k); } catch { return null; } };
 
-/** The people on a batch: who worked when that was changed, else the team's members (ids) */
+/** The people on a batch (staff ids, 087) */
 export function peopleOf(teams, teamId, workerIds) {
-  if (workerIds) return workerIds;
-  const t = (teams || []).find(x => x.id === teamId);
-  return t ? t.members.filter(m => m.status !== 'inactive').map(m => m.id) : [];
+  return workerIds || [];
 }
 
 /**
@@ -67,34 +76,36 @@ export function labourNorm(lists, batches) {
   return { min: Math.ceil(min - 1e-9), max: Math.ceil(max - 1e-9), missing };
 }
 
-/** The team's name, and who worked when that was changed: "Juma team (2 of 3)" */
+/** The team's name and how many worked: "Juma team (5 people)" */
 export function teamLabel(lists, teamId, workerIds) {
   const t = lists?.teams?.find(x => x.id === teamId);
   if (!t) return null;
-  const active = t.members.filter(m => m.status === 'active');
-  return workerIds ? `${t.name} (${workerIds.length} of ${active.length})` : t.name;
+  return workerIds?.length ? `${t.name} (${workerIds.length} ${workerIds.length === 1 ? 'person' : 'people'})` : t.name;
 }
 
-export default function BatchNotes({ branchId, organizationId, productId, lists, reload, value, onChange }) {
+export default function BatchNotes({ branchId, organizationId, productId, date, lists, reload, value, onChange }) {
   const set = patch => onChange({ ...value, ...patch });
   const teams = (lists?.teams || []).filter(t => t.status === 'active');
-  const team = teams.find(t => t.id === value.teamId);
   const allMachines = (lists?.machines || []).filter(m => m.status === 'active');
   // machines that make this product; all the branch's machines until one is linked
   const linked = allMachines.filter(m => lists.links.some(l => l.machine_id === m.id && l.product_id === productId));
   const machines = linked.length ? linked : allMachines;
   const [editing, setEditing] = useState(null);   // 'workers' | 'newTeam' | 'newMachine'
   const [text, setText] = useState('');
-  const [members, setMembers] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [present, setPresent] = useState({});     // staff id → day fraction marked at work on the batch's date
+
+  const active = useMemo(() => (lists?.people || []).filter(p => p.status === 'active'), [lists]);
+  // a team starts with the people of its last batch (those still at the branch)
+  const startPeople = teamId => (lists?.lastWorkers?.[teamId] || []).filter(id => active.some(p => p.id === id));
 
   // Start filled: the last team used here (or the only one); the machine last used for this product (or the only one)
   useEffect(() => {
     if (!lists?.ready || value.teamId) return;
     const last = recall(lastKey('team', branchId));
     const pick = teams.find(t => t.id === last) ?? (teams.length === 1 ? teams[0] : null);
-    if (pick) set({ teamId: pick.id, workerIds: null });
+    if (pick) set({ teamId: pick.id, workerIds: value.workerIds?.length ? value.workerIds : startPeople(pick.id) });
   }, [lists, branchId, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!lists?.ready || !productId) return;
@@ -103,6 +114,19 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
     const pick = machines.find(m => m.id === last) ?? (machines.length === 1 ? machines[0] : null);
     set({ machineId: pick?.id ?? '' });
   }, [lists, branchId, productId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the team kept from an earlier batch, with nobody ticked (a draft from before 087): start with its last people
+  useEffect(() => {
+    if (lists?.ready && value.teamId && !value.workerIds?.length) {
+      const start = startPeople(value.teamId);
+      if (start.length) set({ workerIds: start });
+    }
+  }, [lists, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // who is marked at work that day (HR › Staff › Attendance) is listed first
+  useEffect(() => {
+    if (!lists?.ready || !date) return;
+    supabase.from('production_presence').select('staff_id, day_fraction').eq('branch_id', branchId).eq('work_date', date)
+      .then(({ data }) => setPresent(Object.fromEntries((data || []).map(a => [a.staff_id, Number(a.day_fraction)]))));
+  }, [lists, branchId, date]);
 
   async function run(fn) {
     setError(''); setBusy(true);
@@ -112,9 +136,11 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
   const must = ({ data, error: err }) => { if (err) throw err; return data; };
 
   function pickTeam(id) {
-    if (id === '+') { setEditing('newTeam'); setText(''); setMembers(''); return; }
+    if (id === '+') { setEditing('newTeam'); setText(''); return; }
     remember(lastKey('team', branchId), id);
-    set({ teamId: id, workerIds: null });
+    const start = startPeople(id);
+    // a team with no batch yet keeps whoever is ticked
+    set({ teamId: id, workerIds: start.length ? start : value.workerIds || [] });
   }
   async function pickMachine(id) {
     if (id === '+') { setEditing('newMachine'); setText(''); return; }
@@ -129,12 +155,10 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
   }
   const createTeam = () => run(async () => {
     const t = must(await supabase.from('production_teams').insert({ organization_id: organizationId, branch_id: branchId, name: text.trim() }).select('id').single());
-    const names = members.split(',').map(s => s.trim()).filter(Boolean);
-    if (names.length) must(await supabase.from('production_team_members').insert(names.map(name => ({ organization_id: organizationId, team_id: t.id, name }))));
     await reload();
     remember(lastKey('team', branchId), t.id);
-    set({ teamId: t.id, workerIds: null });
-    setEditing(null);
+    set({ teamId: t.id, workerIds: value.workerIds || [] });
+    setEditing('workers'); setText('');
   });
   const createMachine = () => run(async () => {
     const m = must(await supabase.from('machines').insert({ organization_id: organizationId, branch_id: branchId, name: text.trim() }).select('id').single());
@@ -144,26 +168,22 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
     set({ machineId: m.id });
     setEditing(null);
   });
-  const addMember = () => run(async () => {
-    must(await supabase.from('production_team_members').insert({ organization_id: organizationId, team_id: team.id, name: text.trim() }));
+  // a labourer not on the staff list yet: added as a casual (pay is set in HR › Staff)
+  const addPerson = () => run(async () => {
+    const id = must(await supabase.rpc('add_production_person', { p_branch: branchId, p_name: text.trim() }));
     setText('');
     await reload();
-  });
-  const leaveTeam = id => run(async () => {   // left for good: kept on past batches
-    must(await supabase.from('production_team_members').update({ status: 'inactive' }).eq('id', id));
-    if (value.workerIds) set({ workerIds: value.workerIds.filter(x => x !== id) });
-    await reload();
+    if (!(value.workerIds || []).includes(id)) set({ workerIds: [...(value.workerIds || []), id] });
   });
 
-  // who worked: the team's members (ticked = worked) and helpers from the branch's other teams
-  const activeMembers = team ? team.members.filter(m => m.status === 'active') : [];
-  const helpers = useMemo(() => teams.filter(t => t.id !== value.teamId).flatMap(t => t.members.filter(m => m.status === 'active').map(m => ({ ...m, team: t.name }))), [teams, value.teamId]);
-  const worked = value.workerIds ?? activeMembers.map(m => m.id);
-  function toggleWorker(id) {
-    const next = worked.includes(id) ? worked.filter(x => x !== id) : [...worked, id];
-    const whole = next.length === activeMembers.length && activeMembers.every(m => next.includes(m.id));
-    set({ workerIds: whole ? null : next });
-  }
+  const worked = value.workerIds || [];
+  const toggleWorker = id => set({ workerIds: worked.includes(id) ? worked.filter(x => x !== id) : [...worked, id] });
+  // at work that day first, then the rest; ticked people who have since left still show
+  const listed = useMemo(() => {
+    const extra = (lists?.people || []).filter(p => p.status !== 'active' && worked.includes(p.id));
+    return [...active, ...extra].sort((a, b) => (present[b.id] ? 1 : 0) - (present[a.id] ? 1 : 0) || a.full_name.localeCompare(b.full_name));
+  }, [active, lists, worked, present]);
+  const atWork = listed.filter(p => present[p.id]);
 
   if (!lists) return null;
   const noteInput = (
@@ -178,10 +198,14 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
           <Users size={14} className="bn-ico" aria-hidden="true" />
           <select className="bn-chip-sel" aria-label="Team" value={value.teamId} onChange={e => pickTeam(e.target.value)}>
             {!value.teamId && <option value="">{teams.length ? 'Team…' : 'No team yet'}</option>}
-            {teams.map(t => <option key={t.id} value={t.id}>{t.id === value.teamId ? teamLabel(lists, t.id, value.workerIds) : t.name}</option>)}
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             <option value="+">+ New team…</option>
           </select>
-          {team && <button type="button" className="bn-edit" onClick={() => setEditing(editing === 'workers' ? null : 'workers')}>{editing === 'workers' ? 'done' : 'who worked'}</button>}
+        </span>
+        <span className={`bn-chip${worked.length ? '' : ' is-missing'}`}>
+          <UserCheck size={14} className="bn-ico" aria-hidden="true" />
+          <button type="button" className="bn-edit" onClick={() => setEditing(editing === 'workers' ? null : 'workers')}>
+            {editing === 'workers' ? 'done' : worked.length ? `${worked.length} ${worked.length === 1 ? 'person' : 'people'} worked` : 'who worked…'}</button>
         </span>
         <span className={`bn-chip${value.machineId ? '' : ' is-missing'}`}>
           <Cog size={14} className="bn-ico" aria-hidden="true" />
@@ -198,7 +222,6 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
       {editing === 'newTeam' && (
         <div className="bn-panel">
           <input className="form-input bn-sel" autoFocus placeholder="Team name, e.g. Juma team" value={text} onChange={e => setText(e.target.value)} />
-          <input className="form-input" style={{ flex: 2 }} placeholder="Members, separated by commas (optional)" value={members} onChange={e => setMembers(e.target.value)} />
           <button type="button" className="btn btn-primary btn-sm" disabled={busy || !text.trim()} onClick={createTeam}>Create team</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button>
         </div>
@@ -210,21 +233,28 @@ export default function BatchNotes({ branchId, organizationId, productId, lists,
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button>
         </div>
       )}
-      {editing === 'workers' && team && (
+      {editing === 'workers' && (
         <div className="bn-panel bn-workers">
-          <span className="pl-help">Untick anyone away for this batch; tick a helper. The team stays as it is.</span>
+          <span className="pl-help">
+            Tick who worked on this batch.{atWork.length ? ` ${atWork.length} marked at work on ${date} are listed first.` : ''}
+            {worked.length > 0 && <> <button type="button" className="link-btn" onClick={() => set({ workerIds: [] })}>Untick all</button></>}
+            {atWork.length > 0 && <> · <button type="button" className="link-btn" onClick={() => set({ workerIds: [...new Set([...worked, ...atWork.map(p => p.id)])] })}>Tick everyone at work</button></>}
+          </span>
           <div className="bn-people">
-            {activeMembers.map(m => (
-              <label key={m.id} className="bn-person"><input type="checkbox" checked={worked.includes(m.id)} onChange={() => toggleWorker(m.id)} /> {m.name}
-                <button type="button" className="bn-x" title="Left the team for good" aria-label={`${m.name} left the team`} onClick={() => leaveTeam(m.id)}><X size={11} /></button></label>
-            ))}
-            {helpers.map(m => (
-              <label key={m.id} className="bn-person is-helper"><input type="checkbox" checked={worked.includes(m.id)} onChange={() => toggleWorker(m.id)} /> {m.name} <span className="pl-help">({m.team})</span></label>
+            {listed.length === 0 && <span className="pl-help">No staff at this branch yet — add a name below.</span>}
+            {listed.map(p => (
+              <label key={p.id} className={`bn-person${present[p.id] ? '' : ' is-helper'}`}>
+                <input type="checkbox" checked={worked.includes(p.id)} onChange={() => toggleWorker(p.id)} /> {p.full_name}
+                {present[p.id] === 0.5 && <span className="pl-help">(½ day)</span>}
+                {p.status !== 'active' && <span className="pl-help">(left)</span>}
+              </label>
             ))}
           </div>
           <div className="flex items-center gap-8">
-            <input className="form-input bn-sel" placeholder={`New member of ${team.name}`} value={text} onChange={e => setText(e.target.value)} />
-            <button type="button" className="btn btn-outline btn-sm" disabled={busy || !text.trim()} onClick={addMember}>Add to team</button>
+            <input className="form-input bn-sel" placeholder="Someone new, e.g. a casual labourer" value={text} onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && text.trim()) { e.preventDefault(); addPerson(); } }} />
+            <button type="button" className="btn btn-outline btn-sm" disabled={busy || !text.trim()} onClick={addPerson}>Add</button>
+            <span className="pl-help">Added as a casual in HR › Staff, where their pay is set.</span>
           </div>
         </div>
       )}

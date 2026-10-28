@@ -59,16 +59,17 @@ export default function ProductionLedger() {
       ]);
       setPcsPerSqm(Object.fromEntries((ps.data || []).map(x => [x.product_id, Number(x.pcs_per_sqm)])));
       // production tracking (056) — the ledger still works without it
-      const [t, m] = await Promise.all([
-        supabase.from('production_teams').select('id, name, members:production_team_members(id, name, status)'),
+      const [t, m, pp] = await Promise.all([
+        supabase.from('production_teams').select('id, name'),
         supabase.from('machines').select('*'),
+        supabase.from('production_people').select('id, full_name'),   // who worked (087): staff names, no pay
       ]);
       // labour norms (057): bags a person, per branch and product
       const ln = await supabase.from('branch_products').select('branch_id, product_id, bags_per_person_min, bags_per_person_max');
       const norms = {};
       for (const x of ln.error ? [] : ln.data || []) if (x.bags_per_person_min != null || x.bags_per_person_max != null)
         (norms[x.branch_id] ||= {})[x.product_id] = { min: Number(x.bags_per_person_min ?? x.bags_per_person_max), max: Number(x.bags_per_person_max ?? x.bags_per_person_min) };
-      setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [], norms });
+      setTrack(t.error || m.error ? null : { teams: t.data || [], machines: m.data || [], people: pp.data || [], norms });
       if (b.error) throw b.error;
       setRefs(r);
       setBatches(b.data || []);
@@ -140,13 +141,12 @@ export default function ProductionLedger() {
     };
   }
 
-  // the team, and who worked when it differed: "Juma team (2 of 3: Juma, Neema)"
+  // the team, and who worked on the batch (087): "Juma team (Juma, Neema)"
   function teamOf(b) {
     const t = track?.teams.find(x => x.id === b.team_id);
     if (!t) return null;
-    if (!b.worker_ids) return t.name;
-    const people = track.teams.flatMap(x => x.members);
-    return `${t.name} (${b.worker_ids.map(id => people.find(p => p.id === id)?.name ?? '?').join(', ')})`;
+    if (!b.worker_ids?.length) return t.name;
+    return `${t.name} (${b.worker_ids.map(id => track.people.find(p => p.id === id)?.full_name ?? '?').join(', ')})`;
   }
 
   // Tracking: the period's batches by team, machine or product

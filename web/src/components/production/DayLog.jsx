@@ -274,7 +274,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const tracked = !!lists?.ready;
     if (tracked && !form.teamId) { setAddError('Choose the team that made this batch (or + New team).'); return; }
     if (tracked && !form.machineId) { setAddError('Choose the machine it was made on (or + New machine).'); return; }
-    if (tracked && form.workerIds && !form.workerIds.length) { setAddError('Tick at least one person who worked on this batch.'); return; }
+    if (tracked && !form.workerIds?.length) { setAddError('Tick who worked on this batch (the people chip).'); return; }
     const payload = {
       batch_date: date, raw_warehouse_id: rawId, curing_warehouse_id: curingStore.id, color_id: form.colorId || null,
       recipe_version_id: recipe.id, cement_bags: bags, notes: form.notes.trim() || null, allow_other_products: form.allowOther,
@@ -589,7 +589,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         </div>
       </section>
 
-      <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} lists={lists} reload={reloadLists}
+      <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} date={date} lists={lists} reload={reloadLists}
         value={{ teamId: form.teamId ?? '', workerIds: form.workerIds ?? null, machineId: form.machineId ?? '', notes: form.notes }}
         onChange={v => set(v)} />
       <div className="pl-actions">

@@ -3,7 +3,7 @@ import { HardHat, Plus, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatAmount } from '../lib/format';
+import { formatMoney, formatAmount, formatMoneyShort } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
@@ -36,15 +36,17 @@ const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'we
  * casuals, every two weeks for monthly salaries) prepared, approved and paid.
  * A paid sheet becomes one Wages expense. Pay is seen by the Technical admin,
  * directors, branch managers and secretaries.
+ *
+ * 2026-10-28 (087): Employees and Casuals on their own tabs; no team on a
+ * staff member — teams change day to day, so who worked is ticked on each batch.
  */
 export default function Staff() {
   const { organization, canAt } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, organization?.currency_code);
-  const [tab, setTab] = useState('staff');
+  const [tab, setTab] = useState('employed');
   const [staff, setStaff] = useState(null);
-  const [teams, setTeams] = useState([]);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
@@ -55,44 +57,58 @@ export default function Staff() {
 
   async function load() {
     setError('');
-    const [s, t] = await Promise.all([
-      supabase.from('staff').select('*').order('full_name'),
-      supabase.from('production_teams').select('id, name, branch_id, status').order('name'),
-    ]);
+    const s = await supabase.from('staff').select('*').order('full_name');
     if (s.error) { console.error(s.error); setError(LOAD_ERROR); return; }
     setStaff(s.data || []);
-    setTeams(t.data || []);
   }
   useEffect(() => { load(); }, []);
 
   const here = useMemo(() => (staff || []).filter(s => inBranch(s.branch_id)), [staff, inBranch]);
+  // Employees: employed; Casuals: casual, and anyone whose kind isn't set yet (they're paid by the day until it is)
+  const ofTab = s => (tab === 'employed' ? s.kind === 'employed' : s.kind !== 'employed');
+  const inTab = useMemo(() => here.filter(ofTab), [here, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return here.filter(s => !q || `${s.full_name} ${s.job_title ?? ''} ${s.phone ?? ''}`.toLowerCase().includes(q))
+    return inTab.filter(s => !q || `${s.full_name} ${s.job_title ?? ''} ${s.phone ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1));
-  }, [here, search]);
-  const teamName = id => teams.find(t => t.id === id)?.name;
+  }, [inTab, search]);
+  const working = inTab.filter(s => s.status === 'active');
+  const payTotal = working.reduce((t, s) => t + Number(s.pay_rate || 0), 0);
+  const noPay = working.filter(s => s.pay_rate == null).length;
+  const noKind = working.filter(s => !s.kind).length;
+  const inCost = working.filter(s => s.in_production_cost).length;
   const payText = s => (s.pay_rate == null ? null : `${money(s.pay_rate)} ${basisOf(s) === 'daily' ? 'a day' : 'a month'}`);
 
   return (
     <PageShell title="Staff" subtitle="HR"
       description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
-      primaryAction={tab === 'staff' && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New staff member</button>}>
-      <PageTabs tabs={[['staff', 'Employees'], ['attendance', 'Attendance']]} value={tab} onChange={setTab} />
+      primaryAction={tab !== 'attendance' && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
+      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
-      : tab === 'staff' ? (
+      : tab !== 'attendance' ? (
         <>
+          {staff !== null && (
+            <div className="mm-stats">
+              <div className="mm-stat"><span className="pl-label">{tab === 'employed' ? 'Employees' : 'Casuals'}</span><strong>{working.length} working</strong>
+                <span className="pl-help">{tab === 'employed' ? `${inCost} in product cost` : noKind ? `${noKind} not set employed/casual` : 'paid by the day'}</span></div>
+              <div className="mm-stat"><span className="pl-label">{tab === 'employed' ? 'Salaries a month' : 'Wages a full day'}</span><strong>{formatMoneyShort(payTotal, organization?.currency_code)}</strong>
+                <span className="pl-help">{tab === 'employed' ? 'paid every 2 weeks' : 'all casuals at work'}</span></div>
+              <div className="mm-stat"><span className="pl-label">Pay not set</span><strong className={noPay ? 'text-warning' : ''}>{noPay}</strong>
+                <span className="pl-help">{noPay ? 'double-click to set' : 'everyone has pay'}</span></div>
+            </div>
+          )}
           <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…" />
           <section className="sk">
-            <div className="sk-head"><span>Staff ({shown.filter(s => s.status === 'active').length} working)</span></div>
+            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
-            : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title="No staff yet" description="Add employed staff and casual labourers here. Production team members appear here too." /></div>
+            : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title={tab === 'employed' ? 'No employees yet' : 'No casual labourers yet'}
+                description={tab === 'employed' ? 'Add employed staff — monthly salary, paid every 2 weeks.' : 'Add casual labourers — a day rate, paid weekly. People added on a production batch appear here.'} /></div>
             : shown.map(s => (
               <div key={s.id} className={`sk-card lk-card${s.status !== 'active' ? ' is-inactive' : ''}`} onClick={() => setViewing(s)}
                 onDoubleClick={() => { if (canManage) { setViewing(null); setEditing(s); } }} title="Click for details · double-click to edit">
                 <div className="sk-name">
                   <strong>{s.full_name}</strong>
-                  <span className="pl-help">{[s.job_title, teamName(s.team_id)].filter(Boolean).join(' · ') || (s.kind ? KIND[s.kind] : 'kind not set')}</span>
+                  <span className="pl-help">{s.job_title || (s.kind ? KIND[s.kind] : 'kind not set')}</span>
                 </div>
                 <div className="sk-total">
                   {payText(s) ? <span><strong>{money(s.pay_rate)}</strong></span> : <span className="text-warning">Pay not set</span>}
@@ -118,7 +134,6 @@ export default function Staff() {
           <dl className="detail-list text-sm">
             <dt>Kind</dt><dd>{viewing.kind ? KIND[viewing.kind] : 'Not set'}</dd>
             <dt>Job</dt><dd>{viewing.job_title || '—'}</dd>
-            <dt>Team</dt><dd>{teamName(viewing.team_id) || '—'}</dd>
             <dt>Pay</dt><dd>{payText(viewing) || 'Not set'}, paid {CYCLE[cycleOf(viewing)].toLowerCase()}</dd>
             <dt>In product cost</dt><dd>{viewing.in_production_cost ? 'Yes' : 'No — a running cost'}</dd>
             <dt>Phone</dt><dd>{viewing.phone || '—'}</dd>
@@ -129,17 +144,16 @@ export default function Staff() {
           </dl>
         </Modal>
       )}
-      {editing && <StaffModal person={editing.id ? editing : null} organizationId={organization?.id} branchId={editing.branch_id || branchId}
-        teams={teams.filter(t => t.branch_id === (editing.branch_id || branchId) && (t.status === 'active' || t.id === editing.team_id))}
+      {editing && <StaffModal person={editing.id ? editing : null} kind={editing.id ? undefined : editing.kind} organizationId={organization?.id} branchId={editing.branch_id || branchId}
         onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
     </PageShell>
   );
 }
 
-function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved }) {
+function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, onSaved }) {
   const [f, setF] = useState({
-    full_name: person?.full_name ?? '', phone: person?.phone ?? '', kind: person?.kind ?? '', job_title: person?.job_title ?? '',
-    team_id: person?.team_id ?? '', pay_basis: person?.pay_basis ?? '', pay_rate: person?.pay_rate ?? '', pay_cycle: person?.pay_cycle ?? '',
+    full_name: person?.full_name ?? '', phone: person?.phone ?? '', kind: person?.kind ?? newKind ?? '', job_title: person?.job_title ?? '',
+    pay_basis: person?.pay_basis ?? '', pay_rate: person?.pay_rate ?? '', pay_cycle: person?.pay_cycle ?? '',
     in_production_cost: person?.in_production_cost ?? true, started_on: person?.started_on ?? '', left_on: person?.left_on ?? '',
     notes: person?.notes ?? '', status: person?.status ?? 'active', nssf_no: person?.nssf_no ?? '',
   });
@@ -155,7 +169,7 @@ function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved 
     if (f.status === 'left' && !f.left_on) { setError('Enter the day they left.'); return; }
     const row = {
       full_name: f.full_name.trim(), phone: f.phone.trim() || null, kind: f.kind || null, job_title: f.job_title.trim() || null,
-      team_id: f.team_id || null, pay_basis: f.pay_basis || null, pay_rate: num(f.pay_rate), pay_cycle: f.pay_cycle || null,
+      pay_basis: f.pay_basis || null, pay_rate: num(f.pay_rate), pay_cycle: f.pay_cycle || null,
       in_production_cost: f.in_production_cost, started_on: f.started_on || null, left_on: f.status === 'left' ? f.left_on : null,
       notes: f.notes.trim() || null, status: f.status, nssf_no: f.nssf_no.trim() || null,
     };
@@ -196,10 +210,6 @@ function StaffModal({ person, organizationId, branchId, teams, onClose, onSaved 
             </select></label>
         </div>
         <div className="form-row">
-          <label className="pe-field"><span>Team</span>
-            <select className="form-input" value={f.team_id} onChange={e => set({ team_id: e.target.value })}>
-              <option value="">No team</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select></label>
           <label className="pe-field"><span>Phone</span><input className="form-input" inputMode="tel" value={f.phone} onChange={e => set({ phone: e.target.value })} /></label>
           <label className="pe-field"><span>NSSF no.</span><input className="form-input" value={f.nssf_no} onChange={e => set({ nssf_no: e.target.value })} /></label>
           <label className="pe-field"><span>Started</span><input type="date" className="form-input" value={f.started_on} onChange={e => set({ started_on: e.target.value })} /></label>
@@ -244,18 +254,14 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
   }
   const next = v => (v === 1 ? 0.5 : v === 0.5 ? 0 : 1);
 
-  // who worked on a day, from that day's production (the batch's workers, or its whole team)
+  // who worked on a day, from that day's batches (the people ticked on each, 087)
   async function fillFromProduction(date) {
     setError('');
-    const { data: batches, error: err } = await supabase.from('production_batches').select('team_id, worker_ids')
+    const { data: batches, error: err } = await supabase.from('production_batches').select('worker_ids')
       .eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void');
     if (err) { setError(dbErrorMessage(err)); return; }
-    const teamIds = [...new Set((batches || []).map(b => b.team_id).filter(Boolean))];
-    if (!teamIds.length) { setError(`No production with a team on ${date}.`); return; }
-    const { data: members } = await supabase.from('production_team_members').select('id, team_id, staff_id, status').in('team_id', teamIds);
-    const ids = new Set();
-    for (const b of batches) for (const m of members || [])
-      if (m.team_id === b.team_id && m.staff_id && (b.worker_ids ? b.worker_ids.includes(m.id) : m.status === 'active')) ids.add(m.staff_id);
+    const ids = new Set((batches || []).flatMap(b => b.worker_ids || []));
+    if (!ids.size) { setError(`No production with people ticked on ${date}.`); return; }
     for (const id of ids) if (!marks?.[`${id}|${date}`] && staff.some(s => s.id === id)) await mark(id, date, 1);
   }
 

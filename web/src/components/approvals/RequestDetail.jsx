@@ -114,7 +114,7 @@ function ProductionDay({ p, refs }) {
       {first && <p className="pl-help">{first.batch_date} · from {store(refs, first.raw_warehouse_id)} → cures in {store(refs, first.curing_warehouse_id)}</p>}
       <ProductionBreakdown batches={batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags),
-        team: names[b.team_id] ? `${names[b.team_id]}${b.worker_ids ? ` (${b.worker_ids.length} worked)` : ''}` : null, machine: names[b.machine_id] ?? null,
+        team: names[b.team_id] ? `${names[b.team_id]}${b.worker_ids?.length ? ` (${b.worker_ids.length} worked)` : ''}` : null, machine: names[b.machine_id] ?? null,
         waste: (b.waste || []).map(w => ({ name: refs.items[`m:${w.material_id}`]?.name ?? '—', qty: Number(w.quantity), unit: unit(refs, w.unit_id), reason: names[w.reason_id] ?? '' })),
         ...(est?.[i] ? { cost: est[i].cost, costComplete: est[i].complete, estimate: true } : {}),
         outputs: sortOuts(b).map((o, j) => ({ ...(est?.[i]?.outputs[j] ?? {}),

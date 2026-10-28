@@ -7,8 +7,9 @@ import { dbErrorMessage } from '../../lib/masterData';
 
 /**
  * Production teams & machines of a branch (056), kept here as well as on
- * the spot in the batch form: rename, members in and out, retire, and which
- * products a machine makes (the batch form offers those first).
+ * the spot in the batch form: rename, retire, and which products a machine
+ * makes (the batch form offers those first). A team is a name only (087):
+ * its people change day to day and are ticked on each batch.
  */
 export default function ProductionTeamsCard() {
   const { organization, canAt } = useAuth();
@@ -25,7 +26,7 @@ export default function ProductionTeamsCard() {
   async function load() {
     if (!branch) return;
     const [t, m, mp, bp] = await Promise.all([
-      supabase.from('production_teams').select('id, name, status, members:production_team_members(id, name, status)').eq('branch_id', branch).order('name'),
+      supabase.from('production_teams').select('id, name, status').eq('branch_id', branch).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branch).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
       supabase.from('branch_products').select('product_id, product:products(canonical_name)').eq('branch_id', branch).eq('status', 'active'),
@@ -90,7 +91,7 @@ export default function ProductionTeamsCard() {
         )}
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Every batch records its team and machine. Retired ones stay on past batches. New ones can also be added in the batch form. A machine's crew (e.g. 9-12) is the people it takes to run, whatever the bags — products without it use their bags a person (Products).</p>
+        <p className="text-xs text-muted mb-8">Every batch records its team and machine; who worked is ticked on each batch from the branch's staff (HR › Staff), as teams change day to day. Retired ones stay on past batches. New ones can also be added in the batch form. A machine's crew (e.g. 9-12) is the people it takes to run, whatever the bags — products without it use their bags a person (Products).</p>
         {!data ? <p className="text-sm text-muted">Loading…</p> : (
           <>
             <h3 className="ptc-title">Teams</h3>
@@ -98,15 +99,6 @@ export default function ProductionTeamsCard() {
             {data.teams.map(t => (
               <div key={t.id} className="ptc-item">
                 {nameLine('production_teams', t)}
-                <div className="ptc-chips">
-                  {t.members.filter(m => m.status === 'active').map(m => (
-                    <span key={m.id} className="ptc-chip">{m.name}
-                      {canEdit && <button type="button" aria-label={`${m.name} left the team`} title="Left the team" disabled={busy}
-                        onClick={() => run(supabase.from('production_team_members').update({ status: 'inactive' }).eq('id', m.id))}><X size={11} /></button>}
-                    </span>
-                  ))}
-                  {canEdit && t.status === 'active' && input(`m:${t.id}`, 'Add member', name => run(supabase.from('production_team_members').insert({ organization_id: org, team_id: t.id, name }), `m:${t.id}`))}
-                </div>
               </div>
             ))}
             {canEdit && <div className="ptc-item">{input('team', 'New team', name => run(supabase.from('production_teams').insert({ organization_id: org, branch_id: branch, name }), 'team'))}</div>}
