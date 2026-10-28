@@ -137,7 +137,21 @@ PRD section: 4.6 (Inventory)
 - Suppliers added to master data here, since procurement/receiving needs them
 
 ## 1c — Procurement
-**Status: CURRENT** (about 95% done; finishing alongside 1d — SwahziTech, 2026-10-18)
+**Status: DONE** (2026-10-28, on SwahziTech's instruction)
+
+Closed with the "Not yet" items built on 2026-10-28 (migrations 077–085):
+- **Supplier payments** per purchase, with supplier balances.
+- **Requests** for materials or expenses: the storekeeper or secretary asks
+  and the branch manager approves. Each request is followed from its own
+  row: approved → ordered → bought/received → done. Orders can be printed
+  for the supplier or kept internal, and edited while nothing has come.
+- **LUKU top-ups**, asked from the meter. They are always from TANESCO, and
+  recording the token tops the meter up. Tokens can be entered any day
+  after they were bought; only double entries are refused.
+- **Weekly operations cash**: requested, approved by the branch manager then
+  the directors, paid; last week's spending is read from what was recorded.
+  It can be imported from the branch's Excel sheet or exported.
+- **Suppliers** are suggested from what each one actually supplied.
 
 Scope decided with SwahziTech (2026-10-16): the purchase record and its
 payment status only — supplier, prices, transport (part of landed cost),
@@ -251,7 +265,7 @@ Added to 1e (SwahziTech, 2026-10-27):
   employed staff on production teams.
 
 ## Staff (HR) — next phase after 1e
-**Status: NEXT** (1e closed 2026-10-27; not started until SwahziTech authorizes it) (queued by SwahziTech, 2026-10-27; same dry-run and
+**Status: CURRENT** (from 2026-10-28, on SwahziTech's instruction — Part 1 first: employees, attendance, labour into costing) (queued by SwahziTech, 2026-10-27; same dry-run and
 approval process as every phase)
 
 Its own sidebar section, with four parts:
