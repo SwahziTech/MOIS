@@ -63,6 +63,14 @@ export default function SalesSettings({ onClose }) {
             <div key={a.id} className="ptc-head" style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
               <strong className={a.status !== 'active' ? 'text-muted' : ''}>{a.name}</strong>
               <span className="pl-help">{KINDS[a.kind]}{a.status !== 'active' ? ' · retired' : ''}</span>
+              {'account_no' in a && <>{/* the number and holder printed on the weekly cash request (078) */}
+                <input className="form-input" style={{ width: 150 }} aria-label={`${a.name} account number`} placeholder="Account no." disabled={!canEdit || busy} defaultValue={a.account_no ?? ''}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== a.account_no) run(supabase.from('payment_accounts').update({ account_no: v }).eq('id', a.id)); }} />
+                <input className="form-input" style={{ width: 170 }} aria-label={`${a.name} account name`} placeholder="Account name" disabled={!canEdit || busy} defaultValue={a.account_name ?? ''}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== a.account_name) run(supabase.from('payment_accounts').update({ account_name: v }).eq('id', a.id)); }} />
+                <label className="text-xs flex items-center gap-8" title="The weekly cash request is paid into this account"><input type="checkbox" disabled={!canEdit || busy} checked={!!a.receives_weekly_cash}
+                  onChange={e => run(supabase.from('payment_accounts').update({ receives_weekly_cash: e.target.checked }).eq('id', a.id))} /> weekly cash</label>
+              </>}
               {canEdit && <span className="ptc-actions">
                 <button type="button" className="btn btn-ghost btn-sm" disabled={busy || i === 0} onClick={() => move(a, -1)} aria-label="Move up">↑</button>
                 <button type="button" className="btn btn-ghost btn-sm" disabled={busy || i === rows.length - 1} onClick={() => move(a, 1)} aria-label="Move down">↓</button>

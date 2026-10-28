@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact,
+  Calculator, Receipt, Contact, Wallet,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -64,6 +64,13 @@ const NAV = [
       { label: 'Customers', to: '/customers', icon: Contact, perm: 'sales.view' },
       // cost, price without VAT, margin, finished stock at cost (1e, migration 058)
       { label: 'Costing', to: '/costing', icon: Calculator, perm: 'products.manage' },
+    ],
+  },
+  {
+    section: 'Finance',
+    items: [
+      // the branch's weekly operations cash: request → BM → directors → paid; last week's spending (migration 078)
+      { label: 'Weekly cash', to: '/weekly-cash', icon: Wallet, perm: 'cash.request' },
     ],
   },
   {
