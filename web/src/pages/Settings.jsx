@@ -6,6 +6,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { browserTimeZone } from '../lib/format';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
+import MenuLayoutCard from '../components/settings/MenuLayoutCard';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
 import { BranchVatCard, ExpenseCategoriesCard } from '../components/settings/PurchaseSettings';
@@ -21,7 +22,7 @@ function Row({ label, children }) {
 }
 
 export default function Settings() {
-  const { profile, session, userRoles, organization: org, canManage } = useAuth();
+  const { profile, session, userRoles, organization: org, canManage, can } = useAuth();
 
   const roles = [...new Set(userRoles.map(ur => ur.role?.name).filter(Boolean))];
 
@@ -73,6 +74,8 @@ export default function Settings() {
           </div>
         </section>
       </div>
+      {/* the sidebar per role (098) — Technical admin; full width, under the cards */}
+      {can('system.manage') && <div style={{ marginTop: 16 }}><MenuLayoutCard /></div>}
     </PageShell>
   );
 }

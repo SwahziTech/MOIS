@@ -11,6 +11,8 @@ import { useBranch } from '../hooks/useBranch';
 import { roleLabel as labelOf } from '../lib/manageUsers';
 import ThemeToggle from './ThemeToggle';
 import AlertsBell from './AlertsBell';
+import { primaryRole, resolveMenu } from '../lib/menu';
+import { ChevronRight } from 'lucide-react';
 
 /*
  * Navigation tabs. An item with `perm` is shown only to users holding that
@@ -18,7 +20,7 @@ import AlertsBell from './AlertsBell';
  * for). This is UX only — Supabase RLS remains the security boundary.
  * Codes must exist in public.permissions (migration 006).
  */
-const NAV = [
+export const NAV = [
   {
     section: 'Overview',
     items: [
@@ -128,9 +130,26 @@ export default function Sidebar() {
     .map(labelOf)
     .join(', ');
 
-  const sections = NAV
+  // the layout for this person's role (098), else the current sidebar; only the pages they may open
+  const [layouts, setLayouts] = useState({});
+  useEffect(() => {
+    if (!session) return;
+    supabase.from('menu_layouts').select('role_name, layout').then(({ data, error }) => {
+      if (!error) setLayouts(Object.fromEntries((data || []).map(x => [x.role_name, x.layout])));
+    });
+    const reload = () => supabase.from('menu_layouts').select('role_name, layout').then(({ data, error }) => {
+      if (!error) setLayouts(Object.fromEntries((data || []).map(x => [x.role_name, x.layout])));
+    });
+    window.addEventListener('mois:menu-changed', reload);
+    return () => window.removeEventListener('mois:menu-changed', reload);
+  }, [session]);
+  const role = primaryRole(userRoles);
+  const sections = resolveMenu(NAV, layouts[role])
     .map(section => ({ ...section, items: section.items.filter(item => !item.perm || can(item.perm)) }))
     .filter(section => section.items.length > 0);
+  // a folded section opens on a click (and when one of its pages is open)
+  const [unfolded, setUnfolded] = useState({});
+  const isOpen = sec => !sec.folded || unfolded[sec.title] || sec.items.some(i => i.to !== '/' && location.pathname.startsWith(i.to));
 
   async function handleSignOut() {
     await signOut();
@@ -168,10 +187,13 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="sidebar-nav" aria-label="Main navigation">
-        {sections.map(section => (
-          <div key={section.section} className="sidebar-section">
-            <div className="sidebar-section-label">{section.section}</div>
-            {section.items.map(item => (
+        {sections.map((section, si) => (
+          <div key={`${section.title}|${si}`} className="sidebar-section">
+            {section.title && (section.folded
+              ? <button type="button" className="sidebar-section-label sidebar-fold" aria-expanded={isOpen(section)} onClick={() => setUnfolded(u => ({ ...u, [section.title]: !isOpen(section) }))}>
+                  <ChevronRight size={12} className={isOpen(section) ? 'is-open' : ''} />{section.title}</button>
+              : <div className="sidebar-section-label">{section.title}</div>)}
+            {isOpen(section) && section.items.map(item => (
               <NavLink
                 key={item.to}
                 id={`nav-${item.to === '/' ? 'dashboard' : item.to.slice(1)}`}
