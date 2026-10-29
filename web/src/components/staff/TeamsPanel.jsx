@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Users, X } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -128,30 +128,42 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
   );
 }
 
-/* A team's Edit: its name; members added, deactivated (kept, off for now) or removed */
+/*
+ * A team's Edit: its name, and its members as a tick list of the branch's
+ * production staff — tick to add, untick to take out (status 'removed', kept
+ * for the record); a member can be deactivated (still in the team, off for
+ * now). Members first, then the rest. Changes save as they're made.
+ */
 function TeamEdit({ team, staff, allStaff, organizationId, teams, onClose, onChanged }) {
   const [name, setName] = useState(team.name);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const nameOf = m => allStaff.find(s => s.id === m.staff_id)?.full_name ?? m.name;
-  const members = team.members.filter(m => m.staff_id && m.status !== 'removed').sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const [search, setSearch] = useState('');
+  const memberOf = id => team.members.find(m => m.staff_id === id);
+  const inTeam = id => { const m = memberOf(id); return m && m.status !== 'removed'; };
   const otherTeam = id => teams.filter(t => t.id !== team.id && t.status === 'active' && t.members.some(m => m.staff_id === id && m.status === 'active')).map(t => t.name)[0];
-  const addable = staff.filter(s => !members.some(m => m.staff_id === s.id)).sort((a, b) => a.full_name.localeCompare(b.full_name));
+  // members who aren't production staff any more still show, so they can be taken out
+  const extra = team.members.filter(m => m.staff_id && m.status !== 'removed' && !staff.some(s => s.id === m.staff_id))
+    .map(m => allStaff.find(s => s.id === m.staff_id) || { id: m.staff_id, full_name: m.name });
+  const people = [...staff, ...extra]
+    .filter(p => !search.trim() || p.full_name.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => (inTeam(b.id) ? 1 : 0) - (inTeam(a.id) ? 1 : 0) || a.full_name.localeCompare(b.full_name));
+  const count = team.members.filter(m => m.staff_id && m.status !== 'removed').length;
 
-  async function run(q) {
-    setError(''); setBusy(true);
+  async function run(key, q) {
+    setError(''); setBusy(key);
     const { error: err } = await q;
-    setBusy(false);
+    setBusy('');
     if (err) { setError(err.code === '23505' ? 'That name is already used.' : dbErrorMessage(err)); return false; }
     await onChanged();
     return true;
   }
-  const add = id => {
-    const s = staff.find(x => x.id === id); if (!s) return;
-    const old = team.members.find(m => m.staff_id === id);   // removed before: brought back
-    run(old ? supabase.from('production_team_members').update({ status: 'active' }).eq('id', old.id)
-      : supabase.from('production_team_members').insert({ organization_id: organizationId, team_id: team.id, name: s.full_name, staff_id: s.id }));
-  };
+  function toggle(p) {
+    const m = memberOf(p.id);
+    if (inTeam(p.id)) return run(p.id, supabase.from('production_team_members').update({ status: 'removed' }).eq('id', m.id));
+    return run(p.id, m ? supabase.from('production_team_members').update({ status: 'active' }).eq('id', m.id)
+      : supabase.from('production_team_members').insert({ organization_id: organizationId, team_id: team.id, name: p.full_name, staff_id: p.id }));
+  }
 
   return (
     <Modal title={`Edit ${team.name}`} onClose={onClose}
@@ -159,37 +171,35 @@ function TeamEdit({ team, staff, allStaff, organizationId, teams, onClose, onCha
       <div className="modal-form">
         <div className="form-row">
           <label className="pe-field" style={{ flex: 1 }}><span>Team name</span><input className="form-input" value={name} onChange={e => setName(e.target.value)} /></label>
-          <button type="button" className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-end' }} disabled={busy || !name.trim() || name.trim() === team.name}
-            onClick={() => run(supabase.from('production_teams').update({ name: name.trim() }).eq('id', team.id))}>Save name</button>
+          <button type="button" className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-end' }} disabled={!!busy || !name.trim() || name.trim() === team.name}
+            onClick={() => run('name', supabase.from('production_teams').update({ name: name.trim() }).eq('id', team.id))}>Save name</button>
         </div>
-        <div>
-          <span className="pl-label">Members</span>
-          <div className="table-container" style={{ marginTop: 6 }}>
-            <table>
-              <tbody>
-                {members.length === 0 ? <tr><td className="text-muted">No members yet — add them below.</td></tr>
-                : members.map(m => (
-                  <tr key={m.id} className={m.status !== 'active' ? 'is-inactive' : ''}>
-                    <td><strong>{nameOf(m)}</strong>{m.status !== 'active' && <span className="pl-help"> · deactivated</span>}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy}
-                        onClick={() => run(supabase.from('production_team_members').update({ status: m.status === 'active' ? 'inactive' : 'active' }).eq('id', m.id))}>
-                        {m.status === 'active' ? 'Deactivate' : 'Activate'}</button>
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Take out of the team" aria-label={`Remove ${nameOf(m)}`}
-                        onClick={() => run(supabase.from('production_team_members').update({ status: 'removed' }).eq('id', m.id))}><X size={13} /> Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex items-center gap-8">
+          <span className="pl-label">Members ({count})</span>
+          <input className="form-input" style={{ marginLeft: 'auto', maxWidth: 220 }} placeholder="Search name…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <label className="pe-field"><span>Add a member (production staff)</span>
-          <select className="form-input" value="" disabled={busy} onChange={e => e.target.value && add(e.target.value)}>
-            <option value="">Choose…</option>
-            {addable.map(s => <option key={s.id} value={s.id}>{s.full_name}{otherTeam(s.id) ? ` (in ${otherTeam(s.id)})` : ''}</option>)}
-          </select></label>
-        <p className="pl-help">A batch lists this team's active members first; nobody is ticked for you — tick who worked that day.</p>
+        <div className="tm-ticks">
+          {people.length === 0 && <span className="pl-help">No production staff at this branch{search ? ' by that name' : ''}.</span>}
+          {people.map(p => {
+            const m = memberOf(p.id); const on = inTeam(p.id); const off = on && m.status === 'inactive';
+            return (
+              <div key={p.id} className={`tm-tick${on ? ' is-on' : ''}${off ? ' is-off' : ''}`}>
+                <label>
+                  <input type="checkbox" checked={!!on} disabled={busy === p.id} onChange={() => toggle(p)} />
+                  <span>{p.full_name}</span>
+                  {!on && otherTeam(p.id) && <span className="pl-help">in {otherTeam(p.id)}</span>}
+                  {off && <span className="pl-help">deactivated</span>}
+                </label>
+                {on && (
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={busy === p.id}
+                    onClick={() => run(p.id, supabase.from('production_team_members').update({ status: off ? 'active' : 'inactive' }).eq('id', m.id))}>
+                    {off ? 'Activate' : 'Deactivate'}</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="pl-help">Tick to add, untick to take out. A batch lists this team's active members first; nobody is ticked for you — tick who worked that day. Recorded batches never change.</p>
       </div>
     </Modal>
   );
