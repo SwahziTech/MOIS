@@ -494,7 +494,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   const setVal = (l, k, v) => setEdits(m => ({ ...m, [l.id]: { ...(m[l.id] || {}), [k]: v } }));
   // net as typed: NSSF and PAYE as last worked out (they follow the additions once saved)
   const grossOf = l => Number(l.base) + (num(val(l, 'additions')) || 0);
-  const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0) - Number(l.advance_deductions || 0), 0);
+  const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0) - Number(l.first_payment || 0) - Number(l.advance_deductions || 0), 0);
   const total = lines.reduce((t, l) => t + amountOf(l), 0);
   const sorted = [...lines].sort((a, b) => (a.pay_basis === b.pay_basis ? nameOf(a.staff_id).localeCompare(nameOf(b.staff_id)) : a.pay_basis === 'daily' ? -1 : 1));
   const missing = lines.filter(l => l.rate == null);
@@ -518,13 +518,13 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={12} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={13} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
-                  <td><strong>{nameOf(l.staff_id)}</strong></td>
-                  <td className="num">{l.pay_basis === 'daily' ? Number(l.days || 0) : <span className="pl-help">salary</span>}</td>
+                  <td><strong>{nameOf(l.staff_id)}</strong>{l.part === 'advance' ? <div className="pl-help">first payment — no deductions</div> : l.part === 'balance' ? <div className="pl-help">the month, with deductions</div> : null}</td>
+                  <td className="num">{l.days != null ? Number(l.days) : <span className="pl-help">—</span>}</td>
                   <td className="num">{l.rate == null ? <span className="text-warning">not set</span> : <>{formatAmount(Number(l.rate))}<span className="pl-help"> {l.pay_basis === 'daily' ? '/day' : '/month'}</span></>}</td>
                   <td className="num">{formatAmount(Number(l.base))}</td>
                   <td className="num">{draft && canRecord
@@ -536,13 +536,14 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
                   <td className="num">{draft && canRecord
                     ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'deductions')} onChange={e => setVal(l, 'deductions', e.target.value)} />
                     : Number(l.deductions) ? formatAmount(Number(l.deductions)) : ''}</td>
+                  <td className="num" title="The month's first payment, already paid">{Number(l.first_payment) ? formatAmount(Number(l.first_payment)) : ''}</td>
                   <td className="num" title="Advances and loans taken back (Advances tab)">{Number(l.advance_deductions) ? formatAmount(Number(l.advance_deductions)) : ''}</td>
                   <td className="num"><strong>{formatAmount(amountOf(l))}</strong></td>
                   <td>{draft && canRecord ? <input className="form-input" style={{ width: 140 }} placeholder="e.g. advance" value={val(l, 'note')} onChange={e => setVal(l, 'note', e.target.value)} /> : l.note || ''}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
+            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('first_payment'))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
           </table>
         </div>
         {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (
@@ -570,34 +571,65 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   );
 }
 
-/* Working days a month (089): a salary by the day — days attended × salary ÷ these days */
+/*
+ * The company's pay settings (089, 091) — set by the Technical admin or a
+ * director: working days a month (a salary by the day); twice-a-month pay —
+ * the first payment (1st–15th) as a % of the salary or of what was earned,
+ * with no deductions, and the month's pay on the second payment (by
+ * attendance or the full salary), where NSSF and PAYE are taken.
+ */
 function WorkDaysCard() {
   const { can } = useAuth();
   const canSet = can('payroll.rates');
-  const [days, setDays] = useState(null);
-  const [text, setText] = useState('');
+  const [cfg, setCfg] = useState(null);
+  const [f, setF] = useState(null);
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
-    supabase.from('payroll_settings').select('work_days_a_month').maybeSingle().then(({ data, error }) => {
-      if (error) { setDays(false); return; }
-      const v = Number(data?.work_days_a_month ?? WORK_DAYS_DEFAULT); setDays(v); setText(String(v));
+    supabase.from('payroll_settings').select('*').maybeSingle().then(({ data, error }) => {
+      if (error) { setCfg(false); return; }
+      const v = { work_days_a_month: Number(data?.work_days_a_month ?? WORK_DAYS_DEFAULT), first_half_mode: data?.first_half_mode ?? 'advance',
+        first_half_pct: Number(data?.first_half_pct ?? 50), month_pay_basis: data?.month_pay_basis ?? 'attendance' };
+      setCfg(v); setF({ ...v, work_days_a_month: String(v.work_days_a_month), first_half_pct: String(v.first_half_pct) });
     });
   }, []);
-  if (days === false || days === null) return null;   // before 089
+  if (cfg === false || cfg === null) return null;   // before 089
+  const changed = JSON.stringify({ ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct) }) !== JSON.stringify(cfg);
+  const set = patch => setF(x => ({ ...x, ...patch }));
   async function save() {
-    setMsg('');
-    const { error } = await supabase.rpc('set_work_days_a_month', { p_days: Number(text) });
+    setMsg(''); setBusy(true);
+    const p = { ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct) };
+    const { error } = await supabase.rpc('set_payroll_settings', { p });
+    setBusy(false);
     if (error) { setMsg(dbErrorMessage(error)); return; }
-    setDays(Number(text)); setMsg('Saved — draft pay sheets updated.');
+    setCfg(p); setMsg('Saved — draft pay sheets updated.');
   }
   return (
     <section className="card" style={{ marginTop: 12 }}>
-      <div className="card-header"><h2 className="card-title">Working days a month</h2></div>
+      <div className="card-header"><h2 className="card-title">Pay settings</h2></div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Employed staff are paid by the days attended: salary ÷ this number × days. 26 = Monday to Saturday.</p>
+        <div className="form-row">
+          <label className="pe-field"><span>Working days a month</span>
+            <input className="form-input" inputMode="decimal" value={f.work_days_a_month} disabled={!canSet} onChange={e => set({ work_days_a_month: e.target.value })} /></label>
+          <label className="pe-field"><span>First payment (1st–15th), %</span>
+            <input className="form-input" inputMode="decimal" value={f.first_half_pct} disabled={!canSet} onChange={e => set({ first_half_pct: e.target.value })} /></label>
+          <label className="pe-field"><span>… of</span>
+            <select className="form-input" value={f.first_half_mode} disabled={!canSet} onChange={e => set({ first_half_mode: e.target.value })}>
+              <option value="advance">the monthly salary (an advance)</option>
+              <option value="earned">what was earned 1st–15th (by attendance)</option>
+            </select></label>
+          <label className="pe-field"><span>Month's pay (second payment)</span>
+            <select className="form-input" value={f.month_pay_basis} disabled={!canSet} onChange={e => set({ month_pay_basis: e.target.value })}>
+              <option value="attendance">by attendance — days × salary ÷ working days</option>
+              <option value="salary">the full salary</option>
+            </select></label>
+        </div>
+        <p className="text-xs text-muted" style={{ margin: '8px 0' }}>
+          Salaried staff paid every 2 weeks: the first payment carries no deductions; the second takes the month's pay, NSSF and PAYE on it, other deductions,
+          then the first payment already made. {Number(f.work_days_a_month) === 26 ? '26 days = Monday to Saturday.' : ''}
+        </p>
         <div className="flex items-center gap-8">
-          <input className="form-input" style={{ width: 90 }} inputMode="decimal" aria-label="Working days a month" value={text} disabled={!canSet} onChange={e => setText(e.target.value)} />
-          {canSet && <button type="button" className="btn btn-primary btn-sm" disabled={!text || Number(text) === days} onClick={save}>Save</button>}
+          {canSet && <button type="button" className="btn btn-primary btn-sm" disabled={busy || !changed} onClick={save}>Save</button>}
           {msg && <span className="pl-help">{msg}</span>}
         </div>
       </div>

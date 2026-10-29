@@ -87,12 +87,15 @@ export default function PayslipDocument() {
 
             <section>
               <table className="doc-totals"><tbody>
-                <tr><td>{l.pay_basis === 'daily' ? `${Number(l.days || 0)} days × ${formatAmount(Number(l.rate || 0))}` : `Salary (${formatAmount(Number(l.rate || 0))} a month)`}</td><td className="num">{formatAmount(Number(l.base))}</td></tr>
+                <tr><td>{l.pay_basis === 'daily' ? `${Number(l.days || 0)} days × ${formatAmount(Number(l.rate || 0))}`
+                  : l.part === 'advance' ? `First payment of the month (salary ${formatAmount(Number(l.rate || 0))} a month)`
+                  : `Salary (${formatAmount(Number(l.rate || 0))} a month)${l.part === 'balance' ? ' — the month' : ''}`}</td><td className="num">{formatAmount(Number(l.base))}</td></tr>
                 {row('Additions', l.additions)}
                 <tr className="doc-grand"><td>Gross pay</td><td className="num">{money(Number(l.gross))}</td></tr>
                 {row('NSSF (employee)', l.nssf_employee, true)}
                 {row('PAYE', l.paye, true)}
                 {row(`Other deductions${l.note ? ` (${l.note})` : ''}`, l.deductions, true)}
+                {row('First payment already paid', l.first_payment, true)}
                 {row('Advance / loan taken back', l.advance_deductions, true)}
                 <tr className="doc-grand"><td>Net pay</td><td className="num">{money(Number(l.amount))}</td></tr>
               </tbody></table>
