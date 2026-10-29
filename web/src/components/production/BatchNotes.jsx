@@ -12,9 +12,12 @@ import { dbErrorMessage } from '../../lib/masterData';
  *
  * Who worked (087, 2026-10-28): teams change week to week, even day to day,
  * so a team is a name only and the people are ticked on each batch from the
- * branch's staff — those marked at work that day first. A team starts with
- * its members (HR › Staff › Teams, 2026-10-30), else the people of its last
- * batch; a new labourer added here becomes a casual in HR › Staff (pay set there).
+ * branch's production staff — those marked at work that day first. LOCKED
+ * (2026-10-30): a team has no fixed members (A may be b, j, g today and d, f,
+ * e tomorrow) — the user ticks the people; nothing is filled from the team.
+ * Staff not in production (driver, secretary — "pay part of product cost"
+ * unticked, 092) aren't listed. A new labourer added here becomes a casual in
+ * HR › Staff (pay set there).
  *
  * value: { teamId, workerIds (staff ids), machineId, notes }
  */
@@ -22,23 +25,18 @@ export function useProductionLists(branchId) {
   const [lists, setLists] = useState(null);   // null = loading; { ready: false } before 056
   async function load() {
     if (!branchId) return;
-    const [t, m, mp, pp, lb] = await Promise.all([
-      supabase.from('production_teams').select('id, name, status, members:production_team_members(staff_id, status)').eq('branch_id', branchId).order('name'),
+    const [t, m, mp, pp] = await Promise.all([
+      supabase.from('production_teams').select('id, name, status').eq('branch_id', branchId).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
-      supabase.from('production_people').select('id, full_name, kind, job_title, status').eq('branch_id', branchId).order('full_name'),
-      supabase.from('production_batches').select('team_id, worker_ids').eq('branch_id', branchId).neq('status', 'void').not('team_id', 'is', null)
-        .order('created_at', { ascending: false }).limit(200),
+      supabase.from('production_people').select('*').eq('branch_id', branchId).order('full_name'),
     ]);
-    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [], people: [], lastWorkers: {}, norms: {} }); return; }
+    if (t.error || m.error) { setLists({ ready: false, teams: [], machines: [], links: [], people: [], norms: {} }); return; }
     // labour norms (057): bags a person per product at this branch — the screens work without them
     const n = await supabase.from('branch_products').select('product_id, bags_per_person_min, bags_per_person_max').eq('branch_id', branchId);
     const norms = Object.fromEntries((n.error ? [] : n.data || []).filter(x => x.bags_per_person_min != null || x.bags_per_person_max != null)
       .map(x => [x.product_id, { min: Number(x.bags_per_person_min ?? x.bags_per_person_max), max: Number(x.bags_per_person_max ?? x.bags_per_person_min) }]));
-    // each team's people on its latest batch: where a new batch of that team starts
-    const lastWorkers = {};
-    for (const b of lb.data || []) if (!lastWorkers[b.team_id] && b.worker_ids?.length) lastWorkers[b.team_id] = b.worker_ids;
-    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], people: pp.error ? [] : pp.data || [], lastWorkers, norms });
+    setLists({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], people: pp.error ? [] : pp.data || [], norms });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   return [lists, load];
@@ -96,20 +94,15 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
   const [busy, setBusy] = useState(false);
   const [present, setPresent] = useState({});     // staff id → day fraction marked at work on the batch's date
 
-  const active = useMemo(() => (lists?.people || []).filter(p => p.status === 'active'), [lists]);
-  // a team starts with its members (HR › Staff › Teams), else the people of its last batch — those still at the branch
-  const startPeople = teamId => {
-    const t = (lists?.teams || []).find(x => x.id === teamId);
-    const members = (t?.members || []).filter(m => m.status === 'active' && m.staff_id).map(m => m.staff_id);
-    return (members.length ? members : lists?.lastWorkers?.[teamId] || []).filter(id => active.some(p => p.id === id));
-  };
+  // production staff only (092: in_production_cost; before 092 the flag is absent and everyone shows)
+  const active = useMemo(() => (lists?.people || []).filter(p => p.status === 'active' && p.in_production_cost !== false), [lists]);
 
   // Start filled: the last team used here (or the only one); the machine last used for this product (or the only one)
   useEffect(() => {
     if (!lists?.ready || value.teamId) return;
     const last = recall(lastKey('team', branchId));
     const pick = teams.find(t => t.id === last) ?? (teams.length === 1 ? teams[0] : null);
-    if (pick) set({ teamId: pick.id, workerIds: value.workerIds?.length ? value.workerIds : startPeople(pick.id) });
+    if (pick) set({ teamId: pick.id, workerIds: value.workerIds || [] });
   }, [lists, branchId, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!lists?.ready || !productId) return;
@@ -118,13 +111,6 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
     const pick = machines.find(m => m.id === last) ?? (machines.length === 1 ? machines[0] : null);
     set({ machineId: pick?.id ?? '' });
   }, [lists, branchId, productId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the team kept from an earlier batch, with nobody ticked (a draft from before 087): start with its last people
-  useEffect(() => {
-    if (lists?.ready && value.teamId && !value.workerIds?.length) {
-      const start = startPeople(value.teamId);
-      if (start.length) set({ workerIds: start });
-    }
-  }, [lists, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
   // who is marked at work that day (HR › Staff › Attendance) is listed first
   useEffect(() => {
     if (!lists?.ready || !date) return;
@@ -142,9 +128,8 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
   function pickTeam(id) {
     if (id === '+') { setEditing('newTeam'); setText(''); return; }
     remember(lastKey('team', branchId), id);
-    const start = startPeople(id);
-    // a team with no batch yet keeps whoever is ticked
-    set({ teamId: id, workerIds: start.length ? start : value.workerIds || [] });
+    // the people stay as ticked — a team has no fixed members
+    set({ teamId: id, workerIds: value.workerIds || [] });
   }
   async function pickMachine(id) {
     if (id === '+') { setEditing('newMachine'); setText(''); return; }
