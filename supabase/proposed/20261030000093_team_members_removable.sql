@@ -52,3 +52,23 @@ CREATE TRIGGER trg_batch_keep_names BEFORE INSERT ON public.production_batches
 UPDATE public.production_batches b SET team_name = t.name FROM public.production_teams t WHERE t.id = b.team_id AND b.team_name IS NULL;
 UPDATE public.production_batches b SET worker_names = (SELECT array_agg(s.full_name ORDER BY s.full_name) FROM public.staff s WHERE s.id = ANY(b.worker_ids))
 WHERE b.worker_ids IS NOT NULL AND b.worker_names IS NULL;
+
+-- NEVER (SwahziTech, 2026-10-30): once recorded, a batch's team and people don't change —
+-- not by renaming or removing a team, not by any later edit. The database refuses it.
+CREATE OR REPLACE FUNCTION public.batch_people_fixed()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.team_id IS DISTINCT FROM OLD.team_id
+     OR NEW.worker_ids IS DISTINCT FROM OLD.worker_ids
+     OR (OLD.team_name IS NOT NULL AND NEW.team_name IS DISTINCT FROM OLD.team_name)
+     OR (OLD.worker_names IS NOT NULL AND NEW.worker_names IS DISTINCT FROM OLD.worker_names) THEN
+    RAISE EXCEPTION 'A recorded batch keeps its team and the people who worked as they were — they can''t change' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_batch_people_fixed BEFORE UPDATE ON public.production_batches
+  FOR EACH ROW EXECUTE FUNCTION public.batch_people_fixed();
