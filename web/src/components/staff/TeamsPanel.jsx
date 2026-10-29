@@ -15,6 +15,8 @@ import Modal from '../Modal';
  * (pay part of product cost) can be members; driver, secretary… aren't
  * listed. Each team also shows who worked in it on its latest batch day.
  * Removing a team keeps it on past batches (retired, not deleted).
+ * Edits are for today and the days ahead: a recorded batch keeps its team and
+ * people as they were (093 stores their names on the batch).
  */
 export default function TeamsPanel({ staff, branchId, inBranch }) {
   const { organization, canAt } = useAuth();
@@ -33,17 +35,19 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
       .select('id, name, status, branch_id, members:production_team_members(id, name, status, staff_id)').order('name');
     if (err) { console.error(err); setError("We couldn't load the teams."); setTeams([]); return; }
     setTeams(data || []);
-    const b = await supabase.from('production_batches').select('team_id, batch_date, worker_ids').neq('status', 'void').not('team_id', 'is', null)
+    const b = await supabase.from('production_batches').select('*').neq('status', 'void').not('team_id', 'is', null)
       .order('batch_date', { ascending: false }).limit(500);
     const by = {};
     for (const x of b.data || []) {
       const cur = by[x.team_id];
-      if (!cur) by[x.team_id] = { date: x.batch_date, ids: new Set(x.worker_ids || []) };
-      else if (cur.date === x.batch_date) (x.worker_ids || []).forEach(id => cur.ids.add(id));
+      // the names as recorded on the batch (093), else today's names
+      const names = x.worker_names ?? (x.worker_ids || []).map(id => staff.find(p => p.id === id)?.full_name).filter(Boolean);
+      if (!cur) by[x.team_id] = { date: x.batch_date, ids: new Set(names) };
+      else if (cur.date === x.batch_date) names.forEach(n => cur.ids.add(n));
     }
     setLastDay(by);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [staff.length]); // eslint-disable-line react-hooks/exhaustive-deps -- names need the staff list
   async function run(q) {
     setError(''); setBusy(true);
     const { error: err } = await q;
@@ -90,7 +94,7 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
         : here.map(t => {
           const members = t.members.filter(m => m.staff_id && m.status !== 'removed').sort((a, b) => (a.status === b.status ? nameOf(a).localeCompare(nameOf(b)) : a.status === 'active' ? -1 : 1));
           const ld = lastDay[t.id];
-          const worked = ld ? [...ld.ids].map(id => staff.find(x => x.id === id)?.full_name).filter(Boolean).sort() : [];
+          const worked = ld ? [...ld.ids].sort() : [];
           const day = ld ? new Date(`${ld.date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
           return (
             <div key={t.id} className={`card tm-card${t.status !== 'active' ? ' is-inactive' : ''}`}>

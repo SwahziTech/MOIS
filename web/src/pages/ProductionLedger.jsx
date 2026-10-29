@@ -142,11 +142,12 @@ export default function ProductionLedger() {
   }
 
   // the team, and who worked on the batch (087): "Juma team (Juma, Neema)"
+  // as recorded (093): the team's name and the people's names kept on the batch; live names only for batches from before
   function teamOf(b) {
-    const t = track?.teams.find(x => x.id === b.team_id);
-    if (!t) return null;
-    if (!b.worker_ids?.length) return t.name;
-    return `${t.name} (${b.worker_ids.map(id => track.people.find(p => p.id === id)?.full_name ?? '?').join(', ')})`;
+    const name = b.team_name ?? track?.teams.find(x => x.id === b.team_id)?.name;
+    if (!name) return null;
+    const people = b.worker_names ?? (b.worker_ids || []).map(id => track?.people.find(p => p.id === id)?.full_name ?? '?');
+    return people.length ? `${name} (${people.join(', ')})` : name;
   }
 
   // Tracking: the period's batches by team, machine or product
@@ -156,7 +157,7 @@ export default function ProductionLedger() {
     const rows = {};
     const row = (k, name) => (rows[k] ||= { key: k, name, batches: 0, bags: 0, pieces: 0, implied: 0, implying: 0, released: 0, rejected: 0, cost: 0, costPcs: 0 });
     for (const b of live) {
-      const keys = groupBy === 'team' ? [[b.team_id ?? '-', track.teams.find(t => t.id === b.team_id)?.name ?? 'No team (before 25 Oct)']]
+      const keys = groupBy === 'team' ? [[b.team_id ?? '-', b.team_name ?? track.teams.find(t => t.id === b.team_id)?.name ?? 'No team (before 25 Oct)']]
         : groupBy === 'machine' ? [[b.machine_id ?? '-', track.machines.find(m => m.id === b.machine_id)?.name ?? 'No machine (before 25 Oct)']]
         : [[b.product_id, refs.items[`p:${b.product_id}`]?.name ?? '—']];
       for (const [k, name] of keys) {
