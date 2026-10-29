@@ -340,7 +340,7 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 - Input already waiting: `review_flags.admin_explanation` (migration 029) — admins' free-text notes on Review-queue flags, saved as-is since 1b, deliberately not interpreted yet (AI proposing stock-affecting actions from it was considered for earlier and declined on 2026-10-14).
 
 ## 1g — Billing
-**Status: not started**
+**Status: not started — queued AFTER the AI step** (SwahziTech, 2026-10-30: "que 1g after ai"; the order is 1f AI, then 1g).
 
 PRD section: 4.18 (Subscription & Billing), Snippe.sh integration.
 
