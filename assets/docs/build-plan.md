@@ -347,7 +347,7 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
   - A month's cash-flow statement.
   - A forecast: customers owe and weekly cash approved, against suppliers, statutory, other bills and pay sheets to pay.
   - Migration 094: `payment_accounts.opening_balance`/`opening_date`, `expenses.account_id` ("Paid from"), the `cash_movements` view, and `finance.view` (owner, director, branch manager).
-- **CRM** (next): leads and follow-ups. Prospects (contractors, sites, enquiries) before they buy, the next follow-up date and who does it; a lead is turned into a customer plus a quotation.
+- **CRM:** leads and follow-ups (migration 095). Customers › Leads: prospects with the site, what they want and an estimated value; who follows up and the next date; follow-ups as calls, visits or WhatsApp. "Make quotation" turns the lead into a customer and opens a new quotation filled in from the lead. A lead whose quotation becomes an order or invoice shows as won; lost needs a reason. Due follow-ups appear on Home › Needs attention.
 
 ## 1g — Billing
 **Status: not started — queued AFTER the AI step** (SwahziTech, 2026-10-30: "que 1g after ai"; the order is 1f AI, then 1g).

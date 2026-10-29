@@ -82,16 +82,18 @@ export async function loadRecentSales({ inBranch }) {
 }
 
 /** Things waiting for someone: pay sheets, purchase requests, review flags */
-export async function loadWaiting({ inBranch }) {
-  const [ps, pr, rf] = await Promise.all([
+export async function loadWaiting({ inBranch, today }) {
+  const [ps, pr, rf, ld] = await Promise.all([
     supabase.from('pay_sheets').select('branch_id, status').in('status', ['draft', 'approved']),
     supabase.from('purchase_requests').select('branch_id, status').eq('status', 'waiting'),
     supabase.from('review_flags').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    supabase.from('leads').select('branch_id, next_follow_up, stage').not('stage', 'in', '(won,lost)').lte('next_follow_up', today),
   ]);
   return {
     payToApprove: (ps.data || []).filter(x => inBranch(x.branch_id) && x.status === 'draft').length,
     payToPay: (ps.data || []).filter(x => inBranch(x.branch_id) && x.status === 'approved').length,
     requests: (pr.data || []).filter(x => inBranch(x.branch_id)).length,
     flags: rf.count ?? 0,
+    followUps: ld.error ? 0 : (ld.data || []).filter(x => inBranch(x.branch_id)).length,
   };
 }

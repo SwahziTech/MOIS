@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -75,6 +76,19 @@ export default function Sales() {
     }
   }
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // opened from a lead (Customers › Leads › Make quotation, 095): a new quotation for its customer
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const cid = params.get('quote_for');
+    if (!cid || !refs || !customers.some(c => c.id === cid)) return;
+    const leadId = params.get('lead');
+    (async () => {
+      const { data: lead } = leadId ? await supabase.from('leads').select('site, interest').eq('id', leadId).maybeSingle() : { data: null };
+      setView('list');
+      setEditing({ prefill: { customer_id: cid, site: lead?.site ?? '', notes: lead?.interest ? `Enquiry: ${lead.interest}` : '' }, leadId });
+      setParams({}, { replace: true });
+    })();
+  }, [params, refs, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const buyerOf = s => customers.find(c => c.id === s.customer_id)?.name ?? s.walk_in_name ?? 'Walk-in';
   const paidOf = s => (s.payments || []).reduce((t, p) => t + Number(p.amount), 0);
@@ -159,9 +173,13 @@ export default function Sales() {
       )}
 
       {editing && refs && (
-        <SaleEditor sale={editing.id ? editing : null} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
+        <SaleEditor sale={editing.id ? editing : null} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
-          onClose={() => setEditing(null)} onSaved={async id => { setEditing(null); await load(); setViewing(id); }} />
+          onClose={() => setEditing(null)} onSaved={async id => {
+            // a quotation made for a lead: the lead points to it and is quoted (095)
+            if (editing.leadId && id) await supabase.from('leads').update({ sale_id: id, stage: 'quoted' }).eq('id', editing.leadId);
+            setEditing(null); await load(); setViewing(id);
+          }} />
       )}
       {open && refs && !editing && (
         <SaleView sale={open} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
@@ -178,10 +196,10 @@ export default function Sales() {
  * the money went (account, amount, receipt no.); saved as an invoice with its
  * payments in one go (record_sale, 067).
  */
-function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
+function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
   const { organization } = useAuth();
-  const [buyer, setBuyer] = useState(sale?.customer_id ? 'customer' : 'walkin');
-  const [customerId, setCustomerId] = useState(sale?.customer_id ?? '');
+  const [buyer, setBuyer] = useState(sale?.customer_id || prefill?.customer_id ? 'customer' : 'walkin');
+  const [customerId, setCustomerId] = useState(sale?.customer_id ?? prefill?.customer_id ?? '');
   const [walkName, setWalkName] = useState(sale?.walk_in_name ?? '');
   const [walkPhone, setWalkPhone] = useState(sale?.walk_in_phone ?? '');
   const [newCust, setNewCust] = useState(null);   // { name, phone, tin } while adding one
@@ -196,8 +214,8 @@ function SaleEditor({ sale, book = false, sold = {}, walkIns = [], accounts = []
   }
   const [date, setDate] = useState(sale?.sale_date ?? today);
   const [validUntil, setValidUntil] = useState(sale?.valid_until ?? '');
-  const [notes, setNotes] = useState(sale?.notes ?? '');
-  const [site, setSite] = useState(sale?.site ?? '');
+  const [notes, setNotes] = useState(sale?.notes ?? prefill?.notes ?? '');
+  const [site, setSite] = useState(sale?.site ?? prefill?.site ?? '');
   const [efd, setEfd] = useState('');
   const activeAccounts = accounts.filter(a => a.status === 'active');
   const [pays, setPays] = useState([{ accountId: '', amount: '', receiptNo: '', auto: true }]);   // auto: follows the total until typed

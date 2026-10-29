@@ -117,6 +117,7 @@ export default function Dashboard() {
     d.waiting.payToPay && { text: `${d.waiting.payToPay} approved pay sheet(s) to pay`, to: '/staff' },
     d.waiting.requests && { text: `${d.waiting.requests} purchase request(s) waiting for a decision`, to: '/purchases?tab=requests' },
     d.waiting.flags && { text: `${d.waiting.flags} open review flag(s)`, to: '/review' },
+    d.waiting.followUps && { text: `${d.waiting.followUps} lead follow-up(s) due`, to: '/customers' },
   ].filter(Boolean) : [];
 
   return (

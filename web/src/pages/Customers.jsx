@@ -12,6 +12,7 @@ import { ListToolbar, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
+import LeadsPanel from '../components/customers/LeadsPanel';
 
 const LOAD_ERROR = "We couldn't load customers. Please try again.";
 
@@ -63,12 +64,15 @@ export default function Customers() {
 
   return (
     <PageShell title="Customers" subtitle="Sales & Costing" description="Customers shared by every branch, what each owes and for how long, their history and statements."
-      primaryAction={canEdit && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New customer</button>}>
-      <PageTabs tabs={[['customers', 'Customers'], ['owing', `Who owes${owing.length ? ` (${owing.length})` : ''}`]]} value={tab} onChange={setTab} />
+      primaryAction={canEdit && tab === 'customers' && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New customer</button>}>
+      <PageTabs tabs={[['customers', 'Customers'], ['leads', 'Leads'], ['owing', `Who owes${owing.length ? ` (${owing.length})` : ''}`]]} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
-          <ListToolbar id="customers-search" search={search} onSearch={setSearch} placeholder="Search name, phone or TIN…" />
-          {tab === 'customers' ? (
+          {tab === 'leads' ? (
+            <LeadsPanel branchId={branchId} inBranch={inBranch} today={today} currency={organization?.currency_code} search={search}
+              toolbar={<ListToolbar id="leads-search" search={search} onSearch={setSearch} placeholder="Search name, contact, site or what they want…" />} />
+          ) : <ListToolbar id="customers-search" search={search} onSearch={setSearch} placeholder="Search name, phone or TIN…" />}
+          {tab === 'leads' ? null : tab === 'customers' ? (
             <section className="sk">
               <div className="sk-head"><span>Customers ({shown.length})</span></div>
               {rows === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
