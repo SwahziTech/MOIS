@@ -310,7 +310,17 @@ rates must be verified against TRA before real deductions go live.
 reworked here.
 
 ## 1f — Reports & AI v1
-**Status: CURRENT** (from 2026-10-29, on SwahziTech's instruction — two-way daily report first)
+**Status: Reports part DONE (2026-10-30). The AI part is queued as the LAST step** (SwahziTech, 2026-10-30: "queue 1f into last step").
+
+**Built (2026-10-29/30, no migrations):**
+- Reports › Daily report: two-way, in Swahili. Written from MOIS, or a written report compared against it.
+- Reports › Reports: production, sales, purchases & expenses, materials used against the recipe, basic profit, and branches. Each covers a date range and exports to Excel.
+- Home dashboards: Overview (with "Needs attention"), Production, Inventory, Sales, and Setup. Each tab is shown only to the people who work in that area.
+
+**Queued last:**
+- Ask MOIS (AI v1), basic analysis and AI-assisted drafts.
+- Reading `review_flags.admin_explanation`.
+- Before building, ask SwahziTech three things: the AI provider, what tenant data may be sent to it, and who may use it.
 
 PRD sections: 4.15 (Dashboards & Reports), 7 (AI Features — V1 slice only:
 Ask MOIS, basic authorized queries, basic analysis, AI-assisted document
