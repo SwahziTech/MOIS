@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { roleLabel as labelOf } from '../lib/manageUsers';
 import ThemeToggle from './ThemeToggle';
+import AlertsBell from './AlertsBell';
 
 /*
  * Navigation tabs. An item with `perm` is shown only to users holding that
@@ -150,7 +151,7 @@ export default function Sidebar() {
           <span className="sidebar-system-label">MOIS Platform</span>
         </div>
         {/* light / dark mode — every page used to carry it in a top bar */}
-        <div className="sidebar-logo-toggle"><ThemeToggle /></div>
+        <div className="sidebar-logo-toggle"><AlertsBell /><ThemeToggle /></div>
       </div>
 
       {/* Branch the screens are looking at */}

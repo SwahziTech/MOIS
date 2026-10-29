@@ -2342,3 +2342,18 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .cf-acc.is-on { border-color: var(--color-accent-khaki, var(--border-strong)); box-shadow: 0 0 0 1px var(--color-accent-khaki, var(--border-strong)); }
 .cf-acc.is-unset strong { color: var(--text-secondary); }
 .cf-acc.is-inactive { opacity: .6; }
+
+/* alert bell (PRD 4.16) */
+.sidebar-logo-toggle { display: flex; align-items: center; gap: 2px; }
+.ab { position: relative; }
+.ab-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.ab-btn:hover { background: var(--bg-hover, rgba(127,127,127,.12)); color: var(--text-primary); }
+.ab-badge { position: absolute; top: 3px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--color-error); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.ab-panel { position: fixed; z-index: 1000; top: 56px; left: 12px; width: min(320px, calc(100vw - 24px)); max-height: 420px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.ab-head { padding: 10px 14px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.ab-empty { padding: 14px; margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.ab-panel ul { list-style: none; margin: 0; padding: 4px 0; }
+.ab-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 14px; border: 0; background: transparent; color: var(--text-primary); text-align: left; font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.ab-item:hover { background: var(--bg-hover, rgba(127,127,127,.12)); }
+.ab-dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--color-info, var(--text-muted)); }
+.ab-item.is-warn .ab-dot { background: var(--color-warning); }
