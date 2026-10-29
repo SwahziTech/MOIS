@@ -15,6 +15,8 @@ import { dbErrorMessage } from '../../lib/masterData';
  * branch's production staff — those marked at work that day first. LOCKED
  * (2026-10-30): a team has no fixed members (A may be b, j, g today and d, f,
  * e tomorrow) — the user ticks the people; nothing is filled from the team.
+ * The team's active members (HR › Staff › Teams › Edit, 093) are listed
+ * first, unticked, to find them quickly.
  * Staff not in production (driver, secretary — "pay part of product cost"
  * unticked, 092) aren't listed. A new labourer added here becomes a casual in
  * HR › Staff (pay set there).
@@ -26,7 +28,7 @@ export function useProductionLists(branchId) {
   async function load() {
     if (!branchId) return;
     const [t, m, mp, pp] = await Promise.all([
-      supabase.from('production_teams').select('id, name, status').eq('branch_id', branchId).order('name'),
+      supabase.from('production_teams').select('id, name, status, members:production_team_members(staff_id, status)').eq('branch_id', branchId).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
       supabase.from('production_people').select('*').eq('branch_id', branchId).order('full_name'),
@@ -167,11 +169,14 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
 
   const worked = value.workerIds || [];
   const toggleWorker = id => set({ workerIds: worked.includes(id) ? worked.filter(x => x !== id) : [...worked, id] });
-  // at work that day first, then the rest; ticked people who have since left still show
+  // the team's active members first (not ticked), then those at work that day, then the rest; ticked people who have since left still show
+  const inTeam = useMemo(() => new Set(((lists?.teams || []).find(t => t.id === value.teamId)?.members || [])
+    .filter(m => m.status === 'active' && m.staff_id).map(m => m.staff_id)), [lists, value.teamId]);
   const listed = useMemo(() => {
     const extra = (lists?.people || []).filter(p => p.status !== 'active' && worked.includes(p.id));
-    return [...active, ...extra].sort((a, b) => (present[b.id] ? 1 : 0) - (present[a.id] ? 1 : 0) || a.full_name.localeCompare(b.full_name));
-  }, [active, lists, worked, present]);
+    return [...active, ...extra].sort((a, b) => (inTeam.has(b.id) ? 1 : 0) - (inTeam.has(a.id) ? 1 : 0)
+      || (present[b.id] ? 1 : 0) - (present[a.id] ? 1 : 0) || a.full_name.localeCompare(b.full_name));
+  }, [active, lists, worked, present, inTeam]);
   const atWork = listed.filter(p => present[p.id]);
 
   if (!lists) return null;
@@ -232,7 +237,7 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
           <div className="bn-people">
             {listed.length === 0 && <span className="pl-help">No staff at this branch yet — add a name below.</span>}
             {listed.map(p => (
-              <label key={p.id} className={`bn-person${present[p.id] ? '' : ' is-helper'}`}>
+              <label key={p.id} className={`bn-person${present[p.id] || inTeam.has(p.id) ? '' : ' is-helper'}${inTeam.has(p.id) ? ' is-member' : ''}`} title={inTeam.has(p.id) ? 'In this team' : undefined}>
                 <input type="checkbox" checked={worked.includes(p.id)} onChange={() => toggleWorker(p.id)} /> {p.full_name}
                 {present[p.id] === 0.5 && <span className="pl-help">(½ day)</span>}
                 {p.status !== 'active' && <span className="pl-help">(left)</span>}

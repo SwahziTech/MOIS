@@ -2325,3 +2325,6 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .tm-actions { margin-left: auto; display: flex; gap: 4px; }
 .tm-members { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .tm-worked { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 12px; }
+.ptc-chip.is-off { opacity: .5; text-decoration: line-through; }
+.tm-last { margin-top: 6px; }
+.bn-person.is-member { font-weight: 600; }
