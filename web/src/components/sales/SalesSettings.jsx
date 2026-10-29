@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useDefaultPaymentDays } from '../../lib/paymentTerms';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -48,7 +49,8 @@ export default function SalesSettings({ onClose }) {
 
   return (
     <Modal title="Sales settings" onClose={onClose} size="lg" footer={<button type="button" className="btn btn-outline" onClick={onClose}>Close</button>}>
-      <section className="card">
+      <PaymentTermsCard />
+      <section className="card" style={{ marginTop: 12 }}>
         <div className="card-header" style={{ gap: 8 }}>
           <h2 className="card-title">Receiving accounts</h2>
           {branches.length > 1 && (
@@ -89,5 +91,37 @@ export default function SalesSettings({ onClose }) {
         </div>
       </section>
     </Modal>
+  );
+}
+
+/* The company's usual payment terms (097): days after an order or invoice before payment is due */
+function PaymentTermsCard() {
+  const { organization, canAnywhere, can } = useAuth();
+  const canSet = (canAnywhere ?? can)('sales.discount');
+  const [current, reload] = useDefaultPaymentDays(organization?.id);
+  const [days, setDays] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => { if (current != null) setDays(String(current)); }, [current]);
+  if (current == null) return null;   // loading, or before 097
+  async function save() {
+    setMsg('');
+    const { error } = await supabase.rpc('set_default_payment_days', { p_days: Number(days) });
+    if (error) { setMsg(dbErrorMessage(error)); return; }
+    await reload();
+    setMsg('Saved — new orders and invoices use it.');
+  }
+  return (
+    <section className="card">
+      <div className="card-header"><h2 className="card-title">Payment terms</h2></div>
+      <div className="card-body" style={{ paddingTop: 6 }}>
+        <p className="text-xs text-muted mb-8">Days a customer has to pay after an order or invoice. 0 = due at once. A customer can have their own (Customers › Edit); a sale's due date can be changed on the sale.</p>
+        <div className="flex items-center gap-8">
+          <input className="form-input" style={{ width: 90 }} inputMode="numeric" aria-label="Payment days" value={days} disabled={!canSet} onChange={e => setDays(e.target.value)} />
+          <span className="text-sm">days</span>
+          {canSet && <button type="button" className="btn btn-primary btn-sm" disabled={days === '' || Number(days) === current} onClick={save}>Save</button>}
+          {msg && <span className="pl-help">{msg}</span>}
+        </div>
+      </div>
+    </section>
   );
 }

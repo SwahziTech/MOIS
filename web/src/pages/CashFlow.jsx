@@ -209,18 +209,20 @@ function ForecastTab({ cashNow, inBranch, money, short, today }) {
   const [d, setD] = useState(null);
   useEffect(() => {
     (async () => {
-      const [sb, sp, ex, ps, cr] = await Promise.all([
+      const [sb, sp, ex, ps, cr, od] = await Promise.all([
         supabase.from('sale_balances').select('branch_id, stage, balance').in('stage', ['order', 'invoice']),
         supabase.from('supplier_balances').select('branch_id, owed'),
         supabase.from('expenses').select('branch_id, amount, amount_paid, supplier_id, status, category:expense_categories(name)').eq('status', 'recorded'),
         supabase.from('pay_sheets').select('branch_id, status, total, period_end').in('status', ['draft', 'approved']),
         supabase.from('cash_requests').select('branch_id, status, lines:cash_request_lines(amount, approved_amount)').eq('status', 'approved'),
+        supabase.from('overdue_sales').select('branch_id, balance'),   // 097: past their due date
       ]);
       const sum = (list, f) => list.reduce((t, x) => t + Number(f(x) || 0), 0);
       const own = l => (l.data || []).filter(x => inBranch(x.branch_id));
       const unpaidNoSupplier = own(ex).filter(x => !x.supplier_id && Number(x.amount) > Number(x.amount_paid));
       setD({
         customers: sum(own(sb).filter(x => Number(x.balance) > 0), x => x.balance),
+        overdue: od.error ? null : sum(own(od), x => x.balance),
         topups: sum(own(cr), r => sum(r.lines || [], l => l.approved_amount ?? l.amount)),
         suppliers: sum(own(sp).filter(x => Number(x.owed) > 0), x => x.owed),
         statutory: sum(unpaidNoSupplier.filter(x => /statutory/i.test(x.category?.name || '')), x => Number(x.amount) - Number(x.amount_paid)),
@@ -252,7 +254,10 @@ function ForecastTab({ cashNow, inBranch, money, short, today }) {
           <tbody>
             <tr><td><strong>Cash now</strong></td><td className="num"><strong>{formatAmount(Math.round(cashNow))}</strong></td></tr>
             <tr><td className="pl-label">Coming in</td><td /></tr>
-            {line('Customers owe', d.customers, '/customers', 'orders and invoices not fully paid', '+ ')}
+            {d.overdue == null ? line('Customers owe', d.customers, '/customers', 'orders and invoices not fully paid', '+ ') : <>
+              {line('Customers owe — overdue', d.overdue, '/customers', 'past their due date: chase these', '+ ')}
+              {line('Customers owe — not yet due', d.customers - d.overdue, '/customers', 'within their payment terms', '+ ')}
+            </>}
             {line('Weekly cash approved, not yet paid', d.topups, '/weekly-cash', 'from the directors', '+ ')}
             <tr><td className="pl-label">Going out</td><td /></tr>
             {line('Suppliers owed', d.suppliers, '/purchases', 'purchases and expenses not fully paid', '− ')}
@@ -263,7 +268,7 @@ function ForecastTab({ cashNow, inBranch, money, short, today }) {
           <tfoot><tr><td><strong>Cash after</strong></td><td className="num"><strong>{money(after)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>What is owed today, not dated — sales and bills carry no due dates yet, so this shows where cash stands if everything owed were settled.</p>
+      <p className="pl-help" style={{ marginTop: 8 }}>What is owed today: sales carry due dates (overdue apart); bills from suppliers don't yet — this shows where cash stands if everything owed were settled.</p>
     </>
   );
 }

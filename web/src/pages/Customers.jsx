@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import LeadsPanel from '../components/customers/LeadsPanel';
+import { useDefaultPaymentDays } from '../lib/paymentTerms';
 
 const LOAD_ERROR = "We couldn't load customers. Please try again.";
 
@@ -186,7 +187,10 @@ function CustomerView({ customer, sales, stats, money, today, canEdit, onEdit, o
 }
 
 function CustomerModal({ customer, organizationId, branchId, onClose, onSaved }) {
-  const [f, setF] = useState({ name: customer?.name ?? '', phone: customer?.phone ?? '', email: customer?.email ?? '', tin: customer?.tin ?? '',
+  const { organization } = useAuth();
+  const [usualDays] = useDefaultPaymentDays(organization?.id);
+  const hasTerms = usualDays != null;   // 097
+  const [f, setF] = useState({ payment_days: customer?.payment_days != null ? String(customer.payment_days) : '', name: customer?.name ?? '', phone: customer?.phone ?? '', email: customer?.email ?? '', tin: customer?.tin ?? '',
     vrn: customer?.vrn ?? '', address: customer?.address ?? '', notes: customer?.notes ?? '', status: customer?.status ?? 'active' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -197,6 +201,8 @@ function CustomerModal({ customer, organizationId, branchId, onClose, onSaved })
     setError('');
     if (!f.name.trim()) { setError('Enter the name.'); return; }
     const row = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'string' && k !== 'status' ? (v.trim() || null) : v]));
+    if (!hasTerms) delete row.payment_days;
+    else if (row.payment_days != null && !(Number(row.payment_days) >= 0 && Number(row.payment_days) <= 365)) { setError('Payment days: 0 to 365, or empty for the usual.'); return; }
     setBusy(true);
     const { error: err } = customer
       ? await supabase.from('customers').update(row).eq('id', customer.id)
@@ -213,7 +219,7 @@ function CustomerModal({ customer, organizationId, branchId, onClose, onSaved })
       <div className="modal-form">
         {field('name', 'Name', { autoFocus: true })}
         <div className="form-row">{field('phone', 'Phone', { inputMode: 'tel' })}{field('email', 'Email')}</div>
-        <div className="form-row">{field('tin', 'TIN')}{field('vrn', 'VRN')}</div>
+        <div className="form-row">{field('tin', 'TIN')}{field('vrn', 'VRN')}{hasTerms && field('payment_days', `Payment days (usual ${usualDays})`, { inputMode: 'numeric', placeholder: 'usual' })}</div>
         {field('address', 'Address')}
         {field('notes', 'Notes')}
         {customer && <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={f.status === 'active'} onChange={e => setF({ ...f, status: e.target.checked ? 'active' : 'inactive' })} /> In use</label>}

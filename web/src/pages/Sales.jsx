@@ -152,7 +152,8 @@ export default function Sales() {
                 <div key={s.id} className="sk-card lk-card" onClick={() => setViewing(s.id)} title="Open this sale">
                   <div className="sk-name">
                     <strong>{buyerOf(s)}</strong>
-                    <span className="pl-help">#{s.sale_no} · {s.sale_date}{s.efd_receipt_no ? ` · EFD ${s.efd_receipt_no}` : ''}</span>
+                    <span className="pl-help">#{s.sale_no} · {s.sale_date}{s.efd_receipt_no ? ` · EFD ${s.efd_receipt_no}` : ''}
+                      {s.due_date && ['order', 'invoice'].includes(s.stage) && Number(s.total) - paid > 0.01 && s.due_date < today && <span className="text-error"> · overdue since {s.due_date}</span>}</span>
                   </div>
                   <div className="sk-total">
                     <span><strong>{money(Number(s.total))}</strong></span>
@@ -569,6 +570,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
   // deliveries (065): what has left, its cost, and the margin on it (without VAT)
   const deliveries = [...(sale.deliveries || [])].sort((a, b) => b.delivery_no - a.delivery_no);
   const [confirming, setConfirming] = useState(null);   // a delivery on the way, being confirmed (096)
+  const [dueEdit, setDueEdit] = useState(null);         // the due date being changed (097)
   const given = deliveries.reduce((t, d) => t + Number(d.value), 0);
   const doneOf = lineId => deliveries.reduce((t, d) => t + (d.lines || []).filter(x => x.sale_line_id === lineId).reduce((u, x) => u + Number(x.quantity), 0), 0);
   const lineById = Object.fromEntries((sale.lines || []).map(l => [l.id, l]));
@@ -611,6 +613,16 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
           {customer ? ` · ${customer.phone ?? ''}${customer.tin ? ` · TIN ${customer.tin}` : ''}` : sale.walk_in_phone ? ` · ${sale.walk_in_phone}` : ''}
           {sale.valid_until && sale.stage === 'quotation' ? ` · valid until ${sale.valid_until}` : ''}{sale.site ? ` · site: ${sale.site}` : ''}
           {sale.invoiced_on ? ` · invoiced ${sale.invoiced_on}` : ''}{sale.efd_receipt_no ? ` · EFD ${sale.efd_receipt_no}` : ''}
+          {sale.due_date && ['order', 'invoice'].includes(sale.stage) && (
+            <> · <span className={owed > 0.01 && sale.due_date < today ? 'text-error' : ''}>due {sale.due_date}{owed > 0.01 && sale.due_date < today ? ` — ${Math.round((new Date(today) - new Date(sale.due_date)) / 864e5)} days overdue` : ''}</span>
+              {canAt('sales.create', sale.branch_id, null) && dueEdit === null && <button type="button" className="link-btn" style={{ marginLeft: 6 }} onClick={() => setDueEdit(sale.due_date)}>change</button>}
+              {dueEdit !== null && <>
+                <input type="date" className="form-input" style={{ display: 'inline-block', width: 150, marginLeft: 6 }} min={sale.sale_date} value={dueEdit} onChange={e => setDueEdit(e.target.value)} />
+                <button type="button" className="btn btn-primary btn-sm" style={{ marginLeft: 4 }} disabled={busy || !dueEdit} onClick={async () => { if (await run(() => supabase.rpc('set_sale_due_date', { p_sale: sale.id, p_due: dueEdit }))) setDueEdit(null); }}>Save</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDueEdit(null)}>Cancel</button>
+              </>}
+            </>
+          )}
           {sale.stage === 'cancelled' ? ` · cancelled (was ${STAGES[sale.cancelled_from]}): ${sale.cancel_reason}` : ''}
         </p>
         <table className="rd-table">
