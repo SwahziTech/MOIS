@@ -2334,3 +2334,11 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .tm-tick.is-on { background: color-mix(in srgb, var(--color-success) 10%, transparent); }
 .tm-tick.is-off { opacity: .6; }
 .tm-tick .btn { padding: 2px 6px; }
+
+/* cash flow (094) */
+.cf-accounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+.cf-acc { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-surface); color: inherit; cursor: pointer; font: inherit; }
+.cf-acc:hover { border-color: var(--border-strong); }
+.cf-acc.is-on { border-color: var(--color-accent-khaki, var(--border-strong)); box-shadow: 0 0 0 1px var(--color-accent-khaki, var(--border-strong)); }
+.cf-acc.is-unset strong { color: var(--text-secondary); }
+.cf-acc.is-inactive { opacity: .6; }

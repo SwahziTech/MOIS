@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, ScrollText, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3,
+  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -87,6 +87,8 @@ const NAV = [
     items: [
       // the branch's weekly operations cash: request → BM → directors → paid; last week's spending (migration 078)
       { label: 'Weekly cash', to: '/weekly-cash', icon: Wallet, perm: 'cash.request' },
+      // money in and out by account, statement, forecast (094) — owner, directors, branch managers
+      { label: 'Cash flow', to: '/cash-flow', icon: Landmark, perm: 'finance.view' },
     ],
   },
   {

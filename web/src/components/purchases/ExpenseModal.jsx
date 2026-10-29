@@ -35,8 +35,18 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
   const [supplierId, setSupplierId] = useState(expense?.supplier_id ?? '');
   const [newSupplier, setNewSupplier] = useState('');
   const [vatShown, setVatShown] = useState(expense?.vat_amount != null);
+  useEffect(() => {
+    if (!branch) { setAccounts([]); return; }
+    // only once expenses can name an account (094)
+    Promise.all([supabase.from('payment_accounts').select('id, name, kind, status').eq('branch_id', branch).order('display_order'),
+      supabase.from('expenses').select('account_id').limit(1)])
+      .then(([acc, probe]) => setAccounts(probe.error ? [] : (acc.data || []).filter(a => a.status === 'active' || a.id === accountId)));
+  }, [branch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const account = accounts.find(a => a.id === accountId);
   const [paid,     setPaid]     = useState(expense ? String(expense.amount_paid) : '');
   const [method,   setMethod]   = useState(expense?.payment_method ?? '');
+  const [accountId, setAccountId] = useState(expense?.account_id ?? '');   // paid from (094)
+  const [accounts, setAccounts] = useState([]);
   const [paidOn,   setPaidOn]   = useState(expense?.paid_on ?? expense?.expense_date ?? today);
   const [paidOnSet, setPaidOnSet] = useState(!!expense?.paid_on);
   const [notes,    setNotes]    = useState(expense?.notes ?? '');
@@ -128,7 +138,8 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
       branch_id: branch, expense_date: date, category_id: category, description: what.trim(),
       quantity: num(qty), unit_price: num(qty) != null ? num(price) : null, amount: total,
       ...(supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : supplierId ? { supplier_id: supplierId } : {}),
-      vat_amount: vat, amount_paid: num(paid) ?? 0, payment_method: method.trim() || null,
+      vat_amount: vat, amount_paid: num(paid) ?? 0, payment_method: account ? account.kind : method.trim() || null,
+      ...(accounts.length ? { account_id: num(paid) > 0 ? accountId || null : null } : {}),
       paid_on: num(paid) > 0 ? paidOn || null : null, notes: notes.trim() || null,
     };
     setBusy(true);
@@ -286,11 +297,21 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
             <label className="form-label" htmlFor="ex-paid">Paid</label>
             <NumberInput id="ex-paid" step="any" min="0" className="form-input" placeholder="0 = not paid yet" value={paid} onChange={e => setPaid(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="ex-method">How</label>
-            <input id="ex-method" className="form-input" list="ex-methods" placeholder="e.g. Cash" value={method} onChange={e => setMethod(e.target.value)} />
-            <datalist id="ex-methods">{PAYMENT_METHODS.map(m => <option key={m} value={m} />)}</datalist>
-          </div>
+          {accounts.length > 0 ? (
+            <div className="form-group">
+              <label className="form-label" htmlFor="ex-account">Paid from</label>
+              <select id="ex-account" className="form-input" value={accountId} onChange={e => setAccountId(e.target.value)}>
+                <option value="">Choose the account…</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label" htmlFor="ex-method">How</label>
+              <input id="ex-method" className="form-input" list="ex-methods" placeholder="e.g. Cash" value={method} onChange={e => setMethod(e.target.value)} />
+              <datalist id="ex-methods">{PAYMENT_METHODS.map(m => <option key={m} value={m} />)}</datalist>
+            </div>
+          )}
           {num(paid) > 0 && (
             <div className="form-group">
               <label className="form-label" htmlFor="ex-paidon">Paid on</label>

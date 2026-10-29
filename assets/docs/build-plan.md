@@ -339,6 +339,16 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
   - No night shift any more.
 - Input already waiting: `review_flags.admin_explanation` (migration 029) — admins' free-text notes on Review-queue flags, saved as-is since 1b, deliberately not interpreted yet (AI proposing stock-affecting actions from it was considered for earlier and declined on 2026-10-14).
 
+## CRM & Cash flow
+**Status: CURRENT** (from 2026-10-30, on SwahziTech's instruction. These came forward from PRD Phase 2; cash flow first.)
+
+- **Cash flow** (SwahziTech chose):
+  - Money in and out by account: opening balances; sale payments, weekly cash from the directors, supplier payments and expenses paid, which includes wages and statutory payments; a running balance.
+  - A month's cash-flow statement.
+  - A forecast: customers owe and weekly cash approved, against suppliers, statutory, other bills and pay sheets to pay.
+  - Migration 094: `payment_accounts.opening_balance`/`opening_date`, `expenses.account_id` ("Paid from"), the `cash_movements` view, and `finance.view` (owner, director, branch manager).
+- **CRM** (next): leads and follow-ups. Prospects (contractors, sites, enquiries) before they buy, the next follow-up date and who does it; a lead is turned into a customer plus a quotation.
+
 ## 1g — Billing
 **Status: not started — queued AFTER the AI step** (SwahziTech, 2026-10-30: "que 1g after ai"; the order is 1f AI, then 1g).
 
