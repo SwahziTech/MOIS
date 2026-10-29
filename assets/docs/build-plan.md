@@ -310,7 +310,7 @@ rates must be verified against TRA before real deductions go live.
 reworked here.
 
 ## 1f — Reports & AI v1
-**Status: Reports part DONE (2026-10-30). The AI part is queued as the LAST step** (SwahziTech, 2026-10-30: "queue 1f into last step").
+**Status: Reports part DONE (2026-10-30). The AI part is PENDING** (SwahziTech, 2026-10-30): queued as the last step, and not started until the app works 100% and has been tested in real use for a month.
 
 **Built (2026-10-29/30, no migrations):**
 - Reports › Daily report: two-way, in Swahili. Written from MOIS, or a written report compared against it.
@@ -340,7 +340,7 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 - Input already waiting: `review_flags.admin_explanation` (migration 029) — admins' free-text notes on Review-queue flags, saved as-is since 1b, deliberately not interpreted yet (AI proposing stock-affecting actions from it was considered for earlier and declined on 2026-10-14).
 
 ## CRM & Cash flow
-**Status: CURRENT** (from 2026-10-30, on SwahziTech's instruction. These came forward from PRD Phase 2; cash flow first.)
+**Status: DONE (2026-10-30, live as migrations 094–095).** Brought forward from PRD Phase 2 on SwahziTech's instruction.
 
 - **Cash flow** (SwahziTech chose):
   - Money in and out by account: opening balances; sale payments, weekly cash from the directors, supplier payments and expenses paid, which includes wages and statutory payments; a running balance.
@@ -350,7 +350,7 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 - **CRM:** leads and follow-ups (migration 095). Customers › Leads: prospects with the site, what they want and an estimated value; who follows up and the next date; follow-ups as calls, visits or WhatsApp. "Make quotation" turns the lead into a customer and opens a new quotation filled in from the lead. A lead whose quotation becomes an order or invoice shows as won; lost needs a reason. Due follow-ups appear on Home › Needs attention.
 
 ## 1g — Billing
-**Status: not started — queued AFTER the AI step** (SwahziTech, 2026-10-30: "que 1g after ai"; the order is 1f AI, then 1g).
+**Status: PENDING — after the AI step** (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.
 
 PRD section: 4.18 (Subscription & Billing), Snippe.sh integration.
 
