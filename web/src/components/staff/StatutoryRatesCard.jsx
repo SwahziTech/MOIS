@@ -46,7 +46,9 @@ export default function StatutoryRatesCard() {
     return true;
   }
 
-  if (rates === false) return null;   // before 088
+  if (rates === false) {   // before 088: say so rather than an empty window
+    return <section className="card"><div className="card-body"><p className="text-sm text-muted">Payroll settings aren’t set up on this system yet (statutory rates and working days). Ask the Technical admin.</p></div></section>;
+  }
   const toVerify = (rates || []).filter(r => !r.verified_at).length;
   const bandsText = b => (b || []).map(x => `${x.rate}% from ${formatAmount(Number(x.from))}`).join(' · ');
 
