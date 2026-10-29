@@ -111,7 +111,7 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
                     })()}
                     {canEdit && (
                       <span className="tm-actions">
-                        {t.status === 'active' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRenaming({ id: t.id, name: t.name })}>Rename</button>}
+                        {t.status === 'active' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRenaming({ id: t.id, name: t.name })}>Edit</button>}
                         <button type="button" className="btn btn-ghost btn-sm" disabled={busy}
                           onClick={() => run(supabase.from('production_teams').update({ status: t.status === 'active' ? 'inactive' : 'active' }).eq('id', t.id))}>
                           {t.status === 'active' ? 'Remove team' : 'Bring back'}</button>
