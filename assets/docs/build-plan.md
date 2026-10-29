@@ -349,6 +349,19 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
   - Migration 094: `payment_accounts.opening_balance`/`opening_date`, `expenses.account_id` ("Paid from"), the `cash_movements` view, and `finance.view` (owner, director, branch manager).
 - **CRM:** leads and follow-ups (migration 095). Customers › Leads: prospects with the site, what they want and an estimated value; who follows up and the next date; follow-ups as calls, visits or WhatsApp. "Make quotation" turns the lead into a customer and opens a new quotation filled in from the lead. A lead whose quotation becomes an order or invoice shows as won; lost needs a reason. Due follow-ups appear on Home › Needs attention.
 
+## Phase 1 completion — Deliveries & documents; Due dates & notifications
+**Status: CURRENT** (from 2026-10-30, on SwahziTech's instruction, after comparing the PRD with what is built)
+
+Needed for the month of real use before AI and Billing.
+
+- **Deliveries & documents** (PRD 4.12, 4.14):
+  - Deliveries get a driver, a status (on the way → delivered) and proof of delivery (who received it, when, a note), and a list of all deliveries.
+  - A goods received note (GRN) for each receipt of goods.
+  - A supplier statement.
+  - Already built: receipt, delivery note, proforma (an order's document), quotation, invoice, customer statement, PO.
+- **Due dates & notifications** (PRD 4.11, 4.16): payment terms and due dates on invoices; overdue invoices; an in-app alert bell for each role and branch.
+- **Not chosen now:** Quality extras (4.10) and the small fixes (account on LUKU tokens, transfers between accounts, carrying over an advance overpayment, the cross-tenant check).
+
 ## 1g — Billing
 **Status: PENDING — after the AI step** (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.
 

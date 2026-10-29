@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -123,7 +124,7 @@ export default function Sales() {
   const open = (sales || []).find(s => s.id === viewing);
 
   // page order (locked): heading → summary cards → these tabs → search/filters → list
-  const salesTabs = <PageTabs tabs={[['book', 'Sales book'], ['list', 'Quotations & invoices'], ['overview', 'Overview']]} value={view} onChange={setView} />;
+  const salesTabs = <PageTabs tabs={[['book', 'Sales book'], ['list', 'Quotations & invoices'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title="Sales" subtitle="Sales & Costing"
@@ -136,6 +137,7 @@ export default function Sales() {
           {salesTabs}
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
             refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
+          {view === 'deliveries' && <DeliveriesPanel branchId={branchId} inBranch={inBranch} canAct={!!canSell} today={today} search={search} />}
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} />}
           {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
@@ -566,6 +568,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
   const editable = ['quotation', 'order'].includes(sale.stage) && canAt('sales.create', br, null) && !(sale.deliveries || []).length;
   // deliveries (065): what has left, its cost, and the margin on it (without VAT)
   const deliveries = [...(sale.deliveries || [])].sort((a, b) => b.delivery_no - a.delivery_no);
+  const [confirming, setConfirming] = useState(null);   // a delivery on the way, being confirmed (096)
   const given = deliveries.reduce((t, d) => t + Number(d.value), 0);
   const doneOf = lineId => deliveries.reduce((t, d) => t + (d.lines || []).filter(x => x.sale_line_id === lineId).reduce((u, x) => u + Number(x.quantity), 0), 0);
   const lineById = Object.fromEntries((sale.lines || []).map(l => [l.id, l]));
@@ -654,10 +657,14 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               {deliveries.map(d => (
                 <tr key={d.id}>
                   <td>{d.delivered_on}</td>
-                  <td>{d.kind === 'collection' ? 'Collected' : 'Delivered'} #{d.delivery_no}{d.received_by ? ` · ${d.received_by}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
+                  <td>{d.kind === 'collection' ? 'Collected' : d.status === 'on_the_way' ? 'On the way' : 'Delivered'} #{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
+                    {d.status === 'on_the_way' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>awaiting proof</span>}
+                    {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <div className="pl-help">Received by {d.pod_received_by || d.received_by}{d.delivered_at ? ` · ${new Date(d.delivered_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}{d.pod_note ? ` · ${d.pod_note}` : ''}</div>}
                     <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
-                  <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={13} /> Delivery note</button></td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {d.status === 'on_the_way' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(d)}>Delivered…</button>}
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={13} /> Delivery note</button></td>
                 </tr>
               ))}
             </tbody></table>
@@ -738,6 +745,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
           <label className="pe-field"><span>Why? (required)</span><input className="form-input" autoFocus value={reason} onChange={e => setReason(e.target.value)} /></label>
         </Modal>
       )}
+      {confirming && <ConfirmDelivery delivery={confirming} who={buyer} onClose={() => setConfirming(null)} onDone={async () => { setConfirming(null); await onChanged(); }} />}
     </Modal>
   );
 }
@@ -768,6 +776,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   const [checked, setChecked] = useState(false);
   const [receivedBy, setReceivedBy] = useState(sale.walk_in_name ?? '');
   const [vehicle, setVehicle] = useState('');
+  const [driver, setDriver] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const value = lines.reduce((t, l) => t + r2(unitInc(l) * (num(qty[l.id]) ?? 0)), 0);
@@ -797,10 +806,11 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     if (needEfd && !efdNo.trim()) { setError('This sale carries VAT — enter the EFD receipt number.'); return; }
     if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
+    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
       lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
+    if (kind === 'delivery' && driver.trim() && did) await supabase.rpc('set_delivery_trip', { p_delivery: did, p: { driver: driver.trim() } });
     onSaved();
   }
   return (
@@ -846,7 +856,8 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
             </div>
           )}
           <label className="pe-field"><span>Received by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>
-          {kind === 'delivery' && <label className="pe-field"><span>Vehicle / driver (optional)</span><input className="form-input" value={vehicle} onChange={e => setVehicle(e.target.value)} /></label>}
+          {kind === 'delivery' && <label className="pe-field"><span>Driver</span><input className="form-input" value={driver} onChange={e => setDriver(e.target.value)} /></label>}
+          {kind === 'delivery' && <label className="pe-field"><span>Vehicle</span><input className="form-input" placeholder="e.g. T 123 ABC" value={vehicle} onChange={e => setVehicle(e.target.value)} /></label>}
         </div>
       </div>
     </Modal>

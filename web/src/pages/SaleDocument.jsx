@@ -122,7 +122,14 @@ export default function SaleDocument() {
                 })}
               </tbody>
             </table>
-            <p>{delivery.kind === 'collection' ? 'Collected by the customer' : 'Delivered'}{delivery.vehicle ? ` · ${delivery.vehicle}` : ''}</p>
+            <p>{delivery.kind === 'collection' ? 'Collected by the customer' : 'Delivery'}{sale.site ? ` · site: ${sale.site}` : ''}
+              {delivery.driver ? ` · driver: ${delivery.driver}` : ''}{delivery.vehicle ? ` · vehicle: ${delivery.vehicle}` : ''}</p>
+            {/* proof of delivery once confirmed (096) */}
+            {delivery.kind === 'delivery' && delivery.status === 'delivered' && delivery.pod_received_by && (
+              <p><strong>Delivered</strong> — received by {delivery.pod_received_by}
+                {delivery.delivered_at ? `, ${new Date(delivery.delivered_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                {delivery.pod_note ? ` · ${delivery.pod_note}` : ''}</p>
+            )}
             <div className="doc-sign">
               <div><span>Issued by</span></div>
               <div><span>Received by{delivery.received_by ? `: ${delivery.received_by}` : ''}</span></div>
