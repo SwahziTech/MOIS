@@ -102,7 +102,8 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
                 <strong>{t.name}</strong>
                 {t.status !== 'active' && <span className="pl-help">removed</span>}
                 <span className="tm-worked">
-                  <span className="pl-help">Members:</span>
+                  {/* how many are in the team; deactivated ones counted apart */}
+                  <span className="pl-help">Members ({members.filter(m => m.status === 'active').length}{members.some(m => m.status !== 'active') ? ` + ${members.filter(m => m.status !== 'active').length} off` : ''}):</span>
                   {members.length ? members.map(m => <span key={m.id} className={`ptc-chip${m.status !== 'active' ? ' is-off' : ''}`} title={m.status !== 'active' ? 'Deactivated' : undefined}>{nameOf(m)}</span>)
                     : <span className="pl-help">none yet</span>}
                 </span>
