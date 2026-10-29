@@ -36,6 +36,8 @@ import DailyReport from './pages/DailyReport';
 import Reports from './pages/Reports';
 import CashFlow from './pages/CashFlow';
 import PayslipDocument from './pages/PayslipDocument';
+import GoodsReceivedDocument from './pages/GoodsReceivedDocument';
+import SupplierStatementDocument from './pages/SupplierStatementDocument';
 
 export default function App() {
   return (
@@ -57,6 +59,8 @@ export default function App() {
           <Route path="/print/sale/:id" element={<SaleDocument />} />
           <Route path="/print/statement/:id" element={<StatementDocument />} />
           <Route path="/print/payslips/:id" element={<PayslipDocument />} />
+          <Route path="/print/grn/:id" element={<GoodsReceivedDocument />} />
+          <Route path="/print/supplier-statement/:id" element={<SupplierStatementDocument />} />
           <Route path="/print/po/:id" element={<PurchaseOrderDocument />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}

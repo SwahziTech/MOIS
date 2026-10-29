@@ -249,6 +249,7 @@ export default function Purchases() {
                         {canRecordAt(a.branch_id) && (
                           <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing({ mode: 'complete', receipt: a })}>Add purchase details</button>
                         )}
+                        <button type="button" className="btn btn-ghost btn-sm" title="Goods received note" onClick={() => window.open(`/print/grn/${a.movement_id}`, '_blank', 'noopener')}>GRN</button>
                       </td>
                     </tr>
                   ))}
@@ -311,6 +312,9 @@ export default function Purchases() {
                           )}
                           {p.status === 'recorded' && canRecordAt(p.branch_id) && (
                             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ mode: 'edit', purchase: p })}>Open</button>
+                          )}
+                          {p.status === 'recorded' && p.movement_id && (
+                            <button type="button" className="btn btn-ghost btn-sm" title="Goods received note" onClick={() => window.open(`/print/grn/${p.movement_id}`, '_blank', 'noopener')}>GRN</button>
                           )}
                           {p.status === 'void' && isTechAdmin && (
                             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleting(p)}>Delete…</button>

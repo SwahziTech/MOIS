@@ -115,7 +115,8 @@ export default function Suppliers() {
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td className="text-sm">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' · ') || <span className="text-muted">—</span>}</td>
                     <td className="text-sm text-muted">{bought[s.id] ? [...bought[s.id].items].sort().join(', ') : '—'}</td>
-                    <td className="text-sm">{bought[s.id] ? <>{bought[s.id].count} <span className="text-muted">· last {bought[s.id].last}</span>{bought[s.id].owed > 0 && <div className="text-xs">{money(Math.round(bought[s.id].owed * 100) / 100)} to pay</div>}</> : <span className="text-muted">none yet</span>}</td>
+                    <td className="text-sm">{bought[s.id] ? <>{bought[s.id].count} <span className="text-muted">· last {bought[s.id].last}</span>{bought[s.id].owed > 0 && <div className="text-xs">{money(Math.round(bought[s.id].owed * 100) / 100)} to pay</div>}
+                      <div><button type="button" className="link-btn text-xs" onClick={() => window.open(`/print/supplier-statement/${s.id}`, '_blank', 'noopener')}>Statement</button></div></> : <span className="text-muted">none yet</span>}</td>
                     <td><span className={`badge ${s.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{s.status}</span></td>
                     {canWrite && <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(s)}>Edit</button></td>}
                   </tr>
