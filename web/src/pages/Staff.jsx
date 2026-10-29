@@ -15,6 +15,7 @@ import NumberInput from '../components/NumberInput';
 import StatutoryRatesCard, { RATE_NAME } from '../components/staff/StatutoryRatesCard';
 import AdvancesPanel from '../components/staff/AdvancesPanel';
 import StatutoryReturns from '../components/staff/StatutoryReturns';
+import TeamsPanel from '../components/staff/TeamsPanel';
 
 const LOAD_ERROR = "We couldn't load staff. Please try again.";
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
@@ -120,9 +121,11 @@ export default function Staff() {
     <PageShell title="Staff" subtitle="HR" onSettings={() => setSettings(true)}
       description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
       primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
-      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['attendance', 'Attendance'], ['pay', 'Pay sheets'], ['advances', 'Advances'], ['returns', 'Returns']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
+      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['teams', 'Teams'], ['attendance', 'Attendance'], ['pay', 'Pay sheets'], ['advances', 'Advances'], ['returns', 'Returns']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
-      : tab === 'advances' ? (
+      : tab === 'teams' ? (
+        <TeamsPanel staff={staff || []} branchId={branchId} inBranch={inBranch} />
+      ) : tab === 'advances' ? (
         <AdvancesPanel staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
       ) : tab === 'returns' ? (
         <StatutoryReturns staff={staff || []} today={today} currency={organization?.currency_code} inBranch={inBranch} />

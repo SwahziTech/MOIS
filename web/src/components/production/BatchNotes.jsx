@@ -13,8 +13,8 @@ import { dbErrorMessage } from '../../lib/masterData';
  * Who worked (087, 2026-10-28): teams change week to week, even day to day,
  * so a team is a name only and the people are ticked on each batch from the
  * branch's staff — those marked at work that day first. A team starts with
- * the people of its last batch; a new labourer added here becomes a casual
- * in HR › Staff (pay set there).
+ * its members (HR › Staff › Teams, 2026-10-30), else the people of its last
+ * batch; a new labourer added here becomes a casual in HR › Staff (pay set there).
  *
  * value: { teamId, workerIds (staff ids), machineId, notes }
  */
@@ -23,7 +23,7 @@ export function useProductionLists(branchId) {
   async function load() {
     if (!branchId) return;
     const [t, m, mp, pp, lb] = await Promise.all([
-      supabase.from('production_teams').select('id, name, status').eq('branch_id', branchId).order('name'),
+      supabase.from('production_teams').select('id, name, status, members:production_team_members(staff_id, status)').eq('branch_id', branchId).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
       supabase.from('production_people').select('id, full_name, kind, job_title, status').eq('branch_id', branchId).order('full_name'),
@@ -97,8 +97,12 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
   const [present, setPresent] = useState({});     // staff id → day fraction marked at work on the batch's date
 
   const active = useMemo(() => (lists?.people || []).filter(p => p.status === 'active'), [lists]);
-  // a team starts with the people of its last batch (those still at the branch)
-  const startPeople = teamId => (lists?.lastWorkers?.[teamId] || []).filter(id => active.some(p => p.id === id));
+  // a team starts with its members (HR › Staff › Teams), else the people of its last batch — those still at the branch
+  const startPeople = teamId => {
+    const t = (lists?.teams || []).find(x => x.id === teamId);
+    const members = (t?.members || []).filter(m => m.status === 'active' && m.staff_id).map(m => m.staff_id);
+    return (members.length ? members : lists?.lastWorkers?.[teamId] || []).filter(id => active.some(p => p.id === id));
+  };
 
   // Start filled: the last team used here (or the only one); the machine last used for this product (or the only one)
   useEffect(() => {
