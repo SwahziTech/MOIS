@@ -84,7 +84,7 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
           <button type="button" className="btn btn-primary btn-sm" disabled={busy || !newName.trim()} onClick={addTeam}><Plus size={14} /> New team</button>
         </>}
         <label className="text-sm flex items-center gap-8" style={{ marginLeft: 'auto' }}><input type="checkbox" checked={showRetired} onChange={e => setShowRetired(e.target.checked)} /> Show removed teams</label>
-        <span className="pl-help" title="A batch lists the team's active members first but ticks nobody — who worked is chosen on each batch. A removed team stays on past batches.">Who worked is ticked on each batch.</span>
+        <span className="pl-help" title="Choosing a team on a batch ticks its active members; untick anyone who didn't work on that batch — they stay in the team. A removed team stays on past batches.">A team's active members are ticked on its batches.</span>
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {!branchId && <div className="alert alert-warning">Choose a branch to add teams.</div>}
@@ -199,7 +199,7 @@ function TeamEdit({ team, staff, allStaff, organizationId, teams, onClose, onCha
             );
           })}
         </div>
-        <p className="pl-help">Tick to add, untick to take out. A batch lists this team's active members first; nobody is ticked for you — tick who worked that day. Recorded batches never change.</p>
+        <p className="pl-help">Tick to add, untick to take out. Choosing this team on a batch ticks its active members — untick anyone not on that batch (they stay in the team). Recorded batches never change.</p>
       </div>
     </Modal>
   );
