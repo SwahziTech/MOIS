@@ -126,7 +126,8 @@ export function cardsFor(data, { from, to, compare }, inBranch) {
     left: weeklyCashLeft(data, to, inBranch),
     hasRequests: data.requests.some(r => inBranch(r.branch_id)),
     bought: sum(bought, x => x.total),
-    paid: sum(bought, x => x.paid),
+    // money actually paid to suppliers in the period, whenever the goods were bought
+    paid: sum(moves.filter(x => x.kind === 'purchase' && inRange(x.day, from, to)), x => x.amount),
     // what's owed doesn't belong to one period: everything bought up to its end and still unpaid
     toPay: sum(data.purchases.filter(x => inBranch(x.branch_id) && !!x.day && x.day <= to), x => x.toPay),
   };

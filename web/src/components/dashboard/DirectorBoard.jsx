@@ -110,8 +110,8 @@ export default function DirectorBoard() {
             <span className="pl-help">{c.hasRequests ? `${short(c.spent)} spent · ${short(c.left)} left` : 'No requests yet'}</span>
           </button>
           <button type="button" className="dd-num" onClick={() => open('purchases')}>
-            <span className="pl-label">Purchases</span><strong>{short(c.bought)}</strong>
-            <span className="pl-help">{short(c.paid)} paid · {short(c.toPay)} to pay</span>
+            <span className="pl-label">Purchases</span><strong>{short(c.paid)} paid</strong>
+            <span className="pl-help">{short(c.bought)} bought · <span className={c.toPay > 0 ? 'text-warning' : ''}>{short(c.toPay)} to pay</span></span>
           </button>
         </div>
       ) : unavailable}
