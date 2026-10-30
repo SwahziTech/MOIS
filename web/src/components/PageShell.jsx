@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { groupOf } from './Sidebar';
 import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
@@ -8,7 +10,12 @@ import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
  * the right. The light/dark switch lives in the sidebar header.
  */
 // onSettings: a small ⚙ beside the heading opens the page's own settings (2026-10-25)
+// a page that shares a sidebar entry with others (Review queue, Products, Procurement, Cash flow) shows them as tabs under the heading (2026-10-30)
 export default function PageShell({ title, subtitle, description, primaryAction, actions, onSettings, children }) {
+  const { pathname } = useLocation();
+  const { can } = useAuth();
+  const group = groupOf(pathname);
+  const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
   return (
     <main className="page-content animate-fadeIn">
       <nav className="page-breadcrumb" aria-label="Breadcrumb">
@@ -31,6 +38,13 @@ export default function PageShell({ title, subtitle, description, primaryAction,
           <div className="page-primary-action">{actions}{primaryAction}</div>
         )}
       </div>
+      {siblings.length > 1 && (
+        <nav className="page-group" aria-label={group.label}>
+          {siblings.map(g => (
+            <Link key={g.to} to={g.to} className={`page-group-tab${g.to === pathname ? ' is-on' : ''}`} aria-current={g.to === pathname ? 'page' : undefined}>{g.label}</Link>
+          ))}
+        </nav>
+      )}
       {children}
     </main>
   );

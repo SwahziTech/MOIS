@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { useUrlTab } from '../lib/urlTab';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -47,7 +48,7 @@ export default function Sales() {
   const [stage, setStage] = useState('');
   const [editing, setEditing] = useState(null);   // a sale (or {} for new)
   const [viewing, setViewing] = useState(null);   // a sale id
-  const [view, setView] = useState('book');       // book | list | overview (the book first — 2026-10-26)
+  const [view, setView] = useUrlTab('book');      // book | list | deliveries | overview (the book first — 2026-10-26); list = the sidebar's Invoices
   const [accounts, setAccounts] = useState([]);   // receiving accounts (067)
   const [showSettings, setShowSettings] = useState(false);
 
@@ -85,9 +86,8 @@ export default function Sales() {
     const leadId = params.get('lead');
     (async () => {
       const { data: lead } = leadId ? await supabase.from('leads').select('site, interest').eq('id', leadId).maybeSingle() : { data: null };
-      setView('list');
       setEditing({ prefill: { customer_id: cid, site: lead?.site ?? '', notes: lead?.interest ? `Enquiry: ${lead.interest}` : '' }, leadId });
-      setParams({}, { replace: true });
+      setParams({ tab: 'list' }, { replace: true });
     })();
   }, [params, refs, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 

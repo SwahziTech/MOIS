@@ -1,10 +1,10 @@
 import {
-  LayoutDashboard, Package, Layers, ScrollText, DollarSign,
-  Building2, Users, Settings, LogOut, LayoutGrid, FolderTree, Palette, Flag, Truck, Boxes, ArrowLeftRight, CheckSquare, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark,
+  LayoutDashboard, Package, Layers, DollarSign,
+  Building2, Users, Settings, LogOut, LayoutGrid, Flag, Boxes, ArrowLeftRight, ShoppingCart, Factory, BookOpen,
+  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark, CalendarClock, CalendarCheck, Files,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -15,39 +15,47 @@ import { primaryRole, resolveMenu } from '../lib/menu';
 import { ChevronRight } from 'lucide-react';
 
 /*
- * Navigation tabs. An item with `perm` is shown only to users holding that
- * permission (AGENTS.md §7: users see only the modules they're authorized
- * for). This is UX only — Supabase RLS remains the security boundary.
- * Codes must exist in public.permissions (migration 006).
+ * The sidebar, 2026-10-30: 9 sections of up to 3 pages (the agreed layout).
+ * An entry with `group` stands for several pages shown as tabs under the
+ * page heading (PageShell); an entry with `tabs` opens one page on those of
+ * its tabs (?tab=). Statements, Documents and Print lists come later.
  */
 export const NAV = [
   {
-    section: 'Overview',
+    section: 'Home',
     items: [
       { label: 'Dashboard',     to: '/',          icon: LayoutDashboard },
-      // price changes and stock corrections waiting for an admin (migration 033)
-      { label: 'Approvals',     to: '/approvals', icon: CheckSquare, perm: 'inventory.view', badge: 'approvals' },
+      // the day's report, written from MOIS or a written one checked against it (1f)
+      { label: 'Daily report',  to: '/daily-report', icon: FileText, perm: 'production.view' },
+      // changes waiting for an admin (033) and flags to review (yield band)
+      { label: 'Review queue',  to: '/approvals', icon: Flag, badge: 'approvals', group: [
+        { label: 'Approvals', to: '/approvals', perm: 'inventory.view' },
+        { label: 'Reviews',   to: '/review',    perm: 'products.view' },
+      ] },
     ],
   },
   {
     section: 'Master Data',
     items: [
-      { label: 'Products',      to: '/products',  icon: Package,    perm: 'products.view'  },
-      { label: 'Categories',    to: '/categories', icon: FolderTree, perm: 'products.view' },
-      { label: 'Colours',       to: '/colours',  icon: Palette,    perm: 'products.view' },
       { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
-      { label: 'Suppliers',     to: '/suppliers', icon: Truck,     perm: 'materials.view' },
-      { label: 'Recipes / BOM', to: '/recipes',   icon: ScrollText, perm: 'products.view'  },
+      { label: 'Products',      to: '/products',  icon: Package, group: [
+        { label: 'Products',      to: '/products',   perm: 'products.view' },
+        { label: 'Categories',    to: '/categories', perm: 'products.view' },
+        { label: 'Colours',       to: '/colours',    perm: 'products.view' },
+        { label: 'Recipe / BOM',  to: '/recipes',    perm: 'products.view' },
+      ] },
       { label: 'Pricing',       to: '/pricing',   icon: DollarSign, perm: 'products.view'  },
-      { label: 'Review queue',  to: '/review',   icon: Flag,       perm: 'products.view' },
     ],
   },
   {
-    section: 'Inventory',
+    section: 'Inventory & Procurement',
     items: [
       { label: 'Stock',         to: '/stock',     icon: Boxes,          perm: 'inventory.view' },
       { label: 'Movements',     to: '/movements', icon: ArrowLeftRight, perm: 'inventory.view' },
-      { label: 'Purchases',     to: '/purchases', icon: ShoppingCart,   perm: 'procurement.view' },
+      { label: 'Procurement',   to: '/purchases', icon: ShoppingCart, group: [
+        { label: 'Purchases', to: '/purchases', perm: 'procurement.view' },
+        { label: 'Suppliers', to: '/suppliers', perm: 'materials.view' },
+      ] },
     ],
   },
   {
@@ -56,42 +64,45 @@ export const NAV = [
       // batches, curing and quality release (migration 042)
       { label: 'Production',    to: '/production', icon: Factory,       perm: 'production.view' },
       // every confirmed production day, by period and stage (2026-10-21)
-      { label: 'Production ledger', to: '/production/ledger', icon: BookOpen, perm: 'production.view' },
+      { label: 'Job Costing',   to: '/production/ledger', icon: BookOpen, perm: 'production.view' },
+      { label: 'Planner',       to: '/production?tab=planner', tabs: ['planner'], icon: CalendarClock, perm: 'production.view' },
     ],
   },
   {
-    section: 'Sales & Costing',
+    section: 'Sales',
     items: [
       // quotations → orders → invoices, payments; customers (1e, migration 064)
-      { label: 'Sales', to: '/sales', icon: Receipt, perm: 'sales.view' },
-      { label: 'Customers', to: '/customers', icon: Contact, perm: 'sales.view' },
-      // cost, price without VAT, margin, finished stock at cost (1e, migration 058)
-      { label: 'Costing', to: '/costing', icon: Calculator, perm: 'products.manage' },
+      { label: 'Sales',         to: '/sales', icon: Receipt, perm: 'sales.view' },
+      { label: 'Customers',     to: '/customers', icon: Contact, perm: 'sales.view' },
+      { label: 'Invoices',      to: '/sales?tab=list', tabs: ['list'], icon: Files, perm: 'sales.view' },
     ],
   },
   {
-    section: 'Reports',
+    section: 'Finance & Accounting',
     items: [
-      // the day's report, written from MOIS or a written one checked against it (1f)
-      { label: 'Daily report', to: '/daily-report', icon: FileText, perm: 'production.view' },
-      // production, sales, spending, materials, profit, branches for a date range (PRD 4.15) — managers, like Costing
-      { label: 'Reports', to: '/reports', icon: BarChart3, perm: 'products.manage' },
+      // cost, price without VAT, margin, finished stock at cost (1e, migration 058) — managers
+      { label: 'Costing',       to: '/costing', icon: Calculator, perm: 'products.manage' },
+      // money in and out by account (094); Imprest = the branch's weekly cash (078)
+      { label: 'Cash flow',     to: '/cash-flow', icon: Landmark, group: [
+        { label: 'Cash flow', to: '/cash-flow',   perm: 'finance.view' },
+        { label: 'Imprest',   to: '/weekly-cash', perm: 'cash.request' },
+      ] },
     ],
   },
   {
     section: 'HR',
     items: [
-      // employees and casual labourers, attendance; their pay goes into product cost (Staff (HR) Part 1, 071/086)
-      { label: 'Staff', to: '/staff', icon: HardHat, perm: 'staff.view' },
+      // employees and casual labourers, attendance, pay (Staff (HR), 071/086–091) — one page, three entries
+      { label: 'Personnel',     to: '/staff', tabs: ['', 'employed', 'casual', 'teams'], icon: HardHat, perm: 'staff.view' },
+      { label: 'Attendance',    to: '/staff?tab=attendance', tabs: ['attendance'], icon: CalendarCheck, perm: 'staff.view' },
+      { label: 'Payroll',       to: '/staff?tab=pay', tabs: ['pay', 'advances', 'returns'], icon: Wallet, perm: 'staff.view' },
     ],
   },
   {
-    section: 'Finance',
+    section: 'Document Center',
     items: [
-      // the branch's weekly operations cash: request → BM → directors → paid; last week's spending (migration 078)
-      { label: 'Weekly cash', to: '/weekly-cash', icon: Wallet, perm: 'cash.request' },
-      // money in and out by account, statement, forecast (094) — owner, directors, branch managers
-      { label: 'Cash flow', to: '/cash-flow', icon: Landmark, perm: 'finance.view' },
+      // production, sales, spending, materials, profit, branches for a date range (PRD 4.15) — managers
+      { label: 'Reports',       to: '/reports', icon: BarChart3, perm: 'products.manage' },
     ],
   },
   {
@@ -103,6 +114,24 @@ export const NAV = [
     ],
   },
 ];
+
+const NAV_ITEMS = NAV.flatMap(s => s.items);
+const pathOf = to => to.split('?')[0];
+/** may this person open the entry (any page of a group) */
+export const canSee = (item, can) => (item.group ? item.group.some(g => !g.perm || can(g.perm)) : !item.perm || can(item.perm));
+/** where the entry goes: a group's first page this person may open */
+export const hrefOf = (item, can) => (item.group ? (item.group.find(g => !g.perm || can(g.perm))?.to ?? item.to) : item.to);
+/** is the entry the page open now (a group's pages; a page's tabs split between entries) */
+export function navActive(item, loc) {
+  if (item.group) return item.group.some(g => loc.pathname === g.to);
+  const path = pathOf(item.to);
+  if (loc.pathname !== path) return false;
+  const cur = new URLSearchParams(loc.search).get('tab') || '';
+  if (item.tabs) return item.tabs.includes(cur);
+  return !NAV_ITEMS.some(o => o !== item && !o.group && pathOf(o.to) === path && o.tabs?.includes(cur));
+}
+/** the group the open page belongs to, for the tabs under its heading */
+export const groupOf = pathname => NAV_ITEMS.find(i => i.group?.some(g => g.to === pathname)) ?? null;
 
 export default function Sidebar() {
   const { profile, session, organization, userRoles, can, signOut } = useAuth();
@@ -145,11 +174,11 @@ export default function Sidebar() {
   }, [session]);
   const role = primaryRole(userRoles);
   const sections = resolveMenu(NAV, layouts[role])
-    .map(section => ({ ...section, items: section.items.filter(item => !item.perm || can(item.perm)) }))
+    .map(section => ({ ...section, items: section.items.filter(item => canSee(item, can)) }))
     .filter(section => section.items.length > 0);
   // a folded section opens on a click (and when one of its pages is open)
   const [unfolded, setUnfolded] = useState({});
-  const isOpen = sec => !sec.folded || unfolded[sec.title] || sec.items.some(i => i.to !== '/' && location.pathname.startsWith(i.to));
+  const isOpen = sec => !sec.folded || unfolded[sec.title] || sec.items.some(i => navActive(i, location));
 
   async function handleSignOut() {
     await signOut();
@@ -194,20 +223,20 @@ export default function Sidebar() {
                   <ChevronRight size={12} className={isOpen(section) ? 'is-open' : ''} />{section.title}</button>
               : <div className="sidebar-section-label">{section.title}</div>)}
             {isOpen(section) && section.items.map(item => (
-              <NavLink
+              <Link
                 key={item.to}
-                id={`nav-${item.to === '/' ? 'dashboard' : item.to.slice(1)}`}
-                to={item.to}
-                end={item.to === '/' || item.to === '/production'}
+                id={`nav-${item.to === '/' ? 'dashboard' : item.to.slice(1).replace(/[^a-z0-9]+/gi, '-')}`}
+                to={hrefOf(item, can)}
                 title={item.label}
-                className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
+                aria-current={navActive(item, location) ? 'page' : undefined}
+                className={`sidebar-item${navActive(item, location) ? ' active' : ''}`}
               >
                 <item.icon size={16} strokeWidth={1.8} />
                 <span>{item.label}</span>
                 {item.badge === 'approvals' && pending > 0 && (
                   <b className="sidebar-badge" aria-label={`${pending} pending`}>{pending > 99 ? '99+' : pending}</b>
                 )}
-              </NavLink>
+              </Link>
             ))}
           </div>
         ))}

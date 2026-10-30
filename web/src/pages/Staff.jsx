@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { HardHat, Plus, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney, formatAmount, formatMoneyShort } from '../lib/format';
@@ -56,7 +57,7 @@ export default function Staff() {
   const { branchId, branchName, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, organization?.currency_code);
-  const [tab, setTab] = useState('employed');
+  const [tab, setTab] = useUrlTab('employed');   // in the address: the sidebar's Personnel / Attendance / Payroll
   const [staff, setStaff] = useState(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');

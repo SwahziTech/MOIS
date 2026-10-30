@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useUrlTab } from '../lib/urlTab';
 import { Factory } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -37,7 +38,7 @@ export default function Production() {
   const { branchId, branchName, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
 
-  const [tab,      setTab]      = useState(null);   // opens on Log batches for those who record
+  const [tab,      setTab]      = useUrlTab(null);   // opens on Log batches for those who record
   const [refs,     setRefs]     = useState(null);
   const [batches,  setBatches]  = useState([]);
   const [reasons,  setReasons]  = useState([]);
@@ -61,8 +62,7 @@ export default function Production() {
     const id = params.get('produce');
     if (!id) return;
     setPreset({ productId: id, colorId: '', at: Date.now() });
-    setTab('log');
-    setParams({}, { replace: true });
+    setParams({ tab: 'log' }, { replace: true });
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {

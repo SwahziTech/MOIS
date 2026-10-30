@@ -44,7 +44,8 @@ export default function MenuLayoutCard() {
   if (saved === false) return null;
   const byPath = Object.fromEntries(NAV.flatMap(s => s.items).map(i => [i.to, i]));
   const perms = new Set((roles.find(r => r.name === role)?.role_permissions || []).map(rp => rp.permission?.code));
-  const canOpen = p => !byPath[p]?.perm || perms.has(byPath[p].perm) || role === 'owner';
+  const may = perm => !perm || perms.has(perm) || role === 'owner';
+  const canOpen = p => (byPath[p]?.group ? byPath[p].group.some(g => may(g.perm)) : may(byPath[p]?.perm));
   const set = sections => setDraft({ sections });
   const S = draft?.sections || [];
   const moveSection = (i, d) => { const s = [...S]; const j = i + d; if (j < 0 || j >= s.length) return; [s[i], s[j]] = [s[j], s[i]]; set(s); };
