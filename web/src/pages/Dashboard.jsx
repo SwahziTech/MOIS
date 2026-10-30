@@ -11,6 +11,8 @@ import { loadCuring, loadOpenOrders, loadLowStock, loadPayables, loadRecentSales
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
+import DirectorBoard from '../components/dashboard/DirectorBoard';
+import { primaryRole } from '../lib/menu';
 
 /*
  * One card per master-data table, counted for the branch picked in the
@@ -48,6 +50,15 @@ const STAGE = { order: 'Order', invoice: 'Invoice' };
  * stay at the top for those who take them.
  */
 export default function Dashboard() {
+  const { userRoles } = useAuth();
+  // directors get their own screen (2026-10-30); the Technical admin can see it as a tab
+  if (primaryRole(userRoles) === 'director') {
+    return <PageShell title="Dashboard" subtitle="Overview"><DirectorBoard /></PageShell>;
+  }
+  return <RoleDashboard isOwner={primaryRole(userRoles) === 'owner'} />;
+}
+
+function RoleDashboard({ isOwner }) {
   const { organization, can, canAnywhere } = useAuth();
   const { branchId, branchName, inBranch, branches } = useBranch();
   const today = orgToday(organization?.timezone);
@@ -55,14 +66,15 @@ export default function Dashboard() {
   const short = v => formatMoneyShort(v, cur);
   const sees = code => (canAnywhere ?? can)(code);
   const tabs = useMemo(() => [
+    isOwner && ['director', 'Director view'],
     sees('products.manage') && ['overview', 'Overview'],
     sees('production.view') && ['production', 'Production'],
     sees('inventory.view') && ['inventory', 'Inventory'],
     sees('sales.view') && ['sales', 'Sales'],
     ['setup', 'Setup'],
-  ].filter(Boolean), [can, canAnywhere]); // eslint-disable-line react-hooks/exhaustive-deps
+  ].filter(Boolean), [can, canAnywhere, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState(null);
-  const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs[0][0];
+  const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }
   const [error, setError] = useState('');
@@ -71,7 +83,7 @@ export default function Dashboard() {
 
   useEffect(() => { loadInventoryRefs().then(setRefs).catch(() => setError('Failed to load dashboard data.')); }, []);
   useEffect(() => {
-    if (!refs || shown === 'setup') return;
+    if (!refs || shown === 'setup' || shown === 'director') return;
     const req = ++reqRef.current; const forTab = shown;
     setError(''); setLoaded(null);
     const args = { from, to: today, today, inBranch, branchId, refs, branches };
@@ -127,7 +139,8 @@ export default function Dashboard() {
       <MeterReadingsTask branchId={branchId} />
       {error && <div className="alert alert-error mb-16" role="alert">{error}</div>}
 
-      {shown === 'setup' ? <SetupCounts branchId={branchId} branchName={branchName} inBranch={inBranch} />
+      {shown === 'director' ? <DirectorBoard />
+      : shown === 'setup' ? <SetupCounts branchId={branchId} branchName={branchName} inBranch={inBranch} />
       : shown === 'overview' ? (
         <>
           <div className="mm-stats">{!d ? wait : <>

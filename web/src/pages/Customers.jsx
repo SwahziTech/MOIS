@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Users, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney, formatAmount } from '../lib/format';
@@ -28,7 +29,7 @@ export default function Customers() {
   const { branchId, inBranch } = useBranch();
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
-  const [tab, setTab] = useState('customers');
+  const [tab, setTab] = useUrlTab('customers');
   const [rows, setRows] = useState(null);
   const [sales, setSales] = useState([]);
   const [error, setError] = useState('');

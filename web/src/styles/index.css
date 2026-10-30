@@ -2402,3 +2402,62 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .pp-pay > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: var(--text-sm); }
 .pp-pay strong { font-size: 1.05rem; }
 @media (max-width: 640px) { .pp-facts, .pp-pay { grid-template-columns: 1fr; } }
+
+/* Phone: top bar + sliding menu (2026-10-30) */
+.m-topbar { display: none; }
+@media (max-width: 760px) {
+  .m-topbar { display: flex; align-items: center; gap: 10px; position: absolute; top: 0; left: 0; right: 0; height: 52px; padding: 0 12px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border); z-index: 50; }
+  .m-topbar-menu { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 0; background: none; color: var(--text-primary); cursor: pointer; }
+  .m-topbar-menu .sidebar-badge { position: absolute; top: 0; right: 0; }
+  .m-topbar-name { flex: 1; min-width: 0; font-weight: 600; font-size: var(--text-sm); }
+  .m-backdrop { position: fixed; inset: 0; border: 0; padding: 0; background: rgba(0,0,0,.5); z-index: 99; }
+  .main-wrapper { margin-left: 0; padding-top: 52px; }
+  .sidebar, .sidebar:hover, .sidebar:focus-within { width: var(--sidebar-width); transform: translateX(-100%); box-shadow: none; }
+  .sidebar.is-open { transform: none; }
+  .page-content { padding: 14px; }
+  .page-title { font-size: 1.5rem; }
+  .page-primary-action { width: 100%; flex-wrap: wrap; }
+  .page-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .page-tab { white-space: nowrap; }
+  .modal-footer { flex-wrap: wrap; }
+}
+@media print { .m-topbar, .m-backdrop { display: none; } .main-wrapper { padding-top: 0; } }
+
+/* The director's dashboard: phone first (2026-10-30) */
+.dd { display: grid; gap: 12px; min-width: 0; }
+.dd-block { background: var(--bg-card, var(--bg-surface)); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.dd-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 600; font-size: var(--text-sm); margin-bottom: 8px; }
+.dd-head a { color: inherit; text-decoration: none; }
+.dd-needs { border-color: var(--color-khaki); }
+.dd-needs-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dd-need { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--text-primary); text-decoration: none; font-size: var(--text-sm); line-height: 1.2; }
+.dd-need strong { font-size: 1.35rem; }
+.dd-nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dd-num { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; background: var(--bg-card, var(--bg-surface)); border: 1px solid var(--border); border-radius: 12px; color: var(--text-primary); text-decoration: none; }
+.dd-num strong { font-size: 1.3rem; line-height: 1.3; }
+.dd-two { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.dd-line { display: flex; justify-content: space-between; gap: 10px; align-items: center; min-height: 36px; padding: 4px 0; border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-primary); text-decoration: none; }
+.dd-line:first-of-type { border-top: 0; }
+.dd-line > span:last-child { flex-shrink: 0; text-align: right; }
+.dd-more { display: block; padding-top: 6px; }
+.dd-legend { display: flex; gap: 14px; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 8px; }
+.dd-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+.dd-key.is-sales, .dd-bar.is-sales { background: #3F8FCB; }
+.dd-key.is-costs, .dd-bar.is-costs { background: #C2851F; }
+.dd-chart { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; height: 130px; }
+.dd-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; }
+.dd-bars { flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: flex-end; gap: 2px; }
+.dd-bar { width: min(14px, 40%); min-height: 1px; border-radius: 4px 4px 0 0; }
+@media (min-width: 761px) {
+  .dd-nums { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dd-needs-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .dd-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Phone: wide tables scroll inside their card, the page itself never sideways (2026-10-30) */
+@media (max-width: 760px) {
+  .page-content, .card { min-width: 0; max-width: 100%; }
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-container thead th, .table-container tfoot td { position: static !important; }
+  .card:has(> .table-container) { width: auto; min-width: 0; }
+}

@@ -12,7 +12,7 @@ import { roleLabel as labelOf } from '../lib/manageUsers';
 import ThemeToggle from './ThemeToggle';
 import AlertsBell from './AlertsBell';
 import { primaryRole, resolveMenu } from '../lib/menu';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Menu } from 'lucide-react';
 
 /*
  * The sidebar, 2026-10-30: 9 sections of up to 3 pages (the agreed layout).
@@ -158,7 +158,15 @@ export default function Sidebar() {
   const pending = usePendingApprovals(branchId, location.pathname, !!session);
   // Hidden to icons until pointed at (2026-10-20); on touch screens the logo opens it, and it closes on navigating
   const [open, setOpen] = useState(false);
-  useEffect(() => { setOpen(false); }, [location.pathname]);
+  useEffect(() => { setOpen(false); }, [location.pathname, location.search]);
+  // on a phone the menu slides in from a top bar (2026-10-30)
+  const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const on = e => setPhone(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
   const fullName =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
@@ -203,7 +211,19 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className={`sidebar${open ? ' is-open' : ''}`} onMouseLeave={() => setOpen(false)}>
+    <>
+    {phone && (
+      <header className="m-topbar">
+        <button type="button" className="m-topbar-menu" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)}>
+          <Menu size={20} />
+          {pending > 0 && <b className="sidebar-badge">{pending > 99 ? '99+' : pending}</b>}
+        </button>
+        <span className="m-topbar-name truncate">{organization?.name || 'MOIS'}</span>
+        <AlertsBell />
+      </header>
+    )}
+    {phone && open && <button type="button" className="m-backdrop" aria-label="Close menu" onClick={() => setOpen(false)} />}
+    <aside className={`sidebar${open ? ' is-open' : ''}`} onMouseLeave={() => { if (!phone) setOpen(false); }}>
       {/* Logo / Org header */}
       <div className="sidebar-logo">
         <button type="button" className="sidebar-logo-mark" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(o => !o)}>
@@ -216,7 +236,7 @@ export default function Sidebar() {
           <span className="sidebar-system-label">MOIS Platform</span>
         </div>
         {/* light / dark mode — every page used to carry it in a top bar */}
-        <div className="sidebar-logo-toggle"><AlertsBell /><ThemeToggle /></div>
+        <div className="sidebar-logo-toggle">{!phone && <AlertsBell />}<ThemeToggle /></div>
       </div>
 
       {/* Branch the screens are looking at */}
@@ -274,6 +294,7 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
 
