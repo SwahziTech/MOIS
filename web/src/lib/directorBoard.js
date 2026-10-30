@@ -24,14 +24,14 @@ const lastDay = m => { const x = utc(`${m}-01`); x.setUTCMonth(x.getUTCMonth() +
 const sundayOf = d => dayShift(d, -utc(d).getUTCDay());
 const daysSinceMonday = d => (utc(d).getUTCDay() + 6) % 7;
 const shortDay = d => dateText(d);
-export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).replace('Sept', 'Sep');
 const monthLong = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const inRange = (d, from, to) => !!d && d >= from && d <= to;
 const USE_DAYS = 14;      // recent use a material's days left are worked out from
 const LOW_DAYS = 7;       // fewer days left than this counts as at risk
 
 /**
- * The periods the Sort / Filter menu offers; the first, today, is the default.
+ * The periods the arrows and the period dropdown offer; the first, today, is the default.
  * The earlier days of this week (back to Monday) come after yesterday.
  * Each: { key, label, note, from, to, compare: { from, to, label } }
  */
@@ -60,9 +60,14 @@ export function periodsFor(today) {
     { key: 'month', label: 'This month', note: monthLong(month), from: `${month}-01`, to: today, compare: { from: `${prevM}-01`, to: sameDayIn(prevM), label: `same days ${monthShort(prevM)}` } },
     { key: 'lastmonth', label: 'Last month', note: monthLong(prevM), from: `${prevM}-01`, to: lastDay(prevM), compare: { from: `${prevPrev}-01`, to: lastDay(prevPrev), label: monthShort(prevPrev) } },
     { key: 'quarter', label: 'This quarter', note: `${monthShort(quarterStart)} – today`, from: `${quarterStart}-01`, to: today, compare: { from: `${prevQ}-01`, to: sameDayIn(monthsBack(month, 3)), label: 'same days last quarter' } },
+    { key: 'lastquarter', label: 'Last quarter', note: `${monthShort(prevQ)} – ${monthShort(monthsBack(quarterStart, 1))} ${prevQ.slice(0, 4)}`, from: `${prevQ}-01`, to: lastDay(monthsBack(quarterStart, 1)), compare: { from: `${monthsBack(prevQ, 3)}-01`, to: lastDay(monthsBack(prevQ, 1)), label: 'the quarter before' } },
     { key: 'year', label: 'This year', note: year, from: `${year}-01-01`, to: today, compare: { from: `${lastYear}-01-01`, to: `${lastYear}${today.slice(4)}`, label: `same days ${lastYear}` } },
+    { key: 'lastyear', label: 'Last year', note: lastYear, from: `${lastYear}-01-01`, to: `${lastYear}-12-31`, compare: { from: `${Number(lastYear) - 1}-01-01`, to: `${Number(lastYear) - 1}-12-31`, label: String(Number(lastYear) - 1) } },
   ];
 }
+
+/** How a period's table is broken down: a week by days, a month by weeks, a quarter or year by months */
+export const grainOf = key => ({ month: 'week', lastmonth: 'week', quarter: 'month', lastquarter: 'month', year: 'month', lastyear: 'month' }[key] ?? 'day');
 
 /** The back arrow's path, nearest first: today, each day back to Monday, last week, last month */
 export function periodSteps(today) {
@@ -161,13 +166,13 @@ export function productionFor(data, { from, to }, inBranch, today) {
   };
 }
 
-/** Rows for a card's detail page, newest first. by: day | week | month | quarter | year */
-export function historyFor(data, card, by, inBranch, today) {
+/** Rows for a card's detail page within a period, newest first. by: day | week | month */
+export function historyFor(data, card, by, inBranch, today, { from, to }) {
   const keyOf = d => (by === 'day' ? d : by === 'week' ? sundayOf(d) : by === 'month' ? d.slice(0, 7)
     : by === 'quarter' ? `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : d.slice(0, 4));
-  const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k)} – ${tableDate(dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
+  const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k < from ? from : k)} – ${tableDate(dayShift(k, 6) > to ? to : dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
   const rows = {};
-  const add = (d, f) => { if (!d || d > today) return; const k = keyOf(d); f(rows[k] ||= { key: k, label: label(k), a: 0, b: 0, c: 0 }); };
+  const add = (d, f) => { if (!d || d > today || d < from || d > to) return; const k = keyOf(d); f(rows[k] ||= { key: k, label: label(k), a: 0, b: 0, c: 0 }); };
   if (card === 'sales') for (const x of data.received) { if (inBranch(x.branch_id)) add(x.day, r => { r.a += x.amount; }); }
   if (card === 'cash') for (const x of data.moves) {
     if (!inBranch(x.branch_id)) continue;

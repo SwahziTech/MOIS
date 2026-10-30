@@ -5,15 +5,35 @@ import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
-import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
-import { PageTabs, SortFilterMenu } from '../ListControls';
+import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
-const BY = [['day', 'Days'], ['week', 'Weeks'], ['month', 'Months'], ['quarter', 'Quarters'], ['year', 'Years']];
-const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' };
-const SHOWN_ROWS = { day: 31, week: 13, month: 12, quarter: 8, year: 5 };
+const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month' };
+const DROPDOWN = [['Weekly', [['week', 'This week'], ['lastweek', 'Last week']]], ['Monthly', [['month', 'This month'], ['lastmonth', 'Last month']]],
+  ['Quarterly', [['quarter', 'This quarter'], ['lastquarter', 'Last quarter']]], ['Yearly', [['year', 'This year'], ['lastyear', 'Last year']]]];
+const LAST_OF = { week: 'lastweek', month: 'lastmonth', quarter: 'lastquarter', year: 'lastyear' };
+
+/* Arrows through today → each day back to Monday → last week → last month; the date; the period dropdown */
+function PeriodBar({ period, periodKey, setPeriodKey, today }) {
+  const steps = useMemo(() => periodSteps(today), [today]);
+  const at = steps.indexOf(periodKey);
+  const earlier = at >= 0 ? steps[at + 1] : LAST_OF[periodKey];
+  const later = at >= 0 ? steps[at - 1] : Object.keys(LAST_OF).find(k => LAST_OF[k] === periodKey) ?? 'today';
+  const isDay = !DROPDOWN.some(([, o]) => o.some(([k]) => k === periodKey));
+  return (
+    <div className="dd-period">
+      <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
+      <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
+      <span><strong>{period.label}</strong> · {period.note}</span>
+      <select className="form-input dd-select" aria-label="Period" value={isDay ? 'today' : periodKey} onChange={e => setPeriodKey(e.target.value)}>
+        <option value="today">Day</option>
+        {DROPDOWN.map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
+      </select>
+    </div>
+  );
+}
 const CARD = {
   sales: { title: 'Sales', heads: ['Received (TZS)'], to: '/sales', page: 'Open Sales' },
   cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
@@ -34,9 +54,9 @@ const Line = ({ to, label, value, warn }) => {
 /*
  * The director's dashboard (2026-10-30, draft 2), one screen with no tabs,
  * built for the phone first: what needs them; three cards for today, arrows back through
- * this week's days to last week and last month, or any period from Sort / Filter; production; stock at cost with
+ * this week's days to last week and last month, or a period from the dropdown; production; stock at cost with
  * what's at risk; money in against money out; branches. A card opens its
- * history by days, weeks, months, quarters and years. No profit, by the user's
+ * rows for the chosen period, with the same arrows and dropdown. No profit, by the user's
  * choice. Until receipts are approved in MOIS (stage 2), Sales says so.
  */
 export default function DirectorBoard() {
@@ -52,10 +72,6 @@ export default function DirectorBoard() {
   const [periodKey, setPeriodKey] = useState('today');
   const periods = useMemo(() => periodsFor(today), [today]);
   const period = periods.find(p => p.key === periodKey);
-  // Arrows walk today → each day back to Monday → last week → last month;
-  // from a period off that path (e.g. This year), forward returns to today
-  const steps = useMemo(() => periodSteps(today), [today]);
-  const stepAt = steps.indexOf(periodKey);
 
   async function load() {
     setError(''); setD(null); setStock(undefined);
@@ -71,7 +87,8 @@ export default function DirectorBoard() {
   const open = card => setParams(p => { const n = new URLSearchParams(p); n.set('card', card); return n; });
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
-  if (openCard && d.money) return <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} />;
+  const bar = <PeriodBar period={period} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
+  if (openCard && d.money) return <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} />;
 
   const { needs, money, curing } = d;
   const c = money && cardsFor(money, period, inBranch);
@@ -93,12 +110,7 @@ export default function DirectorBoard() {
         </section>
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 
-      <div className="dd-period">
-        <button type="button" className="dd-step" aria-label="Earlier" disabled={stepAt < 0 || stepAt === steps.length - 1} onClick={() => setPeriodKey(steps[stepAt + 1])}><ChevronLeft size={18} /></button>
-        <button type="button" className="dd-step" aria-label="Later" disabled={stepAt === 0} onClick={() => setPeriodKey(stepAt < 0 ? 'today' : steps[stepAt - 1])}><ChevronRight size={18} /></button>
-        <span><strong>{period.label}</strong> · {period.note}</span>
-        <SortFilterMenu filters={[{ key: 'period', label: 'Period', value: periodKey, onChange: setPeriodKey, options: periods.map(p => ({ value: p.key, label: p.label })) }]} />
-      </div>
+      {bar}
 
       {c ? (
         <div className="dd-cards">
@@ -168,12 +180,12 @@ export default function DirectorBoard() {
   );
 }
 
-/* A card opened: its history by days, weeks, months, quarters or years, newest first */
-function CardHistory({ card, data, inBranch, today, short }) {
-  const [by, setBy] = useState('week');
+/* A card opened: the chosen period's rows, newest first */
+function CardHistory({ card, data, inBranch, today, short, period, periodKey, bar }) {
+  const by = grainOf(periodKey);
   const [, setParams] = useSearchParams();
   const cfg = CARD[card];
-  const rows = useMemo(() => historyFor(data, card, by, inBranch, today).slice(0, SHOWN_ROWS[by]), [data, card, by, inBranch, today]);
+  const rows = useMemo(() => historyFor(data, card, by, inBranch, today, period), [data, card, by, inBranch, today, period]);
   const cols = ['a', 'b', 'c'].slice(0, cfg.heads.length);
   const back = () => setParams(p => { const n = new URLSearchParams(p); n.delete('card'); return n; });
   return (
@@ -183,7 +195,7 @@ function CardHistory({ card, data, inBranch, today, short }) {
         <strong>{cfg.title}</strong>
         <Link to={cfg.to} className="btn btn-outline btn-sm">{cfg.page}</Link>
       </div>
-      <PageTabs nested tabs={BY} value={by} onChange={setBy} />
+      {bar}
       <div className="card"><div className="table-container">
         <table>
           <thead><tr><th>{BY_HEAD[by]}</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
@@ -195,7 +207,7 @@ function CardHistory({ card, data, inBranch, today, short }) {
                 <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
               </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
           </tbody>
-          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>
       </div></div>
     </div>
