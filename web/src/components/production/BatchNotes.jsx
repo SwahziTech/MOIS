@@ -7,9 +7,9 @@ import { dateText } from '../../lib/format';
 /**
  * Production tracking for one batch (migration 056), in the batch's note zone
  * (SwahziTech, 2026-10-25): who made it, on what, and the note ("thrown
- * away" was removed the same day). Team and machine are required but start filled — the
- * last team used at the branch, the machine that makes the product — so a
- * normal batch needs no taps.
+ * away" was removed the same day). Team and machine are required. The team is chosen for
+ * every batch, never filled in; the machine starts as the one that makes the
+ * product.
  *
  * Who worked (087, 2026-10-28): teams change week to week, even day to day,
  * so a team is a name only and the people are ticked on each batch from the
@@ -103,13 +103,8 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
   const membersOf = teamId => ((lists?.teams || []).find(t => t.id === teamId)?.members || [])
     .filter(m => m.status === 'active' && m.staff_id && active.some(p => p.id === m.staff_id)).map(m => m.staff_id);
 
-  // Start filled: the last team used here (or the only one); the machine last used for this product (or the only one)
-  useEffect(() => {
-    if (!lists?.ready || value.teamId) return;
-    const last = recall(lastKey('team', branchId));
-    const pick = teams.find(t => t.id === last) ?? (teams.length === 1 ? teams[0] : null);
-    if (pick) set({ teamId: pick.id, workerIds: value.workerIds?.length ? value.workerIds : membersOf(pick.id) });
-  }, [lists, branchId, value.teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The team is never filled in: chosen for every batch (user rule, 2026-10-30).
+  // The machine starts as the one last used for this product (or the only one).
   useEffect(() => {
     if (!lists?.ready || !productId) return;
     if (value.machineId && machines.some(m => m.id === value.machineId)) return;
@@ -133,7 +128,6 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
 
   function pickTeam(id) {
     if (id === '+') { setEditing('newTeam'); setText(''); return; }
-    remember(lastKey('team', branchId), id);
     // its active members ticked; untick anyone not on this batch (they stay in the team)
     set({ teamId: id, workerIds: membersOf(id) });
   }
@@ -151,7 +145,6 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
   const createTeam = () => run(async () => {
     const t = must(await supabase.from('production_teams').insert({ organization_id: organizationId, branch_id: branchId, name: text.trim() }).select('id').single());
     await reload();
-    remember(lastKey('team', branchId), t.id);
     set({ teamId: t.id, workerIds: value.workerIds || [] });
     setEditing('workers'); setText('');
   });

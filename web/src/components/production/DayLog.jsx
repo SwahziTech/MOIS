@@ -20,7 +20,8 @@ const draftKey = (org, branch) => `mois.production.day.${org}.${branch}`;
 const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '', orderPick: {},
   teamId: '', workerIds: null, machineId: '' });   // production tracking (056)
 // a new batch keeps who made it and on what — the same crew usually casts the next one
-const nextForm = f => ({ ...emptyForm(), teamId: f.teamId ?? '', workerIds: f.workerIds ?? null, machineId: f.machineId ?? '' });
+// the next batch keeps the machine; the team is chosen afresh for every batch (user rule, 2026-10-30)
+const nextForm = f => ({ ...emptyForm(), machineId: f.machineId ?? '' });
 
 /**
  * Log a day's batches (migration 043), the way the factory works: each mix
@@ -41,9 +42,10 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
   // Restore the unsaved list (and the batch being typed) from this device
   const saved = useMemo(() => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }, [key]);
-  const [date,   setDate]   = useState(saved?.date ?? today);
+  // A refresh opens on today; unsaved batches keep their day, since they all save under this one date
+  const [date,   setDate]   = useState(saved?.staged?.length ? saved?.date ?? today : today);
   const [rawId,  setRawId]  = useState(saved?.rawId ?? rawStores.find(w => w.type === 'raw_materials')?.id ?? rawStores[0]?.id ?? '');
-  const [form,   setForm]   = useState(saved?.form ?? emptyForm());
+  const [form,   setForm]   = useState(saved?.form ? { ...saved.form, teamId: '', workerIds: null } : emptyForm());
   // lists saved before 2026-10-21 lack the per-product detail: rebuild it from what was sent
   const [staged, setStaged] = useState(() => (saved?.staged ?? []).map(x => (x.outputs ? x : {
     ...x,
@@ -297,7 +299,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       team: tracked ? teamLabel(lists, form.teamId, form.workerIds) : null, machine: tracked ? lists.machines.find(m => m.id === form.machineId)?.name : null };
     setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
     setEditingId(null);
-    setForm(nextForm(form));   // "allow other products" goes back to the default too; team and machine stay
+    setForm(nextForm(form));   // "allow other products" goes back to the default too; the machine stays, the team doesn't
   }
   function editStaged(item) {
     setForm(item.form);
@@ -415,7 +417,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           onPick={id => { setPicking(false); set({ productId: id, colorId: '', leftovers: [], edits: {}, allowOther: false }); }} />
       )}
       {restored && staged.length > 0 && (
-        <div className="alert alert-info" role="note">Your unsaved list from earlier is back: {staged.length} batch{staged.length === 1 ? '' : 'es'} not saved yet.</div>
+        <div className="alert alert-info" role="note">Your unsaved list from earlier is back: {staged.length} batch{staged.length === 1 ? '' : 'es'} not saved yet, dated {dateText(date)}.</div>
       )}
       <div className="pl-toolbar">
         {rawStores.length > 1 && (
