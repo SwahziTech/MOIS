@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort } from '../../lib/format';
 import { loadInventoryRefs, orgToday } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
-import { PageTabs } from '../ListControls';
+import { PageTabs, SortFilterMenu } from '../ListControls';
 import ErrorState from '../ErrorState';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
@@ -32,9 +32,8 @@ const Line = ({ to, label, value, warn }) => {
 
 /*
  * The director's dashboard (2026-10-30, draft 2), one screen with no tabs,
- * built for the phone first: what needs them; three cards for a period (this
- * week, or this month in the month's last week) with arrows back to yesterday,
- * the day before, last week and last month; production; stock at cost with
+ * built for the phone first: what needs them; three cards for today, or another
+ * period from the Sort / Filter menu; production; stock at cost with
  * what's at risk; money in against money out; branches. A card opens its
  * history by days, weeks, months, quarters and years. No profit, by the user's
  * choice. Until receipts are approved in MOIS (stage 2), Sales says so.
@@ -49,9 +48,9 @@ export default function DirectorBoard() {
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
-  const [step, setStep] = useState(0);
+  const [periodKey, setPeriodKey] = useState('today');
   const periods = useMemo(() => periodsFor(today), [today]);
-  const period = periods[step];
+  const period = periods.find(p => p.key === periodKey);
 
   async function load() {
     setError(''); setD(null); setStock(undefined);
@@ -90,9 +89,8 @@ export default function DirectorBoard() {
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 
       <div className="dd-period">
-        <button type="button" className="dd-step" aria-label="Earlier" disabled={step === periods.length - 1} onClick={() => setStep(step + 1)}><ChevronLeft size={18} /></button>
-        <span>{period.label}</span>
-        <button type="button" className="dd-step" aria-label="Later" disabled={step === 0} onClick={() => setStep(step - 1)}><ChevronRight size={18} /></button>
+        <span><strong>{period.label}</strong> · {period.note}</span>
+        <SortFilterMenu filters={[{ key: 'period', label: 'Period', value: periodKey, onChange: setPeriodKey, options: periods.map(p => ({ value: p.key, label: p.label })) }]} />
       </div>
 
       {c ? (
@@ -113,10 +111,9 @@ export default function DirectorBoard() {
       ) : unavailable}
 
       <div className="dd-two">
-        <Block title="Production" note={period.label.split(' · ')[0].toLowerCase()} to="/production">
+        <Block title="Production" note={period.label.toLowerCase()} to="/production">
           {f ? <>
-            <Line label="Cement bags today" value={fmt(f.bagsToday)} />
-            <Line label="Cement bags in the period" value={fmt(f.bags)} />
+            <Line label="Cement bags" value={fmt(f.bags)} />
             {curing && <Line label="Pieces curing" value={curing.ready ? `${fmt(curing.curing)} · ${curing.ready} batches ready` : fmt(curing.curing)} />}
             {curing && <Line to="/review" label="Batches outside the yield band" value={curing.flags} warn={curing.flags > 0} />}
             <Line to="/production/ledger" label="Pieces rejected" value={fmt(f.rejected)} warn={f.rejected > 0} />
@@ -152,7 +149,7 @@ export default function DirectorBoard() {
       )}
 
       {!branchId && money && branches.length > 1 && (
-        <Block title="Branches" note={period.label.split(' · ')[0].toLowerCase()}>
+        <Block title="Branches" note={period.label.toLowerCase()}>
           {branches.map(b => {
             const here = id => id === b.id;
             return <Line key={b.id} label={b.name} value={`${short(cardsFor(money, period, here).sales)} · ${fmt(productionFor(money, period, here, today).bags)} bags`} />;

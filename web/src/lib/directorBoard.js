@@ -29,29 +29,30 @@ const USE_DAYS = 14;      // recent use a material's days left are worked out fr
 const LOW_DAYS = 7;       // fewer days left than this counts as at risk
 
 /**
- * The periods the arrows step through, newest first. The first is the default:
- * this week, or this month once the week contains the month's last day.
- * Each: { key, label, from, to, compare: { from, to, label } | null }
+ * The periods the Sort / Filter menu offers; the first, today, is the default.
+ * Each: { key, label, note, from, to, compare: { from, to, label } }
  */
 export function periodsFor(today) {
   const month = today.slice(0, 7);
+  const sameDayIn = m => [`${m}-${today.slice(8)}`, lastDay(m)].sort()[0];
+  const y = dayShift(today, -1);
   const sun = sundayOf(today);
-  const sat = dayShift(sun, 6);
-  const lastOfMonth = lastDay(month);
-  const monthly = lastOfMonth >= sun && lastOfMonth <= sat;
-  const prevM = monthsBack(month, 1);
-  const prevMTo = [`${prevM}-${today.slice(8)}`, lastDay(prevM)].sort()[0];
-  const week = { key: 'week', label: `This week · ${shortDay(sun)} – ${shortDay(sat)}`, from: sun, to: today, compare: { from: dayShift(sun, -7), to: dayShift(today, -7), label: 'last week' } };
-  const thisMonth = { key: 'month', label: `This month · ${monthLong(month)}`, from: `${month}-01`, to: today, compare: { from: `${prevM}-01`, to: prevMTo, label: `same days ${monthShort(prevM)}` } };
-  const y = dayShift(today, -1); const y2 = dayShift(today, -2);
   const lastSun = dayShift(sun, -7);
+  const prevM = monthsBack(month, 1);
   const prevPrev = monthsBack(month, 2);
+  const quarterStart = monthsBack(month, (Number(month.slice(5)) - 1) % 3);
+  const prevQ = monthsBack(quarterStart, 3);
+  const year = today.slice(0, 4);
+  const lastYear = String(Number(year) - 1);
   return [
-    monthly ? thisMonth : week,
-    { key: 'yesterday', label: `Yesterday · ${shortDay(y)}`, from: y, to: y, compare: { from: y2, to: y2, label: 'the day before' } },
-    { key: 'daybefore', label: `The day before · ${shortDay(y2)}`, from: y2, to: y2, compare: { from: dayShift(y2, -1), to: dayShift(y2, -1), label: 'the day before' } },
-    { key: 'lastweek', label: `Last week · ${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 6))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },
-    { key: 'lastmonth', label: `Last month · ${monthLong(prevM)}`, from: `${prevM}-01`, to: lastDay(prevM), compare: { from: `${prevPrev}-01`, to: lastDay(prevPrev), label: monthShort(prevPrev) } },
+    { key: 'today', label: 'Today', note: shortDay(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
+    { key: 'yesterday', label: 'Yesterday', note: shortDay(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
+    { key: 'week', label: 'This week', note: `${shortDay(sun)} – ${shortDay(dayShift(sun, 6))}`, from: sun, to: today, compare: { from: lastSun, to: dayShift(today, -7), label: 'last week' } },
+    { key: 'lastweek', label: 'Last week', note: `${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 6))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },
+    { key: 'month', label: 'This month', note: monthLong(month), from: `${month}-01`, to: today, compare: { from: `${prevM}-01`, to: sameDayIn(prevM), label: `same days ${monthShort(prevM)}` } },
+    { key: 'lastmonth', label: 'Last month', note: monthLong(prevM), from: `${prevM}-01`, to: lastDay(prevM), compare: { from: `${prevPrev}-01`, to: lastDay(prevPrev), label: monthShort(prevPrev) } },
+    { key: 'quarter', label: 'This quarter', note: `${monthShort(quarterStart)} – today`, from: `${quarterStart}-01`, to: today, compare: { from: `${prevQ}-01`, to: sameDayIn(monthsBack(month, 3)), label: 'same days last quarter' } },
+    { key: 'year', label: 'This year', note: year, from: `${year}-01-01`, to: today, compare: { from: `${lastYear}-01-01`, to: `${lastYear}${today.slice(4)}`, label: `same days ${lastYear}` } },
   ];
 }
 
