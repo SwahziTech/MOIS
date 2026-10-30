@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, X, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatAmount } from '../../lib/format';
+import { dateText, formatAmount } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
 
@@ -75,10 +75,10 @@ export default function StatutoryRatesCard() {
                 {ORDER.flatMap(code => rates.filter(r => r.code === code)).map(r => (
                   <tr key={r.id}>
                     <td><strong>{RATE_NAME[r.code]}</strong><div className="pl-help">{RATE_HELP[r.code]}</div></td>
-                    <td>{r.effective_from}</td>
+                    <td>{dateText(r.effective_from)}</td>
                     <td>{r.code === 'paye' ? <span className="text-sm">{bandsText(r.bands)}</span>
                       : <><strong>{Number(r.rate)}%</strong>{r.code === 'sdl' && <div className="pl-help">from {r.min_employees ?? 0} employees · casuals {r.count_casuals ? 'count' : 'don’t count'}</div>}</>}</td>
-                    <td>{r.verified_at ? <span className="badge badge-success" title={`Confirmed ${r.verified_at.slice(0, 10)}`}><ShieldCheck size={12} /> Confirmed</span>
+                    <td>{r.verified_at ? <span className="badge badge-success" title={`Confirmed ${dateText(r.verified_at)}`}><ShieldCheck size={12} /> Confirmed</span>
                       : <span className="badge badge-warning">To verify</span>}</td>
                     <td className="pl-help" style={{ maxWidth: 260 }}>{r.notes}</td>
                     {canSet && (
@@ -86,7 +86,7 @@ export default function StatutoryRatesCard() {
                         {!r.verified_at && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(supabase.rpc('verify_statutory_rate', { p_rate: r.id, p_ok: true }))}>Confirm</button>}
                         {r.verified_at && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(supabase.rpc('verify_statutory_rate', { p_rate: r.id, p_ok: false }))}>Take back</button>}
                         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setEditing(r)}>Edit</button>
-                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Remove this rate" aria-label={`Remove ${RATE_NAME[r.code]} from ${r.effective_from}`}
+                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Remove this rate" aria-label={`Remove ${RATE_NAME[r.code]} from ${dateText(r.effective_from)}`}
                           onClick={() => run(supabase.rpc('void_statutory_rate', { p_rate: r.id }))}><X size={13} /></button>
                       </td>
                     )}

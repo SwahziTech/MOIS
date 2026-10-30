@@ -7,6 +7,7 @@ import { qtyText, byMaterialOrder } from '../../lib/inventory';
 import { categoryTools, productOrder } from '../../lib/categories';
 import NumberInput from '../NumberInput';
 import ProductPicker from './ProductPicker';
+import { dateText } from '../../lib/format';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
@@ -228,7 +229,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
                 <div className="po-head">
                   <strong>Order {o.order_no}</strong>
                   {o.reference && <span>{o.reference}</span>}
-                  {o.due_date && <span className="pl-help">due {o.due_date}</span>}
+                  {o.due_date && <span className="pl-help">due {dateText(o.due_date)}</span>}
                   {o.status === 'open' && (st.late ? <span className="pl-badge is-out">At risk — ready about {st.lastReady}</span>
                     : st.anyLeft && st.lastReady && !st.unknown ? <span className="pl-badge">On track — ready about {st.lastReady}</span>
                     : st.anyLeft && st.unknown ? <span className="pl-badge is-plain">No mold count for some products</span>

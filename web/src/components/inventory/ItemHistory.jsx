@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { qtyText, orgToday } from '../../lib/inventory';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, dateTimeText } from '../../lib/format';
 import { useAuth } from '../../hooks/useAuth';
 import Modal from '../Modal';
 
@@ -117,7 +117,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
                     {!x.buy && x.unit_cost != null && <><dt>Cost</dt><dd>{money(x.unit_cost)} per {x.unit?.symbol}</dd></>}
                     {x.movement?.reason && <><dt>Note</dt><dd>{x.movement.reason}</dd></>}
                     {x.movement?.reference && <><dt>Reference</dt><dd>{x.movement.reference}</dd></>}
-                    <dt>Recorded</dt><dd>{people[x.movement?.created_by] ?? '—'} · {new Date(x.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</dd>
+                    <dt>Recorded</dt><dd>{people[x.movement?.created_by] ?? '—'} · {dateTimeText(x.created_at)}</dd>
                   </dl>
                 )}
               </div>

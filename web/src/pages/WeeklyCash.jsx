@@ -3,7 +3,7 @@ import { Wallet, Plus, Trash2, Upload, Download, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatMoneyShort, formatAmount } from '../lib/format';
+import { formatMoney, formatMoneyShort, formatAmount, dateText } from '../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, writeWeeklySheet } from '../lib/weeklyCashExcel';
@@ -17,7 +17,7 @@ const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Numb
 const r2 = n => Math.round(n * 100) / 100;
 const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const saturdayOf = d => { const w = new Date(`${d}T00:00:00Z`).getUTCDay(); return addDays(d, (6 - w + 7) % 7); };
-const longDate = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).toUpperCase();
+const longDate = d => dateText(d).toUpperCase();
 const STATUS = { draft: ['Draft', 'badge-neutral'], with_directors: ['With directors', 'badge-warning'], approved: ['Approved', 'badge-info'], rejected: ['Turned down', 'badge-error'], paid: ['Paid', 'badge-success'], cancelled: ['Cancelled', 'badge-neutral'] };
 const asked = r => (r.lines || []).reduce((t, l) => t + Number(l.amount), 0);
 const approvedOf = r => (r.lines || []).reduce((t, l) => t + Number(l.approved_amount ?? l.amount), 0);
@@ -110,7 +110,7 @@ export default function WeeklyCash() {
       : data === null ? <div className="card"><span className="skeleton" /></div> : (
         <>
           <div className="mm-stats">
-            <div className="mm-stat"><span className="pl-label">This week</span><strong>{thisWeek ? money(approvedOf(thisWeek)) : '—'}</strong><span className="pl-help">{thisWeek ? `${STATUS[thisWeek.status][0]} · week ending ${thisWeek.week_ending}` : 'no request yet'}</span></div>
+            <div className="mm-stat"><span className="pl-label">This week</span><strong>{thisWeek ? money(approvedOf(thisWeek)) : '—'}</strong><span className="pl-help">{thisWeek ? `${STATUS[thisWeek.status][0]} · week ending ${dateText(thisWeek.week_ending)}` : 'no request yet'}</span></div>
             <div className="mm-stat"><span className="pl-label">With directors</span><strong className={here.some(r => r.status === 'with_directors') ? 'text-warning' : ''}>{here.filter(r => r.status === 'with_directors').length}</strong><span className="pl-help">waiting for approval</span></div>
             <div className="mm-stat"><span className="pl-label">Last week's balance</span><strong>{lastClosed ? money(lastClosed.closing) : '—'}</strong><span className="pl-help">{lastClosed ? `spent ${formatMoneyShort(lastClosed.spent, organization?.currency_code)}` : 'from the first request on'}</span></div>
           </div>
@@ -123,7 +123,7 @@ export default function WeeklyCash() {
                   const w = ledger[r.week_ending];
                   return (
                     <tr key={r.id} className="clickable-row" onClick={() => setOpen(r)}>
-                      <td>{r.week_ending}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
+                      <td>{dateText(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
                       <td><span className={`badge ${STATUS[r.status][1]}`}>{STATUS[r.status][0]}</span></td>
                       <td className="num">{formatAmount(asked(r))}</td>
                       <td className="num">{['approved', 'paid'].includes(r.status) ? formatAmount(approvedOf(r)) : ''}</td>
@@ -212,7 +212,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
 
   const st = request?.status ?? 'draft';
   return (
-    <Modal title={isNew ? 'New weekly request' : `Weekly cash — week ending ${request.week_ending}`} onClose={onClose} size="xl"
+    <Modal title={isNew ? 'New weekly request' : `Weekly cash — week ending ${dateText(request.week_ending)}`} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-ghost" onClick={exportFile}><Download size={14} /> Export Excel</button>
@@ -229,7 +229,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
       </>}>
       <div className="modal-form">
         {!isNew && <p className="text-sm"><span className={`badge ${STATUS[st][1]}`}>{STATUS[st][0]}</span>
-          {request.decision_note ? ` · ${request.decision_note}` : ''}{st === 'paid' ? ` · ${money(Number(request.paid_amount))} sent on ${request.paid_on}${request.paid_reference ? ` (${request.paid_reference})` : ''}` : ''}</p>}
+          {request.decision_note ? ` · ${request.decision_note}` : ''}{st === 'paid' ? ` · ${money(Number(request.paid_amount))} sent on ${dateText(request.paid_on)}${request.paid_reference ? ` (${request.paid_reference})` : ''}` : ''}</p>}
 
         <h3 className="modal-section-title">Last week — week ending {addDays(week, -7)}</h3>
         {lastWeek ? (
@@ -239,7 +239,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
               <tr><td /><td>Balance brought forward</td><td /><td className="num">{formatAmount(lastWeek.opening)}</td><td /><td /></tr>
               <tr><td /><td>Cash sent</td><td /><td className="num">{formatAmount(lastWeek.sent)}</td><td /><td className="num"><strong>{formatAmount(lastWeek.opening + lastWeek.sent)}</strong></td></tr>
               {(() => { let b = lastWeek.opening + lastWeek.sent; return lastWeek.lines.map((l, i) => { b = r2(b - l.amount); return (
-                <tr key={i}><td>{l.date}</td><td>{l.description}</td><td className="pl-help">{l.qty}</td><td /><td className="num">{formatAmount(l.amount)}</td><td className="num">{formatAmount(b)}</td></tr>); }); })()}
+                <tr key={i}><td>{dateText(l.date)}</td><td>{l.description}</td><td className="pl-help">{l.qty}</td><td /><td className="num">{formatAmount(l.amount)}</td><td className="num">{formatAmount(b)}</td></tr>); }); })()}
             </tbody>
             <tfoot><tr><td /><td><strong>Spent · balance</strong></td><td /><td /><td className="num"><strong>{money(lastWeek.spent)}</strong></td><td className="num"><strong>{money(lastWeek.closing)}</strong></td></tr></tfoot>
           </table>

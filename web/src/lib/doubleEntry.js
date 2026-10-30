@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { stockKey, qtyText, warehouseLabel } from './inventory';
+import { dateText } from './format';
 
 /*
  * Double entries (2026-10-17). The ledger accepts the same stock twice —
@@ -103,22 +104,22 @@ export function planOpeningFix({ entries, item, colorId, target, whById, reason 
     if (e === kept) continue;
     if (e.lineCount === 1) {
       steps.push({ kind: 'reverse', movementId: e.movement_id, reason,
-        summary: `Reverse the opening balance of ${e.transaction_date} at ${warehouseLabel(whById[e.warehouse_id])} (${qtyText(e.quantity)} ${sym} ${item.name}) — ${reason}` });
+        summary: `Reverse the opening balance of ${dateText(e.transaction_date)} at ${warehouseLabel(whById[e.warehouse_id])} (${qtyText(e.quantity)} ${sym} ${item.name}) — ${reason}` });
     } else {
       steps.push({ kind: 'movement', payload: { type: 'adjustment', warehouse_id: e.warehouse_id, movement_date: e.transaction_date, reason, lines: [line(-Number(e.quantity))] },
-        summary: `Adjustment at ${warehouseLabel(whById[e.warehouse_id])}, dated ${e.transaction_date}: remove ${qtyText(e.quantity)} ${sym} ${item.name} — ${reason}` });
+        summary: `Adjustment at ${warehouseLabel(whById[e.warehouse_id])}, dated ${dateText(e.transaction_date)}: remove ${qtyText(e.quantity)} ${sym} ${item.name} — ${reason}` });
     }
   }
   if (kept) {
     const diff = target.qty - Number(kept.quantity);
     if (Math.abs(diff) > 1e-9) {
       steps.push({ kind: 'movement', payload: { type: 'adjustment', warehouse_id: kept.warehouse_id, movement_date: kept.transaction_date, reason, lines: [line(diff)] },
-        summary: `Adjustment at ${warehouseLabel(whById[kept.warehouse_id])}, dated ${kept.transaction_date}: ${diff > 0 ? 'add' : 'remove'} ${qtyText(Math.abs(diff))} ${sym} ${item.name} — ${reason}` });
+        summary: `Adjustment at ${warehouseLabel(whById[kept.warehouse_id])}, dated ${dateText(kept.transaction_date)}: ${diff > 0 ? 'add' : 'remove'} ${qtyText(Math.abs(diff))} ${sym} ${item.name} — ${reason}` });
     }
   } else if (target.qty > 0) {
     const date = entries.map(e => e.transaction_date).sort()[0];
     steps.push({ kind: 'movement', payload: { type: 'opening_balance', warehouse_id: target.warehouseId, movement_date: date, reason, lines: [line(target.qty)] },
-      summary: `Opening balance at ${warehouseLabel(whById[target.warehouseId])}, dated ${date}: ${qtyText(target.qty)} ${sym} ${item.name} — ${reason}` });
+      summary: `Opening balance at ${warehouseLabel(whById[target.warehouseId])}, dated ${dateText(date)}: ${qtyText(target.qty)} ${sym} ${item.name} — ${reason}` });
   }
   return steps;
 }

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatMoney, formatAmount } from '../../lib/format';
+import { formatMoney, formatAmount, dateText } from '../../lib/format';
 import { PageTabs } from '../ListControls';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
@@ -110,7 +110,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
                 return (
                   <Fragment key={k}>
                     <tr className={d.batches.length ? 'clickable-row' : ''} onClick={() => d.batches.length && setOpenDay(isOpen ? null : k)}>
-                      <td>{d.batches.length ? (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : null} {d.day}</td>
+                      <td>{d.batches.length ? (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : null} {dateText(d.day)}</td>
                       <td>{d.meter_name}</td>
                       <td className="num">{units(Number(d.day_units))}</td>
                       <td className="num"><strong>{formatAmount(Number(d.day_cost || 0))}</strong></td>

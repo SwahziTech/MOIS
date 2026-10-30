@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatMoney, formatAmount } from '../../lib/format';
+import { formatMoney, formatAmount, dateText } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { qtyText, orgToday } from '../../lib/inventory';
 import Modal from '../Modal';
@@ -142,9 +142,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
             : here.map(r => (
               <tr key={r.id} className="clickable-row" onClick={() => setOpenId(r.id)} title="Open the request">
                 <td>#{r.request_no}</td>
-                <td>{r.requested_on}</td>
+                <td>{dateText(r.requested_on)}</td>
                 <td>{people[r.requested_by] ?? ''}</td>
-                <td>{r.needed_by ?? ''}</td>
+                <td>{dateText(r.needed_by) ?? ''}</td>
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
                 <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
               </tr>
@@ -217,7 +217,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
       </>}>
       <div className="modal-form">
-        <p className="text-sm"><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span> · asked {r.requested_on}{people[r.requested_by] ? ` by ${people[r.requested_by]}` : ''}{r.needed_by ? ` · needed by ${r.needed_by}` : ''}{r.decision_note ? ` · ${r.decision_note}` : ''}</p>
+        <p className="text-sm"><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span> · asked {dateText(r.requested_on)}{people[r.requested_by] ? ` by ${people[r.requested_by]}` : ''}{r.needed_by ? ` · needed by ${dateText(r.needed_by)}` : ''}{r.decision_note ? ` · ${r.decision_note}` : ''}</p>
         {r.notes && <p className="pl-help">{r.notes}</p>}
         {!po && (
           <table className="rd-table">
@@ -229,7 +229,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
           <label className="pe-field"><span>Note (needed to turn down)</span><input className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
         )}
         {po && <>
-          <h3 className="modal-section-title">Order #{po.po_no} — {supplierName(po.supplier_id)}{po.expected_on ? ` · expected ${po.expected_on}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
+          <h3 className="modal-section-title">Order #{po.po_no} — {supplierName(po.supplier_id)}{po.expected_on ? ` · expected ${dateText(po.expected_on)}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
           <table className="rd-table">
             <thead><tr><th>What</th><th className="num">Ordered</th><th className="num">Price (TZS)</th><th>Bought</th></tr></thead>
             <tbody>{lines.map(l => {
@@ -398,7 +398,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
               return (
                 <tr key={po.id} className="clickable-row" onClick={() => setViewing(po)} title="Open the order">
                   <td>#{po.po_no}{po.sent_to_supplier && <div className="pl-help">sent</div>}</td>
-                  <td>{po.order_date}{po.expected_on && <div className="pl-help">expected {po.expected_on}</div>}</td>
+                  <td>{dateText(po.order_date)}{po.expected_on && <div className="pl-help">expected {dateText(po.expected_on)}</div>}</td>
                   <td>{supplierName(po.supplier_id)}</td>
                   <td onClick={e => { if (e.target.closest('button')) e.stopPropagation(); }}>{[...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
                     if (l.kind === 'expense') return (
@@ -451,7 +451,7 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
         {canReceive && <button type="button" className="btn btn-primary" onClick={onReceive}>Receive goods</button>}
       </>}>
       <div className="modal-form">
-        <p className="text-sm">Ordered {po.order_date}{po.expected_on ? ` · expected ${po.expected_on}` : ''} · {po.sent_to_supplier ? 'sent to the supplier' : 'kept in MOIS'} · <strong>{state === 'received' ? 'received in full' : state === 'part' ? 'part received' : po.status === 'open' ? 'nothing received yet' : po.status}</strong></p>
+        <p className="text-sm">Ordered {dateText(po.order_date)}{po.expected_on ? ` · expected ${dateText(po.expected_on)}` : ''} · {po.sent_to_supplier ? 'sent to the supplier' : 'kept in MOIS'} · <strong>{state === 'received' ? 'received in full' : state === 'part' ? 'part received' : po.status === 'open' ? 'nothing received yet' : po.status}</strong></p>
         <table className="rd-table">
           <thead><tr><th>Material</th><th className="num">Ordered</th><th className="num">Received</th><th className="num">To come</th><th className="num">Price (TZS)</th></tr></thead>
           <tbody>
@@ -477,7 +477,7 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
         {po.notes && <p className="pl-help">{po.notes}</p>}
         <h3 className="modal-section-title">Received against it</h3>
         {purchases.length === 0 ? <p className="pl-help">Nothing yet — use Receive goods when they arrive.</p>
-          : <p className="text-sm">{purchases.map(p => `${p.purchase_date}${p.invoice_reference ? ` (${p.invoice_reference})` : ''}`).join(' · ')}</p>}
+          : <p className="text-sm">{purchases.map(p => `${dateText(p.purchase_date)}${p.invoice_reference ? ` (${p.invoice_reference})` : ''}`).join(' · ')}</p>}
       </div>
     </Modal>
   );
@@ -620,13 +620,13 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
     onSaved();
   }
   return (
-    <Modal title={`Pay ${supplierName} — purchase of ${purchase.purchase_date}`} onClose={onClose}
+    <Modal title={`Pay ${supplierName} — purchase of ${dateText(purchase.purchase_date)}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || owed <= 0} onClick={save}>Record payment</button></>}>
       <div className="modal-form">
         <p className="text-sm">Total <strong>{money(Number(total))}</strong> · paid {money(paid)} · <strong className={owed > 0 ? 'text-warning' : ''}>{money(owed)} owed</strong></p>
-        {payments.length > 0 && <div className="pl-help">{payments.map(p => `${p.paid_on}: ${money(Number(p.amount))}${p.kind === 'at_purchase' ? ' (with the purchase)' : ''}`).join(' · ')}</div>}
+        {payments.length > 0 && <div className="pl-help">{payments.map(p => `${dateText(p.paid_on)}: ${money(Number(p.amount))}${p.kind === 'at_purchase' ? ' (with the purchase)' : ''}`).join(' · ')}</div>}
         <div className="form-row">
           <label className="pe-field"><span>Amount</span><NumberInput step="any" min="0" className="form-input" autoFocus value={f.amount} onChange={e => setF({ ...f, amount: e.target.value })} /></label>
           <label className="pe-field"><span>Paid on</span><input type="date" className="form-input" max={today} value={f.paid_on} onChange={e => setF({ ...f, paid_on: e.target.value })} /></label>

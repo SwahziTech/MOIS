@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Users, Cog, UserCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
+import { dateText } from '../../lib/format';
 
 /**
  * Production tracking for one batch (migration 056), in the batch's note zone
@@ -233,7 +234,7 @@ export default function BatchNotes({ branchId, organizationId, productId, date, 
       {editing === 'workers' && (
         <div className="bn-panel bn-workers">
           <span className="pl-help">
-            Tick who worked on this batch.{atWork.length ? ` ${atWork.length} marked at work on ${date} are listed first.` : ''}
+            Tick who worked on this batch.{atWork.length ? ` ${atWork.length} marked at work on ${dateText(date)} are listed first.` : ''}
             {worked.length > 0 && <> <button type="button" className="link-btn" onClick={() => set({ workerIds: [] })}>Untick all</button></>}
             {atWork.length > 0 && <> · <button type="button" className="link-btn" onClick={() => set({ workerIds: [...new Set([...worked, ...atWork.map(p => p.id)])] })}>Tick everyone at work</button></>}
           </span>

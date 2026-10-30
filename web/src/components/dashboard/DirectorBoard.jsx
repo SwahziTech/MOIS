@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
-import { formatAmount, formatMoneyShort } from '../../lib/format';
+import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
 import { loadInventoryRefs, orgToday } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import { PageTabs, SortFilterMenu } from '../ListControls';
@@ -162,7 +162,7 @@ export default function DirectorBoard() {
           })}
         </Block>
       )}
-      <p className="pl-help">{branchId ? branchName : 'All branches'} · {today}. Days left are an estimate from the last 14 days&apos; use. Money out counts only what&apos;s recorded in MOIS.</p>
+      <p className="pl-help">{branchId ? branchName : 'All branches'} · {dateText(today)}. Days left are an estimate from the last 14 days&apos; use. Money out counts only what&apos;s recorded in MOIS.</p>
     </div>
   );
 }

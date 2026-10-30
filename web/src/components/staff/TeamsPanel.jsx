@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
+import { dateText } from '../../lib/format';
 
 /*
  * Teams (HR › Staff, 2026-10-30): a branch's production teams. Edit renames a
@@ -95,7 +96,7 @@ export default function TeamsPanel({ staff, branchId, inBranch }) {
           const members = t.members.filter(m => m.staff_id && m.status !== 'removed').sort((a, b) => (a.status === b.status ? nameOf(a).localeCompare(nameOf(b)) : a.status === 'active' ? -1 : 1));
           const ld = lastDay[t.id];
           const worked = ld ? [...ld.ids].sort() : [];
-          const day = ld ? new Date(`${ld.date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
+          const day = ld ? dateText(ld.date) : null;
           return (
             <div key={t.id} className={`card tm-card${t.status !== 'active' ? ' is-inactive' : ''}`}>
               <div className="tm-head">

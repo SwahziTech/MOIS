@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatAmount, formatMoneyShort } from '../lib/format';
+import { formatMoney, formatAmount, formatMoneyShort, dateText } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
@@ -183,7 +183,7 @@ export default function Staff() {
                 <div className="co-details">
                   <span>{s.kind ? KIND[s.kind] : <span className="text-warning">Employed or casual?</span>}</span>
                   <span className="pl-help">paid {CYCLE[cycleOf(s)].toLowerCase()}</span>
-                  {s.status !== 'active' && <span className="pl-help">left{s.left_on ? ` ${s.left_on}` : ''}</span>}
+                  {s.status !== 'active' && <span className="pl-help">left{s.left_on ? ` ${dateText(s.left_on)}` : ''}</span>}
                 </div>
                 <div className="st-att" onDoubleClick={e => e.stopPropagation()}>
                   <div className="st-week">
@@ -191,7 +191,7 @@ export default function Staff() {
                       const k = `${s.id}|${d}`; const v = att[k];
                       return (
                         <button key={d} type="button" className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}`}
-                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dayName(d)}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
+                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dateText(d)}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
                           onClick={e => markDay(e, s.id, d)}>
                           <span className="st-dname">{dayName(d)}</span>{v === 1 ? '✓' : v === 0.5 ? '½' : d > today ? '' : '·'}
                         </button>
@@ -451,7 +451,7 @@ function PayrollSheet({ kind, staff, today, money, currency, canRecord, canAppro
   ];
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (sheets === null) return <div className="card"><span className="skeleton" /></div>;
-  const label = s => `${s.period_start} – ${s.period_end} · ${STATUS[s.status]}`;
+  const label = s => `${dateText(s.period_start)} – ${dateText(s.period_end)} · ${STATUS[s.status]}`;
   return (
     <>
       <div className="mm-stats">
@@ -507,7 +507,7 @@ function PersonPay({ line: l, sheet, person, money, onClose }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
       <div className="modal-form">
         <p className="text-sm">{[person?.job_title, person?.kind ? KIND[person.kind] : null, person?.nssf_no && `NSSF no. ${person.nssf_no}`].filter(Boolean).join(' · ')}</p>
-        <p className="text-sm">Period <strong>{sheet.period_start} – {sheet.period_end}</strong> · {STATUS[sheet.status]}{sheet.paid_on ? ` · paid ${sheet.paid_on}` : ''}
+        <p className="text-sm">Period <strong>{dateText(sheet.period_start)} – {dateText(sheet.period_end)}</strong> · {STATUS[sheet.status]}{sheet.paid_on ? ` · paid ${dateText(sheet.paid_on)}` : ''}
           {l.days != null ? <> · <strong>{Number(l.days)}</strong> days attended</> : ''}{l.rate != null ? ` · ${formatAmount(Number(l.rate))} ${l.pay_basis === 'daily' ? 'a day' : 'a month'}` : ''}</p>
         <div className="pp-grid">
           <table className="pp-table">
@@ -578,7 +578,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   const tot = f => lines.reduce((t, l) => t + Number(l[f] || 0), 0);
   if (!sheet) return <Modal title="Pay sheet" onClose={onClose}>{error ? <div className="alert alert-error">{error}</div> : <span className="skeleton" />}</Modal>;
   return (
-    <Modal title={`${CYCLE[sheet.cycle]} pay · ${sheet.period_start} – ${sheet.period_end}`} onClose={onClose} size="lg"
+    <Modal title={`${CYCLE[sheet.cycle]} pay · ${dateText(sheet.period_start)} – ${dateText(sheet.period_end)}`} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {sheet.status !== 'void' && (sheet.status === 'draft' ? canRecord : canApprove) && voidReason === null &&
           <button type="button" className="btn btn-ghost" onClick={() => setVoidReason('')}>Void…</button>}
@@ -589,7 +589,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {lines.length > 0 && <a className="btn btn-outline" href={`/print/payslips/${id}`} target="_blank" rel="noreferrer">Payslips</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
       <div className="modal-form">
-        <p className="text-sm">Status: <strong>{STATUS[sheet.status]}</strong>{sheet.paid_on ? ` on ${sheet.paid_on} — net pay recorded as a Wages expense${sheet.statutory_expense_id ? ', PAYE/NSSF/WCF/SDL as a Statutory contributions expense (owed until remitted)' : ''}` : ''}{sheet.void_reason ? ` — ${sheet.void_reason}` : ''}</p>
+        <p className="text-sm">Status: <strong>{STATUS[sheet.status]}</strong>{sheet.paid_on ? ` on ${dateText(sheet.paid_on)} — net pay recorded as a Wages expense${sheet.statutory_expense_id ? ', PAYE/NSSF/WCF/SDL as a Statutory contributions expense (owed until remitted)' : ''}` : ''}{sheet.void_reason ? ` — ${sheet.void_reason}` : ''}</p>
         {draft && unverified.length > 0 && <div className="alert alert-warning">Rates to verify: {unverified.map(c => RATE_NAME[c]).join(', ')}. The Technical admin or a director checks them with TRA / NSSF / WCF and confirms them under ⚙ — then Refresh and approve.</div>}
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">

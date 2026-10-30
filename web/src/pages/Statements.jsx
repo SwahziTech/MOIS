@@ -3,7 +3,7 @@ import { Download, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, formatMoney, formatMoneyShort } from '../lib/format';
+import { formatAmount, formatMoney, formatMoneyShort, dateText } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { exportTable, loadProfit } from '../lib/reports';
 import { loadOwing, ageByBuyer, AGE_BUCKETS } from '../lib/receivables';
@@ -133,7 +133,7 @@ function BalanceSheet({ today, money, short, inBranch, branchId, branchIds, wher
       <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Holds</span><strong>{short(d.totalAssets)}</strong><span className="pl-help">cash, owed to us, stock</span></div>
         <div className="mm-stat"><span className="pl-label">Owes</span><strong>{short(d.totalLiabilities)}</strong><span className="pl-help">suppliers, pay</span></div>
-        <div className="mm-stat"><span className="pl-label">Owners&apos; share</span><strong className={d.equity < 0 ? 'text-warning' : ''}>{short(d.equity)}</strong><span className="pl-help">today, {today}</span></div>
+        <div className="mm-stat"><span className="pl-label">Owners&apos; share</span><strong className={d.equity < 0 ? 'text-warning' : ''}>{short(d.equity)}</strong><span className="pl-help">today, {dateText(today)}</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
         <span className="pl-help">As of today. Machines, buildings and loans aren&apos;t recorded in MOIS, so they&apos;re not here.</span>
@@ -141,7 +141,7 @@ function BalanceSheet({ today, money, short, inBranch, branchId, branchIds, wher
       </div>
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Balance sheet — {today}</th><th className="num">Amount (TZS)</th></tr></thead>
+          <thead><tr><th>Balance sheet — {dateText(today)}</th><th className="num">Amount (TZS)</th></tr></thead>
           <tbody>
             <tr><td className="pl-label">What the business holds</td><td /></tr>
             {d.assets.map(([l, v]) => <tr key={l}><td style={{ paddingLeft: 24 }}>{l}</td><td className="num">{amt(v)}</td></tr>)}
@@ -197,9 +197,9 @@ function AccountStatement({ today, money, short, inBranch, where }) {
   return (
     <>
       <div className="mm-stats">
-        <div className="mm-stat"><span className="pl-label">Opening</span><strong>{short(st.opening)}</strong><span className="pl-help">{from}</span></div>
+        <div className="mm-stat"><span className="pl-label">Opening</span><strong>{short(st.opening)}</strong><span className="pl-help">{dateText(from)}</span></div>
         <div className="mm-stat"><span className="pl-label">In · out</span><strong>{short(st.tin)}</strong><span className="pl-help">out {short(st.tout)}</span></div>
-        <div className="mm-stat"><span className="pl-label">Closing</span><strong>{short(st.closing)}</strong><span className="pl-help">{to}</span></div>
+        <div className="mm-stat"><span className="pl-label">Closing</span><strong>{short(st.closing)}</strong><span className="pl-help">{dateText(to)}</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
         <select className="form-input" style={{ maxWidth: 220 }} aria-label="Account" value={sel.id} onChange={e => setAccount(e.target.value)}>
@@ -216,14 +216,14 @@ function AccountStatement({ today, money, short, inBranch, where }) {
           <tbody>
             <tr><td /><td><strong>Opening balance</strong></td><td /><td /><td /><td className="num"><strong>{amt(st.opening)}</strong></td></tr>
             {st.rows.slice().reverse().map((x, i) => (
-              <tr key={i}><td>{x.day}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
+              <tr key={i}><td>{dateText(x.day)}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
                 <td className="num">{x.direction === 'in' ? amt(x.amount) : ''}</td><td className="num">{x.direction === 'out' ? amt(x.amount) : ''}</td><td className="num">{amt(x.balance)}</td></tr>
             ))}
           </tbody>
           <tfoot><tr><td /><td><strong>Closing balance</strong></td><td /><td className="num"><strong>{amt(st.tin)}</strong></td><td className="num"><strong>{amt(st.tout)}</strong></td><td className="num"><strong>{money(st.closing)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>{sel.opening_date ? `Counted from the opening balance on ${sel.opening_date}.` : 'No opening balance set — set it under Cash flow ⚙.'} Newest first.</p>
+      <p className="pl-help" style={{ marginTop: 8 }}>{sel.opening_date ? `Counted from the opening balance on ${dateText(sel.opening_date)}.` : 'No opening balance set — set it under Cash flow ⚙.'} Newest first.</p>
     </>
   );
 }
@@ -293,7 +293,7 @@ function Parties({ today, money, inBranch, branchId }) {
               {owe.length === 0 ? <tr><td colSpan={7} className="text-muted">Nothing to pay suppliers.</td></tr> : owe.map(s => (
                 <tr key={s.id}>
                   <td>{s.name}</td><td className="num">{s.bills}</td><td className="num">{amt(s.billed)}</td><td className="num">{amt(s.paid)}</td>
-                  <td className="num"><strong>{amt(s.owed)}</strong></td><td>{s.since ?? ''}</td>
+                  <td className="num"><strong>{amt(s.owed)}</strong></td><td>{dateText(s.since) ?? ''}</td>
                   <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc(`/print/supplier-statement/${s.id}?from=${yearStart}&to=${today}`)}><Printer size={13} /> Statement</button></td>
                 </tr>
               ))}

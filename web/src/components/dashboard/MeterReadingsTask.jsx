@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { orgToday } from '../../lib/inventory';
 import { ReadingsModal } from '../purchases/ElectricityPanel';
+import { dateText } from '../../lib/format';
 
 const units = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v);
 
@@ -45,7 +46,7 @@ export default function MeterReadingsTask({ branchId }) {
         const last = data.readings.find(r => r.meter_id === m.id);
         const d = dueOf(m.id);
         return (
-          <span key={m.id} className="mr-meter-inline" title={last ? `Latest reading: ${last.read_on} ${last.slot}` : 'No reading yet'}>
+          <span key={m.id} className="mr-meter-inline" title={last ? `Latest reading: ${dateText(last.read_on)} ${last.slot}` : 'No reading yet'}>
             <strong>{m.name}</strong> {last ? `${units(Number(last.reading))} units left` : 'no reading yet'}
             {d.length > 0 ? <span className="mr-due"> · {d.join(' & ')} due</span> : <span className="mr-ok"> · today done</span>}
           </span>

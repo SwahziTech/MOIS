@@ -11,6 +11,7 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import RequestDetail from '../components/approvals/RequestDetail';
 import { loadInventoryRefs } from '../lib/inventory';
+import { dateTimeText, datesInText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load approvals. Please try again.";
 
@@ -99,7 +100,7 @@ export default function Approvals() {
   const inView = rows.filter(r => inBranch(r.branch_id));
   const shown = inView.filter(r => (tab === 'pending' ? r.status === 'pending' : r.status !== 'pending'));
   const waiting = inView.filter(r => r.status === 'pending').length;
-  const when = ts => new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const when = ts => dateTimeText(ts);
 
   return (
     <PageShell title="Approvals" subtitle="Overview"
@@ -125,7 +126,7 @@ export default function Approvals() {
                     <tr key={r.id} className="clickable-row" onClick={() => openRequest(r)} title="Open to review">
                       <td style={{ maxWidth: 520 }}>
                         <div className="text-xs text-muted">{KIND[r.kind]?.label ?? r.kind}</div>
-                        <div>{r.summary}</div>
+                        <div>{datesInText(r.summary)}</div>
                         {r.status === 'pending' && r.last_error && (
                           <div className="text-xs text-error mt-4">Last approval couldn't be applied: {r.last_error}</div>
                         )}

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatAmount } from '../lib/format';
+import { formatMoney, formatAmount, dateText } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadOwing, ageByBuyer, statementLines, owedSince, AGE_BUCKETS } from '../lib/receivables';
@@ -177,7 +177,7 @@ function CustomerView({ customer, sales, stats, money, today, canEdit, onEdit, o
                 <td className="num">{formatAmount(Number(s.total))}</td>
                 <td className="num">{formatAmount(paidOf(s))}</td>
                 <td className={`num${Number(s.total) - paidOf(s) > 0.004 ? ' text-warning' : ''}`}><strong>{formatAmount(Number(s.total) - paidOf(s))}</strong></td>
-                <td className="pl-help">{(s.payments || []).sort((a, b) => (a.paid_on < b.paid_on ? -1 : 1)).map(p => `${p.paid_on}: ${formatAmount(Number(p.amount))}`).join(' · ')}</td>
+                <td className="pl-help">{(s.payments || []).sort((a, b) => (a.paid_on < b.paid_on ? -1 : 1)).map(p => `${dateText(p.paid_on)}: ${formatAmount(Number(p.amount))}`).join(' · ')}</td>
               </tr>
             ))}
           </tbody>

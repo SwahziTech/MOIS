@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { datesInText } from './format';
 
 /**
  * Shared helpers for every master-data screen (products, materials,
@@ -42,9 +43,9 @@ export function dbErrorMessage(err, fallback = "We couldn't save this change. Pl
       // Postgres' own access errors are not user-facing; our functions' messages are
       return !err.message || /row-level security|permission denied for/i.test(err.message)
         ? "You don't have permission to change this."
-        : err.message;
+        : datesInText(err.message);
     case '23514': return err.message && !/violates check constraint/i.test(err.message)
-      ? err.message                                   // our own trigger messages are user-facing
+      ? datesInText(err.message)                      // our own trigger messages are user-facing
       : 'That value is not allowed here.';
     case '23503': return 'This is still used elsewhere, so it cannot be changed this way.';
     default: return fallback;

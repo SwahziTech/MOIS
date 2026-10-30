@@ -7,6 +7,7 @@ import { warehouseLabel, qtyText, itemKey } from '../../lib/inventory';
 import { findOpeningDuplicates, planOpeningFix, runSteps, closeDoubleEntry } from '../../lib/doubleEntry';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
+import { dateText } from '../../lib/format';
 
 // The store an item usually belongs in: products in a finished-goods store, materials elsewhere
 export const fitsStore = (item, w) => !!item && !!w && (item.kind === 'product') === (w.type === 'finished_goods');
@@ -143,8 +144,8 @@ function FixOpeningModal({ dup, refs, whById, onClose, onFixed }) {
         <ul className="text-sm double-entry-entries">
           {entries.map(e => (
             <li key={e.id}>
-              <strong>{qtyText(e.quantity)} {sym}</strong> in {warehouseLabel(whById[e.warehouse_id])}, dated {e.transaction_date}
-              <span className="text-muted"> · entered {e.created_at.slice(0, 10)}</span>
+              <strong>{qtyText(e.quantity)} {sym}</strong> in {warehouseLabel(whById[e.warehouse_id])}, dated {dateText(e.transaction_date)}
+              <span className="text-muted"> · entered {dateText(e.created_at)}</span>
               {!fitsStore(item, whById[e.warehouse_id]) && <span className="text-warning"> · {item.kind === 'material' ? 'a material in a finished-goods store' : 'a product outside the finished-goods store'}</span>}
             </li>
           ))}

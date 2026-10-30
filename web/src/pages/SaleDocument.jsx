@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { formatMoney } from '../lib/format';
+import { formatMoney, dateText, dateTimeText } from '../lib/format';
 import { qtyText } from '../lib/inventory';
 
 const METHODS = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' };
@@ -86,8 +86,8 @@ export default function SaleDocument() {
           <div className="doc-title">
             <h1>{title}</h1>
             <div><strong>{number}</strong></div>
-            <div>Date: {date}</div>
-            {doc === 'quotation' && sale.valid_until && <div>Valid until: {sale.valid_until}</div>}
+            <div>Date: {dateText(date)}</div>
+            {doc === 'quotation' && sale.valid_until && <div>Valid until: {dateText(sale.valid_until)}</div>}
             {(doc === 'invoice' || doc === 'receipt') && sale.efd_receipt_no && <div>EFD receipt: {sale.efd_receipt_no}</div>}
             {doc === 'receipt' && payment.receipt_no && <div>Receipt book no.: {payment.receipt_no}</div>}
             {(doc === 'receipt' || doc === 'delivery') && <div>For {sale.stage === 'invoice' ? 'invoice' : 'order'} #{sale.sale_no}</div>}
@@ -127,7 +127,7 @@ export default function SaleDocument() {
             {/* proof of delivery once confirmed (096) */}
             {delivery.kind === 'delivery' && delivery.status === 'delivered' && delivery.pod_received_by && (
               <p><strong>Delivered</strong> — received by {delivery.pod_received_by}
-                {delivery.delivered_at ? `, ${new Date(delivery.delivered_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                {delivery.delivered_at ? `, ${dateTimeText(delivery.delivered_at)}` : ''}
                 {delivery.pod_note ? ` · ${delivery.pod_note}` : ''}</p>
             )}
             <div className="doc-sign">

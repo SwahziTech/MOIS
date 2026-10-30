@@ -17,6 +17,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import DayLog from '../components/production/DayLog';
 import CapacityPlanner from '../components/production/CapacityPlanner';
 import ProductionSettings from '../components/production/ProductionSettings';
+import { dateText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load production. Please try again.";
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -142,7 +143,7 @@ export default function Production() {
         fg_warehouse_id: fg?.id ?? null, release_date: today, note: minCuring == null && b.curing_until > today ? bulkNote.trim() : null,
         outputs: (b.outputs || []).map(o => ({ output_id: o.id, pieces_passed: o.pieces_cast, rejects: [] })),
       } });
-      if (err) failed.push({ name: `${b.batch_date} · ${productName(b)}`, error: dbErrorMessage(err) });
+      if (err) failed.push({ name: `${dateText(b.batch_date)} · ${productName(b)}`, error: dbErrorMessage(err) });
       setBulk(x => ({ ...x, done: x.done + 1, failed: [...failed] }));
     }
     setBulk(x => ({ ...x, running: false }));
@@ -224,7 +225,7 @@ export default function Production() {
                       {current === 'curing' && (
                         <td>{readyToRelease(b) && <input type="checkbox" aria-label={`Select ${productName(b)} ${b.batch_date}`} checked={picked.has(b.id)} onChange={() => togglePick(b.id)} />}</td>
                       )}
-                      <td>{b.batch_date}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
+                      <td>{dateText(b.batch_date)}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
                       <td><span style={{ fontWeight: 500 }}>{productName(b)}</span>
                         {leftoversOf(b).length > 0 && <div className="text-xs text-muted">+ {leftoversOf(b).map(o => `${o.pieces_cast} ${refs?.items[`p:${o.product_id}`]?.name ?? ''}`).join(', ')}</div>}</td>
                       <td style={{ textAlign: 'right' }}>{qtyText(b.cement_bags)}</td>
@@ -239,7 +240,7 @@ export default function Production() {
                             </span>}
                       </td>
                       <td>{b.status === 'released' ? b.released_on : b.status === 'void' ? '—' : (
-                        <>{b.curing_until}{readyOn(b) <= today
+                        <>{dateText(b.curing_until)}{readyOn(b) <= today
                           ? <div className="text-xs" style={{ color: 'var(--color-success)' }}>Ready to release</div>
                           : minCuring != null && <div className="text-xs text-muted">ready {readyOn(b)}</div>}</>
                       )}</td>
@@ -287,8 +288,8 @@ export default function Production() {
               )}
               <table className="rd-table"><tbody>
                 {ready.filter(b => picked.has(b.id)).map(b => (
-                  <tr key={b.id}><td>{b.batch_date}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
-                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{minCuring == null && b.curing_until > today ? `early · until ${b.curing_until}` : 'ready'}</td></tr>
+                  <tr key={b.id}><td>{dateText(b.batch_date)}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
+                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{minCuring == null && b.curing_until > today ? `early · until ${dateText(b.curing_until)}` : 'ready'}</td></tr>
                 ))}
               </tbody></table>
             </div>
@@ -345,7 +346,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
       if (passedOf(o) < 0) { setError(`${nameOf(o)}: more rejects than the ${o.pieces_cast} pieces cast.`); return; }
     }
     if (tooSoon) { setError(`It cures at least until ${minFrom} — release from then.`); return; }
-    if (early && !note.trim()) { setError(`Curing runs until ${batch.curing_until} — say why it is released early.`); return; }
+    if (early && !note.trim()) { setError(`Curing runs until ${dateText(batch.curing_until)} — say why it is released early.`); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('release_production_batch', { p_batch: batch.id, p: {
       fg_warehouse_id: fgId, release_date: date, note: note.trim() || null,
@@ -359,14 +360,14 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
   }
 
   return (
-    <Modal title={`Release ${name} · ${batch.batch_date}`} onClose={onClose} size="lg"
+    <Modal title={`Release ${name} · ${dateText(batch.batch_date)}`} onClose={onClose} size="lg"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="submit" form="release-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Release</button>
       </>}>
       <form id="release-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">Curing until {batch.curing_until}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods and rejected ones leave stock, both dated the production day ({batch.batch_date}); the date below is the day of this quality release.</p>
+        <p className="text-sm text-muted">Curing until {dateText(batch.curing_until)}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods and rejected ones leave stock, both dated the production day ({dateText(batch.batch_date)}); the date below is the day of this quality release.</p>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rl-fg">Into</label>
@@ -438,7 +439,7 @@ function VoidModal({ batch, name, onClose, onSaved }) {
     onSaved();
   }
   return (
-    <Modal title={`Void ${name} · ${batch.batch_date}`} onClose={onClose}
+    <Modal title={`Void ${name} · ${dateText(batch.batch_date)}`} onClose={onClose}
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Keep it</button>

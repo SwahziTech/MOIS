@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { formatMoney } from '../lib/format';
+import { formatMoney, dateText } from '../lib/format';
 import { qtyText } from '../lib/inventory';
 
 /*
@@ -64,8 +64,8 @@ export default function PurchaseOrderDocument() {
           <div className="doc-title">
             <h1>Purchase order</h1>
             <div><strong>PO #{po.po_no}</strong></div>
-            <div>Date: {po.order_date}</div>
-            {po.expected_on && <div>Expected by: {po.expected_on}</div>}
+            <div>Date: {dateText(po.order_date)}</div>
+            {po.expected_on && <div>Expected by: {dateText(po.expected_on)}</div>}
           </div>
         </header>
         <section className="doc-to">

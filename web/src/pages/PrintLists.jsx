@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { orgToday } from '../lib/inventory';
 import PageShell from '../components/PageShell';
+import { dateText } from '../lib/format';
 
 const LISTS = [
   { kind: 'stock', label: 'Stock list', icon: Boxes, perm: 'inventory.view', text: 'Every product (by colour) and material in the branch stores, with the quantity on hand — for a stock count or the notice board.' },
@@ -41,7 +42,7 @@ export default function PrintLists() {
             <div className="pls-head"><l.icon size={18} /><strong>{l.label}</strong></div>
             <p className="pl-help">{l.text}</p>
             <div className="pls-foot">
-              <span className="pl-help">{l.dated ? `${from} to ${to}` : 'as of today'}</span>
+              <span className="pl-help">{l.dated ? `${dateText(from)} to ${dateText(to)}` : 'as of today'}</span>
               <button type="button" className="btn btn-primary btn-sm" disabled={!branchId} title={branchId ? '' : 'Pick a branch first'} onClick={() => open(l)}><Printer size={13} /> Open to print</button>
             </div>
           </div>

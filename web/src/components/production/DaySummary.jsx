@@ -1,5 +1,6 @@
 import { qtyText } from '../../lib/inventory';
 import ProductionBreakdown, { MaterialStrip } from './ProductionBreakdown';
+import { dateText } from '../../lib/format';
 
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const STAGE_BADGE = { Curing: 'badge-accent', Ready: 'badge-warning', Released: 'badge-success', Void: 'badge-neutral' };
@@ -17,7 +18,7 @@ export default function DaySummary({ day, currency }) {
   return (
     <div className="ds">
       <div className="ds-head">
-        <span><strong>{day.date}</strong> · {day.branchName}</span>
+        <span><strong>{dateText(day.date)}</strong> · {day.branchName}</span>
         <span>{day.batches.length} batch{day.batches.length === 1 ? '' : 'es'} · {qtyText(round(day.batches.reduce((s, b) => s + b.bags, 0)))} bags</span>
         {day.people != null && (
           <span className="ds-people" title="Each person counted once for the day, whichever batches they worked on">
@@ -25,7 +26,7 @@ export default function DaySummary({ day, currency }) {
             {day.norm && (day.norm.max > 0) && <span className={`pl-help${day.people < day.norm.min ? ' text-warning' : ''}`}> · norm {day.norm.min === day.norm.max ? day.norm.min : `${day.norm.min}–${day.norm.max}`}{day.norm.missing ? ` (${day.norm.missing} batch${day.norm.missing === 1 ? '' : 'es'} without a norm)` : ''}</span>}
           </span>
         )}
-        {day.curingUntil && <span className="ds-cure">Curing until <strong>{day.curingUntil}</strong>{day.curingDays ? ` (${day.curingDays} days)` : ''}</span>}
+        {day.curingUntil && <span className="ds-cure">Curing until <strong>{dateText(day.curingUntil)}</strong>{day.curingDays ? ` (${day.curingDays} days)` : ''}</span>}
       </div>
 
       <ProductionBreakdown batches={day.batches} currency={currency} stageBadge={st => <span className={`badge ${STAGE_BADGE[st]}`}>{st}</span>} />

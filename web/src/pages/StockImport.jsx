@@ -10,6 +10,7 @@ import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/sto
 import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
+import { dateText, dateTimeText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the catalogue. Please try again.";
 
@@ -370,7 +371,7 @@ export default function StockImport() {
       const { error: err } = await supabase.rpc('request_change', {
         p_kind: 'stock_import', p_branch_id: null,
         p_payload: { batch: { placeholders: Object.values(placeholders), movements, decisions }, draft_id: draftId || null },
-        p_summary: `Opening stock import${fileName ? ` "${fileName}"` : ''}: ${ready.length} lines at ${warehouseLabel(warehouses.find(w => w.id === warehouseId))}, dated ${date}`,
+        p_summary: `Opening stock import${fileName ? ` "${fileName}"` : ''}: ${ready.length} lines at ${warehouseLabel(warehouses.find(w => w.id === warehouseId))}, dated ${dateText(date)}`,
       });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't send the import for approval. Nothing was recorded.")); return; }
@@ -446,7 +447,7 @@ export default function StockImport() {
                   <div key={d.id} className="flex items-center gap-8 text-sm" style={{ flexWrap: 'wrap' }}>
                     <span>{d.file_name || 'Untitled sheet'}</span>
                     <span className="text-muted">
-                      {Object.keys(d.line_choices || {}).length} lines · saved {new Date(d.updated_at).toLocaleString('en-GB', { timeZone: organization?.timezone || undefined })}
+                      {Object.keys(d.line_choices || {}).length} lines · saved {dateTimeText(d.updated_at, organization?.timezone)}
                     </span>
                     <button type="button" className="btn btn-outline btn-sm" disabled={!catalog} onClick={() => resume(d)}>Continue</button>
                   </div>
@@ -618,7 +619,7 @@ export default function StockImport() {
                                 <tr key={g.key}>
                                   <td>{g.placeholder ? <>{g.placeholder.name} <span className="badge badge-warning">new · to review</span></> : prodById[g.productId]?.name}</td>
                                   <td className="text-muted">{colById[g.colorId]?.name ?? '—'}</td>
-                                  <td className="text-muted">{g.date}</td>
+                                  <td className="text-muted">{dateText(g.date)}</td>
                                   <td className="text-xs text-muted">
                                     {g.lines.map(l => `${l.typeText} ${l.raw}${effective(l).converted ? ' (converted)' : ''}`).join(' + ')}
                                   </td>

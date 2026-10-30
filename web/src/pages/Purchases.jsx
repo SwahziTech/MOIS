@@ -4,7 +4,7 @@ import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney } from '../lib/format';
+import { formatMoney, dateText } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
@@ -241,7 +241,7 @@ export default function Purchases() {
                       description="Materials the storekeeper receives appear here until the supplier, cost and payment are added." /></td></tr>
                   ) : waitingHere.map(a => (
                     <tr key={a.movement_id}>
-                      <td>{a.movement_date}{a.reference && <div className="text-xs text-muted">{a.reference}</div>}</td>
+                      <td>{dateText(a.movement_date)}{a.reference && <div className="text-xs text-muted">{a.reference}</div>}</td>
                       <td className="text-muted">{warehouseLabel(whById[a.warehouse_id])}</td>
                       <td className="text-sm">{describeLines(txByMove[a.movement_id])}</td>
                       <td className="text-sm text-muted">{people[a.created_by] ?? '—'}</td>
@@ -269,7 +269,7 @@ export default function Purchases() {
                     const goods = rl.reduce((sum, l) => sum + Number(l.quantity) * Number(priceOf(l.material_id) ?? 0), 0);
                     return (
                     <tr key={p.id} className="text-muted">
-                      <td>{p.payload?.receipt?.movement_date ?? p.payload?.purchase_date ?? '—'}</td>
+                      <td>{dateText(p.payload?.receipt?.movement_date) ?? p.payload?.purchase_date ?? '—'}</td>
                       {rl.length ? <>
                         <td style={{ fontWeight: 500 }}>{rl.map((l, i) => <div key={i}>{refs?.items[`m:${l.material_id}`]?.name ?? '—'}</div>)}</td>
                         <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{qtyText(l.quantity)} <span className="text-xs">{refs?.unitById[l.unit_id]?.symbol}</span></div>)}</td>
@@ -278,7 +278,7 @@ export default function Purchases() {
                       <td>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
                       <td style={{ textAlign: 'right' }}>{rl.length ? money(round2(goods + Number(p.payload?.transport_charge ?? 0))) : ''}</td>
                       <td><span className="badge badge-warning">Waiting for approval</span>
-                        <div className="text-xs">{people[p.requested_by] ?? ''} · {p.requested_at.slice(0, 10)}</div></td>
+                        <div className="text-xs">{people[p.requested_by] ?? ''} · {dateText(p.requested_at)}</div></td>
                       <td style={{ textAlign: 'right' }}><Link to="/approvals" className="btn btn-ghost btn-sm">Approvals</Link></td>
                     </tr>
                     );
@@ -291,7 +291,7 @@ export default function Purchases() {
                     const ls = (txByMove[p.movement_id] || []).filter(x => x.material_id);
                     return (
                       <tr key={p.id} className={p.status === 'void' ? 'text-muted' : ''}>
-                        <td>{p.purchase_date}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
+                        <td>{dateText(p.purchase_date)}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
                         <td style={{ fontWeight: 500 }}>{ls.map(x => {
                           // double-click (a tap on a phone) opens that material's purchases
                           const open = () => { const it = refs?.items[`m:${x.material_id}`]; if (it) setHistoryOf({ id: it.id, name: it.name }); };
@@ -343,7 +343,7 @@ export default function Purchases() {
                       const pay = expensePay(e);
                       return (
                         <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>
-                          <td>{e.expense_date}</td>
+                          <td>{dateText(e.expense_date)}</td>
                           <td><span style={{ fontWeight: 500 }}>{e.description}</span><div className="text-xs text-muted">{catName(e.category_id)}</div></td>
                           <td style={{ textAlign: 'right' }}>{e.quantity != null ? qtyText(e.quantity) : '—'}</td>
                           <td style={{ textAlign: 'right' }}>{e.unit_price != null ? money(e.unit_price) : '—'}</td>
@@ -379,7 +379,7 @@ export default function Purchases() {
                       <tr key={c.material.id} className="clickable-row" title="Open its purchases" onClick={() => setHistoryOf(c.material)}>
                         <td style={{ fontWeight: 500 }}>{c.material.name}</td>
                         <td style={{ textAlign: 'right' }}>{c.average_cost != null ? <>{money(round2(c.average_cost))} <span className="text-muted">/ {unit}</span></> : <span className="text-muted">no cost yet</span>}</td>
-                        <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{c.last_purchase_date}</span></> : <span className="text-muted">—</span>}</td>
+                        <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{dateText(c.last_purchase_date)}</span></> : <span className="text-muted">—</span>}</td>
                         <td className="text-sm text-muted">
                           {Number(c.costed_quantity) > 0 ? `${qtyText(c.costed_quantity)} ${unit}` : '—'}
                           {Number(c.uncosted_quantity) > 0 && <div className="text-xs">{qtyText(c.uncosted_quantity)} {unit} with no cost</div>}
@@ -416,7 +416,7 @@ export default function Purchases() {
       {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
         accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}
       {deleting && (
-        <Modal title={`Delete the purchase of ${deleting.purchase_date}`} onClose={() => setDeleting(null)}>
+        <Modal title={`Delete the purchase of ${dateText(deleting.purchase_date)}`} onClose={() => setDeleting(null)}>
           <DeletePurchase purchase={deleting} goods={describeLines(txByMove[deleting.movement_id])}
             onCancel={() => setDeleting(null)} onDeleted={async () => { setDeleting(null); await load(); }} />
         </Modal>
@@ -556,7 +556,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
         const goods = lines.map(l => `${qtyText(l.qty)} ${refs.unitById[l.unitId]?.symbol ?? ''} ${l.name ?? ''}`).join(', ');
         res = await supabase.rpc('request_change', {
           p_kind: 'purchase', p_branch_id: null, p_payload: payload,
-          p_summary: `Purchase dated ${date} at ${warehouseLabel(wh)}: ${goods} from ${supplierLabel} — ${money(round2(total))}`,
+          p_summary: `Purchase dated ${dateText(date)} at ${warehouseLabel(wh)}: ${goods} from ${supplierLabel} — ${money(round2(total))}`,
         });
         setBusy(false);
         if (res.error) { setError(dbErrorMessage(res.error, "We couldn't send this for approval. Nothing was recorded.")); return; }
@@ -588,7 +588,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     return (
       <Modal title="Record goods + purchase" onClose={onSaved}
         footer={<button type="button" className="btn btn-primary" onClick={onSaved}>Done</button>}>
-        <p className="text-sm">Sent for an admin's approval. The goods and the purchase are recorded, dated {date}, once it is approved — follow it under <strong>Approvals</strong>.</p>
+        <p className="text-sm">Sent for an admin's approval. The goods and the purchase are recorded, dated {dateText(date)}, once it is approved — follow it under <strong>Approvals</strong>.</p>
       </Modal>
     );
   }
@@ -624,8 +624,8 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     const past = pastOf(b, materialId);
     if (past.length < AUTOFILL_AFTER) return null;
     const [a, z] = past;
-    const one = p => `${p.date} · ${supplierName(p.supplierId)} · ${qtyText(p.qty)} ${refs.unitById[p.unitId]?.symbol ?? ''} at ${money(p.price)}`;
-    if (a.opening) return <div className="text-xs text-muted purchase-hint">Price filled from the opening stock cost: {money(a.price)} per {refs.unitById[a.unitId]?.symbol ?? 'unit'} ({a.date}). Change it if this purchase is different.</div>;
+    const one = p => `${dateText(p.date)} · ${supplierName(p.supplierId)} · ${qtyText(p.qty)} ${refs.unitById[p.unitId]?.symbol ?? ''} at ${money(p.price)}`;
+    if (a.opening) return <div className="text-xs text-muted purchase-hint">Price filled from the opening stock cost: {money(a.price)} per {refs.unitById[a.unitId]?.symbol ?? 'unit'} ({dateText(a.date)}). Change it if this purchase is different.</div>;
     return (
       <div className="text-xs text-muted purchase-hint">
         Filled from the last {z ? '2 purchases' : 'purchase'}: {[a, z].filter(Boolean).map(one).join('; ')}.{z && a.price !== z.price && a.unitId === z.unitId ? ` The price changed from ${money(z.price)} to ${money(a.price)}.` : ''} Change anything that is different this time.
@@ -693,7 +693,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
           </>
         ) : (
           <section>
-            <h3 className="modal-section-title">Goods received {receipt?.movement_date ?? purchase?.purchase_date}</h3>
+            <h3 className="modal-section-title">Goods received {dateText(receipt?.movement_date) ?? purchase?.purchase_date}</h3>
             <div className="flex flex-col gap-8">
               {lines.map(l => (
                 <div key={l.key} className="form-row" style={{ alignItems: 'center' }}>
@@ -722,7 +722,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
             {supplierId && (openOrders.length > 0 || orderId) && (
               <select className="form-input mt-4" aria-label="Against purchase order" value={orderId} onChange={e => setOrderId(e.target.value)}>
                 <option value="">No purchase order</option>
-                {openOrders.map(o => <option key={o.id} value={o.id}>Against PO #{o.po_no} · {o.order_date}</option>)}
+                {openOrders.map(o => <option key={o.id} value={o.id}>Against PO #{o.po_no} · {dateText(o.order_date)}</option>)}
               </select>
             )}
           </div>

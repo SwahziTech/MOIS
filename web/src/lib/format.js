@@ -45,3 +45,28 @@ export function formatMoneyShort(value, currencyCode) {
   const n = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}M` : a >= 1e4 ? `${Math.round(a / 1e3)}K` : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(a);
   return `${value < 0 ? '−' : ''}${LOCAL_SYMBOL[currencyCode] ?? currencyCode ?? ''} ${n.replace('.0', '')}`.trim();
 }
+
+/**
+ * THE date format, everywhere (user rule, 2026-10-30): "Fri, 30 Oct 2026".
+ * Takes a 'YYYY-MM-DD' or a timestamp; empty stays null so `?? '—'` works.
+ */
+export function dateText(v, timeZone = 'UTC') {
+  if (v == null || v === '') return null;
+  const s = String(v);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const d = new Date(day ? `${s}T00:00:00Z` : s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: day ? 'UTC' : timeZone || undefined });
+}
+
+/** A moment: "Fri, 30 Oct 2026, 14:53" (pass the organization's time zone) */
+export function dateTimeText(v, timeZone) {
+  if (v == null || v === '') return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  const tz = timeZone || undefined;
+  return `${dateText(v, tz)}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz })}`;
+}
+
+/** Dates inside text written elsewhere (database messages, saved summaries) */
+export const datesInText = s => (s == null ? s : String(s).replace(/\b\d{4}-\d{2}-\d{2}\b/g, m => dateText(m)));

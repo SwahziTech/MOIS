@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { loadCuring, loadLowStock } from './dashboard';
 import { loadMaterialUse } from './reports';
 import { stockAtCost } from './statements';
+import { dateText } from './format';
 
 /*
  * The director's dashboard (2026-10-30, draft 2 of the design), read only, at
@@ -22,10 +23,8 @@ const monthsBack = (m, k) => { const d = utc(`${m}-01`); d.setUTCMonth(d.getUTCM
 const lastDay = m => { const x = utc(`${m}-01`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return iso(x); };
 const sundayOf = d => dayShift(d, -utc(d).getUTCDay());
 const daysSinceMonday = d => (utc(d).getUTCDay() + 6) % 7;
-const shortDay = d => utc(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const shortDay = d => dateText(d);
 export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
-const fullDay = d => utc(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-const weekday = d => utc(d).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
 const monthLong = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const inRange = (d, from, to) => !!d && d >= from && d <= to;
 const USE_DAYS = 14;      // recent use a material's days left are worked out from
@@ -50,11 +49,11 @@ export function periodsFor(today) {
   const lastYear = String(Number(year) - 1);
   const earlier = Array.from({ length: Math.max(daysSinceMonday(today) - 1, 0) }, (_, i) => {
     const d = dayShift(today, -(i + 2));
-    return { key: `day-${i + 2}`, label: weekday(d), note: fullDay(d).split(', ')[1], from: d, to: d, compare: { from: dayShift(d, -1), to: dayShift(d, -1), label: 'the day before' } };
+    return { key: `day-${i + 2}`, label: `${i + 2} days ago`, note: dateText(d), from: d, to: d, compare: { from: dayShift(d, -1), to: dayShift(d, -1), label: 'the day before' } };
   });
   return [
-    { key: 'today', label: 'Today', note: fullDay(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
-    { key: 'yesterday', label: 'Yesterday', note: fullDay(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
+    { key: 'today', label: 'Today', note: dateText(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
+    { key: 'yesterday', label: 'Yesterday', note: dateText(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
     ...earlier,
     { key: 'week', label: 'This week', note: `${shortDay(sun)} – ${shortDay(dayShift(sun, 6))}`, from: sun, to: today, compare: { from: lastSun, to: dayShift(today, -7), label: 'last week' } },
     { key: 'lastweek', label: 'Last week', note: `${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 6))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },

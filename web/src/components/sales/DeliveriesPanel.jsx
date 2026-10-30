@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
+import { dateText, dateTimeText } from '../../lib/format';
 
 const STATUS = { on_the_way: 'On the way', delivered: 'Delivered' };
 const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
@@ -61,7 +62,7 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
             : shown.length === 0 ? <tr><td colSpan={8}><EmptyState icon={Truck} title="Nothing here" description={filter === 'on_the_way' ? 'No deliveries on the way.' : 'No deliveries in this list.'} /></td></tr>
             : shown.map(r => (
               <tr key={r.id}>
-                <td>{r.delivered_on}{r.dispatched_at ? <div className="pl-help">{new Date(r.dispatched_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div> : null}</td>
+                <td>{dateText(r.delivered_on)}{r.dispatched_at ? <div className="pl-help">{new Date(r.dispatched_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div> : null}</td>
                 <td>DN-{r.delivery_no}<div className="pl-help">#{r.sale.sale_no}</div></td>
                 <td>{who(r)}</td>
                 <td>{r.sale.site || ''}</td>
@@ -69,7 +70,7 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
                 <td>{r.kind === 'collection' ? <span className="badge badge-neutral">Collected</span>
                   : <span className={`badge ${r.status === 'on_the_way' ? 'badge-warning' : 'badge-success'}`}>{STATUS[r.status ?? 'delivered']}</span>}</td>
                 <td>{r.status === 'delivered' || r.kind === 'collection'
-                  ? <>{r.pod_received_by || r.received_by || '—'}{r.delivered_at ? <div className="pl-help">{new Date(r.delivered_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{r.pod_note ? ` · ${r.pod_note}` : ''}</div> : null}</>
+                  ? <>{r.pod_received_by || r.received_by || '—'}{r.delivered_at ? <div className="pl-help">{dateTimeText(r.delivered_at)}{r.pod_note ? ` · ${r.pod_note}` : ''}</div> : null}</>
                   : ''}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {canAct && r.status === 'on_the_way' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(r)}>Delivered…</button>}

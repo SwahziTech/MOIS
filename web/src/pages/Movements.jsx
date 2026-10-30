@@ -3,7 +3,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney } from '../lib/format';
+import { formatMoney, dateText, dateTimeText } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } from '../lib/inventory';
 
@@ -113,12 +113,12 @@ export default function Movements() {
                   <tr><td colSpan={7}><EmptyState icon={ArrowLeftRight} title="No movements yet" description="Receipts, issues, transfers, adjustments and counts appear here once posted." /></td></tr>
                 ) : shown.map(m => (
                   <tr key={m.id}>
-                    <td className="text-muted">{m.movement_date}</td>
+                    <td className="text-muted">{dateText(m.movement_date)}</td>
                     <td>
                       <span className="badge badge-neutral">{MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type}</span>
                       {reversedBy[m.id] && <span className="badge badge-warning" style={{ marginLeft: 4 }}>reversed</span>}
                       {dateIn(m.created_at, organization?.timezone) > m.movement_date && (
-                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${dateIn(m.created_at, organization?.timezone)}`}>entered later</span>
+                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${dateText(m.created_at, organization?.timezone)}`}>entered later</span>
                       )}
                     </td>
                     <td className="text-sm">{where(m)}</td>
@@ -169,7 +169,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
     if (reverseNeedsApproval) {
       const { error: err } = await supabase.rpc('request_change', {
         p_kind: 'stock_reversal', p_branch_id: null, p_payload: { movement_id: m.id, reason: reason.trim() },
-        p_summary: `Reverse the ${(MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type).toLowerCase()} of ${m.movement_date} at ${warehouseLabel(whById[m.warehouse_id])} — ${reason.trim()}`,
+        p_summary: `Reverse the ${(MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type).toLowerCase()} of ${dateText(m.movement_date)} at ${warehouseLabel(whById[m.warehouse_id])} — ${reason.trim()}`,
       });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
@@ -183,7 +183,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
   }
 
   return (
-    <Modal title={`${MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type} · ${m.movement_date}`} onClose={onClose} size="lg"
+    <Modal title={`${MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type} · ${dateText(m.movement_date)}`} onClose={onClose} size="lg"
       footer={<button type="button" className="btn btn-outline" onClick={onClose}>Close</button>}>
       <div className="modal-form">
         {error && <div className="alert alert-error" role="alert">{error}</div>}
@@ -193,10 +193,10 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
           {m.reason && <><dt>Reason</dt><dd>{m.reason}</dd></>}
           {m.reference && <><dt>Reference</dt><dd>{m.reference}</dd></>}
           {m.notes && <><dt>Notes</dt><dd>{m.notes}</dd></>}
-          <dt>Dated</dt><dd>{m.movement_date}</dd>
-          <dt>Recorded</dt><dd>{new Date(m.created_at).toLocaleString('en-GB', { timeZone: organization?.timezone || undefined })} by {people[m.created_by] || 'a user'}</dd>
-          {original && <><dt>Reverses</dt><dd>{MOVEMENT_TYPES[original.movement_type]?.noun} of {original.movement_date}</dd></>}
-          {reversal && <><dt>Reversed</dt><dd>{reversal.movement_date} — {reversal.reason}</dd></>}
+          <dt>Dated</dt><dd>{dateText(m.movement_date)}</dd>
+          <dt>Recorded</dt><dd>{dateTimeText(m.created_at, organization?.timezone)} by {people[m.created_by] || 'a user'}</dd>
+          {original && <><dt>Reverses</dt><dd>{MOVEMENT_TYPES[original.movement_type]?.noun} of {dateText(original.movement_date)}</dd></>}
+          {reversal && <><dt>Reversed</dt><dd>{dateText(reversal.movement_date)} — {reversal.reason}</dd></>}
         </dl>
         <div className="table-container">
           <table>

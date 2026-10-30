@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Target, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatAmount, formatMoneyShort } from '../../lib/format';
+import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
@@ -116,7 +116,7 @@ export default function LeadsPanel({ branchId, inBranch, today, currency, search
               <div className="co-details">
                 <span><span className={`badge ${STAGE_BADGE[st]}`}>{STAGE[st]}</span>{l.sale_id && sales[l.sale_id] ? <span className="pl-help"> · {sales[l.sale_id].sale_no}</span> : null}</span>
                 <span className={late ? 'text-error' : isDue ? 'text-warning' : 'pl-help'}>
-                  {['won', 'lost'].includes(st) ? (st === 'lost' ? l.lost_reason : '') : l.next_follow_up ? `Follow up ${l.next_follow_up === today ? 'today' : l.next_follow_up}${late ? ' (late)' : ''}` : 'no follow-up planned'}
+                  {['won', 'lost'].includes(st) ? (st === 'lost' ? l.lost_reason : '') : l.next_follow_up ? `Follow up ${l.next_follow_up === today ? 'today' : dateText(l.next_follow_up)}${late ? ' (late)' : ''}` : 'no follow-up planned'}
                 </span>
                 <span className="pl-help">{l.assigned_to ? fullName(personOf(l.assigned_to)) : 'not assigned'}</span>
               </div>
@@ -232,7 +232,7 @@ function LeadView({ lead, stage, sale, people, canEdit, me, today, currency, onC
           <dt>Site</dt><dd>{lead.site || '—'}</dd>
           <dt>Wants</dt><dd>{lead.interest || '—'}{lead.estimated_value ? ` · about ${formatMoneyShort(Number(lead.estimated_value), currency)}` : ''}</dd>
           <dt>Came from</dt><dd>{SOURCE[lead.source] || '—'}</dd>
-          <dt>Follows up</dt><dd>{lead.assigned_to ? nameOf(lead.assigned_to) : 'Not assigned'}{lead.next_follow_up && !closed ? ` — next ${lead.next_follow_up}` : ''}</dd>
+          <dt>Follows up</dt><dd>{lead.assigned_to ? nameOf(lead.assigned_to) : 'Not assigned'}{lead.next_follow_up && !closed ? ` — next ${dateText(lead.next_follow_up)}` : ''}</dd>
           {lead.notes && <><dt>Notes</dt><dd>{lead.notes}</dd></>}
         </dl>
         {lost !== null && (
@@ -268,7 +268,7 @@ function LeadView({ lead, stage, sale, people, canEdit, me, today, currency, onC
               <tbody>
                 {history === null ? <tr><td colSpan={5}><span className="skeleton" /></td></tr>
                 : history.length === 0 ? <tr><td colSpan={5} className="text-muted">No follow-ups yet.</td></tr>
-                : history.map(h => <tr key={h.id}><td>{h.done_on}</td><td>{KIND[h.kind]}</td><td>{h.note}</td><td>{nameOf(h.done_by)}</td><td>{h.next_follow_up || ''}</td></tr>)}
+                : history.map(h => <tr key={h.id}><td>{dateText(h.done_on)}</td><td>{KIND[h.kind]}</td><td>{h.note}</td><td>{nameOf(h.done_by)}</td><td>{h.next_follow_up || ''}</td></tr>)}
               </tbody>
             </table>
           </div>

@@ -3,7 +3,7 @@ import { Printer, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount } from '../lib/format';
+import { formatAmount, dateText } from '../lib/format';
 import { useUrlTab } from '../lib/urlTab';
 import PageShell from '../components/PageShell';
 import { PageTabs, ListToolbar, ChipRow } from '../components/ListControls';
@@ -56,7 +56,7 @@ export default function Documents() {
         <>
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Documents</span><strong>{rows ? here.length : '—'}</strong><span className="pl-help">{branchId ? branchName : 'all branches'}</span></div>
-            <div className="mm-stat"><span className="pl-label">Newest</span><strong className="text-base">{here[0]?.date ?? '—'}</strong><span className="pl-help">{here[0] ? `${here[0].kind} ${here[0].number}` : ''}</span></div>
+            <div className="mm-stat"><span className="pl-label">Newest</span><strong className="text-base">{dateText(here[0]?.date) ?? '—'}</strong><span className="pl-help">{here[0] ? `${here[0].kind} ${here[0].number}` : ''}</span></div>
             <div className="mm-stat"><span className="pl-label">Kinds</span><strong>{kinds.length}</strong><span className="pl-help">{kinds.join(', ')}</span></div>
           </div>
           <ListToolbar id="docs-search" search={search} onSearch={setSearch} placeholder="Search number, name or reference…" />
@@ -70,7 +70,7 @@ export default function Documents() {
                   : shown.length === 0 ? <tr><td colSpan={7} className="text-muted">{search || kind ? 'Nothing matches.' : 'No documents yet.'}</td></tr>
                   : shown.slice(0, SHOW).map(r => (
                     <tr key={r.key} className="clickable-row" onClick={() => openDoc(r.url)} title="Open to print">
-                      <td>{r.date}</td><td>{r.kind}</td><td>{r.number}</td><td>{r.who ?? ''}</td><td className="text-sm">{r.ref ?? ''}</td>
+                      <td>{dateText(r.date)}</td><td>{r.kind}</td><td>{r.number}</td><td>{r.who ?? ''}</td><td className="text-sm">{r.ref ?? ''}</td>
                       <td className="num">{amt(r.amount)}</td>
                       <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); openDoc(r.url); }}><Printer size={13} /> Print</button></td>
                     </tr>
@@ -132,5 +132,5 @@ async function loadPayslips() {
   const r = await supabase.from('pay_sheets').select('id, branch_id, cycle, period_start, period_end, status, total, paid_on, created_at').neq('status', 'void');
   if (r.error) throw r.error;
   return byNewest((r.data || []).map(x => ({ key: x.id, branch_id: x.branch_id, date: x.period_end, at: x.created_at,
-    kind: 'Payslips', number: `${x.period_start} – ${x.period_end}`, who: `${x.cycle ?? ''} pay sheet`.trim(), ref: x.status === 'paid' ? `paid ${x.paid_on ?? ''}`.trim() : x.status, amount: x.total, url: `/print/payslips/${x.id}` })));
+    kind: 'Payslips', number: `${dateText(x.period_start)} – ${dateText(x.period_end)}`, who: `${x.cycle ?? ''} pay sheet`.trim(), ref: x.status === 'paid' ? `paid ${dateText(x.paid_on) ?? ''}`.trim() : x.status, amount: x.total, url: `/print/payslips/${x.id}` })));
 }

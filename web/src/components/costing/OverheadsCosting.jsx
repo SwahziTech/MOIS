@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Wrench } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatMoney, formatMoneyShort, formatAmount } from '../../lib/format';
+import { formatMoney, formatMoneyShort, formatAmount, dateText } from '../../lib/format';
 import { PageTabs } from '../ListControls';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
@@ -79,7 +79,7 @@ export default function OverheadsCosting({ branchId, currency }) {
               <tbody>
                 {data.expenses.map(e => (
                   <tr key={e.id}>
-                    <td>{e.expense_date}</td><td>{e.category}</td><td>{e.description}</td>
+                    <td>{dateText(e.expense_date)}</td><td>{e.category}</td><td>{e.description}</td>
                     <td>{e.machine_id ? data.machine[e.machine_id] ?? '—' : <span className="pl-help">the whole branch</span>}</td>
                     <td className="num">{formatAmount(Number(e.amount))}</td>
                   </tr>

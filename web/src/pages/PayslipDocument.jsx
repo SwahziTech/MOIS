@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { formatMoney, formatAmount } from '../lib/format';
+import { formatMoney, formatAmount, dateText } from '../lib/format';
 
 const CYCLE = { weekly: 'Weekly', fortnightly: 'Every 2 weeks', monthly: 'Monthly' };
 
@@ -73,8 +73,8 @@ export default function PayslipDocument() {
               </div>
               <div className="doc-title">
                 <h1>Salary slip{sheet.status === 'draft' ? ' — DRAFT' : sheet.status === 'void' ? ' — VOID' : ''}</h1>
-                <div>Period: {sheet.period_start} to {sheet.period_end}</div>
-                <div>{CYCLE[sheet.cycle]}{sheet.paid_on ? ` · paid ${sheet.paid_on}` : ''}</div>
+                <div>Period: {dateText(sheet.period_start)} to {dateText(sheet.period_end)}</div>
+                <div>{CYCLE[sheet.cycle]}{sheet.paid_on ? ` · paid ${dateText(sheet.paid_on)}` : ''}</div>
               </div>
             </header>
 

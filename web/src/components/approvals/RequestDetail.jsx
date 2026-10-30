@@ -4,6 +4,7 @@ import { qtyText, warehouseLabel, breakdownMaterials, estimateBatchCosts } from 
 import { useAuth } from '../../hooks/useAuth';
 import ProductionBreakdown from '../production/ProductionBreakdown';
 import Modal from '../Modal';
+import { dateText, dateTimeText, datesInText } from '../../lib/format';
 
 /**
  * One approval request in full, so the admin sees exactly what will be
@@ -26,8 +27,8 @@ export default function RequestDetail({ request: r, kindLabel, branchName, asked
         {!(pending && canDecide) && <button type="button" className="btn btn-primary" onClick={onClose}>Close</button>}
       </>}>
       <div className="rd">
-        <p className="rd-meta">{r.summary}</p>
-        <p className="pl-help">{branchName ?? '—'} · asked by {askedBy ?? '—'} · {new Date(r.requested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · <strong>{r.status}</strong></p>
+        <p className="rd-meta">{datesInText(r.summary)}</p>
+        <p className="pl-help">{branchName ?? '—'} · asked by {askedBy ?? '—'} · {dateTimeText(r.requested_at)} · <strong>{r.status}</strong></p>
         {r.status === 'pending' && r.last_error && <div className="alert alert-error">Last approval couldn't be applied: {r.last_error}</div>}
         {r.decision_note && <p className="pl-help">Note: {r.decision_note}</p>}
         {error && <div className="alert alert-error">{error}</div>}
@@ -71,7 +72,7 @@ function SaleCorrection({ p, refs }) {
       {(c.payments || []).length > 0 && (
         <table className="rd-table"><thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Date</th><th>Receipt no.</th></tr></thead>
           <tbody>{c.payments.map((x, i) => (
-            <tr key={i}><td>{x.remove ? 'Remove this payment' : 'Change'}</td><td style={{ textAlign: 'right' }}>{x.amount != null ? money(x.amount) : '—'}</td><td>{x.paid_on ?? '—'}</td><td>{x.receipt_no ?? '—'}</td></tr>
+            <tr key={i}><td>{x.remove ? 'Remove this payment' : 'Change'}</td><td style={{ textAlign: 'right' }}>{x.amount != null ? money(x.amount) : '—'}</td><td>{dateText(x.paid_on) ?? '—'}</td><td>{x.receipt_no ?? '—'}</td></tr>
           ))}</tbody></table>
       )}
     </section>
@@ -111,7 +112,7 @@ function ProductionDay({ p, refs }) {
   const first = batches[0];
   return (
     <section className="rd-sec">
-      {first && <p className="pl-help">{first.batch_date} · from {store(refs, first.raw_warehouse_id)} → cures in {store(refs, first.curing_warehouse_id)}</p>}
+      {first && <p className="pl-help">{dateText(first.batch_date)} · from {store(refs, first.raw_warehouse_id)} → cures in {store(refs, first.curing_warehouse_id)}</p>}
       <ProductionBreakdown batches={batches.map((b, i) => ({
         n: i + 1, bags: Number(b.cement_bags),
         team: names[b.team_id] ? `${names[b.team_id]}${b.worker_ids?.length ? ` (${b.worker_ids.length} worked)` : ''}` : null, machine: names[b.machine_id] ?? null,
@@ -134,7 +135,7 @@ function Purchase({ p, refs }) {
   let total = 0;
   return (
     <section className="rd-sec">
-      <p className="pl-help">Received {rc.movement_date ?? '—'} into {store(refs, rc.warehouse_id)} · supplier <strong>{sup}</strong>{p.invoice_reference ? ` · invoice ${p.invoice_reference}` : ''}</p>
+      <p className="pl-help">Received {dateText(rc.movement_date) ?? '—'} into {store(refs, rc.warehouse_id)} · supplier <strong>{sup}</strong>{p.invoice_reference ? ` · invoice ${p.invoice_reference}` : ''}</p>
       <table className="rd-table">
         <thead><tr><th>Material</th><th className="num">Quantity</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
         <tbody>
@@ -152,7 +153,7 @@ function Purchase({ p, refs }) {
         <dt>Lines total</dt><dd>{money(total)}{p.prices_include_vat ? ' (VAT included)' : ''}</dd>
         {Number(p.transport_charge) > 0 && <><dt>Transport</dt><dd>{money(p.transport_charge)}</dd></>}
         {p.vat_amount != null && <><dt>VAT</dt><dd>{money(p.vat_amount)}</dd></>}
-        <dt>Paid</dt><dd>{money(p.amount_paid)}{p.paid_on ? ` on ${p.paid_on}` : ''}{p.payment_method ? ` · ${p.payment_method}` : ''}</dd>
+        <dt>Paid</dt><dd>{money(p.amount_paid)}{p.paid_on ? ` on ${dateText(p.paid_on)}` : ''}{p.payment_method ? ` · ${p.payment_method}` : ''}</dd>
         {p.notes && <><dt>Notes</dt><dd>{p.notes}</dd></>}
       </dl>
     </section>
@@ -163,7 +164,7 @@ const MOVE_LABEL = { opening_balance: 'Opening balance', receipt: 'Receipt', iss
 function Movement({ p, refs }) {
   return (
     <section className="rd-sec">
-      <p className="pl-help">{MOVE_LABEL[p.type] ?? p.type} · {p.movement_date ?? '—'} · {store(refs, p.warehouse_id)}{p.to_warehouse_id ? ` → ${store(refs, p.to_warehouse_id)}` : ''}{p.reason ? ` · ${p.reason}` : ''}</p>
+      <p className="pl-help">{MOVE_LABEL[p.type] ?? p.type} · {dateText(p.movement_date) ?? '—'} · {store(refs, p.warehouse_id)}{p.to_warehouse_id ? ` → ${store(refs, p.to_warehouse_id)}` : ''}{p.reason ? ` · ${p.reason}` : ''}</p>
       <Lines lines={p.lines || []} refs={refs} />
       {p.notes && <p className="pl-help">Notes: {p.notes}</p>}
     </section>
@@ -197,7 +198,7 @@ function Reversal({ p, refs }) {
       <p className="pl-help">Reason: {p.reason ?? '—'}</p>
       {mv === null ? <span className="skeleton" /> : !mv ? <p className="pl-help">The movement isn't available.</p> : (
         <>
-          <p className="pl-help">Undoes: {MOVE_LABEL[mv.movement_type] ?? mv.movement_type} · {mv.movement_date} · {store(refs, mv.warehouse_id)}{mv.reason ? ` · ${mv.reason}` : ''}</p>
+          <p className="pl-help">Undoes: {MOVE_LABEL[mv.movement_type] ?? mv.movement_type} · {dateText(mv.movement_date)} · {store(refs, mv.warehouse_id)}{mv.reason ? ` · ${mv.reason}` : ''}</p>
           <Lines lines={mv.lines || []} refs={refs} />
         </>
       )}

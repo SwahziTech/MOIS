@@ -3,9 +3,10 @@ import { Flag, CheckCircle2, XCircle, History } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { auditValue, dbErrorMessage } from '../../lib/masterData';
+import { dateTimeText, datesInText } from '../../lib/format';
 
 function formatWhen(ts) {
-  return new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return dateTimeText(ts);
 }
 
 /**
@@ -81,7 +82,7 @@ export function EntityFlags({ entityType, entityId, canResolve, canRaise, onChan
       <ul className="flag-list">
         {open.map(f => (
           <li key={f.id} className="flag-item flag-open">
-            <p className="text-sm">{f.reason}</p>
+            <p className="text-sm">{datesInText(f.reason)}</p>
             {canResolve && (
               <div className="flag-actions">
                 <input className="form-input" placeholder="Note (optional) — what was decided"
@@ -99,7 +100,7 @@ export function EntityFlags({ entityType, entityId, canResolve, canRaise, onChan
         ))}
         {closed.map(f => (
           <li key={f.id} className="flag-item flag-closed">
-            <p className="text-sm text-muted">{f.reason}</p>
+            <p className="text-sm text-muted">{datesInText(f.reason)}</p>
             <p className="text-xs text-muted">
               {f.status === 'resolved' ? 'Resolved' : 'Dismissed'} {formatWhen(f.resolved_at)}{f.resolution_note ? ` — ${f.resolution_note}` : ''}
             </p>

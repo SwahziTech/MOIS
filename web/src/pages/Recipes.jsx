@@ -13,6 +13,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityHistory } from '../components/master/EntityPanels';
 import { ScrollText, Search, Plus, Trash2 } from 'lucide-react';
 import NumberInput from '../components/NumberInput';
+import { dateText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -193,7 +194,7 @@ export default function Recipes() {
                         <IngredientBadges items={r.items} />
                       </td>
                       <td>{r.links?.length ?? 0}</td>
-                      <td className="text-muted">{r.effective_date}</td>
+                      <td className="text-muted">{dateText(r.effective_date)}</td>
                       <td>
                         <span className={`badge ${r.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>
                           {r.status}
@@ -567,7 +568,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
                   <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
                     <strong>v{v.version_number}</strong>
                     <span className={`badge ${v.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{v.status}</span>
-                    <span className="text-muted">from {v.effective_date}{v.created_by ? ` · ${people[v.created_by] || 'a user'}` : ' · data import'}</span>
+                    <span className="text-muted">from {dateText(v.effective_date)}{v.created_by ? ` · ${people[v.created_by] || 'a user'}` : ' · data import'}</span>
                     {v.status !== 'active' && (
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewing(viewing === v.id ? null : v.id)}>
                         {viewing === v.id ? 'Hide' : 'Show'}

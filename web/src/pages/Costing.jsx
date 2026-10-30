@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { loadInventoryRefs, qtyText } from '../lib/inventory';
-import { formatMoney, formatMoneyShort } from '../lib/format';
+import { formatMoney, formatMoneyShort, dateText } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
@@ -164,7 +164,7 @@ export default function Costing() {
                     </>) : <span className="pl-help">{x.cost == null ? 'not produced yet' : 'no price'}</span>}
                   </div>
                   <div className="co-details">
-                    <span>{x.cost != null ? <>production cost <strong>{money(round(x.cost))}</strong> /{per(x.it)}<span className="pl-help"> · {x.last_batch_date}</span></>
+                    <span>{x.cost != null ? <>production cost <strong>{money(round(x.cost))}</strong> /{per(x.it)}<span className="pl-help"> · {dateText(x.last_batch_date)}</span></>
                       : <>cost <span className="co-est-txt">estimated at price</span></>}</span>
                     {isTech && x.bag != null && <span className={belowBag(x) ? 'text-warning' : ''} title="Price without VAT × yield a cement bag — Technical admin only">a bag <strong>{money(round(x.bag, 0))}</strong>{belowBag(x) ? ' · below target' : ''}</span>}
                     <span>price <strong>{x.price != null ? money(round(x.price)) : '—'}</strong> /{per(x.it)}{x.price == null && x.price_source ? <span className="pl-help"> · {x.price_source}</span> : ''}</span>
@@ -209,7 +209,7 @@ function LayerList({ branchId, row, unit, money }) {
       <tbody>
         {[...layers].reverse().map((l, i) => (   /* newest on top (locked 2026-10-25) */
           <tr key={i}>
-            <td>{l.date}</td>
+            <td>{dateText(l.date)}</td>
             <td>{l.stage === 'curing' ? 'curing' : l.stage === 'released' ? 'released' : l.batch ? '—' : 'opening stock'}</td>
             <td style={{ textAlign: 'right' }}>{qtyText(round(Number(l.quantity)))} {unit}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost))) : '—'}</td>

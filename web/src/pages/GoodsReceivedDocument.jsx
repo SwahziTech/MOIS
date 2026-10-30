@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { dateText } from '../lib/format';
 
 const qty = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(v);
 
@@ -72,7 +73,7 @@ export default function GoodsReceivedDocument() {
           <div className="doc-title">
             <h1>Goods received note</h1>
             <div>GRN-{mv.id.slice(0, 8).toUpperCase()}</div>
-            <div>Date: {mv.movement_date}</div>
+            <div>Date: {dateText(mv.movement_date)}</div>
           </div>
         </header>
 

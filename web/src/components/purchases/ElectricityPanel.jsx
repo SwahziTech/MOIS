@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatMoney, formatAmount } from '../../lib/format';
+import { formatMoney, formatAmount, dateText, dateTimeText } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
 import { parseLukuReceipt } from '../../lib/lukuReceipt';
@@ -14,7 +14,7 @@ import NumberInput from '../NumberInput';
 
 const units = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v);
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
-const when = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = t => dateTimeText(t);
 const avg = xs => (xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : null);
 const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], approved: ['Approved — to order', 'badge-info'], ordered: ['Ordered — to buy', 'badge-info'], done: ['Bought', 'badge-success'], rejected: ['Turned down', 'badge-error'], cancelled: ['Cancelled', 'badge-neutral'] };
 
@@ -90,7 +90,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
             <span className="pl-label">{x.m.name}</span>
             <strong>{x.last ? `${units(Number(x.last.reading))} units left` : 'no reading yet'}</strong>
             <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.workDay != null ? ` · ${units(x.workDay)} a working day` : ''}${x.idleDay != null ? ` · ${units(x.idleDay)} an idle day` : ''}${x.night != null ? ` · ${units(x.night)} a night` : ''}`}>
-              {x.last ? `${x.last.read_on} ${x.last.slot === 'morning' ? 'morning' : 'evening'}` : ''}{x.loadedSince > 0 ? ` · +${units(x.loadedSince)} token since` : ''}{x.perBag != null ? ` · ${units(x.perBag)} units/bag` : ''}</span>
+              {x.last ? `${dateText(x.last.read_on)} ${x.last.slot === 'morning' ? 'morning' : 'evening'}` : ''}{x.loadedSince > 0 ? ` · +${units(x.loadedSince)} token since` : ''}{x.perBag != null ? ` · ${units(x.perBag)} units/bag` : ''}</span>
           </div>
         ))}
       </div>
@@ -112,7 +112,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
                 const tok = data.tokens.find(t => t.expense_id && q.status === 'done' && t.meter_id === l.meter_id && t.loaded_at.slice(0, 10) >= q.requested_on);
                 return (
                   <tr key={q.id}>
-                    <td>{q.requested_on}{q.notes && <div className="pl-help">{q.notes}</div>}</td>
+                    <td>{dateText(q.requested_on)}{q.notes && <div className="pl-help">{q.notes}</div>}</td>
                     <td>{meterName(l.meter_id)}</td>
                     <td className="num">{l.amount != null ? formatAmount(Number(l.amount)) : ''}</td>
                     <td className="num">{l.quantity != null ? units(Number(l.quantity)) : ''}{tok && <div className="pl-help">got {units(Number(tok.units))}</div>}</td>
@@ -136,7 +136,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
               {data.days.length === 0 ? <tr><td colSpan={9} className="text-muted">Days show once a meter has two readings.</td></tr>
               : data.days.map(d => (
                 <tr key={`${d.meter_id}|${d.day}`}>
-                  <td>{d.day}{d.gap_units != null && <div className="pl-help text-warning">a reading missing: {units(Number(d.gap_units))} units not split</div>}
+                  <td>{dateText(d.day)}{d.gap_units != null && <div className="pl-help text-warning">a reading missing: {units(Number(d.gap_units))} units not split</div>}
                     {d.token_missing && <div className="pl-help text-warning">the meter went up — a token not recorded yet</div>}</td>
                   <td>{d.meter_name}</td>
                   <td className="num"><strong>{d.day_units != null ? units(Number(d.day_units)) : ''}</strong></td>
@@ -165,7 +165,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
               {data.readings.length === 0 ? <tr><td colSpan={6} className="text-muted">No readings yet.</td></tr>
               : data.readings.map(r => (
                 <tr key={r.id} className={r.status === 'void' ? 'is-inactive' : ''}>
-                  <td>{r.read_on}</td><td>{r.slot === 'morning' ? 'Morning' : 'Evening'}</td><td>{meterName(r.meter_id)}</td><td className="num">{units(Number(r.reading))}</td>
+                  <td>{dateText(r.read_on)}</td><td>{r.slot === 'morning' ? 'Morning' : 'Evening'}</td><td>{meterName(r.meter_id)}</td><td className="num">{units(Number(r.reading))}</td>
                   <td>{r.status === 'void' ? <span className="text-muted">Void — {r.void_reason}</span> : r.note || ''}</td>
                   <td>{r.status === 'recorded' && canRecord && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(r)}>Void…</button>}</td>
                 </tr>
@@ -366,7 +366,7 @@ export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record and top up</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Asked {q.requested_on}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units, an Electricity expense is made and the order closes.</p>
+        <p className="pl-help">Asked {dateText(q.requested_on)}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units, an Electricity expense is made and the order closes.</p>
         <label className="pe-field"><span>Paste the LUKU message (optional — fills the form)</span>
           <textarea className="form-input" rows={3} placeholder="Malipo yamekamilika… TOKEN … KWH Cost … VAT … TOTAL TZS …" value={pasted} onChange={e => fromMessage(e.target.value)} /></label>
         <div className="form-row">{field('units', 'Units bought (kWh)', { autoFocus: true })}{field('amount', 'Paid (TZS)')}

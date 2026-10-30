@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, formatMoney, formatMoneyShort } from '../lib/format';
+import { formatAmount, formatMoney, formatMoneyShort, dateText } from '../lib/format';
 import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadProduction, loadSales, loadSpending, loadMaterialUse, loadProfit, loadBranches, exportTable } from '../lib/reports';
 import PageShell from '../components/PageShell';
@@ -146,7 +146,7 @@ export default function Reports() {
       note = 'Basic: electricity, production overheads and production staff are already in the production cost, so their expenses are left out here. Cash timing, depreciation and tax are not included.';
     } else if (tab === 'branches') {
       const tt = f => data.reduce((t, x) => t + x[f], 0);
-      cards = <>{card('Branches', data.length, `${from} to ${to}`)}
+      cards = <>{card('Branches', data.length, `${dateText(from)} to ${dateText(to)}`)}
         {card('Sales', short(tt('sales')), 'orders & invoices')}
         {card('Pieces cast', formatAmount(tt('pieces')), `${n2(tt('bags'))} bags of cement`)}</>;
       head = ['Branch', 'Batches', 'Cement bags', 'Pieces cast', 'Sales (TZS)', 'Purchases (TZS)', 'Expenses (TZS)'];

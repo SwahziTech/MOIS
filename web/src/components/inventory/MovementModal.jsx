@@ -10,6 +10,7 @@ import { categoryTools, productOrder } from '../../lib/categories';
 import { findRepeats, planOpeningFix, runSteps } from '../../lib/doubleEntry';
 import { fitsStore } from './DoubleEntry';
 import NumberInput from '../NumberInput';
+import { dateText } from '../../lib/format';
 
 const emptyLine = (kind = 'material') => ({ kind, key: '', colorId: '', quantity: '', unitId: '', unitCost: '', direction: 'remove' });
 // A new line's type follows the store: products in a finished-goods store, materials elsewhere
@@ -184,7 +185,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         const sq = stockQty(l);
         return `${type === 'adjustment' ? (l.direction === 'remove' ? 'remove ' : 'add ') : ''}${qtyText(sq ?? l.quantity)} ${unitById[items[l.key].stockUnitId]?.symbol ?? ''} ${items[l.key].name}${l.colorId ? ` (${colorById[l.colorId]?.name})` : ''}`;
       }).join(', ');
-      const summary = `${def.noun} at ${warehouseLabel(wh)}${date < today ? `, dated ${date}` : ''}: ${what}${reason.trim() ? ` — ${reason.trim()}` : ''}`;
+      const summary = `${def.noun} at ${warehouseLabel(wh)}${date < today ? `, dated ${dateText(date)}` : ''}: ${what}${reason.trim() ? ` — ${reason.trim()}` : ''}`;
       const { error: err } = await supabase.rpc('request_change', { p_kind: 'stock_movement', p_branch_id: null, p_payload: payload, p_summary: summary });
       if (err) { setBusy(false); setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
       sentAny = true;
@@ -232,7 +233,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
         steps.push({ kind: 'movement',
           payload: { type: 'adjustment', warehouse_id: first.warehouse_id, movement_date: first.transaction_date, reason,
             lines: [{ [item.kind === 'material' ? 'material_id' : 'product_id']: item.id, ...(l.colorId ? { color_id: l.colorId } : {}), quantity: qty, unit_id: item.stockUnitId }] },
-          summary: `Adjustment at ${warehouseLabel(warehouses.find(w => w.id === first.warehouse_id))}, dated ${first.transaction_date}: add ${qtyText(qty)} ${sym} ${item.name} — ${reason}` });
+          summary: `Adjustment at ${warehouseLabel(warehouses.find(w => w.id === first.warehouse_id))}, dated ${dateText(first.transaction_date)}: add ${qtyText(qty)} ${sym} ${item.name} — ${reason}` });
       }
     }
     await send(filled.filter((_, i) => !leaveOut.has(i)), steps);
@@ -342,7 +343,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                 const sq = stockQty(l);
                 const stockSym = unitById[item?.stockUnitId]?.symbol ?? '';
                 let preview = '';
-                const when = date < today ? ` on ${date}` : '';
+                const when = date < today ? ` on ${dateText(date)}` : '';
                 if (item && bal != null) {
                   if (type === 'count') preview = sq != null ? `records${when} ${qtyText(bal)} ${stockSym} → difference ${sq - bal >= 0 ? '+' : ''}${qtyText(sq - bal)}` : `records ${qtyText(bal)} ${stockSym}`;
                   else if (type === 'issue' || type === 'transfer' || (type === 'adjustment' && l.direction === 'remove')) preview = `${qtyText(bal)} ${stockSym} in stock${when}${sq != null && sq > bal ? ' — not enough' : ''}`;
@@ -503,7 +504,7 @@ function RepeatChoices({ repeats, type, def, wh, items, unitById, colorById, war
               <strong>{name}</strong>{type === 'opening_balance' ? ` already has ${f.existing.length === 1 ? 'an opening balance' : `${f.existing.length} opening balances`} at ${wh.branch?.name ?? 'this branch'}:` : ` — the same ${def.noun.toLowerCase()} is already recorded:`}
               <ul className="double-entry-entries">
                 {f.existing.map(e => (
-                  <li key={e.id}>{qtyText(Math.abs(Number(e.quantity)))} {sym} in {store(e.warehouse_id)}, dated {e.transaction_date} <span className="text-muted">· entered {e.created_at.slice(0, 10)}</span></li>
+                  <li key={e.id}>{qtyText(Math.abs(Number(e.quantity)))} {sym} in {store(e.warehouse_id)}, dated {dateText(e.transaction_date)} <span className="text-muted">· entered {dateText(e.created_at)}</span></li>
                 ))}
               </ul>
               <div>This entry: <strong>{qtyText(qty)} {sym}</strong> in {wh.name}{!fitsStore(item, wh) ? <span className="text-warning"> — {item.kind === 'material' ? 'a material in a finished-goods store' : 'a product outside the finished-goods store'}</span> : ''}</div>

@@ -13,6 +13,7 @@ import ErrorState from '../components/ErrorState';
 import MovementModal from '../components/inventory/MovementModal';
 import { DoubleEntryAlert } from '../components/inventory/DoubleEntry';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
+import { dateText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load stock. Please try again.";
 const ACTIONS = ['receipt', 'issue', 'transfer', 'adjustment', 'count', 'opening_balance'];
@@ -249,7 +250,7 @@ export default function Stock() {
           })}
           {!loading && shown.length > 0 && (
             <p className="pl-help">
-              {asOfDate ? `Stock at the end of ${asOfDate}, from movements dated up to then. ` : ''}Calculated from posted movements — see <Link to="/movements">Movements</Link> for the full history.
+              {asOfDate ? `Stock at the end of ${dateText(asOfDate)}, from movements dated up to then. ` : ''}Calculated from posted movements — see <Link to="/movements">Movements</Link> for the full history.
             </p>
           )}
         </section>

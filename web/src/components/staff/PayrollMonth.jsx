@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatAmount, formatMoneyShort } from '../../lib/format';
+import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { ListToolbar } from '../ListControls';
 import ErrorState from '../ErrorState';
@@ -11,7 +11,6 @@ import NumberInput from '../NumberInput';
 const monthName = m => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const prevMonth = m => { const d = new Date(`${m}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); };
 const monthEnd = m => { const x = new Date(`${m}-01T00:00:00Z`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return x.toISOString().slice(0, 10); };
-const shortDay = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const n = v => Number(v || 0);
 const amt = v => formatAmount(Math.round(n(v)));
 const cell = v => (n(v) ? amt(v) : '');
@@ -19,9 +18,9 @@ const SHEET_STATUS = { draft: 'Draft', approved: 'Approved', paid: 'Paid' };
 
 /** where a payment stands: paid, approved, or due (by its date or already) */
 function standing(sheet, dueOn, today) {
-  if (sheet?.status === 'paid') return { text: `Paid ${sheet.paid_on ?? ''}`.trim(), cls: 'text-success' };
+  if (sheet?.status === 'paid') return { text: `Paid ${dateText(sheet.paid_on) ?? ''}`.trim(), cls: 'text-success' };
   if (sheet?.status === 'approved') return { text: 'Approved — to pay', cls: 'text-warning' };
-  return today >= dueOn ? { text: 'Due', cls: 'text-warning' } : { text: `Due ${shortDay(dueOn)}`, cls: 'text-muted' };
+  return today >= dueOn ? { text: 'Due', cls: 'text-warning' } : { text: `Due ${dateText(dueOn)}`, cls: 'text-muted' };
 }
 
 /*
@@ -185,7 +184,7 @@ function PersonMonth({ r, month, today, money, pct, nssfPct, workDays, firstDue,
           <div><span className="pl-label">{isNow ? 'Earned as of today' : 'Earned'}</span><strong>{money(Math.round(r.earned))}</strong></div>
         </div>
         <div className="pp-pay">
-          <div><span>First payment ({pct}% of salary){r.firstSheet?.period_end ? '' : ` — by ${shortDay(firstDue)}`}</span><strong>{money(Math.round(r.firstAmt))}</strong><span className={f.cls}>{f.text}</span></div>
+          <div><span>First payment ({pct}% of salary){r.firstSheet?.period_end ? '' : ` — by ${dateText(firstDue)}`}</span><strong>{money(Math.round(r.firstAmt))}</strong><span className={f.cls}>{f.text}</span></div>
           <div><span>Balance at the end of the month</span><strong>{money(Math.round(r.balance))}</strong><span className={r.overpaid ? 'text-warning' : b.cls}>{r.overpaid ? `Overpaid ${amt(r.overpaid)}` : b.text}</span></div>
         </div>
         <div className="pp-grid">

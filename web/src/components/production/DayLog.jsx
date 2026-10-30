@@ -12,6 +12,7 @@ import { categoryTools, productOrder } from '../../lib/categories';
 import Modal from '../Modal';
 import DaySummary from './DaySummary';
 import BatchNotes, { useProductionLists, teamLabel, peopleOf, labourNorm } from './BatchNotes';
+import { dateText, dateTimeText } from '../../lib/format';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
@@ -354,7 +355,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const made = staged.flatMap(s => s.outputs.map(o => `${o.pieces} ${o.name}`)).join(', ');
     const { error: err } = viaApproval
       ? await supabase.rpc('request_change', { p_kind: 'production_day', p_branch_id: null, p_payload: { batches },
-          p_summary: `Production of ${date} at ${branchName}: ${staged.length} batch${staged.length === 1 ? '' : 'es'}, ${qtyText(bagsTotal)} bags — ${made}` })
+          p_summary: `Production of ${dateText(date)} at ${branchName}: ${staged.length} batch${staged.length === 1 ? '' : 'es'}, ${qtyText(bagsTotal)} bags — ${made}` })
       : await supabase.rpc('record_production_batches', { p: { batches } });
     setBusy(false);
     setConfirming(false);
@@ -364,7 +365,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     loadStock();
     if (viaApproval) {
       window.dispatchEvent(new Event('mois:approvals-changed'));
-      setSentNote(`Sent for approval — ${date}'s batches are recorded once an admin approves (Approvals).`);
+      setSentNote(`Sent for approval — ${dateText(date)}'s batches are recorded once an admin approves (Approvals).`);
       return;
     }
     loadOrders();
@@ -651,9 +652,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           </>}>
           {already.length > 0 && (
             <div className="alert alert-warning" role="alert" style={{ marginBottom: 12 }}>
-              <strong>{date} may already be recorded.</strong> These look like batches already {already.every(a => a.how === 'saved') ? 'saved' : 'saved or waiting for approval'} for this date — saving again counts them twice:
+              <strong>{dateText(date)} may already be recorded.</strong> These look like batches already {already.every(a => a.how === 'saved') ? 'saved' : 'saved or waiting for approval'} for this date — saving again counts them twice:
               <ul style={{ margin: '6px 0 0 18px' }}>
-                {already.map((a, i) => <li key={i}>{a.label} · {qtyText(a.bags)} bags — {a.how} {new Date(a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</li>)}
+                {already.map((a, i) => <li key={i}>{a.label} · {qtyText(a.bags)} bags — {a.how} {dateTimeText(a.at)}</li>)}
               </ul>
               <span className="pl-help">Check Production › Curing or Approvals first. Save anyway only if these are genuinely extra batches.</span>
             </div>
