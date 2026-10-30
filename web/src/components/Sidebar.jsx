@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Layers, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, Flag, Boxes, ArrowLeftRight, ShoppingCart, Factory, BookOpen,
-  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark, CalendarClock, CalendarCheck, Files,
+  Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark, CalendarClock, CalendarCheck, Files, ScrollText, FolderOpen, Printer,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ import { ChevronRight } from 'lucide-react';
  * The sidebar, 2026-10-30: 9 sections of up to 3 pages (the agreed layout).
  * An entry with `group` stands for several pages shown as tabs under the
  * page heading (PageShell); an entry with `tabs` opens one page on those of
- * its tabs (?tab=). Statements, Documents and Print lists come later.
+ * its tabs (?tab=); `perms` = shown to anyone holding one of them.
  */
 export const NAV = [
   {
@@ -90,6 +90,8 @@ export const NAV = [
         { label: 'Cash flow', to: '/cash-flow',   perm: 'finance.view' },
         { label: 'Imprest',   to: '/weekly-cash', perm: 'cash.request' },
       ] },
+      // profit & loss, balance sheet, account statements, who owes whom (2026-10-30)
+      { label: 'Statements',    to: '/statements', icon: ScrollText, perm: 'finance.view' },
     ],
   },
   {
@@ -106,6 +108,9 @@ export const NAV = [
     items: [
       // production, sales, spending, materials, profit, branches for a date range (PRD 4.15) — managers
       { label: 'Reports',       to: '/reports', icon: BarChart3, perm: 'products.manage' },
+      // find and print any document again; A4 lists of a branch (2026-10-30)
+      { label: 'Documents',     to: '/documents', icon: FolderOpen, perms: ['sales.view', 'procurement.view', 'staff.view'] },
+      { label: 'Print lists',   to: '/print-lists', icon: Printer, perms: ['inventory.view', 'products.view', 'staff.view', 'procurement.view'] },
     ],
   },
   {
@@ -136,7 +141,7 @@ export function atEntry(entry, loc) {
   return !CLAIMS.some(c => c.path === path && c.tabs.includes(cur));
 }
 /** may this person open the entry (any page of a group) */
-export const canSee = (item, can) => (item.group ? item.group.some(g => !g.perm || can(g.perm)) : !item.perm || can(item.perm));
+export const canSee = (item, can) => (item.group ? item.group.some(g => !g.perm || can(g.perm)) : item.perms ? item.perms.some(p => can(p)) : !item.perm || can(item.perm));
 /** where the entry goes: a group's first page this person may open */
 export const hrefOf = (item, can) => (item.group ? (item.group.find(g => !g.perm || can(g.perm))?.to ?? item.to) : item.to);
 /** is the entry the page open now (a group's pages; a page's tabs split between entries) */

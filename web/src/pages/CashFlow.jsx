@@ -8,6 +8,7 @@ import { formatAmount, formatMoney, formatMoneyShort } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { exportTable } from '../lib/reports';
+import { cashPeriods } from '../lib/statements';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import ErrorState from '../components/ErrorState';
@@ -29,7 +30,9 @@ const lastMonth = today => { const m = prevMonth(today.slice(0, 7)); const end =
  *   Accounts  — each account's balance now (opening balance + in − out after
  *               its opening date), and every movement, newest first, with the
  *               running balance when one account is chosen;
- *   Statement — a month: money in and out by type, the net change;
+ *   Monthly   — each week or month: opening cash, money in and out by type,
+ *               closing cash (2026-10-30; replaced the one-month Statement —
+ *               account statements are on the Statements page);
  *   Forecast  — cash now, what's expected in (customers owe, weekly cash
  *               approved) and out (suppliers, PAYE/NSSF…, pay sheets), the
  *               cash left after.
@@ -49,7 +52,7 @@ export default function CashFlow() {
   const [error, setError] = useState('');
   const [account, setAccount] = useState('');
   const [range, setRange] = useState(() => [`${today.slice(0, 7)}-01`, today]);
-  const [month, setMonth] = useState(today.slice(0, 7));
+  const [by, setBy] = useState('month');
   const [settings, setSettings] = useState(false);
 
   async function load() {
@@ -77,13 +80,13 @@ export default function CashFlow() {
   return (
     <PageShell title="Cash flow" subtitle="Finance" onSettings={() => setSettings(true)}
       description={`Money in and out by account — ${branchId ? branchName : 'all branches'}.`}>
-      <PageTabs tabs={[['accounts', 'Accounts'], ['statement', 'Statement'], ['forecast', 'Forecast']]} value={tab} onChange={setTab} />
+      <PageTabs tabs={[['accounts', 'Accounts'], ['forecast', 'Forecast'], ['monthly', 'Monthly']]} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : accounts === null ? <div className="card"><span className="skeleton" /></div>
       : tab === 'accounts' ? (
         <AccountsTab {...{ accs, mv, balanceOf, unassigned, unassignedNet, account, setAccount, range, setRange, today, money, short, cashNow, branchId }} />
-      ) : tab === 'statement' ? (
-        <StatementTab {...{ mv, month, setMonth, today, money, short }} />
+      ) : tab === 'monthly' ? (
+        <MonthlyTab {...{ accs, mv, by, setBy, today, money, short }} />
       ) : (
         <ForecastTab {...{ cashNow, inBranch, money, short, today }} />
       )}
@@ -163,44 +166,45 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
   );
 }
 
-function StatementTab({ mv, month, setMonth, today, money, short }) {
-  const rows = mv.filter(x => x.day.startsWith(month));
-  const by = k => rows.filter(x => x.kind === k).reduce((t, x) => t + Number(x.amount), 0);
-  const ins = ['sale', 'topup'].map(k => [k, by(k)]);
-  const outs = ['purchase', 'wages', 'statutory', 'expense'].map(k => [k, by(k)]);
-  const tIn = ins.reduce((t, [, v]) => t + v, 0); const tOut = outs.reduce((t, [, v]) => t + v, 0);
-  const months = Array.from({ length: 12 }, (_, i) => { let m = today.slice(0, 7); for (let k = 0; k < i; k++) m = prevMonth(m); return m; });
-  const xl = () => exportTable(`Cash flow ${month}`, `Cash flow statement — ${monthName(month)}`, ['', 'Amount'],
-    [['MONEY IN', ''], ...ins.map(([k, v]) => [KIND[k], Math.round(v)]), ['Total in', Math.round(tIn)], ['MONEY OUT', ''], ...outs.map(([k, v]) => [KIND[k], Math.round(v)]), ['Total out', Math.round(tOut)]],
-    ['Net change', Math.round(tIn - tOut)]);
+function MonthlyTab({ accs, mv, by, setBy, today, money, short }) {
+  const periods = useMemo(() => cashPeriods({ accounts: accs, moves: mv, today, by, count: 12 }), [accs, mv, today, by]);
+  const INS = ['sale', 'topup']; const OUTS = ['purchase', 'wages', 'statutory', 'expense'];
+  const label = p => (by === 'week' ? `${p.from} – ${p.to > today ? today : p.to}` : monthName(p.from.slice(0, 7)));
+  const tIn = p => INS.reduce((t, k) => t + (p.ins[k] || 0), 0); const tOut = p => OUTS.reduce((t, k) => t + (p.outs[k] || 0), 0);
+  const now = periods[0];
+  const xl = () => exportTable(`Cash ${by === 'week' ? 'weekly' : 'monthly'} ${today}`, `Money in and out by ${by} — to ${today}`,
+    [by === 'week' ? 'Week' : 'Month', 'Opening', ...INS.map(k => KIND[k]), ...OUTS.map(k => KIND[k]), 'Closing'],
+    periods.map(p => [label(p), Math.round(p.opening), ...INS.map(k => Math.round(p.ins[k] || 0)), ...OUTS.map(k => Math.round(p.outs[k] || 0)), Math.round(p.closing)]));
   return (
     <>
       <div className="mm-stats">
-        <div className="mm-stat"><span className="pl-label">Money in</span><strong>{short(tIn)}</strong><span className="pl-help">{monthName(month)}</span></div>
-        <div className="mm-stat"><span className="pl-label">Money out</span><strong>{short(tOut)}</strong><span className="pl-help">{rows.filter(x => x.direction === 'out').length} payments</span></div>
-        <div className="mm-stat"><span className="pl-label">Net change</span><strong className={tIn - tOut < 0 ? 'text-warning' : ''}>{short(tIn - tOut)}</strong><span className="pl-help">{tIn - tOut < 0 ? 'more went out than came in' : 'more came in than went out'}</span></div>
+        <div className="mm-stat"><span className="pl-label">In · this {by}</span><strong>{short(tIn(now))}</strong><span className="pl-help">{label(now)}</span></div>
+        <div className="mm-stat"><span className="pl-label">Out</span><strong>{short(tOut(now))}</strong><span className="pl-help">net {short(tIn(now) - tOut(now))}</span></div>
+        <div className="mm-stat"><span className="pl-label">Cash at the end</span><strong>{short(now.closing)}</strong><span className="pl-help">opened at {short(now.opening)}</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <select className="form-input" style={{ maxWidth: 200 }} aria-label="Month" value={month} onChange={e => setMonth(e.target.value)}>
-          {months.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
-        </select>
+        <span className="filter-chips">
+          {[['week', 'By week'], ['month', 'By month']].map(([k, l]) => <button key={k} type="button" className={`filter-chip${by === k ? ' is-on' : ''}`} onClick={() => setBy(k)}>{l}</button>)}
+        </span>
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>{monthName(month)}</th><th className="num">Amount (TZS)</th></tr></thead>
+          <thead><tr><th>{by === 'week' ? 'Week' : 'Month'}</th><th className="num">Opening (TZS)</th>
+            {INS.map(k => <th key={k} className="num">{KIND[k]}</th>)}{OUTS.map(k => <th key={k} className="num">{KIND[k]}</th>)}<th className="num">Closing (TZS)</th></tr></thead>
           <tbody>
-            <tr><td className="pl-label">Money in</td><td /></tr>
-            {ins.map(([k, v]) => <tr key={k}><td style={{ paddingLeft: 24 }}>{KIND[k]}</td><td className="num">{amt(v)}</td></tr>)}
-            <tr><td><strong>Total in</strong></td><td className="num"><strong>{amt(tIn)}</strong></td></tr>
-            <tr><td className="pl-label">Money out</td><td /></tr>
-            {outs.map(([k, v]) => <tr key={k}><td style={{ paddingLeft: 24 }}>{KIND[k]}</td><td className="num">{v ? `− ${amt(v)}` : '0'}</td></tr>)}
-            <tr><td><strong>Total out</strong></td><td className="num"><strong>− {amt(tOut)}</strong></td></tr>
+            {periods.map(p => (
+              <tr key={p.from}>
+                <td>{label(p)}</td><td className="num">{amt(p.opening)}</td>
+                {INS.map(k => <td key={k} className="num">{p.ins[k] ? amt(p.ins[k]) : ''}</td>)}
+                {OUTS.map(k => <td key={k} className="num">{p.outs[k] ? `− ${amt(p.outs[k])}` : ''}</td>)}
+                <td className="num"><strong>{amt(p.closing)}</strong></td>
+              </tr>
+            ))}
           </tbody>
-          <tfoot><tr><td><strong>Net change</strong></td><td className="num"><strong>{money(tIn - tOut)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>Money as it moved (payments made and received), not sales or bills — those are in Reports.</p>
+      <p className="pl-help" style={{ marginTop: 8 }}>Money as it moved, newest first. Opening and closing are the cash in the accounts (with their opening balances) and money recorded without an account; amounts in TZS.</p>
     </>
   );
 }

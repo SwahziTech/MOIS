@@ -34,6 +34,10 @@ import WeeklyCash from './pages/WeeklyCash';
 import Staff from './pages/Staff';
 import DailyReport from './pages/DailyReport';
 import Reports from './pages/Reports';
+import Statements from './pages/Statements';
+import Documents from './pages/Documents';
+import PrintLists from './pages/PrintLists';
+import ListDocument from './pages/ListDocument';
 import CashFlow from './pages/CashFlow';
 import PayslipDocument from './pages/PayslipDocument';
 import GoodsReceivedDocument from './pages/GoodsReceivedDocument';
@@ -62,6 +66,7 @@ export default function App() {
           <Route path="/print/grn/:id" element={<GoodsReceivedDocument />} />
           <Route path="/print/supplier-statement/:id" element={<SupplierStatementDocument />} />
           <Route path="/print/po/:id" element={<PurchaseOrderDocument />} />
+          <Route path="/print/list/:kind" element={<ListDocument />} />
 
           {/* Protected routes (redirect to /login if not signed in) */}
           <Route element={<ProtectedLayout />}>
@@ -85,6 +90,9 @@ export default function App() {
             <Route path="/staff" element={<Staff />} />
             <Route path="/daily-report" element={<DailyReport />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/statements" element={<Statements />} />
+            <Route path="/documents" element={<Documents />} />
+            <Route path="/print-lists" element={<PrintLists />} />
             <Route path="/stock/import" element={<StockImport />} />
             <Route path="/materials"   element={<Materials />} />
             <Route path="/branches"    element={<Branches />} />

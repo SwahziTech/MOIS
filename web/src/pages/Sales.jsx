@@ -600,6 +600,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         {sale.stage !== 'cancelled' && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
           <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
+        {sale.stage === 'quotation' && <button type="button" className="btn btn-ghost" title="The quotation as a proforma invoice" onClick={() => openDoc('proforma')}><Printer size={14} /> Proforma</button>}
         {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
         {!editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) &&
           <button type="button" className="btn btn-ghost" onClick={() => setCorrecting(true)}>Correct…</button>}

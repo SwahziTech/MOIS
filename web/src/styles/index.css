@@ -2377,3 +2377,12 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .page-group-tab:hover { color: var(--text-primary); border-color: var(--text-muted); }
 .page-group-tab.is-on { background: var(--color-charcoal); border-color: var(--color-charcoal); color: var(--color-white); font-weight: 600; }
 @media print { .page-group { display: none; } }
+
+/* Document Center › Print lists (2026-10-30) */
+.pls-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.pls-card { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.pls-head { display: flex; align-items: center; gap: 8px; }
+.pls-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.doc.doc-wide { max-width: 297mm; }
+.doc-att th, .doc-att td { padding: 2px 3px; font-size: 10px; }
+@media print { .doc.doc-wide { max-width: none; } }
