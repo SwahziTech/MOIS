@@ -12,7 +12,7 @@ const CYCLE = { weekly: 'Weekly', fortnightly: 'Every 2 weeks', monthly: 'Monthl
  * in a tab of their own:
  *   /print/payslips/:sheetId            everyone on the sheet
  *   /print/payslips/:sheetId?line=:id   one person
- * Pay, additions, gross; NSSF, PAYE and other deductions; net pay. Read as
+ * Earnings beside deductions, then net pay (2026-10-30). Read as
  * saved — a draft prints marked DRAFT.
  */
 export default function PayslipDocument() {
@@ -49,7 +49,7 @@ export default function PayslipDocument() {
   const only = params.get('line');
   const lines = d.lines.filter(l => !only || l.id === only)
     .sort((a, b) => (person(a.staff_id).full_name || '').localeCompare(person(b.staff_id).full_name || ''));
-  const row = (label, v, minus) => (Number(v) ? <tr><td>{label}</td><td className="num">{minus ? '− ' : ''}{formatAmount(Number(v))}</td></tr> : null);
+  const row = (label, v) => (Number(v) ? <tr><td>{label}</td><td className="num">{formatAmount(Number(v))}</td></tr> : null);
 
   return (
     <div className="doc-page">
@@ -72,7 +72,7 @@ export default function PayslipDocument() {
                 </div>
               </div>
               <div className="doc-title">
-                <h1>Payslip{sheet.status === 'draft' ? ' — DRAFT' : sheet.status === 'void' ? ' — VOID' : ''}</h1>
+                <h1>Salary slip{sheet.status === 'draft' ? ' — DRAFT' : sheet.status === 'void' ? ' — VOID' : ''}</h1>
                 <div>Period: {sheet.period_start} to {sheet.period_end}</div>
                 <div>{CYCLE[sheet.cycle]}{sheet.paid_on ? ` · paid ${sheet.paid_on}` : ''}</div>
               </div>
@@ -83,22 +83,34 @@ export default function PayslipDocument() {
               <strong>{p.full_name}</strong>
               <div>{[p.job_title, p.kind === 'casual' ? 'Casual' : p.kind === 'employed' ? 'Employed' : null].filter(Boolean).join(' · ')}</div>
               {p.nssf_no && <div>NSSF no. {p.nssf_no}</div>}
+              {l.days != null && <div>Days attended: {Number(l.days)}</div>}
             </section>
 
             <section>
-              <table className="doc-totals"><tbody>
-                <tr><td>{l.pay_basis === 'daily' ? `${Number(l.days || 0)} days × ${formatAmount(Number(l.rate || 0))}`
-                  : l.part === 'advance' ? `First payment of the month (salary ${formatAmount(Number(l.rate || 0))} a month)`
-                  : `Salary (${formatAmount(Number(l.rate || 0))} a month)${l.part === 'balance' ? ' — the month' : ''}`}</td><td className="num">{formatAmount(Number(l.base))}</td></tr>
-                {row('Additions', l.additions)}
-                <tr className="doc-grand"><td>Gross pay</td><td className="num">{money(Number(l.gross))}</td></tr>
-                {row('NSSF (employee)', l.nssf_employee, true)}
-                {row('PAYE', l.paye, true)}
-                {row(`Other deductions${l.note ? ` (${l.note})` : ''}`, l.deductions, true)}
-                {row('First payment already paid', l.first_payment, true)}
-                {row('Advance / loan taken back', l.advance_deductions, true)}
-                <tr className="doc-grand"><td>Net pay</td><td className="num">{money(Number(l.amount))}</td></tr>
-              </tbody></table>
+              <div className="doc-slip-grid">
+                <table className="doc-table">
+                  <thead><tr><th>Earnings</th><th className="num">TZS</th></tr></thead>
+                  <tbody>
+                    <tr><td>{l.pay_basis === 'daily' ? `${Number(l.days || 0)} days × ${formatAmount(Number(l.rate || 0))}`
+                      : l.part === 'advance' ? `First payment of the month (salary ${formatAmount(Number(l.rate || 0))} a month)`
+                      : `Salary (${formatAmount(Number(l.rate || 0))} a month)${l.part === 'balance' ? ' — the month' : ''}`}</td><td className="num">{formatAmount(Number(l.base))}</td></tr>
+                    {row('Allowance', l.additions)}
+                  </tbody>
+                  <tfoot><tr><td><strong>Gross pay</strong></td><td className="num"><strong>{formatAmount(Number(l.gross))}</strong></td></tr></tfoot>
+                </table>
+                <table className="doc-table">
+                  <thead><tr><th>Deductions</th><th className="num">TZS</th></tr></thead>
+                  <tbody>
+                    {row('NSSF (employee)', l.nssf_employee)}
+                    {row('PAYE', l.paye)}
+                    {row(`Other deductions${l.note ? ` (${l.note})` : ''}`, l.deductions)}
+                    {row('First payment already paid', l.first_payment)}
+                    {row('Advance / loan taken back', l.advance_deductions)}
+                  </tbody>
+                  <tfoot><tr><td><strong>Total deductions</strong></td><td className="num"><strong>{formatAmount(['nssf_employee', 'paye', 'deductions', 'first_payment', 'advance_deductions'].reduce((t, k) => t + Number(l[k] || 0), 0))}</strong></td></tr></tfoot>
+                </table>
+              </div>
+              <table className="doc-totals"><tbody><tr className="doc-grand"><td>Net pay</td><td className="num">{money(Number(l.amount))}</td></tr></tbody></table>
               {Number(l.nssf_employer) > 0 && <p className="pl-help" style={{ marginTop: 10 }}>The employer also pays NSSF {formatAmount(Number(l.nssf_employer))} for you.</p>}
             </section>
 

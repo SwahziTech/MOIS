@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { HardHat, Plus, RefreshCw } from 'lucide-react';
+import { HardHat, Plus, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
@@ -119,16 +119,17 @@ export default function Staff() {
   const payText = s => (s.pay_rate == null ? null : `${money(s.pay_rate)} ${basisOf(s) === 'daily' ? 'a day' : 'a month'}`);
 
   // the sidebar shows this page three ways (2026-10-30): Personnel, Attendance, Payroll — each with its own tabs
-  const page = tab === 'attendance' ? 'attendance' : ['pay', 'advances', 'returns'].includes(tab) ? 'payroll' : 'personnel';
+  const page = ['attendance', 'attcasual'].includes(tab) ? 'attendance' : ['pay', 'paycasual', 'advances', 'returns'].includes(tab) ? 'payroll' : 'personnel';
   const pageTabs = page === 'personnel' ? [['employed', 'Employees'], ['casual', 'Casuals'], ['teams', 'Teams']]
-    : page === 'payroll' ? [['pay', 'Pay runs'], ['advances', 'Advances'], ['returns', 'Returns']] : null;
+    : page === 'payroll' ? [['pay', 'Employees'], ['paycasual', 'Casuals'], ['advances', 'Advances'], ['returns', 'Returns']]
+    : [['attendance', 'Employees'], ['attcasual', 'Casuals']];
   return (
     <PageShell title={{ personnel: 'Personnel', attendance: 'Attendance', payroll: 'Payroll' }[page]} subtitle="HR" onSettings={() => setSettings(true)}
       description={page === 'attendance' ? `Who worked each day${branchId ? ` at ${branchName}` : ' — choose a branch to mark attendance'}.`
-        : page === 'payroll' ? `Pay sheets from attendance, advances and statutory returns${branchId ? ` at ${branchName}` : ''}.`
+        : page === 'payroll' ? `Each pay period from attendance: pay, allowances, deductions and net${branchId ? ` at ${branchName}` : ''}.`
         : branchId ? `Employees, casual labourers and teams at ${branchName}.` : 'Staff at every branch — choose a branch to add staff.'}
       primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
-      {pageTabs && <PageTabs tabs={pageTabs} value={tab} onChange={t => { setTab(t); setSearch(''); }} />}
+      <PageTabs tabs={pageTabs} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : tab === 'teams' ? (
         <TeamsPanel staff={staff || []} branchId={branchId} inBranch={inBranch} />
@@ -136,9 +137,9 @@ export default function Staff() {
         <AdvancesPanel staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
       ) : tab === 'returns' ? (
         <StatutoryReturns staff={staff || []} today={today} currency={organization?.currency_code} inBranch={inBranch} />
-      ) : tab === 'pay' ? (
-        <PaySheets staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
-      ) : tab !== 'attendance' ? (
+      ) : tab === 'pay' || tab === 'paycasual' ? (
+        <PayrollSheet key={tab} kind={tab === 'pay' ? 'employed' : 'casual'} staff={staff || []} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
+      ) : page !== 'attendance' ? (
         <>
           {staff !== null && (
             <div className="mm-stats">
@@ -201,7 +202,7 @@ export default function Staff() {
           </section>
         </>
       ) : (
-        <AttendanceWeek staff={here.filter(s => s.status === 'active')} branchId={branchId} today={today} canRecord={canRecord} />
+        <AttendanceWeek staff={here.filter(s => s.status === 'active' && (tab === 'attendance' ? s.kind === 'employed' : s.kind !== 'employed'))} branchId={branchId} today={today} canRecord={canRecord} />
       )}
 
       {viewing && (
@@ -374,7 +375,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
               {canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
             </th>))}<th className="num">Days</th></tr></thead>
           <tbody>
-            {staff.length === 0 ? <tr><td colSpan={9} className="text-muted">No staff yet — add them under Staff.</td></tr>
+            {staff.length === 0 ? <tr><td colSpan={9} className="text-muted">No one here yet — add them under Personnel.</td></tr>
             : [...staff].sort((a, b) => (a.kind === b.kind ? a.full_name.localeCompare(b.full_name) : a.kind === 'casual' ? -1 : 1)).map(s => (
               <tr key={s.id}>
                 <td><strong>{s.full_name}</strong><div className="pl-help">{s.kind ? KIND[s.kind] : ''}{s.job_title ? ` · ${s.job_title}` : ''}</div></td>
@@ -397,69 +398,131 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
   );
 }
 
-/* Pay sheets: prepared from the staff list and attendance, then approved and paid */
-function PaySheets({ staff, branchId, today, money, currency, canRecord, canApprove, inBranch }) {
+/*
+ * Payroll sheet (2026-10-30): one pay period, one person a row — days, basic,
+ * allowance, gross, every deduction, net. Employees and Casuals on their own
+ * tabs. A row opens the person's pay in full with their salary slip; "Open pay
+ * sheet" edits allowances and deductions, approves, pays or voids as before.
+ */
+function PayrollSheet({ kind, staff, today, money, currency, canRecord, canApprove, inBranch }) {
   const [sheets, setSheets] = useState(null);
+  const [lines, setLines] = useState([]);
   const [error, setError] = useState('');
+  const [picked, setPicked] = useState('');
   const [openId, setOpenId] = useState(null);
+  const [personLine, setPersonLine] = useState(null);
+  const [search, setSearch] = useState('');
   async function load() {
     setError('');
-    const { data, error: err } = await supabase.from('pay_sheets').select('*, pay_sheet_lines(count)')
-      .order('period_start', { ascending: false }).order('created_at', { ascending: false });
-    if (err) { console.error(err); setError("We couldn't load pay sheets."); return; }
-    setSheets(data || []);
+    const [sh, li] = await Promise.all([
+      supabase.from('pay_sheets').select('*').order('period_start', { ascending: false }).order('created_at', { ascending: false }),
+      supabase.from('pay_sheet_lines').select('*'),
+    ]);
+    if (sh.error || li.error) { console.error(sh.error || li.error); setError("We couldn't load payroll."); setSheets([]); return; }
+    setSheets(sh.data || []); setLines(li.data || []);
   }
   useEffect(() => { load(); }, []);
-  const here = (sheets || []).filter(s => inBranch(s.branch_id));
-  const month = today.slice(0, 7);
-  const paidMonth = here.filter(s => s.status === 'paid' && (s.paid_on || '').startsWith(month));
-  const sum = (list, f) => list.reduce((t, s) => t + Number(s[f] || 0), 0);
-  const waiting = here.filter(s => s.status === 'draft' || s.status === 'approved');
+  const person = id => staff.find(s => s.id === id);
+  const isMine = l => { const k = person(l.staff_id)?.kind ?? (l.pay_basis === 'daily' ? 'casual' : 'employed'); return (k === 'employed') === (kind === 'employed'); };
+  const mine = useMemo(() => lines.filter(isMine), [lines, staff, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  const here = useMemo(() => (sheets || []).filter(s => inBranch(s.branch_id) && (mine.some(l => l.sheet_id === s.id) || (s.cycle === 'weekly') === (kind !== 'employed'))), [sheets, mine, inBranch, kind]);
+  const sheet = here.find(s => s.id === picked) ?? here.find(s => s.status !== 'void' && mine.some(l => l.sheet_id === s.id)) ?? here[0];
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return mine.filter(l => l.sheet_id === sheet?.id && (!q || (person(l.staff_id)?.full_name ?? '').toLowerCase().includes(q)))
+      .sort((a, b) => (person(a.staff_id)?.full_name ?? '').localeCompare(person(b.staff_id)?.full_name ?? ''));
+  }, [mine, sheet, search, staff]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tot = f => rows.reduce((t, l) => t + (typeof f === 'function' ? f(l) : Number(l[f] || 0)), 0);
+  const dedOf = l => Number(l.nssf_employee || 0) + Number(l.paye || 0) + Number(l.deductions || 0) + Number(l.advance_deductions || 0);
   const short = v => formatMoneyShort(v, currency);
+  const cell = v => (Number(v) ? formatAmount(Number(v)) : '');
+  const COLS = [
+    ['Basic', l => cell(l.base), 'base'],
+    ['Allowance', l => cell(l.additions), 'additions'],
+    ['Gross', l => formatAmount(Number(l.gross ?? l.base)), l => Number(l.gross ?? l.base)],
+    ['NSSF', l => cell(l.nssf_employee), 'nssf_employee'],
+    ['PAYE', l => cell(l.paye), 'paye'],
+    ['Other deductions', l => cell(l.deductions), 'deductions'],
+    ...(kind === 'employed' ? [['First payment', l => cell(l.first_payment), 'first_payment']] : []),
+    ['Advance', l => cell(l.advance_deductions), 'advance_deductions'],
+  ];
+  if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
+  if (sheets === null) return <div className="card"><span className="skeleton" /></div>;
+  const label = s => `${s.period_start} – ${s.period_end} · ${STATUS[s.status]}`;
   return (
     <>
-      {sheets !== null && (
-        <div className="mm-stats">
-          <div className="mm-stat"><span className="pl-label">Paid this month</span><strong>{short(sum(paidMonth, 'total'))}</strong>
-            <span className="pl-help" title="Net pay handed to staff on sheets paid this month">net · gross {short(sum(paidMonth, 'gross_total'))}</span></div>
-          <div className="mm-stat"><span className="pl-label">Statutory this month</span><strong>{short(sum(paidMonth, 'employee_statutory') + sum(paidMonth, 'employer_statutory'))}</strong>
-            <span className="pl-help" title="PAYE and NSSF taken from pay, plus the employer's NSSF, WCF and SDL — recorded as a Statutory contributions expense, owed until remitted">PAYE · NSSF · WCF · SDL to remit</span></div>
-          <div className="mm-stat"><span className="pl-label">Waiting</span><strong className={waiting.length ? 'text-warning' : ''}>{waiting.length}</strong>
-            <span className="pl-help">{waiting.length ? `${waiting.filter(s => s.status === 'draft').length} to approve · ${waiting.filter(s => s.status === 'approved').length} to pay` : 'nothing waiting'}</span></div>
-        </div>
-      )}
-      <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <span className="pl-help" title="Marking attendance keeps the period's draft up to date: casuals weekly (Mon–Sun), employed every 2 weeks (1–15, 16–end). Casuals: days × day rate. Employed: days × salary ÷ working days a month (⚙). NSSF and PAYE come off gross pay; the employer adds NSSF, WCF and SDL. Paid: net pay is one Wages expense, the statutory amounts one Statutory contributions expense (owed until remitted).">Made automatically from attendance — open a sheet to approve and pay it. NSSF, PAYE, WCF and SDL from the rates (⚙).</span>
+      <div className="mm-stats">
+        <div className="mm-stat"><span className="pl-label">Gross pay</span><strong>{short(tot(l => Number(l.gross ?? l.base)))}</strong><span className="pl-help">{rows.length} {rows.length === 1 ? 'person' : 'people'}</span></div>
+        <div className="mm-stat"><span className="pl-label">Deductions</span><strong>{short(tot(dedOf))}</strong><span className="pl-help">NSSF, PAYE, advances, other</span></div>
+        <div className="mm-stat"><span className="pl-label">Net pay</span><strong>{short(tot('amount'))}</strong><span className="pl-help">{sheet ? STATUS[sheet.status] : 'no pay period yet'}</span></div>
       </div>
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      <ListToolbar id="payroll-search" search={search} onSearch={setSearch} placeholder="Search name…" />
+      <div className="flex items-center gap-8" style={{ margin: '0 0 12px', flexWrap: 'wrap' }}>
+        <select className="form-input" style={{ maxWidth: 320 }} aria-label="Pay period" value={sheet?.id ?? ''} onChange={e => setPicked(e.target.value)}>
+          {here.length === 0 && <option value="">No pay periods yet</option>}
+          {here.map(s => <option key={s.id} value={s.id}>{label(s)}</option>)}
+        </select>
+        {sheet && <span className={`badge ${STATUS_BADGE[sheet.status]}`}>{STATUS[sheet.status]}</span>}
+        {sheet?.status === 'draft' && sheet.rates_unverified?.length > 0 && <span className="pl-help text-warning">rates to verify</span>}
+        <span style={{ marginLeft: 'auto' }} className="flex items-center gap-8">
+          {sheet && rows.length > 0 && <a className="btn btn-outline btn-sm" href={`/print/payslips/${sheet.id}`} target="_blank" rel="noreferrer"><Printer size={13} /> All slips</a>}
+          {sheet && <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpenId(sheet.id)}>Open pay sheet</button>}
+        </span>
+      </div>
       <div className="card"><div className="table-container">
-        <table>
-          <thead><tr><th>Period</th><th>Pay</th><th className="num">People</th><th className="num">Gross (TZS)</th><th className="num">PAYE + NSSF (TZS)</th><th className="num">Net (TZS)</th><th>Status</th><th>Paid on</th></tr></thead>
+        <table className="ps-table">
+          <thead><tr><th>Name</th><th className="num">Days</th>{COLS.map(([h]) => <th key={h} className="num">{h} (TZS)</th>)}<th className="num">Net (TZS)</th></tr></thead>
           <tbody>
-            {sheets === null ? <tr><td colSpan={8}><span className="skeleton" /></td></tr>
-            : here.length === 0 ? <tr><td colSpan={8} className="text-muted">No pay sheets yet.</td></tr>
-            : here.map(s => (
-              <tr key={s.id} className={`clickable-row${s.status === 'void' ? ' is-inactive' : ''}`} onClick={() => setOpenId(s.id)}>
-                <td>{s.period_start} – {s.period_end}</td>
-                <td>{CYCLE[s.cycle]}</td>
-                <td className="num">{s.pay_sheet_lines?.[0]?.count ?? ''}</td>
-                <td className="num">{formatAmount(Number(s.gross_total || s.total))}</td>
-                <td className="num">{Number(s.employee_statutory) ? formatAmount(Number(s.employee_statutory)) : ''}</td>
-                <td className="num"><strong>{formatAmount(Number(s.total))}</strong></td>
-                <td><span className={`badge ${STATUS_BADGE[s.status]}`}>{STATUS[s.status]}</span>
-                  {s.status === 'draft' && s.rates_unverified?.length > 0 && <div className="pl-help text-warning">rates to verify</div>}</td>
-                <td>{s.paid_on || ''}</td>
+            {rows.length === 0 ? <tr><td colSpan={COLS.length + 3} className="text-muted">{search ? 'Nobody matches.' : 'No one in this period — attendance fills it.'}</td></tr>
+            : rows.map(l => (
+              <tr key={l.id} className="clickable-row" title="Open their pay in full" onClick={() => setPersonLine(l)}>
+                <td><strong>{person(l.staff_id)?.full_name ?? '—'}</strong>{person(l.staff_id)?.job_title && <div className="pl-help">{person(l.staff_id).job_title}</div>}</td>
+                <td className="num">{l.days != null ? Number(l.days) : ''}</td>
+                {COLS.map(([h, f]) => <td key={h} className="num">{f(l)}</td>)}
+                <td className="num"><strong>{formatAmount(Number(l.amount))}</strong></td>
               </tr>
             ))}
           </tbody>
-          {here.some(s => s.status === 'paid') && (
-            <tfoot><tr><td colSpan={5}><strong>Paid</strong></td><td className="num"><strong>{money(here.filter(s => s.status === 'paid').reduce((t, s) => t + Number(s.total), 0))}</strong></td><td colSpan={2} /></tr></tfoot>
-          )}
+          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td><td className="num">{tot('days') || ''}</td>{COLS.map(([h, , k]) => <td key={h} className="num"><strong>{formatAmount(tot(k))}</strong></td>)}<td className="num"><strong>{money(tot('amount'))}</strong></td></tr></tfoot>}
         </table>
       </div></div>
-      {openId && <SheetModal id={openId} staff={staff} money={money} today={today} canRecord={canRecord} canApprove={canApprove}
-        onClose={() => setOpenId(null)} onChanged={load} />}
+      {openId && <SheetModal id={openId} staff={staff} money={money} today={today} canRecord={canRecord} canApprove={canApprove} onClose={() => { setOpenId(null); load(); }} onChanged={load} />}
+      {personLine && sheet && <PersonPay line={personLine} sheet={sheet} person={person(personLine.staff_id)} money={money} onClose={() => setPersonLine(null)} />}
     </>
+  );
+}
+
+/* One person's pay in a period, in full, with their salary slip */
+function PersonPay({ line: l, sheet, person, money, onClose }) {
+  const row = (label, v) => (Number(v) ? <tr key={label}><td>{label}</td><td className="num">{formatAmount(Number(v))}</td></tr> : null);
+  const gross = Number(l.gross ?? l.base);
+  const deductions = ['nssf_employee', 'paye', 'deductions', 'first_payment', 'advance_deductions'].reduce((t, k) => t + Number(l[k] || 0), 0);
+  const employer = ['nssf_employer', 'wcf', 'sdl'].reduce((t, k) => t + Number(l[k] || 0), 0);
+  return (
+    <Modal title={person?.full_name ?? 'Pay'} onClose={onClose} size="lg"
+      footer={<><a className="btn btn-primary" href={`/print/payslips/${sheet.id}?line=${l.id}`} target="_blank" rel="noreferrer"><Printer size={14} /> Salary slip</a>
+        <button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
+      <div className="modal-form">
+        <p className="text-sm">{[person?.job_title, person?.kind ? KIND[person.kind] : null, person?.nssf_no && `NSSF no. ${person.nssf_no}`].filter(Boolean).join(' · ')}</p>
+        <p className="text-sm">Period <strong>{sheet.period_start} – {sheet.period_end}</strong> · {STATUS[sheet.status]}{sheet.paid_on ? ` · paid ${sheet.paid_on}` : ''}
+          {l.days != null ? <> · <strong>{Number(l.days)}</strong> days attended</> : ''}{l.rate != null ? ` · ${formatAmount(Number(l.rate))} ${l.pay_basis === 'daily' ? 'a day' : 'a month'}` : ''}</p>
+        <div className="pp-grid">
+          <table className="pp-table">
+            <thead><tr><th>Earnings</th><th className="num">TZS</th></tr></thead>
+            <tbody><tr><td>Basic pay</td><td className="num">{formatAmount(Number(l.base))}</td></tr>{row('Allowance', l.additions)}</tbody>
+            <tfoot><tr><td><strong>Gross pay</strong></td><td className="num"><strong>{formatAmount(gross)}</strong></td></tr></tfoot>
+          </table>
+          <table className="pp-table">
+            <thead><tr><th>Deductions</th><th className="num">TZS</th></tr></thead>
+            <tbody>{row('NSSF (employee)', l.nssf_employee)}{row('PAYE', l.paye)}{row(`Other deductions${l.note ? ` (${l.note})` : ''}`, l.deductions)}{row('First payment already paid', l.first_payment)}{row('Advance / loan taken back', l.advance_deductions)}
+              {deductions === 0 && <tr><td className="text-muted" colSpan={2}>None</td></tr>}</tbody>
+            <tfoot><tr><td><strong>Total deductions</strong></td><td className="num"><strong>{formatAmount(deductions)}</strong></td></tr></tfoot>
+          </table>
+        </div>
+        <div className="pp-net"><span>Net pay</span><strong>{money(Number(l.amount))}</strong></div>
+        {employer > 0 && <p className="pl-help">The employer also pays: NSSF {formatAmount(Number(l.nssf_employer || 0))} · WCF {formatAmount(Number(l.wcf || 0))} · SDL {formatAmount(Number(l.sdl || 0))}.</p>}
+      </div>
+    </Modal>
   );
 }
 
@@ -528,7 +591,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Add (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Allowance (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
               {sorted.length === 0 ? <tr><td colSpan={13} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (

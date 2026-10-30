@@ -2386,3 +2386,12 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .doc.doc-wide { max-width: 297mm; }
 .doc-att th, .doc-att td { padding: 2px 3px; font-size: 10px; }
 @media print { .doc.doc-wide { max-width: none; } }
+
+/* Payroll: one person's pay; the salary slip (2026-10-30) */
+.pp-grid, .doc-slip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.doc-slip-grid { margin-bottom: 12px; }
+.pp-table { width: 100%; border: 1px solid var(--border); border-radius: 6px; }
+.pp-table th, .pp-table td { padding: 7px 10px; font-size: var(--text-sm); }
+.pp-net { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; }
+.pp-net strong { font-size: 1.1rem; }
+@media (max-width: 640px) { .pp-grid { grid-template-columns: 1fr; } }

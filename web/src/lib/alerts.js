@@ -86,8 +86,8 @@ export async function loadAlerts({ can, inBranch, today }) {
       const r = await supabase.from('pay_sheets').select('branch_id, status').in('status', ['draft', 'approved']).lt('period_end', today);
       const rows = ok(r).filter(x => inBranch(x.branch_id));
       const a = rows.filter(x => x.status === 'draft').length; const p = rows.filter(x => x.status === 'approved').length;
-      add('pay-approve', a, 'info', `${a} pay sheet${a === 1 ? '' : 's'} ended — to approve`, '/staff');
-      add('pay-pay', p, 'warn', `${p} approved pay sheet${p === 1 ? '' : 's'} to pay`, '/staff');
+      add('pay-approve', a, 'info', `${a} pay sheet${a === 1 ? '' : 's'} ended — to approve`, '/staff?tab=pay');
+      add('pay-pay', p, 'warn', `${p} approved pay sheet${p === 1 ? '' : 's'} to pay`, '/staff?tab=pay');
     })());
   }
   await Promise.all(jobs.map(j => j.catch(() => null)));

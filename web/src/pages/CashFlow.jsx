@@ -9,6 +9,7 @@ import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { exportTable } from '../lib/reports';
 import { cashPeriods } from '../lib/statements';
+import { useUrlTab } from '../lib/urlTab';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import ErrorState from '../components/ErrorState';
@@ -46,7 +47,7 @@ export default function CashFlow() {
   const cur = organization?.currency_code;
   const money = v => formatMoney(Math.round(Number(v || 0)), cur);
   const short = v => formatMoneyShort(v, cur);
-  const [tab, setTab] = useState('accounts');
+  const [tab, setTab] = useUrlTab('accounts');   // monthly = the Monthly tab beside Weekly and Cash flow
   const [accounts, setAccounts] = useState(null);
   const [moves, setMoves] = useState(null);
   const [error, setError] = useState('');
@@ -78,9 +79,9 @@ export default function CashFlow() {
   const canSet = !!branchId && canAt('sales.discount', branchId);
 
   return (
-    <PageShell title="Cash flow" subtitle="Finance" onSettings={() => setSettings(true)}
+    <PageShell title={tab === 'monthly' ? 'Monthly' : 'Cash flow'} subtitle="Finance" onSettings={() => setSettings(true)}
       description={`Money in and out by account — ${branchId ? branchName : 'all branches'}.`}>
-      <PageTabs tabs={[['accounts', 'Accounts'], ['forecast', 'Forecast'], ['monthly', 'Monthly']]} value={tab} onChange={setTab} />
+      {tab !== 'monthly' && <PageTabs tabs={[['accounts', 'Accounts'], ['forecast', 'Forecast']]} value={tab} onChange={setTab} />}
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : accounts === null ? <div className="card"><span className="skeleton" /></div>
       : tab === 'accounts' ? (

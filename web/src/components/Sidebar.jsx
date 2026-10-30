@@ -85,10 +85,11 @@ export const NAV = [
     items: [
       // cost, price without VAT, margin, finished stock at cost (1e, migration 058) — managers
       { label: 'Costing',       to: '/costing', icon: Calculator, perm: 'products.manage' },
-      // money in and out by account (094); Imprest = the branch's weekly cash (078)
+      // the branch's weekly cash (078); money in and out by week and month, by account (094)
       { label: 'Cash flow',     to: '/cash-flow', icon: Landmark, group: [
+        { label: 'Weekly',    to: '/weekly-cash', perm: 'cash.request' },
+        { label: 'Monthly',   to: '/cash-flow?tab=monthly', perm: 'finance.view' },
         { label: 'Cash flow', to: '/cash-flow',   perm: 'finance.view' },
-        { label: 'Imprest',   to: '/weekly-cash', perm: 'cash.request' },
       ] },
       // profit & loss, balance sheet, account statements, who owes whom (2026-10-30)
       { label: 'Statements',    to: '/statements', icon: ScrollText, perm: 'finance.view' },
@@ -99,8 +100,8 @@ export const NAV = [
     items: [
       // employees and casual labourers, attendance, pay (Staff (HR), 071/086–091) — one page, three entries
       { label: 'Personnel',     to: '/staff', tabs: ['', 'employed', 'casual', 'teams'], icon: HardHat, perm: 'staff.view' },
-      { label: 'Attendance',    to: '/staff?tab=attendance', tabs: ['attendance'], icon: CalendarCheck, perm: 'staff.view' },
-      { label: 'Payroll',       to: '/staff?tab=pay', tabs: ['pay', 'advances', 'returns'], icon: Wallet, perm: 'staff.view' },
+      { label: 'Attendance',    to: '/staff?tab=attendance', tabs: ['attendance', 'attcasual'], icon: CalendarCheck, perm: 'staff.view' },
+      { label: 'Payroll',       to: '/staff?tab=pay', tabs: ['pay', 'paycasual', 'advances', 'returns'], icon: Wallet, perm: 'staff.view' },
     ],
   },
   {
