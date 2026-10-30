@@ -17,6 +17,7 @@ import StatutoryRatesCard, { RATE_NAME } from '../components/staff/StatutoryRate
 import AdvancesPanel from '../components/staff/AdvancesPanel';
 import StatutoryReturns from '../components/staff/StatutoryReturns';
 import TeamsPanel from '../components/staff/TeamsPanel';
+import PayrollMonth from '../components/staff/PayrollMonth';
 
 const LOAD_ERROR = "We couldn't load staff. Please try again.";
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
@@ -137,8 +138,10 @@ export default function Staff() {
         <AdvancesPanel staff={staff || []} branchId={branchId} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
       ) : tab === 'returns' ? (
         <StatutoryReturns staff={staff || []} today={today} currency={organization?.currency_code} inBranch={inBranch} />
-      ) : tab === 'pay' || tab === 'paycasual' ? (
-        <PayrollSheet key={tab} kind={tab === 'pay' ? 'employed' : 'casual'} staff={staff || []} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
+      ) : tab === 'pay' ? (
+        <PayrollMonth staff={staff || []} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} SheetModal={SheetModal} workDays={workDays} />
+      ) : tab === 'paycasual' ? (
+        <PayrollSheet key={tab} kind="casual" staff={staff || []} today={today} money={money} currency={organization?.currency_code} canRecord={canRecord} canApprove={canApprove} inBranch={inBranch} />
       ) : page !== 'attendance' ? (
         <>
           {staff !== null && (
@@ -399,7 +402,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
 }
 
 /*
- * Payroll sheet (2026-10-30): one pay period, one person a row — days, basic,
+ * Payroll sheet, casuals (2026-10-30; employees by month: PayrollMonth): one pay period, one person a row — days, basic,
  * allowance, gross, every deduction, net. Employees and Casuals on their own
  * tabs. A row opens the person's pay in full with their salary slip; "Open pay
  * sheet" edits allowances and deductions, approves, pays or voids as before.

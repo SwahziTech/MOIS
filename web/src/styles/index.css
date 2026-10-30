@@ -2395,3 +2395,10 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .pp-net { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; }
 .pp-net strong { font-size: 1.1rem; }
 @media (max-width: 640px) { .pp-grid { grid-template-columns: 1fr; } }
+
+.pp-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pp-facts > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.pp-pay { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pp-pay > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: var(--text-sm); }
+.pp-pay strong { font-size: 1.05rem; }
+@media (max-width: 640px) { .pp-facts, .pp-pay { grid-template-columns: 1fr; } }
