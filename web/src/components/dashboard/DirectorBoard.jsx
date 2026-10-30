@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort } from '../../lib/format';
 import { loadInventoryRefs, orgToday } from '../../lib/inventory';
-import { loadDirectorBoard } from '../../lib/directorBoard';
+import { loadDirectorBoard, loadStockBlock, periodsFor, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
+import { PageTabs } from '../ListControls';
 import ErrorState from '../ErrorState';
 
-const monthShort = m => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
+const BY = [['day', 'Days'], ['week', 'Weeks'], ['month', 'Months'], ['quarter', 'Quarters'], ['year', 'Years']];
+const SHOWN_ROWS = { day: 31, week: 13, month: 12, quarter: 8, year: 5 };
+const CARD = {
+  sales: { title: 'Sales', heads: ['Received (TZS)'], to: '/sales', page: 'Open Sales' },
+  cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
+  purchases: { title: 'Purchases', heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases', page: 'Open Purchases' },
+};
 
 const Block = ({ title, note, to, children }) => (
   <section className="dd-block">
@@ -21,40 +29,54 @@ const Line = ({ to, label, value, warn }) => {
   const inner = <><span>{label}</span><span className={warn ? 'text-warning' : 'text-muted'}>{value}</span></>;
   return to ? <Link to={to} className="dd-line">{inner}</Link> : <div className="dd-line">{inner}</div>;
 };
-const Num = ({ to, label, figure, note, warn }) => (
-  <Link to={to} className="dd-num"><span className="pl-label">{label}</span><strong>{figure}</strong><span className={`pl-help${warn ? ' text-warning' : ''}`}>{note}</span></Link>
-);
 
 /*
- * The director's dashboard (2026-10-30), one screen with no tabs, built for
- * the phone first: what needs them on top, then four numbers, production,
- * stock at risk, six months of sales against money paid out, the most overdue
- * customers and, on All branches, the branches side by side. Every figure
- * opens the page behind it. No profit here (the user's choice).
+ * The director's dashboard (2026-10-30, draft 2), one screen with no tabs,
+ * built for the phone first: what needs them; three cards for a period (this
+ * week, or this month in the month's last week) with arrows back to yesterday,
+ * the day before, last week and last month; production; stock at cost with
+ * what's at risk; money in against money out; branches. A card opens its
+ * history by days, weeks, months, quarters and years. No profit, by the user's
+ * choice. Until receipts are approved in MOIS (stage 2), Sales says so.
  */
 export default function DirectorBoard() {
   const { organization } = useAuth();
   const { branchId, branchName, branches, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
+  const [params, setParams] = useSearchParams();
+  const openCard = CARD[params.get('card')] ? params.get('card') : null;
   const [d, setD] = useState(null);
+  const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
+  const [step, setStep] = useState(0);
+  const periods = useMemo(() => periodsFor(today), [today]);
+  const period = periods[step];
 
   async function load() {
-    setError(''); setD(null);
+    setError(''); setD(null); setStock(undefined);
     try {
       const refs = await loadInventoryRefs();
-      setD(await loadDirectorBoard({ inBranch, branchId, branches, today, refs }));
+      setD(await loadDirectorBoard({ inBranch, today, refs }));
+      // stock at cost asks the database item by item, so it follows when ready
+      loadStockBlock({ inBranch, branchId, branches, today, refs }).then(setStock).catch(e => { console.error(e); setStock(null); });
     } catch (e) { console.error(e); setError("We couldn't load the dashboard."); }
   }
   useEffect(() => { load(); }, [branchId, branches.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const open = card => setParams(p => { const n = new URLSearchParams(p); n.set('card', card); return n; });
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
-  const { needs, money: m, factory: f, risk: r } = d;
-  const change = m && m.lastMonth > 0 ? Math.round((m.sales / m.lastMonth - 1) * 100) : null;
-  const top = m ? Math.max(1, ...m.trend.flatMap(x => [x.sales, x.costs])) : 1;
+  if (openCard && d.money) return <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} />;
+
+  const { needs, money, curing } = d;
+  const c = money && cardsFor(money, period, inBranch);
+  const f = money && productionFor(money, period, inBranch, today);
+  const trend = money && trendFrom(money, inBranch, today);
+  const top = trend ? Math.max(1, ...trend.flatMap(x => [x.in, x.out])) : 1;
+  const change = c && c.salesBefore > 0 ? Math.round((c.sales / c.salesBefore - 1) * 100) : null;
   const unavailable = <p className="pl-help">Couldn&apos;t load this part.</p>;
+  const risks = stock ? stock.materials.length + stock.products.length : 0;
 
   return (
     <div className="dd">
@@ -62,48 +84,65 @@ export default function DirectorBoard() {
         <section className="dd-block dd-needs">
           <div className="dd-head"><span>Needs you now</span><span className="pl-help">{needs.reduce((t, x) => t + x.count, 0)} items</span></div>
           <div className="dd-needs-row">
-            {needs.map(x => <Link key={x.key} to={x.to} className="dd-need"><strong className={x.warn ? 'text-warning' : ''}>{x.count}</strong><span>{x.label}</span></Link>)}
+            {needs.map(x => <Link key={x.key} to={x.to} className="dd-need"><strong>{x.count}</strong><span>{x.label}</span></Link>)}
           </div>
         </section>
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 
-      {m ? (
-        <div className="dd-nums">
-          <Num to="/cash-flow" label="Cash now" figure={short(m.cash)} note={m.unset ? "Opening balances not set" : `${m.accounts} accounts`} warn={m.unset > 0} />
-          <Num to="/sales" label="Sales this month" figure={short(m.sales)} note={change == null ? 'Nothing to compare yet' : `${change >= 0 ? '+' : ''}${change}% vs same days in ${monthShort(m.prevMonth)}`} />
-          <Num to="/customers?tab=owing" label="Customers owe us" figure={short(m.owedToUs)} note={d.overdueTotal > 0 ? `${short(d.overdueTotal)} overdue` : 'None overdue'} warn={d.overdueTotal > 0} />
-          <Num to="/statements?tab=parties" label="We owe suppliers" figure={short(m.weOwe)} note={`${m.supplierCount} suppliers`} />
+      <div className="dd-period">
+        <button type="button" className="dd-step" aria-label="Earlier" disabled={step === periods.length - 1} onClick={() => setStep(step + 1)}><ChevronLeft size={18} /></button>
+        <span>{period.label}</span>
+        <button type="button" className="dd-step" aria-label="Later" disabled={step === 0} onClick={() => setStep(step - 1)}><ChevronRight size={18} /></button>
+      </div>
+
+      {c ? (
+        <div className="dd-cards">
+          <button type="button" className="dd-num dd-num-big" onClick={() => open('sales')}>
+            <span className="pl-label">Sales</span><strong>{short(c.sales)}</strong>
+            <span className="pl-help">received, not yet approved{change == null ? '' : ` · ${change >= 0 ? '+' : ''}${change}% vs ${period.compare.label}`}</span>
+          </button>
+          <button type="button" className="dd-num" onClick={() => open('cash')}>
+            <span className="pl-label">Weekly cash</span><strong>{short(c.sent)} sent</strong>
+            <span className="pl-help">{c.hasRequests ? `${short(c.spent)} spent · ${short(c.left)} left` : 'No requests yet'}</span>
+          </button>
+          <button type="button" className="dd-num" onClick={() => open('purchases')}>
+            <span className="pl-label">Purchases</span><strong>{short(c.bought)}</strong>
+            <span className="pl-help">{short(c.paid)} paid · {short(c.toPay)} to pay</span>
+          </button>
         </div>
       ) : unavailable}
 
       <div className="dd-two">
-        <Block title="Production" note="this month" to="/production">
+        <Block title="Production" note={period.label.split(' · ')[0].toLowerCase()} to="/production">
           {f ? <>
             <Line label="Cement bags today" value={fmt(f.bagsToday)} />
-            <Line label="Cement bags this month" value={fmt(f.bagsMonth)} />
-            <Line label="Pieces curing" value={f.ready ? `${fmt(f.curing)} · ${f.ready} batches ready` : fmt(f.curing)} />
-            <Line to="/review" label="Batches outside the yield band" value={f.flags} warn={f.flags > 0} />
+            <Line label="Cement bags in the period" value={fmt(f.bags)} />
+            {curing && <Line label="Pieces curing" value={curing.ready ? `${fmt(curing.curing)} · ${curing.ready} batches ready` : fmt(curing.curing)} />}
+            {curing && <Line to="/review" label="Batches outside the yield band" value={curing.flags} warn={curing.flags > 0} />}
             <Line to="/production/ledger" label="Pieces rejected" value={fmt(f.rejected)} warn={f.rejected > 0} />
           </> : unavailable}
         </Block>
-        <Block title="Stock at risk" note="only what's low" to="/stock">
-          {r ? (r.materials.length + r.products.length === 0 ? <p className="pl-help">Nothing is low.</p> : <>
-            {r.materials.slice(0, SHOW).map(x => <Line key={x.id} to="/stock" label={x.name} value={`about ${x.days} day${x.days === 1 ? '' : 's'} left`} warn />)}
-            {r.products.slice(0, Math.max(SHOW - r.materials.length, 0)).map(x => <Line key={x.key} to="/stock" label={x.name} value="below reorder" />)}
-            {r.materials.length + r.products.length > SHOW && <Link to="/stock" className="pl-help dd-more">{r.materials.length + r.products.length - SHOW} more</Link>}
-          </>) : unavailable}
+        <Block title="Stock" note="at cost, today" to="/stock">
+          {stock === undefined ? <span className="skeleton" /> : stock === null ? unavailable : <>
+            <Line to="/stock" label="Products" value={short(stock.finished)} />
+            <Line to="/stock" label="Materials" value={short(stock.materials_value)} />
+            {stock.materials.slice(0, SHOW).map(x => <Line key={x.id} to="/stock" label={x.name} value={`about ${x.days} day${x.days === 1 ? '' : 's'} left`} warn />)}
+            {stock.products.slice(0, Math.max(SHOW - stock.materials.length, 0)).map(x => <Line key={x.key} to="/stock" label={x.name} value="below reorder" />)}
+            {risks > SHOW && <Link to="/stock" className="pl-help dd-more">{risks - SHOW} more at risk</Link>}
+            {stock.uncosted > 0 && <p className="pl-help dd-more">{stock.uncosted} items have no cost yet, so the value is lower than it will be.</p>}
+          </>}
         </Block>
       </div>
 
-      {m && (
-        <Block title="Sales vs money paid out" note="last 6 months" to="/cash-flow?tab=monthly">
-          <div className="dd-legend"><span><i className="dd-key is-sales" />Sales</span><span><i className="dd-key is-costs" />Paid out</span></div>
-          <div className="dd-chart" role="img" aria-label={m.trend.map(x => `${monthShort(x.month)}: sales ${fmt(x.sales)}, paid out ${fmt(x.costs)}`).join('; ')}>
-            {m.trend.map(x => (
-              <div key={x.month} className="dd-col" title={`${monthShort(x.month)}\nSales: ${fmt(x.sales)}\nPaid out: ${fmt(x.costs)}`}>
+      {trend && (
+        <Block title="Money in vs out" note="last 6 months" to="/cash-flow?tab=monthly">
+          <div className="dd-legend"><span><i className="dd-key is-sales" />In</span><span><i className="dd-key is-costs" />Out</span></div>
+          <div className="dd-chart" role="img" aria-label={trend.map(x => `${monthShort(x.month)}: in ${fmt(x.in)}, out ${fmt(x.out)}`).join('; ')}>
+            {trend.map(x => (
+              <div key={x.month} className="dd-col" title={`${monthShort(x.month)}\nIn: ${fmt(x.in)}\nOut: ${fmt(x.out)}`}>
                 <div className="dd-bars">
-                  <div className="dd-bar is-sales" style={{ height: `${(x.sales / top) * 100}%` }} />
-                  <div className="dd-bar is-costs" style={{ height: `${(x.costs / top) * 100}%` }} />
+                  <div className="dd-bar is-sales" style={{ height: `${(x.in / top) * 100}%` }} />
+                  <div className="dd-bar is-costs" style={{ height: `${(x.out / top) * 100}%` }} />
                 </div>
                 <span className="pl-help">{monthShort(x.month)}</span>
               </div>
@@ -112,18 +151,45 @@ export default function DirectorBoard() {
         </Block>
       )}
 
-      <div className="dd-two">
-        <Block title="Top overdue customers" note="days late" to="/customers?tab=owing">
-          {d.overdue.length === 0 ? <p className="pl-help">Nobody is overdue.</p>
-            : d.overdue.slice(0, SHOW).map(x => <Line key={x.key} to="/customers?tab=owing" label={`${x.name} · ${short(x.amount)}`} value={x.days} warn={x.days > 30} />)}
+      {!branchId && money && branches.length > 1 && (
+        <Block title="Branches" note={period.label.split(' · ')[0].toLowerCase()}>
+          {branches.map(b => {
+            const here = id => id === b.id;
+            return <Line key={b.id} label={b.name} value={`${short(cardsFor(money, period, here).sales)} · ${fmt(productionFor(money, period, here, today).bags)} bags`} />;
+          })}
         </Block>
-        {!branchId && m && m.branches.length > 1 && (
-          <Block title="Branches" note="this month">
-            {m.branches.map(b => <Line key={b.id} label={b.name} value={`Sales ${short(b.sales)} · cash ${short(b.cash)}`} />)}
-          </Block>
-        )}
+      )}
+      <p className="pl-help">{branchId ? branchName : 'All branches'} · {today}. Days left are an estimate from the last 14 days&apos; use. Money out counts only what&apos;s recorded in MOIS.</p>
+    </div>
+  );
+}
+
+/* A card opened: its history by days, weeks, months, quarters or years, newest first */
+function CardHistory({ card, data, inBranch, today, short }) {
+  const [by, setBy] = useState('week');
+  const [, setParams] = useSearchParams();
+  const cfg = CARD[card];
+  const rows = useMemo(() => historyFor(data, card, by, inBranch, today).slice(0, SHOWN_ROWS[by]), [data, card, by, inBranch, today]);
+  const cols = ['a', 'b', 'c'].slice(0, cfg.heads.length);
+  const back = () => setParams(p => { const n = new URLSearchParams(p); n.delete('card'); return n; });
+  return (
+    <div className="dd">
+      <div className="dd-back">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={back}><ArrowLeft size={15} /> Dashboard</button>
+        <strong>{cfg.title}</strong>
+        <Link to={cfg.to} className="btn btn-outline btn-sm">{cfg.page}</Link>
       </div>
-      <p className="pl-help">{branchId ? branchName : 'All branches'} · {today}. Days left are an estimate from the last 14 days&apos; use. Sales include VAT.</p>
+      <PageTabs nested tabs={BY} value={by} onChange={setBy} />
+      <div className="card"><div className="table-container">
+        <table>
+          <thead><tr><th>Period</th>{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.length === 0 ? <tr><td colSpan={cols.length + 1} className="text-muted">Nothing recorded yet.</td></tr>
+            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
+          </tbody>
+          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+        </table>
+      </div></div>
     </div>
   );
 }

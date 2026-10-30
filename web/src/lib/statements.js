@@ -48,15 +48,28 @@ export function cashPeriods({ accounts, moves, today, by = 'month', count = 12 }
   return out;
 }
 
+/** Finished stock and materials at cost today, branch by branch (product_costing 058; material_stock_value 052) */
+export async function stockAtCost(branchIds) {
+  const bal = await supabase.from('stock_balances').select('branch_id, material_id, quantity').not('material_id', 'is', null).gt('quantity', 0);
+  let finished = 0; let materials = 0; let uncosted = 0;
+  for (const b of branchIds) {
+    const pc = await supabase.rpc('product_costing', { p_branch_id: b });
+    if (!pc.error) for (const r of pc.data || []) { finished += n(r.value); if (n(r.uncosted_quantity) > 0) uncosted += 1; }
+    const mats = [...new Set((bal.data || []).filter(x => x.branch_id === b).map(x => x.material_id))];
+    const vals = await Promise.all(mats.map(m => supabase.rpc('material_stock_value', { p_branch_id: b, p_material_id: m })));
+    for (const v of vals) { const r = v.data?.[0]; if (r) { materials += n(r.value); if (n(r.uncosted_quantity) > 0) uncosted += 1; } }
+  }
+  return { finished, materials_value: materials, uncosted };
+}
+
 /** The balance sheet today at the branches in view */
 export async function loadBalanceSheet({ branchIds, inBranch, today }) {
-  const [acc, mv, sup, pay, adv, bal] = await Promise.all([
+  const [acc, mv, sup, pay, adv] = await Promise.all([
     supabase.from('payment_accounts').select('*'),
     supabase.from('cash_movements').select('account_id, branch_id, day, direction, amount'),
     supabase.from('supplier_balances').select('branch_id, owed'),
     supabase.from('pay_sheets').select('branch_id, status, period_end, total').in('status', ['draft', 'approved']),
     supabase.from('staff_advance_balances').select('branch_id, status, outstanding'),
-    supabase.from('stock_balances').select('branch_id, material_id, quantity').not('material_id', 'is', null).gt('quantity', 0),
   ]);
   if (acc.error || mv.error) throw acc.error || mv.error;
   const accounts = (acc.data || []).filter(a => inBranch(a.branch_id) && a.status === 'active');
@@ -66,15 +79,7 @@ export async function loadBalanceSheet({ branchIds, inBranch, today }) {
   const sales = (await loadOwing()).filter(s => inBranch(s.branch_id));
   const receivable = sum(ageByBuyer(sales, [], today), 'owed');
 
-  // stock at cost, branch by branch (product_costing 058; material_stock_value 052)
-  let finished = 0; let materials = 0; let uncosted = 0;
-  for (const b of branchIds) {
-    const pc = await supabase.rpc('product_costing', { p_branch_id: b });
-    if (!pc.error) for (const r of pc.data || []) { finished += n(r.value); if (n(r.uncosted_quantity) > 0) uncosted += 1; }
-    const mats = [...new Set((bal.data || []).filter(x => x.branch_id === b).map(x => x.material_id))];
-    const vals = await Promise.all(mats.map(m => supabase.rpc('material_stock_value', { p_branch_id: b, p_material_id: m })));
-    for (const v of vals) { const r = v.data?.[0]; if (r) { materials += n(r.value); if (n(r.uncosted_quantity) > 0) uncosted += 1; } }
-  }
+  const { finished, materials_value: materials, uncosted } = await stockAtCost(branchIds);
   const advances = adv.error ? 0 : sum((adv.data || []).filter(a => inBranch(a.branch_id) && a.status !== 'void'), 'outstanding');
   const suppliers = sup.error ? 0 : sum((sup.data || []).filter(s => inBranch(s.branch_id) && n(s.owed) > 0), 'owed');
   const wages = pay.error ? 0 : sum((pay.data || []).filter(p => inBranch(p.branch_id) && (p.status === 'approved' || p.period_end < today)), 'total');

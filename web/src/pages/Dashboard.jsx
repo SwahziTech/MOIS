@@ -73,7 +73,7 @@ function RoleDashboard({ isOwner }) {
     sees('sales.view') && ['sales', 'Sales'],
     ['setup', 'Setup'],
   ].filter(Boolean), [can, canAnywhere, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [tab, setTab] = useState(null);
+  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.search).get('card') ? 'director' : null));
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }

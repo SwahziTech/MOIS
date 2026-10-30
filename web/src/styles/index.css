@@ -2468,3 +2468,18 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .pwa-note > span { flex: 1 1 160px; }
 .pwa-note.is-warn { border-color: var(--color-warning, var(--color-khaki)); }
 @media print { .pwa-notes { display: none; } }
+
+/* Director's dashboard, draft 2: period arrows, three cards, card history (2026-10-30) */
+.dd-period { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--text-sm); color: var(--text-muted); }
+.dd-period > span { flex: 1; text-align: center; }
+.dd-step { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 10px; background: none; color: var(--text-primary); cursor: pointer; }
+.dd-step:disabled { opacity: .35; cursor: default; }
+.dd-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dd-num { font: inherit; text-align: left; cursor: pointer; }
+.dd-num-big { grid-column: 1 / -1; }
+.dd-num-big strong { font-size: 1.9rem; }
+.dd-back { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+@media (min-width: 761px) {
+  .dd-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dd-num-big { grid-column: span 2; }
+}
