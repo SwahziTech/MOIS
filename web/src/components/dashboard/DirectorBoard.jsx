@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
-import { loadInventoryRefs, orgToday } from '../../lib/inventory';
+import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import { PageTabs, SortFilterMenu } from '../ListControls';
 import ErrorState from '../ErrorState';
@@ -185,12 +185,16 @@ function CardHistory({ card, data, inBranch, today, short }) {
       <PageTabs nested tabs={BY} value={by} onChange={setBy} />
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Period</th>{cfg.showItems && <th>Item</th>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
+          <thead><tr><th>Period</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 2 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
-            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cfg.showItems && <td>{[...(r.items || [])].join(', ') || '—'}</td>}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
+            {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 4 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
+            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cfg.showItems && (() => { const its = Object.values(r.items || {}); return <>
+                <td>{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{i.name}</div>)}</td>
+                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{qtyText(i.qty)} {i.unit}</div>)}</td>
+                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
+              </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
           </tbody>
-          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cfg.showItems && <td />}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>
       </div></div>
     </div>
