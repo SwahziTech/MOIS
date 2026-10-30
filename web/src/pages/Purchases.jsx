@@ -401,7 +401,7 @@ export default function Purchases() {
 
       {editing && refs && (
         <PurchaseModal {...editing} refs={refs} materials={materials} txByMove={txByMove} organization={organization}
-          branchId={branchId} canAt={canAt} canManage={canManage}
+          branchId={editing.fromOrder?.branchId ?? branchId} canAt={canAt} canManage={canManage}
           goods={editing.purchase ? describeLines(txByMove[editing.purchase.movement_id]) : ''} history={history} vatRateOf={vatRateOf}
           onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); setOrdersKey(k => k + 1); await load(); }} />
       )}

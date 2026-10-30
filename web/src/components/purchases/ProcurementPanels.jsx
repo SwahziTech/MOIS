@@ -94,11 +94,21 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
 const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '', categoryId: '', description: '', unitText: '', amount: '' };
 
 /* ---------- Requests ---------- */
+/** An order's material lines still to come, in their own units, ready for the purchase form */
+const goodsLeftOf = (po, got) => [...(po.lines || [])].filter(l => l.kind !== 'expense' && (got[l.id] ?? 0) < Number(l.stock_quantity) - 1e-9)
+  .sort((a, b) => a.line_no - b.line_no).map(l => {
+    const f = Number(l.stock_quantity) / Number(l.quantity);
+    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
+  });
+const purchaseFromOrder = (po, got) => ({ orderId: po.id, supplierId: po.supplier_id, branchId: po.branch_id, lines: goodsLeftOf(po, got) });
+
 /*
  * One flow for every request (2026-10-28, migration 084), from its row:
  * waiting → the branch manager approves → approved → an order is made →
  * ordered → open it again to edit the order or confirm what was bought
- * (goods received, expenses or LUKU tokens recorded) → done.
+ * (goods received, expenses or LUKU tokens recorded) → done. An ordered
+ * request with goods to come also has Record purchase right on its row: the
+ * form opens filled from the order.
  */
 export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v, onReceive, onRecordExpense, onRecordToken, openFirst, onOpened }) {
   const { canAt } = useAuth();
@@ -106,18 +116,25 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
   const [error, setError] = useState('');
   const [asking, setAsking] = useState(false);
   const [cats, setCats] = useState([]);
+  const [orders, setOrders] = useState({});   // request id → its open order
+  const [gotAll, setGotAll] = useState({});   // order line id → received
   const [openId, setOpenId] = useState(openFirst ?? null);   // a request opened from elsewhere (Electricity › Top-ups)
   useEffect(() => { if (openFirst) onOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function load() {
-    const [q, c] = await Promise.all([
+    const [q, c, po, rc] = await Promise.all([
       supabase.from('purchase_requests').select('*, lines:purchase_request_lines(*)').order('requested_on', { ascending: false }).order('request_no', { ascending: false }),
       supabase.from('expense_categories').select('id, name, status').order('display_order').order('name'),
+      supabase.from('purchase_orders').select('*, lines:purchase_order_lines(*)').eq('status', 'open').not('request_id', 'is', null),
+      supabase.from('purchase_order_receipts').select('order_line_id, received'),
     ]);
     if (q.error) { console.error(q.error); setError("We couldn't load purchase requests."); return; }
     setRows(q.data || []);
     setCats(c.data || []);
+    setOrders(Object.fromEntries((po.data || []).map(o => [o.request_id, o])));
+    setGotAll(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
   }
   useEffect(() => { load(); }, []);
+  const canBuy = b => canAt('procurement.receive', b) || canAt('cash.approve', b);
   const here = (rows || []).filter(r => inBranch(r.branch_id));
   const canAsk = !!branchId && canAt('procurement.request', branchId);
   const open = here.find(r => r.id === openId);
@@ -135,10 +152,10 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>What</th><th>Status</th></tr></thead>
+          <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>What</th><th>Status</th><th aria-label="Actions" /></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
-            : here.length === 0 ? <tr><td colSpan={6} className="text-muted">No purchase requests yet.</td></tr>
+            {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
+            : here.length === 0 ? <tr><td colSpan={7} className="text-muted">No purchase requests yet.</td></tr>
             : here.map(r => (
               <tr key={r.id} className="clickable-row" onClick={() => setOpenId(r.id)} title="Open the request">
                 <td>#{r.request_no}</td>
@@ -147,6 +164,11 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
                 <td>{dateText(r.needed_by) ?? ''}</td>
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
                 <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                  {orders[r.id] && canBuy(r.branch_id) && goodsLeftOf(orders[r.id], gotAll).length > 0 && (
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive?.(purchaseFromOrder(orders[r.id], gotAll))}>Record purchase</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -193,10 +215,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
   };
   const lineDone = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
   const lines = [...(po?.lines || [])].sort((a, b) => a.line_no - b.line_no);
-  const goodsLeft = lines.filter(l => l.kind !== 'expense' && !lineDone(l)).map(l => {
-    const f = Number(l.stock_quantity) / Number(l.quantity);
-    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
-  });
+  const goodsLeft = po ? goodsLeftOf(po, got) : [];
   const nothingYet = po && !lines.some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0));
   const canConfirm = po && po.status === 'open' && (canAt('procurement.receive', r.branch_id) || canAt('cash.approve', r.branch_id));
   return (
@@ -251,7 +270,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
               );
             })}</tbody>
           </table>
-          {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive({ orderId: po.id, supplierId: po.supplier_id, lines: goodsLeft })}>Receive goods</button>}
+          {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive(purchaseFromOrder(po, got))}>Record purchase</button>}
         </>}
       </div>
       {mode === 'order' && <OrderModal refs={refs} branchId={r.branch_id} request={r} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}
