@@ -124,11 +124,14 @@ export default function Sales() {
   const open = (sales || []).find(s => s.id === viewing);
 
   // page order (locked): heading → summary cards → these tabs → search/filters → list
-  const salesTabs = <PageTabs tabs={[['book', 'Sales book'], ['list', 'Quotations & invoices'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
+  // the sidebar shows this page twice (2026-10-30): Sales (book, deliveries, overview) and Invoices (the quotations & invoices list)
+  const onInvoices = view === 'list';
+  const salesTabs = !onInvoices && <PageTabs tabs={[['book', 'Sales book'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
 
   return (
-    <PageShell title="Sales" subtitle="Sales & Costing"
-      description={branchId ? `The sales book at ${branchName}: each sale, where the money went, and where the goods went.` : 'The sales book at every branch.'}
+    <PageShell title={onInvoices ? 'Invoices' : 'Sales'} subtitle="Sales"
+      description={onInvoices ? `Quotations, orders and invoices${branchId ? ` at ${branchName}` : ' at every branch'}.`
+        : branchId ? `The sales book at ${branchName}: each sale, where the money went, and where the goods went.` : 'The sales book at every branch.'}
       onSettings={() => setShowSettings(true)}
       actions={canSell && <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button>}
       primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>

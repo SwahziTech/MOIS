@@ -118,11 +118,17 @@ export default function Staff() {
   const inCost = working.filter(s => s.in_production_cost).length;
   const payText = s => (s.pay_rate == null ? null : `${money(s.pay_rate)} ${basisOf(s) === 'daily' ? 'a day' : 'a month'}`);
 
+  // the sidebar shows this page three ways (2026-10-30): Personnel, Attendance, Payroll — each with its own tabs
+  const page = tab === 'attendance' ? 'attendance' : ['pay', 'advances', 'returns'].includes(tab) ? 'payroll' : 'personnel';
+  const pageTabs = page === 'personnel' ? [['employed', 'Employees'], ['casual', 'Casuals'], ['teams', 'Teams']]
+    : page === 'payroll' ? [['pay', 'Pay runs'], ['advances', 'Advances'], ['returns', 'Returns']] : null;
   return (
-    <PageShell title="Staff" subtitle="HR" onSettings={() => setSettings(true)}
-      description={branchId ? `Employees and casual labourers at ${branchName}, and who worked each day.` : 'Staff at every branch — choose a branch to add staff or mark attendance.'}
+    <PageShell title={{ personnel: 'Personnel', attendance: 'Attendance', payroll: 'Payroll' }[page]} subtitle="HR" onSettings={() => setSettings(true)}
+      description={page === 'attendance' ? `Who worked each day${branchId ? ` at ${branchName}` : ' — choose a branch to mark attendance'}.`
+        : page === 'payroll' ? `Pay sheets from attendance, advances and statutory returns${branchId ? ` at ${branchName}` : ''}.`
+        : branchId ? `Employees, casual labourers and teams at ${branchName}.` : 'Staff at every branch — choose a branch to add staff.'}
       primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
-      <PageTabs tabs={[['employed', 'Employees'], ['casual', 'Casuals'], ['teams', 'Teams'], ['attendance', 'Attendance'], ['pay', 'Pay sheets'], ['advances', 'Advances'], ['returns', 'Returns']]} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
+      {pageTabs && <PageTabs tabs={pageTabs} value={tab} onChange={t => { setTab(t); setSearch(''); }} />}
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : tab === 'teams' ? (
         <TeamsPanel staff={staff || []} branchId={branchId} inBranch={inBranch} />

@@ -205,7 +205,7 @@ export default function Purchases() {
 
   const purchaseTabs = (
     <PageTabs value={tab} onChange={setTab}
-      tabs={[['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['requests', 'Requests'], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Waiting for details (${waitingHere.length})`]]} />
+      tabs={[['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['requests', 'Orders'], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Goods received (${waitingHere.length})`]]} />
   );
 
   return (

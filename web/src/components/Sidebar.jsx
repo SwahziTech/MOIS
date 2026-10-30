@@ -64,7 +64,10 @@ export const NAV = [
       // batches, curing and quality release (migration 042)
       { label: 'Production',    to: '/production', icon: Factory,       perm: 'production.view' },
       // every confirmed production day, by period and stage (2026-10-21)
-      { label: 'Job Costing',   to: '/production/ledger', icon: BookOpen, perm: 'production.view' },
+      { label: 'Job Costing',   to: '/production/ledger', icon: BookOpen, group: [
+        { label: 'Production ledger', to: '/production/ledger',       perm: 'production.view' },
+        { label: 'Material variance', to: '/production?tab=variance', perm: 'production.view' },
+      ] },
       { label: 'Planner',       to: '/production?tab=planner', tabs: ['planner'], icon: CalendarClock, perm: 'production.view' },
     ],
   },
@@ -117,21 +120,29 @@ export const NAV = [
 
 const NAV_ITEMS = NAV.flatMap(s => s.items);
 const pathOf = to => to.split('?')[0];
+const tabIn = to => new URLSearchParams(to.split('?')[1] || '').get('tab');
+// the tabs of a page that belong to another entry (Planner, Invoices, Material variance, Attendance, Payroll)
+const CLAIMS = NAV_ITEMS.flatMap(i => (i.group
+  ? i.group.filter(g => tabIn(g.to)).map(g => ({ owner: g, path: pathOf(g.to), tabs: [tabIn(g.to)] }))
+  : i.tabs ? [{ owner: i, path: pathOf(i.to), tabs: i.tabs }] : []));
+const curTab = loc => new URLSearchParams(loc.search).get('tab') || '';
+/** is `to` (an entry, or a page of a group) the page open now */
+export function atEntry(entry, loc) {
+  const path = pathOf(entry.to);
+  if (loc.pathname !== path) return false;
+  const cur = curTab(loc);
+  const mine = CLAIMS.find(c => c.owner === entry);
+  if (mine) return mine.tabs.includes(cur);
+  return !CLAIMS.some(c => c.path === path && c.tabs.includes(cur));
+}
 /** may this person open the entry (any page of a group) */
 export const canSee = (item, can) => (item.group ? item.group.some(g => !g.perm || can(g.perm)) : !item.perm || can(item.perm));
 /** where the entry goes: a group's first page this person may open */
 export const hrefOf = (item, can) => (item.group ? (item.group.find(g => !g.perm || can(g.perm))?.to ?? item.to) : item.to);
 /** is the entry the page open now (a group's pages; a page's tabs split between entries) */
-export function navActive(item, loc) {
-  if (item.group) return item.group.some(g => loc.pathname === g.to);
-  const path = pathOf(item.to);
-  if (loc.pathname !== path) return false;
-  const cur = new URLSearchParams(loc.search).get('tab') || '';
-  if (item.tabs) return item.tabs.includes(cur);
-  return !NAV_ITEMS.some(o => o !== item && !o.group && pathOf(o.to) === path && o.tabs?.includes(cur));
-}
+export const navActive = (item, loc) => (item.group ? item.group.some(g => atEntry(g, loc)) : atEntry(item, loc));
 /** the group the open page belongs to, for the tabs under its heading */
-export const groupOf = pathname => NAV_ITEMS.find(i => i.group?.some(g => g.to === pathname)) ?? null;
+export const groupOf = loc => NAV_ITEMS.find(i => i.group?.some(g => atEntry(g, loc))) ?? null;
 
 export default function Sidebar() {
   const { profile, session, organization, userRoles, can, signOut } = useAuth();

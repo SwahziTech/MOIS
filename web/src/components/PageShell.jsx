@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { groupOf } from './Sidebar';
+import { groupOf, atEntry } from './Sidebar';
 import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
@@ -12,9 +12,9 @@ import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 // onSettings: a small ⚙ beside the heading opens the page's own settings (2026-10-25)
 // a page that shares a sidebar entry with others (Review queue, Products, Procurement, Cash flow) shows them as tabs under the heading (2026-10-30)
 export default function PageShell({ title, subtitle, description, primaryAction, actions, onSettings, children }) {
-  const { pathname } = useLocation();
+  const loc = useLocation();
   const { can } = useAuth();
-  const group = groupOf(pathname);
+  const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
   return (
     <main className="page-content animate-fadeIn">
@@ -41,7 +41,7 @@ export default function PageShell({ title, subtitle, description, primaryAction,
       {siblings.length > 1 && (
         <nav className="page-group" aria-label={group.label}>
           {siblings.map(g => (
-            <Link key={g.to} to={g.to} className={`page-group-tab${g.to === pathname ? ' is-on' : ''}`} aria-current={g.to === pathname ? 'page' : undefined}>{g.label}</Link>
+            <Link key={g.to} to={g.to} className={`page-group-tab${atEntry(g, loc) ? ' is-on' : ''}`} aria-current={atEntry(g, loc) ? 'page' : undefined}>{g.label}</Link>
           ))}
         </nav>
       )}

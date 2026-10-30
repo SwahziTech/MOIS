@@ -160,17 +160,19 @@ export default function Production() {
     load();
   }
 
+  // the sidebar shows this page three ways (2026-10-30): Production, Planner, and Job Costing › Material variance
+  const page = current === 'planner' ? 'planner' : current === 'variance' ? 'variance' : 'production';
   return (
-    <PageShell title="Production" subtitle="Production" onSettings={() => setShowSettings(true)}
-      description={branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
-      <PageTabs value={current} onChange={setTab} tabs={[
+    <PageShell title={{ production: 'Production', planner: 'Planner', variance: 'Material variance' }[page]} subtitle="Production" onSettings={() => setShowSettings(true)}
+      description={page === 'planner' ? `Production orders and capacity${branchId ? ` at ${branchName}` : ''}: what to make next.`
+        : page === 'variance' ? 'Materials taken against what the recipes needed, batch by batch.'
+        : branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
+      {page === 'production' && <PageTabs value={current} onChange={setTab} tabs={[
         ...(canRecord ? [['log', 'Production']] : []),
         ['curing', `Curing (${curing.length})`],
         ...(waitingMaterials.length ? [['materials', `Materials to issue (${waitingMaterials.length})`]] : []),
         ['done', 'Released & void'],
-        ['variance', 'Material variance'],
-        ['planner', 'Orders & planner'],
-      ]} />
+      ]} />}
       {rowError && <div className="alert alert-error mb-8" role="alert">{rowError}</div>}
 
       {current === 'planner' ? (
