@@ -21,8 +21,11 @@ export const dayShift = (d, k) => { const x = utc(d); x.setUTCDate(x.getUTCDate(
 const monthsBack = (m, k) => { const d = utc(`${m}-01`); d.setUTCMonth(d.getUTCMonth() - k); return iso(d).slice(0, 7); };
 const lastDay = m => { const x = utc(`${m}-01`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return iso(x); };
 const sundayOf = d => dayShift(d, -utc(d).getUTCDay());
+const daysSinceMonday = d => (utc(d).getUTCDay() + 6) % 7;
 const shortDay = d => utc(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+const fullDay = d => utc(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const weekday = d => utc(d).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
 const monthLong = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const inRange = (d, from, to) => !!d && d >= from && d <= to;
 const USE_DAYS = 14;      // recent use a material's days left are worked out from
@@ -30,6 +33,7 @@ const LOW_DAYS = 7;       // fewer days left than this counts as at risk
 
 /**
  * The periods the Sort / Filter menu offers; the first, today, is the default.
+ * The earlier days of this week (back to Monday) come after yesterday.
  * Each: { key, label, note, from, to, compare: { from, to, label } }
  */
 export function periodsFor(today) {
@@ -44,9 +48,14 @@ export function periodsFor(today) {
   const prevQ = monthsBack(quarterStart, 3);
   const year = today.slice(0, 4);
   const lastYear = String(Number(year) - 1);
+  const earlier = Array.from({ length: Math.max(daysSinceMonday(today) - 1, 0) }, (_, i) => {
+    const d = dayShift(today, -(i + 2));
+    return { key: `day-${i + 2}`, label: weekday(d), note: fullDay(d).split(', ')[1], from: d, to: d, compare: { from: dayShift(d, -1), to: dayShift(d, -1), label: 'the day before' } };
+  });
   return [
-    { key: 'today', label: 'Today', note: shortDay(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
-    { key: 'yesterday', label: 'Yesterday', note: shortDay(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
+    { key: 'today', label: 'Today', note: fullDay(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
+    { key: 'yesterday', label: 'Yesterday', note: fullDay(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
+    ...earlier,
     { key: 'week', label: 'This week', note: `${shortDay(sun)} – ${shortDay(dayShift(sun, 6))}`, from: sun, to: today, compare: { from: lastSun, to: dayShift(today, -7), label: 'last week' } },
     { key: 'lastweek', label: 'Last week', note: `${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 6))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },
     { key: 'month', label: 'This month', note: monthLong(month), from: `${month}-01`, to: today, compare: { from: `${prevM}-01`, to: sameDayIn(prevM), label: `same days ${monthShort(prevM)}` } },
@@ -54,6 +63,12 @@ export function periodsFor(today) {
     { key: 'quarter', label: 'This quarter', note: `${monthShort(quarterStart)} – today`, from: `${quarterStart}-01`, to: today, compare: { from: `${prevQ}-01`, to: sameDayIn(monthsBack(month, 3)), label: 'same days last quarter' } },
     { key: 'year', label: 'This year', note: year, from: `${year}-01-01`, to: today, compare: { from: `${lastYear}-01-01`, to: `${lastYear}${today.slice(4)}`, label: `same days ${lastYear}` } },
   ];
+}
+
+/** The back arrow's path, nearest first: today, each day back to Monday, last week, last month */
+export function periodSteps(today) {
+  const days = daysSinceMonday(today);
+  return ['today', ...(days >= 1 ? ['yesterday'] : []), ...Array.from({ length: Math.max(days - 1, 0) }, (_, i) => `day-${i + 2}`), 'lastweek', 'lastmonth'];
 }
 
 async function loadNeeds({ inBranch, today }) {

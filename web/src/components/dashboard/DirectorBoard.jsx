@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort } from '../../lib/format';
 import { loadInventoryRefs, orgToday } from '../../lib/inventory';
-import { loadDirectorBoard, loadStockBlock, periodsFor, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
+import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import { PageTabs, SortFilterMenu } from '../ListControls';
 import ErrorState from '../ErrorState';
 
@@ -32,8 +32,8 @@ const Line = ({ to, label, value, warn }) => {
 
 /*
  * The director's dashboard (2026-10-30, draft 2), one screen with no tabs,
- * built for the phone first: what needs them; three cards for today, or another
- * period from the Sort / Filter menu; production; stock at cost with
+ * built for the phone first: what needs them; three cards for today, arrows back through
+ * this week's days to last week and last month, or any period from Sort / Filter; production; stock at cost with
  * what's at risk; money in against money out; branches. A card opens its
  * history by days, weeks, months, quarters and years. No profit, by the user's
  * choice. Until receipts are approved in MOIS (stage 2), Sales says so.
@@ -51,6 +51,10 @@ export default function DirectorBoard() {
   const [periodKey, setPeriodKey] = useState('today');
   const periods = useMemo(() => periodsFor(today), [today]);
   const period = periods.find(p => p.key === periodKey);
+  // Arrows walk today → each day back to Monday → last week → last month;
+  // from a period off that path (e.g. This year), forward returns to today
+  const steps = useMemo(() => periodSteps(today), [today]);
+  const stepAt = steps.indexOf(periodKey);
 
   async function load() {
     setError(''); setD(null); setStock(undefined);
@@ -89,6 +93,8 @@ export default function DirectorBoard() {
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 
       <div className="dd-period">
+        <button type="button" className="dd-step" aria-label="Earlier" disabled={stepAt < 0 || stepAt === steps.length - 1} onClick={() => setPeriodKey(steps[stepAt + 1])}><ChevronLeft size={18} /></button>
+        <button type="button" className="dd-step" aria-label="Later" disabled={stepAt === 0} onClick={() => setPeriodKey(stepAt < 0 ? 'today' : steps[stepAt - 1])}><ChevronRight size={18} /></button>
         <span><strong>{period.label}</strong> · {period.note}</span>
         <SortFilterMenu filters={[{ key: 'period', label: 'Period', value: periodKey, onChange: setPeriodKey, options: periods.map(p => ({ value: p.key, label: p.label })) }]} />
       </div>
