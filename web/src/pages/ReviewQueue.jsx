@@ -14,7 +14,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import Decisions from '../components/master/Decisions';
 import FlagChoices from '../components/master/FlagChoices';
 import { useSearchParams, Link } from 'react-router-dom';
-import { datesInText } from '../lib/format';
+import { datesInText, tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the review queue. Please try again.";
 
@@ -177,7 +177,7 @@ export default function ReviewQueue() {
                         </Link>
                       )}
                     </td>
-                    <td className="text-sm" style={{ verticalAlign: 'top', maxWidth: 420 }}>{datesInText(f.reason)}</td>
+                    <td className="text-sm" style={{ verticalAlign: 'top', maxWidth: 420 }}>{datesInText(f.reason, tableDate)}</td>
                     {canResolve && (
                       <td style={{ verticalAlign: 'top' }}>
                         {refs ? <FlagChoices flag={f} name={names[`${f.entity_type}:${f.entity_id}`]} refs={refs} onDone={load} />

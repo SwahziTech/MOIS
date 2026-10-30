@@ -6,7 +6,7 @@ import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/Deliveries
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatAmount, formatMoneyShort, dateText, dateTimeText } from '../lib/format';
+import { formatMoney, formatAmount, formatMoneyShort, dateText, tableDate, tableDateTime } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
@@ -658,7 +658,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
             {(sale.payments || []).length === 0 ? <p className="pl-help">No payment yet.</p> : (
               <table className="rd-table"><tbody>
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
-                  <tr key={p.id}><td>{dateText(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · receipt ${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
+                  <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · receipt ${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
                     <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
                 ))}
               </tbody></table>
@@ -672,10 +672,10 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
             <table className="rd-table"><tbody>
               {deliveries.map(d => (
                 <tr key={d.id}>
-                  <td>{dateText(d.delivered_on)}</td>
+                  <td>{tableDate(d.delivered_on)}</td>
                   <td>{d.kind === 'collection' ? 'Collected' : d.status === 'on_the_way' ? 'On the way' : 'Delivered'} #{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
                     {d.status === 'on_the_way' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>awaiting proof</span>}
-                    {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <div className="pl-help">Received by {d.pod_received_by || d.received_by}{d.delivered_at ? ` · ${dateTimeText(d.delivered_at)}` : ''}{d.pod_note ? ` · ${d.pod_note}` : ''}</div>}
+                    {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <div className="pl-help">Received by {d.pod_received_by || d.received_by}{d.delivered_at ? ` · ${tableDateTime(d.delivered_at)}` : ''}{d.pod_note ? ` · ${d.pod_note}` : ''}</div>}
                     <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -1191,7 +1191,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
             <thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into</th><th>Date</th><th>Receipt no.</th><th /></tr></thead>
             <tbody>{pays.map((x, i) => (
               <tr key={x.pm.id} className={x.remove ? 'text-muted' : ''}>
-                <td>{dateText(x.pm.paid_on)}</td>
+                <td>{tableDate(x.pm.paid_on)}</td>
                 <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.amount}
                   onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value } : y)))} /></td>
                 <td>{accounts.length ? (

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { loadFlagBranches } from '../lib/flagBranch';
-import { formatAmount, formatMoneyShort, dateText } from '../lib/format';
+import { formatAmount, formatMoneyShort, dateText, tableDate } from '../lib/format';
 import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadProduction, loadSales, loadMaterialUse, loadProfit } from '../lib/reports';
 import { loadCuring, loadOpenOrders, loadLowStock, loadPayables, loadRecentSales, loadWaiting } from '../lib/dashboard';
@@ -176,7 +176,7 @@ function RoleDashboard({ isOwner }) {
               <table><thead><tr><th>Cast on</th><th>Product</th><th className="num">Pieces</th><th>Cured by</th></tr></thead>
                 <tbody>{!d ? <tr><td colSpan={4}><span className="skeleton" /></td></tr>
                   : d.curing.rows.length === 0 ? <tr><td colSpan={4} className="text-muted">Nothing curing.</td></tr>
-                  : d.curing.rows.slice(0, 10).map(r => <tr key={r.id}><td>{dateText(r.date)}</td><td>{r.name}</td><td className="num">{formatAmount(r.pieces)}</td>
+                  : d.curing.rows.slice(0, 10).map(r => <tr key={r.id}><td>{tableDate(r.date)}</td><td>{r.name}</td><td className="num">{formatAmount(r.pieces)}</td>
                     <td>{r.ready ? <span className="badge badge-success">ready</span> : r.until}</td></tr>)}</tbody></table>
             </div></div>
             <div className="card"><div className="card-header"><h2 className="card-title">Open production orders</h2></div><div className="table-container">
@@ -226,7 +226,7 @@ function RoleDashboard({ isOwner }) {
             <table><thead><tr><th>Date</th><th>No.</th><th>Customer</th><th>Stage</th><th className="num">Total (TZS)</th><th className="num">Owed (TZS)</th></tr></thead>
               <tbody>{!d ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
                 : d.recent.length === 0 ? <tr><td colSpan={6} className="text-muted">No orders or invoices yet.</td></tr>
-                : d.recent.map(r => <tr key={r.id}><td>{dateText(r.date)}</td><td>{r.no}</td><td>{r.who}</td><td>{STAGE[r.stage]}</td>
+                : d.recent.map(r => <tr key={r.id}><td>{tableDate(r.date)}</td><td>{r.no}</td><td>{r.who}</td><td>{STAGE[r.stage]}</td>
                   <td className="num">{formatAmount(r.total)}</td><td className="num">{r.balance > 0.5 ? formatAmount(r.balance) : ''}</td></tr>)}</tbody></table>
           </div></div>
         </>

@@ -4,7 +4,7 @@ import { qtyText, warehouseLabel, breakdownMaterials, estimateBatchCosts } from 
 import { useAuth } from '../../hooks/useAuth';
 import ProductionBreakdown from '../production/ProductionBreakdown';
 import Modal from '../Modal';
-import { dateText, dateTimeText, datesInText } from '../../lib/format';
+import { dateText, dateTimeText, datesInText, tableDate } from '../../lib/format';
 
 /**
  * One approval request in full, so the admin sees exactly what will be
@@ -72,7 +72,7 @@ function SaleCorrection({ p, refs }) {
       {(c.payments || []).length > 0 && (
         <table className="rd-table"><thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Date</th><th>Receipt no.</th></tr></thead>
           <tbody>{c.payments.map((x, i) => (
-            <tr key={i}><td>{x.remove ? 'Remove this payment' : 'Change'}</td><td style={{ textAlign: 'right' }}>{x.amount != null ? money(x.amount) : '—'}</td><td>{dateText(x.paid_on) ?? '—'}</td><td>{x.receipt_no ?? '—'}</td></tr>
+            <tr key={i}><td>{x.remove ? 'Remove this payment' : 'Change'}</td><td style={{ textAlign: 'right' }}>{x.amount != null ? money(x.amount) : '—'}</td><td>{tableDate(x.paid_on) ?? '—'}</td><td>{x.receipt_no ?? '—'}</td></tr>
           ))}</tbody></table>
       )}
     </section>

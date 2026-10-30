@@ -3,7 +3,7 @@ import { Download, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, formatMoney, formatMoneyShort, dateText } from '../lib/format';
+import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { exportTable, loadProfit } from '../lib/reports';
 import { loadOwing, ageByBuyer, AGE_BUCKETS } from '../lib/receivables';
@@ -216,7 +216,7 @@ function AccountStatement({ today, money, short, inBranch, where }) {
           <tbody>
             <tr><td /><td><strong>Opening balance</strong></td><td /><td /><td /><td className="num"><strong>{amt(st.opening)}</strong></td></tr>
             {st.rows.slice().reverse().map((x, i) => (
-              <tr key={i}><td>{dateText(x.day)}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
+              <tr key={i}><td>{tableDate(x.day)}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
                 <td className="num">{x.direction === 'in' ? amt(x.amount) : ''}</td><td className="num">{x.direction === 'out' ? amt(x.amount) : ''}</td><td className="num">{amt(x.balance)}</td></tr>
             ))}
           </tbody>
@@ -293,7 +293,7 @@ function Parties({ today, money, inBranch, branchId }) {
               {owe.length === 0 ? <tr><td colSpan={7} className="text-muted">Nothing to pay suppliers.</td></tr> : owe.map(s => (
                 <tr key={s.id}>
                   <td>{s.name}</td><td className="num">{s.bills}</td><td className="num">{amt(s.billed)}</td><td className="num">{amt(s.paid)}</td>
-                  <td className="num"><strong>{amt(s.owed)}</strong></td><td>{dateText(s.since) ?? ''}</td>
+                  <td className="num"><strong>{amt(s.owed)}</strong></td><td>{tableDate(s.since) ?? ''}</td>
                   <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc(`/print/supplier-statement/${s.id}?from=${yearStart}&to=${today}`)}><Printer size={13} /> Statement</button></td>
                 </tr>
               ))}

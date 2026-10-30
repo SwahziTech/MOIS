@@ -13,7 +13,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import { EntityHistory } from '../components/master/EntityPanels';
 import { ScrollText, Search, Plus, Trash2 } from 'lucide-react';
 import NumberInput from '../components/NumberInput';
-import { dateText } from '../lib/format';
+import { dateText, tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -194,7 +194,7 @@ export default function Recipes() {
                         <IngredientBadges items={r.items} />
                       </td>
                       <td>{r.links?.length ?? 0}</td>
-                      <td className="text-muted">{dateText(r.effective_date)}</td>
+                      <td className="text-muted">{tableDate(r.effective_date)}</td>
                       <td>
                         <span className={`badge ${r.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>
                           {r.status}

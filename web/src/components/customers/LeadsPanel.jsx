@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Target, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
+import { formatAmount, formatMoneyShort, dateText, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
@@ -268,7 +268,7 @@ function LeadView({ lead, stage, sale, people, canEdit, me, today, currency, onC
               <tbody>
                 {history === null ? <tr><td colSpan={5}><span className="skeleton" /></td></tr>
                 : history.length === 0 ? <tr><td colSpan={5} className="text-muted">No follow-ups yet.</td></tr>
-                : history.map(h => <tr key={h.id}><td>{dateText(h.done_on)}</td><td>{KIND[h.kind]}</td><td>{h.note}</td><td>{nameOf(h.done_by)}</td><td>{h.next_follow_up || ''}</td></tr>)}
+                : history.map(h => <tr key={h.id}><td>{tableDate(h.done_on)}</td><td>{KIND[h.kind]}</td><td>{h.note}</td><td>{nameOf(h.done_by)}</td><td>{h.next_follow_up || ''}</td></tr>)}
               </tbody>
             </table>
           </div>

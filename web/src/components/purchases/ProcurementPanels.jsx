@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatMoney, formatAmount, dateText } from '../../lib/format';
+import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import { qtyText, orgToday } from '../../lib/inventory';
 import Modal from '../Modal';
@@ -159,9 +159,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
             : here.map(r => (
               <tr key={r.id} className="clickable-row" onClick={() => setOpenId(r.id)} title="Open the request">
                 <td>#{r.request_no}</td>
-                <td>{dateText(r.requested_on)}</td>
+                <td>{tableDate(r.requested_on)}</td>
                 <td>{people[r.requested_by] ?? ''}</td>
-                <td>{dateText(r.needed_by) ?? ''}</td>
+                <td>{tableDate(r.needed_by) ?? ''}</td>
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
                 <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
@@ -417,7 +417,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
               return (
                 <tr key={po.id} className="clickable-row" onClick={() => setViewing(po)} title="Open the order">
                   <td>#{po.po_no}{po.sent_to_supplier && <div className="pl-help">sent</div>}</td>
-                  <td>{dateText(po.order_date)}{po.expected_on && <div className="pl-help">expected {dateText(po.expected_on)}</div>}</td>
+                  <td>{tableDate(po.order_date)}{po.expected_on && <div className="pl-help">expected {tableDate(po.expected_on)}</div>}</td>
                   <td>{supplierName(po.supplier_id)}</td>
                   <td onClick={e => { if (e.target.closest('button')) e.stopPropagation(); }}>{[...(po.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => {
                     if (l.kind === 'expense') return (

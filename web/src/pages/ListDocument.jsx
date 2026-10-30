@@ -4,7 +4,7 @@ import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { loadInventoryRefs, orgToday, mainUnitOf, byMaterialOrder } from '../lib/inventory';
-import { formatAmount, dateText } from '../lib/format';
+import { formatAmount, dateText, tableDate } from '../lib/format';
 
 const qty = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v);
 const amt = v => formatAmount(Math.round(Number(v || 0)));
@@ -106,7 +106,7 @@ export default function ListDocument() {
           <section>
             <table className="doc-table">
               <thead><tr><th>Date</th><th>Supplier</th><th>Invoice</th><th className="num">Total (TZS)</th><th className="num">Paid (TZS)</th><th className="num">To pay (TZS)</th></tr></thead>
-              <tbody>{d.rows.map(r => <tr key={r.id}><td>{dateText(r.date)}</td><td>{r.supplier}</td><td>{r.ref}</td><td className="num">{amt(r.total)}</td><td className="num">{amt(r.paid)}</td><td className="num">{r.balance > 0 ? amt(r.balance) : ''}</td></tr>)}</tbody>
+              <tbody>{d.rows.map(r => <tr key={r.id}><td>{tableDate(r.date)}</td><td>{r.supplier}</td><td>{r.ref}</td><td className="num">{amt(r.total)}</td><td className="num">{amt(r.paid)}</td><td className="num">{r.balance > 0 ? amt(r.balance) : ''}</td></tr>)}</tbody>
               <tfoot><tr><td colSpan={3}><strong>Total ({d.rows.length})</strong></td><td className="num"><strong>{amt(d.rows.reduce((t, r) => t + r.total, 0))}</strong></td><td className="num"><strong>{amt(d.rows.reduce((t, r) => t + r.paid, 0))}</strong></td><td className="num"><strong>Tsh {amt(d.rows.reduce((t, r) => t + Math.max(r.balance, 0), 0))}</strong></td></tr></tfoot>
             </table>
             {d.rows.length === 0 && <p>No purchases in this period.</p>}

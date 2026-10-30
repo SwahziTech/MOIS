@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
 import { peopleOf, labourNorm } from '../components/production/BatchNotes';
-import { formatMoney, dateText } from '../lib/format';
+import { formatMoney, dateText, tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
 const STAGES = ['Curing', 'Ready', 'Released', 'Void'];
@@ -253,7 +253,7 @@ export default function ProductionLedger() {
                   <tr><td colSpan={branchId ? 5 : 6}><EmptyState icon={BookOpen} title="No production in this period" description="Confirmed production days appear here." /></td></tr>
                 ) : days.map(d => (
                   <tr key={d.key} className="clickable-row" onClick={() => setOpen(d.key)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') setOpen(d.key); }}>
-                    <td style={{ fontWeight: 600 }}>{dateText(d.date)}</td>
+                    <td style={{ fontWeight: 600 }}>{tableDate(d.date)}</td>
                     {!branchId && <td className="text-muted">{branchNameOf(d.branchId)}</td>}
                     <td>{productsOf(d).map(p => <div key={p.name} className="text-sm">{p.name} <strong>{qtyText(p.pieces)}</strong> pcs</div>)}</td>
                     <td style={{ textAlign: 'right' }}>{d.batches.length}</td>

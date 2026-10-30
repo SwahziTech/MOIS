@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { HardHat } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { formatMoney, formatAmount, dateText } from '../../lib/format';
+import { formatMoney, formatAmount, tableDate } from '../../lib/format';
 import { PageTabs } from '../ListControls';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
@@ -70,7 +70,7 @@ export default function LabourCosting({ branchId, currency }) {
               {data.days.length === 0 ? <tr><td colSpan={8} className="text-muted">No days yet — mark attendance in HR › Staff.</td></tr>
               : data.days.map(x => (
                 <tr key={x.day}>
-                  <td>{dateText(x.day)}{Number(x.without_rate) > 0 && <div className="pl-help text-warning">{x.without_rate} without a day rate</div>}</td>
+                  <td>{tableDate(x.day)}{Number(x.without_rate) > 0 && <div className="pl-help text-warning">{x.without_rate} without a day rate</div>}</td>
                   <td className="num">{x.people}</td><td className="num">{Number(x.days)}</td>
                   <td className="num">{formatAmount(Number(x.wages || 0))}</td>
                   <td className="num">{Number(x.employer) ? formatAmount(Number(x.employer)) : ''}</td>

@@ -12,7 +12,7 @@ import ManageUserModal from '../components/ManageUserModal';
 import { scopeLabel } from '../components/AccessFields';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Users, Search, ShieldCheck, UserPlus } from 'lucide-react';
-import { dateText } from '../lib/format';
+import { tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -83,7 +83,7 @@ export default function UsersPage() {
   const managing = users.find(u => u.id === managingId);
 
   function formatDate(str) {
-    return dateText(str) ?? '—';
+    return tableDate(str) ?? '—';
   }
 
   return (

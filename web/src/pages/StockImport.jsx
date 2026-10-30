@@ -10,7 +10,7 @@ import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/sto
 import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
-import { dateText, dateTimeText } from '../lib/format';
+import { dateText, dateTimeText, tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load the catalogue. Please try again.";
 
@@ -619,7 +619,7 @@ export default function StockImport() {
                                 <tr key={g.key}>
                                   <td>{g.placeholder ? <>{g.placeholder.name} <span className="badge badge-warning">new · to review</span></> : prodById[g.productId]?.name}</td>
                                   <td className="text-muted">{colById[g.colorId]?.name ?? '—'}</td>
-                                  <td className="text-muted">{dateText(g.date)}</td>
+                                  <td className="text-muted">{tableDate(g.date)}</td>
                                   <td className="text-xs text-muted">
                                     {g.lines.map(l => `${l.typeText} ${l.raw}${effective(l).converted ? ' (converted)' : ''}`).join(' + ')}
                                   </td>

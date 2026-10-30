@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { formatMoney, formatAmount, dateText } from '../lib/format';
+import { formatMoney, formatAmount, dateText, tableDate } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 
 /*
@@ -96,10 +96,10 @@ export default function SupplierStatementDocument() {
           <table className="doc-table">
             <thead><tr><th>Date</th><th>Details</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Owed</th></tr></thead>
             <tbody>
-              {from && <tr><td>{dateText(from)}</td><td>Balance brought forward</td><td /><td /><td className="num">{formatAmount(opening)}</td></tr>}
+              {from && <tr><td>{tableDate(from)}</td><td>Balance brought forward</td><td /><td /><td className="num">{formatAmount(opening)}</td></tr>}
               {rows.length === 0 && <tr><td colSpan={5}>Nothing in this period.</td></tr>}
               {rows.map((m, i) => (
-                <tr key={i}><td>{dateText(m.date)}</td><td>{m.ref}</td>
+                <tr key={i}><td>{tableDate(m.date)}</td><td>{m.ref}</td>
                   <td className="num">{m.charge ? formatAmount(m.charge) : ''}</td><td className="num">{m.paid ? formatAmount(m.paid) : ''}</td>
                   <td className="num">{formatAmount(m.balance)}</td></tr>
               ))}

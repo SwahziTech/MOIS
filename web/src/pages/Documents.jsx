@@ -3,7 +3,7 @@ import { Printer, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, dateText } from '../lib/format';
+import { formatAmount, dateText, tableDate } from '../lib/format';
 import { useUrlTab } from '../lib/urlTab';
 import PageShell from '../components/PageShell';
 import { PageTabs, ListToolbar, ChipRow } from '../components/ListControls';
@@ -70,7 +70,7 @@ export default function Documents() {
                   : shown.length === 0 ? <tr><td colSpan={7} className="text-muted">{search || kind ? 'Nothing matches.' : 'No documents yet.'}</td></tr>
                   : shown.slice(0, SHOW).map(r => (
                     <tr key={r.key} className="clickable-row" onClick={() => openDoc(r.url)} title="Open to print">
-                      <td>{dateText(r.date)}</td><td>{r.kind}</td><td>{r.number}</td><td>{r.who ?? ''}</td><td className="text-sm">{r.ref ?? ''}</td>
+                      <td>{tableDate(r.date)}</td><td>{r.kind}</td><td>{r.number}</td><td>{r.who ?? ''}</td><td className="text-sm">{r.ref ?? ''}</td>
                       <td className="num">{amt(r.amount)}</td>
                       <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); openDoc(r.url); }}><Printer size={13} /> Print</button></td>
                     </tr>

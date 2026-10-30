@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { loadInventoryRefs, qtyText } from '../lib/inventory';
-import { formatMoney, formatMoneyShort, dateText } from '../lib/format';
+import { formatMoney, formatMoneyShort, dateText, tableDate } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
@@ -209,7 +209,7 @@ function LayerList({ branchId, row, unit, money }) {
       <tbody>
         {[...layers].reverse().map((l, i) => (   /* newest on top (locked 2026-10-25) */
           <tr key={i}>
-            <td>{dateText(l.date)}</td>
+            <td>{tableDate(l.date)}</td>
             <td>{l.stage === 'curing' ? 'curing' : l.stage === 'released' ? 'released' : l.batch ? '—' : 'opening stock'}</td>
             <td style={{ textAlign: 'right' }}>{qtyText(round(Number(l.quantity)))} {unit}</td>
             <td style={{ textAlign: 'right' }}>{l.cost != null ? money(round(Number(l.cost))) : '—'}</td>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
+import { formatAmount, formatMoneyShort, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
@@ -65,7 +65,7 @@ export default function AdvancesPanel({ staff, branchId, today, money, currency,
             : here.length === 0 ? <tr><td colSpan={8} className="text-muted">No advances or loans yet.</td></tr>
             : here.map(r => (
               <tr key={r.id} className={r.status === 'void' ? 'is-inactive' : ''}>
-                <td>{dateText(r.given_on)}</td>
+                <td>{tableDate(r.given_on)}</td>
                 <td><strong>{nameOf(r.staff_id)}</strong></td>
                 <td className="num">{formatAmount(Number(r.amount))}</td>
                 <td className="num">{r.installment ? formatAmount(Number(r.installment)) : <span className="pl-help">all at once</span>}</td>

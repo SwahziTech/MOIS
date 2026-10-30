@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { qtyText, materialStockValue } from '../../lib/inventory';
-import { formatMoney, dateText } from '../../lib/format';
+import { formatMoney, tableDate } from '../../lib/format';
 import Modal from '../Modal';
 import { ItemHistoryList } from '../inventory/ItemHistory';
 import { EntityFlags, EntityHistory } from './EntityPanels';
@@ -85,7 +85,7 @@ export default function MaterialInfo({ material: m, category, unitById, branchNa
               <thead><tr><th>In on</th><th className="num">Quantity left</th><th className="num">Cost</th><th className="num">Value</th></tr></thead>
               <tbody>
                 {[...fifo.layers].reverse().map((l, i) => (   /* newest on top (locked 2026-10-25) */
-                  <tr key={i}><td>{dateText(l.date)}</td>
+                  <tr key={i}><td>{tableDate(l.date)}</td>
                     <td className="num">{qtyText(Math.round((l.quantity / mf) * 100) / 100)} {ms}</td>
                     <td className="num">{l.cost != null ? `${money(l.cost * mf)}/${ms}` : 'no cost'}</td>
                     <td className="num">{l.cost != null ? money(l.cost * l.quantity) : '—'}</td></tr>

@@ -17,7 +17,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import DayLog from '../components/production/DayLog';
 import CapacityPlanner from '../components/production/CapacityPlanner';
 import ProductionSettings from '../components/production/ProductionSettings';
-import { dateText } from '../lib/format';
+import { dateText, tableDate } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load production. Please try again.";
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
@@ -225,7 +225,7 @@ export default function Production() {
                       {current === 'curing' && (
                         <td>{readyToRelease(b) && <input type="checkbox" aria-label={`Select ${productName(b)} ${b.batch_date}`} checked={picked.has(b.id)} onChange={() => togglePick(b.id)} />}</td>
                       )}
-                      <td>{dateText(b.batch_date)}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
+                      <td>{tableDate(b.batch_date)}<div className="text-xs text-muted">{people[b.created_by] ?? ''}</div></td>
                       <td><span style={{ fontWeight: 500 }}>{productName(b)}</span>
                         {leftoversOf(b).length > 0 && <div className="text-xs text-muted">+ {leftoversOf(b).map(o => `${o.pieces_cast} ${refs?.items[`p:${o.product_id}`]?.name ?? ''}`).join(', ')}</div>}</td>
                       <td style={{ textAlign: 'right' }}>{qtyText(b.cement_bags)}</td>
@@ -240,7 +240,7 @@ export default function Production() {
                             </span>}
                       </td>
                       <td>{b.status === 'released' ? b.released_on : b.status === 'void' ? '—' : (
-                        <>{dateText(b.curing_until)}{readyOn(b) <= today
+                        <>{tableDate(b.curing_until)}{readyOn(b) <= today
                           ? <div className="text-xs" style={{ color: 'var(--color-success)' }}>Ready to release</div>
                           : minCuring != null && <div className="text-xs text-muted">ready {readyOn(b)}</div>}</>
                       )}</td>
@@ -288,8 +288,8 @@ export default function Production() {
               )}
               <table className="rd-table"><tbody>
                 {ready.filter(b => picked.has(b.id)).map(b => (
-                  <tr key={b.id}><td>{dateText(b.batch_date)}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
-                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{minCuring == null && b.curing_until > today ? `early · until ${dateText(b.curing_until)}` : 'ready'}</td></tr>
+                  <tr key={b.id}><td>{tableDate(b.batch_date)}</td><td>{productName(b)}{leftoversOf(b).length > 0 && <span className="pl-help"> + {leftoversOf(b).map(o => refs?.items[`p:${o.product_id}`]?.name).join(', ')}</span>}</td>
+                    <td className="num"><strong>{qtyText(b.pieces_cast)}</strong> pcs</td><td className="num pl-help">{minCuring == null && b.curing_until > today ? `early · until ${tableDate(b.curing_until)}` : 'ready'}</td></tr>
                 ))}
               </tbody></table>
             </div>

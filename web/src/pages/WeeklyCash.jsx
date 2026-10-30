@@ -3,7 +3,7 @@ import { Wallet, Plus, Trash2, Upload, Download, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, formatMoneyShort, formatAmount, dateText } from '../lib/format';
+import { formatMoney, formatMoneyShort, formatAmount, dateText, tableDate } from '../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, writeWeeklySheet } from '../lib/weeklyCashExcel';
@@ -123,7 +123,7 @@ export default function WeeklyCash() {
                   const w = ledger[r.week_ending];
                   return (
                     <tr key={r.id} className="clickable-row" onClick={() => setOpen(r)}>
-                      <td>{dateText(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
+                      <td>{tableDate(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
                       <td><span className={`badge ${STATUS[r.status][1]}`}>{STATUS[r.status][0]}</span></td>
                       <td className="num">{formatAmount(asked(r))}</td>
                       <td className="num">{['approved', 'paid'].includes(r.status) ? formatAmount(approvedOf(r)) : ''}</td>
@@ -239,7 +239,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
               <tr><td /><td>Balance brought forward</td><td /><td className="num">{formatAmount(lastWeek.opening)}</td><td /><td /></tr>
               <tr><td /><td>Cash sent</td><td /><td className="num">{formatAmount(lastWeek.sent)}</td><td /><td className="num"><strong>{formatAmount(lastWeek.opening + lastWeek.sent)}</strong></td></tr>
               {(() => { let b = lastWeek.opening + lastWeek.sent; return lastWeek.lines.map((l, i) => { b = r2(b - l.amount); return (
-                <tr key={i}><td>{dateText(l.date)}</td><td>{l.description}</td><td className="pl-help">{l.qty}</td><td /><td className="num">{formatAmount(l.amount)}</td><td className="num">{formatAmount(b)}</td></tr>); }); })()}
+                <tr key={i}><td>{tableDate(l.date)}</td><td>{l.description}</td><td className="pl-help">{l.qty}</td><td /><td className="num">{formatAmount(l.amount)}</td><td className="num">{formatAmount(b)}</td></tr>); }); })()}
             </tbody>
             <tfoot><tr><td /><td><strong>Spent · balance</strong></td><td /><td /><td className="num"><strong>{money(lastWeek.spent)}</strong></td><td className="num"><strong>{money(lastWeek.closing)}</strong></td></tr></tfoot>
           </table>

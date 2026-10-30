@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Copy, Check, FileText } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, dateText } from '../lib/format';
+import { formatAmount, tableDate } from '../lib/format';
 import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadDayFacts, writeReport, readReport, compareReport } from '../lib/dailyReport';
 import PageShell from '../components/PageShell';
@@ -90,7 +90,7 @@ export default function DailyReport() {
                 <table>
                   <thead><tr><th>What</th><th className="num">Report</th><th className="num">MOIS</th><th className="num">Difference</th></tr></thead>
                   <tbody>
-                    {!pasted.trim() ? <tr><td colSpan={4} className="text-muted">Paste a report to compare it with {dateText(date)}.</td></tr>
+                    {!pasted.trim() ? <tr><td colSpan={4} className="text-muted">Paste a report to compare it with {tableDate(date)}.</td></tr>
                     : facts === null ? <tr><td colSpan={4}><span className="skeleton" /></td></tr>
                     : rows.map((r, i) => {
                       const both = r.report != null && r.mois != null;

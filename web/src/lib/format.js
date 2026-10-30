@@ -69,4 +69,10 @@ export function dateTimeText(v, timeZone) {
 }
 
 /** Dates inside text written elsewhere (database messages, saved summaries) */
-export const datesInText = s => (s == null ? s : String(s).replace(/\b\d{4}-\d{2}-\d{2}\b/g, m => dateText(m)));
+export const datesInText = (s, format = dateText) => (s == null ? s : String(s).replace(/\b\d{4}-\d{2}-\d{2}\b/g, m => format(m)));
+
+/** Inside a table: the date without the day, "30 Oct 2026" (user rule, 2026-10-30) */
+export const tableDate = (v, timeZone) => dateText(v, timeZone)?.replace(/^\p{L}+,\s*/u, '') ?? null;
+
+/** Inside a table: a moment without the day, "30 Oct 2026, 14:53" */
+export const tableDateTime = (v, timeZone) => dateTimeText(v, timeZone)?.replace(/^\p{L}+,\s*/u, '') ?? null;

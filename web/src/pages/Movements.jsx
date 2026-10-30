@@ -3,7 +3,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, dateText, dateTimeText } from '../lib/format';
+import { formatMoney, dateText, dateTimeText, tableDate } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } from '../lib/inventory';
 
@@ -113,12 +113,12 @@ export default function Movements() {
                   <tr><td colSpan={7}><EmptyState icon={ArrowLeftRight} title="No movements yet" description="Receipts, issues, transfers, adjustments and counts appear here once posted." /></td></tr>
                 ) : shown.map(m => (
                   <tr key={m.id}>
-                    <td className="text-muted">{dateText(m.movement_date)}</td>
+                    <td className="text-muted">{tableDate(m.movement_date)}</td>
                     <td>
                       <span className="badge badge-neutral">{MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type}</span>
                       {reversedBy[m.id] && <span className="badge badge-warning" style={{ marginLeft: 4 }}>reversed</span>}
                       {dateIn(m.created_at, organization?.timezone) > m.movement_date && (
-                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${dateText(m.created_at, organization?.timezone)}`}>entered later</span>
+                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${tableDate(m.created_at, organization?.timezone)}`}>entered later</span>
                       )}
                     </td>
                     <td className="text-sm">{where(m)}</td>

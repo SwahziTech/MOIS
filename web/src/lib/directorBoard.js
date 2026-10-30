@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { loadCuring, loadLowStock } from './dashboard';
 import { loadMaterialUse } from './reports';
 import { stockAtCost } from './statements';
-import { dateText } from './format';
+import { dateText, tableDate } from './format';
 
 /*
  * The director's dashboard (2026-10-30, draft 2 of the design), read only, at
@@ -165,7 +165,7 @@ export function productionFor(data, { from, to }, inBranch, today) {
 export function historyFor(data, card, by, inBranch, today) {
   const keyOf = d => (by === 'day' ? d : by === 'week' ? sundayOf(d) : by === 'month' ? d.slice(0, 7)
     : by === 'quarter' ? `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : d.slice(0, 4));
-  const label = k => (by === 'day' ? shortDay(k) : by === 'week' ? `${shortDay(k)} – ${shortDay(dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
+  const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k)} – ${tableDate(dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
   const rows = {};
   const add = (d, f) => { if (!d || d > today) return; const k = keyOf(d); f(rows[k] ||= { key: k, label: label(k), a: 0, b: 0, c: 0 }); };
   if (card === 'sales') for (const x of data.received) { if (inBranch(x.branch_id)) add(x.day, r => { r.a += x.amount; }); }

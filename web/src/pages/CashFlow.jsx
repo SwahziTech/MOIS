@@ -4,7 +4,7 @@ import { Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatAmount, formatMoney, formatMoneyShort, dateText } from '../lib/format';
+import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from '../lib/format';
 import { orgToday } from '../lib/inventory';
 import { dbErrorMessage } from '../lib/masterData';
 import { exportTable } from '../lib/reports';
@@ -153,7 +153,7 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
             {shown.length === 0 ? <tr><td colSpan={running ? 7 : 6} className="text-muted">No money in or out in this range.</td></tr>
             : shown.map((x, i) => (
               <tr key={i}>
-                <td>{dateText(x.day)}</td><td>{nameOf(x.account_id)}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
+                <td>{tableDate(x.day)}</td><td>{nameOf(x.account_id)}</td><td>{KIND[x.kind]}</td><td>{x.ref}</td>
                 <td className="num">{x.direction === 'in' ? amt(x.amount) : ''}</td>
                 <td className="num">{x.direction === 'out' ? amt(x.amount) : ''}</td>
                 {running && <td className="num">{amt(running[`${x.kind}|${x.doc_id}|${x.day}|${x.created_at}`])}</td>}
@@ -170,7 +170,7 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
 function MonthlyTab({ accs, mv, by, setBy, today, money, short }) {
   const periods = useMemo(() => cashPeriods({ accounts: accs, moves: mv, today, by, count: 12 }), [accs, mv, today, by]);
   const INS = ['sale', 'topup']; const OUTS = ['purchase', 'wages', 'statutory', 'expense'];
-  const label = p => (by === 'week' ? `${dateText(p.from)} – ${dateText(p.to > today ? today : p.to)}` : monthName(p.from.slice(0, 7)));
+  const label = p => (by === 'week' ? `${tableDate(p.from)} – ${tableDate(p.to > today ? today : p.to)}` : monthName(p.from.slice(0, 7)));
   const tIn = p => INS.reduce((t, k) => t + (p.ins[k] || 0), 0); const tOut = p => OUTS.reduce((t, k) => t + (p.outs[k] || 0), 0);
   const now = periods[0];
   const xl = () => exportTable(`Cash ${by === 'week' ? 'weekly' : 'monthly'} ${today}`, `Money in and out by ${by} — to ${today}`,

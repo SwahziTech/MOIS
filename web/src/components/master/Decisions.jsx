@@ -8,7 +8,7 @@ import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
 import Modal from '../Modal';
 import { SkeletonRow } from '../LoadingSpinner';
-import { dateText } from '../../lib/format';
+import { tableDate } from '../../lib/format';
 
 const LOAD_ERROR = "We couldn't load the decisions. Please try again.";
 
@@ -136,7 +136,7 @@ export default function Decisions() {
                     </td>
                     <td className="text-xs text-muted" style={{ verticalAlign: 'top', maxWidth: 380 }}>{plainEvidence(r.evidence)}</td>
                     <td className="text-xs text-muted" style={{ verticalAlign: 'top' }}>
-                      {r.decided_by_label}<br />{dateText(r.decided_at, organization?.timezone)} · {SOURCES[r.source] ?? r.source}
+                      {r.decided_by_label}<br />{tableDate(r.decided_at, organization?.timezone)} · {SOURCES[r.source] ?? r.source}
                     </td>
                     {canEdit && (
                       <td style={{ textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>

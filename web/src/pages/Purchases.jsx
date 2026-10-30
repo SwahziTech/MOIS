@@ -4,7 +4,7 @@ import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, dateText } from '../lib/format';
+import { formatMoney, dateText, tableDate } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
@@ -241,7 +241,7 @@ export default function Purchases() {
                       description="Materials the storekeeper receives appear here until the supplier, cost and payment are added." /></td></tr>
                   ) : waitingHere.map(a => (
                     <tr key={a.movement_id}>
-                      <td>{dateText(a.movement_date)}{a.reference && <div className="text-xs text-muted">{a.reference}</div>}</td>
+                      <td>{tableDate(a.movement_date)}{a.reference && <div className="text-xs text-muted">{a.reference}</div>}</td>
                       <td className="text-muted">{warehouseLabel(whById[a.warehouse_id])}</td>
                       <td className="text-sm">{describeLines(txByMove[a.movement_id])}</td>
                       <td className="text-sm text-muted">{people[a.created_by] ?? '—'}</td>
@@ -269,7 +269,7 @@ export default function Purchases() {
                     const goods = rl.reduce((sum, l) => sum + Number(l.quantity) * Number(priceOf(l.material_id) ?? 0), 0);
                     return (
                     <tr key={p.id} className="text-muted">
-                      <td>{dateText(p.payload?.receipt?.movement_date) ?? p.payload?.purchase_date ?? '—'}</td>
+                      <td>{tableDate(p.payload?.receipt?.movement_date) ?? p.payload?.purchase_date ?? '—'}</td>
                       {rl.length ? <>
                         <td style={{ fontWeight: 500 }}>{rl.map((l, i) => <div key={i}>{refs?.items[`m:${l.material_id}`]?.name ?? '—'}</div>)}</td>
                         <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{qtyText(l.quantity)} <span className="text-xs">{refs?.unitById[l.unit_id]?.symbol}</span></div>)}</td>
@@ -278,7 +278,7 @@ export default function Purchases() {
                       <td>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
                       <td style={{ textAlign: 'right' }}>{rl.length ? money(round2(goods + Number(p.payload?.transport_charge ?? 0))) : ''}</td>
                       <td><span className="badge badge-warning">Waiting for approval</span>
-                        <div className="text-xs">{people[p.requested_by] ?? ''} · {dateText(p.requested_at)}</div></td>
+                        <div className="text-xs">{people[p.requested_by] ?? ''} · {tableDate(p.requested_at)}</div></td>
                       <td style={{ textAlign: 'right' }}><Link to="/approvals" className="btn btn-ghost btn-sm">Approvals</Link></td>
                     </tr>
                     );
@@ -291,7 +291,7 @@ export default function Purchases() {
                     const ls = (txByMove[p.movement_id] || []).filter(x => x.material_id);
                     return (
                       <tr key={p.id} className={p.status === 'void' ? 'text-muted' : ''}>
-                        <td>{dateText(p.purchase_date)}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
+                        <td>{tableDate(p.purchase_date)}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
                         <td style={{ fontWeight: 500 }}>{ls.map(x => {
                           // double-click (a tap on a phone) opens that material's purchases
                           const open = () => { const it = refs?.items[`m:${x.material_id}`]; if (it) setHistoryOf({ id: it.id, name: it.name }); };
@@ -343,7 +343,7 @@ export default function Purchases() {
                       const pay = expensePay(e);
                       return (
                         <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>
-                          <td>{dateText(e.expense_date)}</td>
+                          <td>{tableDate(e.expense_date)}</td>
                           <td><span style={{ fontWeight: 500 }}>{e.description}</span><div className="text-xs text-muted">{catName(e.category_id)}</div></td>
                           <td style={{ textAlign: 'right' }}>{e.quantity != null ? qtyText(e.quantity) : '—'}</td>
                           <td style={{ textAlign: 'right' }}>{e.unit_price != null ? money(e.unit_price) : '—'}</td>
@@ -379,7 +379,7 @@ export default function Purchases() {
                       <tr key={c.material.id} className="clickable-row" title="Open its purchases" onClick={() => setHistoryOf(c.material)}>
                         <td style={{ fontWeight: 500 }}>{c.material.name}</td>
                         <td style={{ textAlign: 'right' }}>{c.average_cost != null ? <>{money(round2(c.average_cost))} <span className="text-muted">/ {unit}</span></> : <span className="text-muted">no cost yet</span>}</td>
-                        <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{dateText(c.last_purchase_date)}</span></> : <span className="text-muted">—</span>}</td>
+                        <td style={{ textAlign: 'right' }}>{c.last_purchase_cost != null ? <>{money(round2(c.last_purchase_cost))} <span className="text-xs text-muted">{tableDate(c.last_purchase_date)}</span></> : <span className="text-muted">—</span>}</td>
                         <td className="text-sm text-muted">
                           {Number(c.costed_quantity) > 0 ? `${qtyText(c.costed_quantity)} ${unit}` : '—'}
                           {Number(c.uncosted_quantity) > 0 && <div className="text-xs">{qtyText(c.uncosted_quantity)} {unit} with no cost</div>}

@@ -12,6 +12,7 @@ import ErrorState from '../ErrorState';
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
 const BY = [['day', 'Days'], ['week', 'Weeks'], ['month', 'Months'], ['quarter', 'Quarters'], ['year', 'Years']];
+const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' };
 const SHOWN_ROWS = { day: 31, week: 13, month: 12, quarter: 8, year: 5 };
 const CARD = {
   sales: { title: 'Sales', heads: ['Received (TZS)'], to: '/sales', page: 'Open Sales' },
@@ -185,7 +186,7 @@ function CardHistory({ card, data, inBranch, today, short }) {
       <PageTabs nested tabs={BY} value={by} onChange={setBy} />
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Period</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
+          <thead><tr><th>{BY_HEAD[by]}</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
           <tbody>
             {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 4 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
             : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cfg.showItems && (() => { const its = Object.values(r.items || {}); return <>

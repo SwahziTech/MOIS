@@ -11,7 +11,7 @@ import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import RequestDetail from '../components/approvals/RequestDetail';
 import { loadInventoryRefs } from '../lib/inventory';
-import { dateTimeText, datesInText } from '../lib/format';
+import { tableDateTime, datesInText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load approvals. Please try again.";
 
@@ -100,7 +100,7 @@ export default function Approvals() {
   const inView = rows.filter(r => inBranch(r.branch_id));
   const shown = inView.filter(r => (tab === 'pending' ? r.status === 'pending' : r.status !== 'pending'));
   const waiting = inView.filter(r => r.status === 'pending').length;
-  const when = ts => dateTimeText(ts);
+  const when = ts => tableDateTime(ts);
 
   return (
     <PageShell title="Approvals" subtitle="Overview"
