@@ -56,7 +56,7 @@ export function dateText(v, timeZone = 'UTC') {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(s);
   const d = new Date(day ? `${s}T00:00:00Z` : s);
   if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: day ? 'UTC' : timeZone || undefined });
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: day ? 'UTC' : timeZone || undefined }).replace('Sept', 'Sep');
 }
 
 /** A moment: "Fri, 30 Oct 2026, 14:53" (pass the organization's time zone) */

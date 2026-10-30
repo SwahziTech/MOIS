@@ -16,7 +16,7 @@ const SHOWN_ROWS = { day: 31, week: 13, month: 12, quarter: 8, year: 5 };
 const CARD = {
   sales: { title: 'Sales', heads: ['Received (TZS)'], to: '/sales', page: 'Open Sales' },
   cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
-  purchases: { title: 'Purchases', heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases', page: 'Open Purchases' },
+  purchases: { title: 'Purchases', showItems: true, heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases', page: 'Open Purchases' },
 };
 
 const Block = ({ title, note, to, children }) => (
@@ -185,12 +185,12 @@ function CardHistory({ card, data, inBranch, today, short }) {
       <PageTabs nested tabs={BY} value={by} onChange={setBy} />
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Period</th>{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
+          <thead><tr><th>Period</th>{cfg.showItems && <th>Item</th>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={cols.length + 1} className="text-muted">Nothing recorded yet.</td></tr>
-            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
+            {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 2 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
+            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cfg.showItems && <td>{[...(r.items || [])].join(', ') || '—'}</td>}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
           </tbody>
-          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+          {rows.length > 0 && <tfoot><tr><td><strong>Total shown</strong></td>{cfg.showItems && <td />}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>
       </div></div>
     </div>

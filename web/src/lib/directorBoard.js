@@ -93,7 +93,7 @@ export async function loadMoneyData() {
     supabase.from('sale_payments').select('paid_on, amount, sale:sales!inner(branch_id)'),
     supabase.from('cash_movements').select('branch_id, day, direction, amount, kind'),
     supabase.from('cash_requests').select('branch_id, week_ending, status, opening_balance'),
-    supabase.from('purchases').select('id, branch_id, purchase_date').neq('status', 'void'),
+    supabase.from('purchases').select('id, branch_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material:materials(name)))').neq('status', 'void'),
     supabase.from('purchase_totals').select('purchase_id, total, amount_paid, balance'),
     supabase.from('production_batches').select('branch_id, batch_date, cement_bags, status, outputs:production_batch_outputs(is_primary), rejects:production_batch_rejects(pieces)').neq('status', 'void'),
   ]);
@@ -104,7 +104,8 @@ export async function loadMoneyData() {
     received: (pa.data || []).map(p => ({ branch_id: p.sale.branch_id, day: p.paid_on, amount: n(p.amount) })),
     moves: mv.data || [],
     requests: (cr.data || []).filter(r => !['cancelled', 'rejected'].includes(r.status)),
-    purchases: (pu.data || []).map(p => ({ branch_id: p.branch_id, day: p.purchase_date, total: n(totals[p.id]?.total), paid: n(totals[p.id]?.amount_paid), toPay: Math.max(n(totals[p.id]?.balance), 0) })),
+    purchases: (pu.data || []).map(p => ({ branch_id: p.branch_id, day: p.purchase_date, total: n(totals[p.id]?.total), paid: n(totals[p.id]?.amount_paid), toPay: Math.max(n(totals[p.id]?.balance), 0),
+      items: (p.lines || []).map(l => l.tx?.material?.name).filter(Boolean) })),
     batches: (ba.data || []).filter(b => (b.outputs || []).some(o => o.is_primary)),
   };
 }
@@ -173,7 +174,7 @@ export function historyFor(data, card, by, inBranch, today) {
     if (x.kind === 'topup') add(x.day, r => { r.a += n(x.amount); });
     if (SPENT.has(x.kind)) add(x.day, r => { r.b += n(x.amount); });
   }
-  if (card === 'purchases') for (const x of data.purchases) { if (inBranch(x.branch_id)) add(x.day, r => { r.a += x.total; r.b += x.paid; r.c += x.toPay; }); }
+  if (card === 'purchases') for (const x of data.purchases) { if (inBranch(x.branch_id)) add(x.day, r => { r.a += x.total; r.b += x.paid; r.c += x.toPay; (r.items ||= new Set()); x.items.forEach(i => r.items.add(i)); }); }
   return Object.values(rows).sort((p, q) => (p.key < q.key ? 1 : -1));
 }
 
