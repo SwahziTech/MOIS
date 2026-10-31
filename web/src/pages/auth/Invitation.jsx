@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { manageUsers, roleLabel } from '../../lib/manageUsers';
+import { invitationCall, roleLabel } from '../../lib/manageUsers';
 import AuthShell from '../../components/AuthShell';
 
 const MIN_PASSWORD = 8;
@@ -32,7 +32,7 @@ export default function Invitation() {
 
   async function check() {
     setError(''); setChecking(true);
-    try { setInvite(await manageUsers({ action: 'invitation_check', ...proof })); }
+    try { setInvite(await invitationCall({ action: 'invitation_check', ...proof })); }
     catch (e) { setError(e.message); }
     setChecking(false);
   }
@@ -43,7 +43,7 @@ export default function Invitation() {
     const name = username.trim();
     if (!invite || invite.kind !== 'invite' || method !== 'username' || !name) return undefined;
     const timer = setTimeout(async () => {
-      try { setFree(await manageUsers({ action: 'username_available', ...proof, username: name })); }
+      try { setFree(await invitationCall({ action: 'username_available', ...proof, username: name })); }
       catch { setFree(null); }
     }, 400);
     return () => clearTimeout(timer);
@@ -55,7 +55,7 @@ export default function Invitation() {
     if (password.length < MIN_PASSWORD) { setError(`Use at least ${MIN_PASSWORD} characters for your password.`); return; }
     setSaving(true);
     try {
-      const done = await manageUsers({
+      const done = await invitationCall({
         action: 'invitation_claim', ...proof, method,
         email: email.trim(), username: username.trim(), password,
       });

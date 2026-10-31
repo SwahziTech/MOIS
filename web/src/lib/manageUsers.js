@@ -19,6 +19,30 @@ export async function manageUsers(body) {
   return data;
 }
 
+/**
+ * Holding an invitation, not signed in: an old session left in the browser must
+ * not get in the way, so these go with the public key only. The message says
+ * whether MOIS answered at all.
+ */
+export async function invitationCall(body) {
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  let res;
+  try {
+    res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.error('invitation call failed', e);
+    throw new Error("We couldn't reach MOIS. Check your connection and try again.");
+  }
+  const payload = await res.json().catch(() => null);
+  if (res.ok && payload) return payload;
+  console.error('invitation call refused', res.status, payload);
+  throw new Error(payload?.error || `Something went wrong (${res.status}). Please try again.`);
+}
+
 // Display names where the stored role name isn't the label (migration 034:
 // the system role 'owner' is the Technical admin)
 const ROLE_LABELS = { owner: 'Technical admin' };
