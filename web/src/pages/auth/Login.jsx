@@ -45,13 +45,16 @@ export default function Login() {
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="form-group">
-          <label className="form-label" htmlFor="login-email">Email address</label>
+          <label className="form-label" htmlFor="login-email">Email or username</label>
           <input
             id="login-email"
-            type="email"
+            type="text"
             className="form-input"
-            placeholder="you@example.com"
-            autoComplete="email"
+            placeholder="you@example.com or username"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             value={email}
             onChange={e => setEmail(e.target.value)}
@@ -96,7 +99,7 @@ export default function Login() {
       </form>
 
       <div className="auth-footer">
-        Don&apos;t have an account? <Link to="/signup">Create one</Link>
+        Have an invitation? <Link to="/invite">Create your login</Link>
       </div>
     </AuthShell>
   );

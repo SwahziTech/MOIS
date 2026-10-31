@@ -2486,3 +2486,10 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
   .dd-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dd-num-big { grid-column: span 2; }
 }
+
+/* Invitations (migration 100, 2026-10-31) */
+.inv-code { font-family: var(--font-mono, monospace); font-size: 1.4rem; font-weight: 600; letter-spacing: .04em; text-align: center; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 10px; }
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.auth-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.auth-who { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: var(--text-sm); color: var(--text-muted); }
+.auth-who strong { display: block; color: var(--text-primary); font-size: var(--text-base, 1rem); }

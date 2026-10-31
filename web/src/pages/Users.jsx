@@ -4,11 +4,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
-import { ListToolbar } from '../components/ListControls';
+import { ListToolbar, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import InviteUserModal from '../components/InviteUserModal';
 import ManageUserModal from '../components/ManageUserModal';
+import InvitationsPanel, { InvitationReady } from '../components/InvitationsPanel';
+import { manageUsers } from '../lib/manageUsers';
+import { isHiddenEmail } from '../lib/authId';
 import { scopeLabel } from '../components/AccessFields';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Users, Search, ShieldCheck, UserPlus } from 'lucide-react';
@@ -29,8 +32,20 @@ export default function UsersPage() {
   const [search,     setSearch]     = useState('');
   const [inviting,   setInviting]   = useState(false);
   const [managingId, setManagingId] = useState(null);
+  const [tab,        setTab]        = useState('users');
+  const [ready,      setReady]      = useState(null);   // an invitation or reset link just made: shown once
+  const [listKey,    setListKey]    = useState(0);
 
-  const canInvite = can('users.invite');
+  // invitations: the Technical admin; a Branch Manager for their own branch (100)
+  const isBM = hasRole('branch_manager');
+  const canInvite = hasRole('owner') || isBM;
+  async function makeReset(u) {
+    setNotice('');
+    try {
+      const r = await manageUsers({ action: 'create_reset', user_id: u.id, origin: window.location.origin });
+      setReady({ ...r, title: `Reset link for ${[u.first_name, u.last_name].filter(Boolean).join(' ') || u.username}`, reset: true });
+    } catch (e) { setNotice(e.message); }
+  }
   const canManage = can('users.manage');
 
   async function load({ quiet = false } = {}) {
@@ -41,7 +56,7 @@ export default function UsersPage() {
       supabase
         .from('profiles')
         .select(`
-          id, first_name, last_name, email, phone, status, created_at,
+          *,
           user_roles(
             id, branch_id, warehouse_id,
             role:roles(id, name),
@@ -77,7 +92,7 @@ export default function UsersPage() {
     : inView.filter(u => {
         const q = search.toLowerCase();
         return `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-               (u.email || '').toLowerCase().includes(q);
+               (u.email || '').toLowerCase().includes(q) || (u.username || '').includes(q);
       });
 
   const managing = users.find(u => u.id === managingId);
@@ -93,11 +108,13 @@ export default function UsersPage() {
       description="Who can sign in, their role and which branch or store it covers."
       primaryAction={canInvite && (
         <button type="button" className="btn btn-primary" onClick={() => { setNotice(''); setInviting(true); }}>
-          <UserPlus size={14} /> Invite User
+          <UserPlus size={14} /> Invite person
         </button>
       )}
     >
-      <ListToolbar id="users-search" search={search} onSearch={setSearch} placeholder="Search name or email…" />
+      {canInvite && <PageTabs tabs={[['users', 'Users'], ['invitations', 'Invitations']]} value={tab} onChange={setTab} />}
+      {tab === 'invitations' ? <InvitationsPanel key={listKey} roles={roles} /> : <>
+      <ListToolbar id="users-search" search={search} onSearch={setSearch} placeholder="Search name, email or username…" />
       {notice && <div className="alert alert-success mb-16" role="status">{notice}</div>}
 
       <div className="card">
@@ -112,15 +129,15 @@ export default function UsersPage() {
                   <th>Access</th>
                   <th>Joined</th>
                   <th>Status</th>
-                  {canManage && <th aria-label="Actions" />}
+                  {(canManage || canInvite) && <th aria-label="Actions" />}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={canManage ? 5 : 4} />)
+                  Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={canManage || canInvite ? 5 : 4} />)
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={canManage ? 5 : 4}>
+                    <td colSpan={canManage || canInvite ? 5 : 4}>
                       <EmptyState
                         icon={Users}
                         title="No users found"
@@ -131,16 +148,17 @@ export default function UsersPage() {
                 ) : (
                   filtered.map(u => {
                     const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
+                    const shownId = u.username || (isHiddenEmail(u.email) ? '' : u.email);
                     const initials = `${(u.first_name || '')[0] || ''}${(u.last_name || '')[0] || ''}`.toUpperCase()
-                      || (u.email || '?')[0].toUpperCase();
+                      || (shownId || '?')[0].toUpperCase();
                     return (
                       <tr key={u.id}>
                         <td>
                           <div className="flex items-center gap-8">
                             <div className="user-avatar">{initials}</div>
                             <div>
-                              <div style={{ fontWeight: 500 }}>{fullName || u.email || 'Unnamed user'}</div>
-                              {fullName && u.email && <div className="text-muted text-sm">{u.email}</div>}
+                              <div style={{ fontWeight: 500 }}>{fullName || shownId || 'Unnamed user'}</div>
+                              {fullName && shownId && <div className="text-muted text-sm">{shownId}</div>}
                             </div>
                           </div>
                         </td>
@@ -163,11 +181,12 @@ export default function UsersPage() {
                             {u.status}
                           </span>
                         </td>
-                        {canManage && (
-                          <td style={{ textAlign: 'right' }}>
-                            <button type="button" className="btn btn-outline btn-sm" onClick={() => { setNotice(''); setManagingId(u.id); }}>
+                        {(canManage || canInvite) && (
+                          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {canInvite && u.username && <button type="button" className="btn btn-ghost btn-sm" onClick={() => makeReset(u)}>Reset link</button>}
+                            {canManage && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setNotice(''); setManagingId(u.id); }}>
                               Manage
-                            </button>
+                            </button>}
                           </td>
                         )}
                       </tr>
@@ -185,9 +204,15 @@ export default function UsersPage() {
         )}
       </div>
 
+      </>}
+
+      {ready && <InvitationReady ready={ready} onClose={() => setReady(null)} />}
+
       {inviting && (
         <InviteUserModal
-          roles={roles} branches={branches} warehouses={warehouses}
+          roles={isBM && !hasRole('owner') ? roles.filter(r => ['secretary', 'storekeeper', 'sales_user'].includes(r.name)) : roles}
+          branches={branches} warehouses={warehouses}
+          onReady={r => { setInviting(false); setReady(r); setListKey(k => k + 1); }}
           onClose={() => setInviting(false)}
           onInvited={async result => {
             setInviting(false);

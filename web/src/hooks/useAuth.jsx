@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { toAuthEmail } from '../lib/authId';
 
 const AuthContext = createContext(null);
 
@@ -109,7 +110,7 @@ export function AuthProvider({ children }) {
   }, [loadProfile]);
 
   async function signIn(email, password) {
-    return supabase.auth.signInWithPassword({ email, password });
+    return supabase.auth.signInWithPassword({ email: toAuthEmail(email), password });
   }
 
   async function signUp(email, password, meta = {}) {

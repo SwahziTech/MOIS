@@ -5,6 +5,7 @@ import Login        from './pages/auth/Login';
 import Signup       from './pages/auth/Signup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword  from './pages/auth/ResetPassword';
+import Invitation     from './pages/auth/Invitation';
 import Dashboard    from './pages/Dashboard';
 import Products     from './pages/Products';
 import Materials    from './pages/Materials';
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/login"           element={<Login />} />
             <Route path="/signup"          element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/invite"          element={<Invitation />} />
           </Route>
 
           {/* The recovery link signs the user in, so this page must not sit
