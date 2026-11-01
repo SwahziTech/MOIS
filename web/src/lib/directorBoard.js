@@ -21,7 +21,8 @@ const utc = s => new Date(`${s}T00:00:00Z`);
 export const dayShift = (d, k) => { const x = utc(d); x.setUTCDate(x.getUTCDate() + k); return iso(x); };
 const monthsBack = (m, k) => { const d = utc(`${m}-01`); d.setUTCMonth(d.getUTCMonth() - k); return iso(d).slice(0, 7); };
 const lastDay = m => { const x = utc(`${m}-01`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return iso(x); };
-const sundayOf = d => dayShift(d, -utc(d).getUTCDay());
+// the work week: Monday to Saturday; a Sunday worked counts with the week just ended
+const weekStartOf = d => dayShift(d, -((utc(d).getUTCDay() + 6) % 7));
 const daysSinceMonday = d => (utc(d).getUTCDay() + 6) % 7;
 const shortDay = d => dateText(d);
 export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).replace('Sept', 'Sep');
@@ -39,7 +40,7 @@ export function periodsFor(today) {
   const month = today.slice(0, 7);
   const sameDayIn = m => [`${m}-${today.slice(8)}`, lastDay(m)].sort()[0];
   const y = dayShift(today, -1);
-  const sun = sundayOf(today);
+  const sun = weekStartOf(today);
   const lastSun = dayShift(sun, -7);
   const prevM = monthsBack(month, 1);
   const prevPrev = monthsBack(month, 2);
@@ -55,8 +56,8 @@ export function periodsFor(today) {
     { key: 'today', label: 'Today', note: dateText(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
     { key: 'yesterday', label: 'Yesterday', note: dateText(y), from: y, to: y, compare: { from: dayShift(y, -1), to: dayShift(y, -1), label: 'the day before' } },
     ...earlier,
-    { key: 'week', label: 'This week', note: `${shortDay(sun)} – ${shortDay(dayShift(sun, 6))}`, from: sun, to: today, compare: { from: lastSun, to: dayShift(today, -7), label: 'last week' } },
-    { key: 'lastweek', label: 'Last week', note: `${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 6))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },
+    { key: 'week', label: 'This week', note: `${shortDay(sun)} – ${shortDay(dayShift(sun, 5))}`, from: sun, to: today, compare: { from: lastSun, to: dayShift(today, -7), label: 'last week' } },
+    { key: 'lastweek', label: 'Last week', note: `${shortDay(lastSun)} – ${shortDay(dayShift(lastSun, 5))}`, from: lastSun, to: dayShift(lastSun, 6), compare: { from: dayShift(lastSun, -7), to: dayShift(lastSun, -1), label: 'the week before' } },
     { key: 'month', label: 'This month', note: monthLong(month), from: `${month}-01`, to: today, compare: { from: `${prevM}-01`, to: sameDayIn(prevM), label: `same days ${monthShort(prevM)}` } },
     { key: 'lastmonth', label: 'Last month', note: monthLong(prevM), from: `${prevM}-01`, to: lastDay(prevM), compare: { from: `${prevPrev}-01`, to: lastDay(prevPrev), label: monthShort(prevPrev) } },
     { key: 'quarter', label: 'This quarter', note: `${monthShort(quarterStart)} – today`, from: `${quarterStart}-01`, to: today, compare: { from: `${prevQ}-01`, to: sameDayIn(monthsBack(month, 3)), label: 'same days last quarter' } },
@@ -168,9 +169,9 @@ export function productionFor(data, { from, to }, inBranch, today) {
 
 /** Rows for a card's detail page within a period, newest first. by: day | week | month */
 export function historyFor(data, card, by, inBranch, today, { from, to }) {
-  const keyOf = d => (by === 'day' ? d : by === 'week' ? sundayOf(d) : by === 'month' ? d.slice(0, 7)
+  const keyOf = d => (by === 'day' ? d : by === 'week' ? weekStartOf(d) : by === 'month' ? d.slice(0, 7)
     : by === 'quarter' ? `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : d.slice(0, 4));
-  const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k < from ? from : k)} – ${tableDate(dayShift(k, 6) > to ? to : dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
+  const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k < from ? from : k)} – ${tableDate(dayShift(k, 5) > to ? to : dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
   const rows = {};
   const add = (d, f) => { if (!d || d > today || d < from || d > to) return; const k = keyOf(d); f(rows[k] ||= { key: k, label: label(k), a: 0, b: 0, c: 0 }); };
   if (card === 'sales') for (const x of data.received) { if (inBranch(x.branch_id)) add(x.day, r => { r.a += x.amount; }); }

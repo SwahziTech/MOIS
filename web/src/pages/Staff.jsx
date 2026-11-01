@@ -17,6 +17,7 @@ import StatutoryRatesCard, { RATE_NAME } from '../components/staff/StatutoryRate
 import AdvancesPanel from '../components/staff/AdvancesPanel';
 import StatutoryReturns from '../components/staff/StatutoryReturns';
 import TeamsPanel from '../components/staff/TeamsPanel';
+import OvertimePanel from '../components/staff/OvertimePanel';
 import PayrollMonth from '../components/staff/PayrollMonth';
 
 const LOAD_ERROR = "We couldn't load staff. Please try again.";
@@ -56,8 +57,7 @@ function periodNote(key, today) {
   const opt = o => ({ timeZone: 'UTC', ...o });
   const mon = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ month: 'short' })).replace('Sept', 'Sep');
   const dm = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ day: 'numeric', month: 'short' })).replace('Sept', 'Sep');
-  if (key === 'week') return `${dm(from)} – ${dm(addDays(from, 6))}`;
-  if (key === 'lastweek') return `${dm(from)} – ${dm(to)}`;
+  if (key === 'week' || key === 'lastweek') return `${dm(from)} – ${dm(addDays(from, 5))}`;   // the work week; a Sunday worked counts with it
   if (key === 'lastquarter') return `${mon(from)} – ${mon(to)}`;
   if (key === 'year') return from.slice(0, 4);
   return mon(from);
@@ -94,9 +94,15 @@ export default function Staff() {
   const [att, setAtt] = useState({});   // `${staff_id}|${date}` → day fraction, this week and month (the cards)
   const [attBusy, setAttBusy] = useState('');
   const [workDays, setWorkDays] = useState(WORK_DAYS_DEFAULT);
+  const [restDay, setRestDay] = useState(0);          // no normal work: ticked, it is overtime (102). 0 = Sunday
+  const [overtime, setOvertime] = useState([]);       // { staff_id, work_date, amount } in the days on screen
+  const isRest = d => new Date(`${d}T00:00:00Z`).getUTCDay() === restDay;
   useEffect(() => {
-    supabase.from('payroll_settings').select('work_days_a_month').maybeSingle()
-      .then(({ data }) => { if (data?.work_days_a_month) setWorkDays(Number(data.work_days_a_month)); });
+    supabase.from('payroll_settings').select('*').maybeSingle()
+      .then(({ data }) => {
+        if (data?.work_days_a_month) setWorkDays(Number(data.work_days_a_month));
+        if (data?.rest_day != null) setRestDay(Number(data.rest_day));
+      });
   }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -131,6 +137,8 @@ export default function Staff() {
       if ((data || []).length < 1000) break;
     }
     setAtt(Object.fromEntries(rows.map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
+    const ot = await supabase.from('staff_overtime').select('staff_id, work_date, amount').eq('status', 'recorded').gte('work_date', attFrom).lte('work_date', addDays(monday, 6));
+    setOvertime(ot.error ? [] : ot.data || []);
   }
   useEffect(() => { if (tab === 'employed' || tab === 'casual') loadAtt(); }, [tab, attFrom]); // eslint-disable-line react-hooks/exhaustive-deps
   // a day on the card: ✓ full → ½ half → empty (as on Attendance)
@@ -142,8 +150,10 @@ export default function Staff() {
     setAttBusy('');
     if (err) { setError(dbErrorMessage(err)); return; }
     setAtt(m => { const n = { ...m }; if (fr) n[k] = fr; else delete n[k]; return n; });
+    if (isRest(d)) loadAtt();   // the rest day's overtime appeared or went
   }
-  const daysIn = (sid, from, to) => Object.entries(att).reduce((t, [k, v]) => { const [id, d] = k.split('|'); return id === sid && d >= from && d <= to ? t + v : t; }, 0);
+  const daysIn = (sid, from, to) => Object.entries(att).reduce((t, [k, v]) => { const [id, d] = k.split('|'); return id === sid && d >= from && d <= to && !isRest(d) ? t + v : t; }, 0);
+  const overtimeIn = (sid, from, to) => overtime.reduce((t, o) => (o.staff_id === sid && o.work_date >= from && o.work_date <= to ? t + Number(o.amount) : t), 0);
 
   const here = useMemo(() => (staff || []).filter(s => inBranch(s.branch_id)), [staff, inBranch]);
   // Employees: employed; Casuals: casual, and anyone whose kind isn't set yet (they're paid by the day until it is)
@@ -152,14 +162,14 @@ export default function Staff() {
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     // casuals change often: someone no longer working shows only for a period they worked in
-    return inTab.filter(s => !isCasualTab || s.status === 'active' || daysIn(s.id, periodFrom, periodTo) > 0)
+    return inTab.filter(s => !isCasualTab || s.status === 'active' || daysIn(s.id, periodFrom, periodTo) > 0 || overtimeIn(s.id, periodFrom, periodTo) > 0)
       .filter(s => !q || `${s.full_name} ${s.job_title ?? ''} ${s.phone ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1));
-  }, [inTab, search, isCasualTab, att, periodFrom, periodTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inTab, search, isCasualTab, att, overtime, restDay, periodFrom, periodTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const working = inTab.filter(s => s.status === 'active');
   const payTotal = working.reduce((t, s) => t + Number(s.pay_rate || 0), 0);
   // earned in the period by attendance: everyone on this tab, also anyone who has since left
-  const earnedBy = s => daysIn(s.id, periodFrom, periodTo) * Number(s.pay_rate || 0) / (basisOf(s) === 'daily' ? 1 : workDays);
+  const earnedBy = s => daysIn(s.id, periodFrom, periodTo) * Number(s.pay_rate || 0) / (basisOf(s) === 'daily' ? 1 : workDays) + overtimeIn(s.id, periodFrom, periodTo);
   const earnedTotal = inTab.reduce((t, s) => t + earnedBy(s), 0);
   const noPay = working.filter(s => s.pay_rate == null).length;
   const noKind = working.filter(s => !s.kind).length;
@@ -225,8 +235,8 @@ export default function Staff() {
                     const days = daysIn(s.id, periodFrom, periodTo);
                     const due = earnedBy(s);
                     return <>
-                      <strong title={daily ? 'Days × day rate' : `Days × salary ÷ ${workDays} working days. What was actually paid is on Payroll.`}>{money(Math.round(due))}</strong>
-                      <span className="sk-sub">{days} day{days === 1 ? '' : 's'} {periodWord}</span>
+                      <strong title={daily ? 'Days × day rate, plus overtime' : `Days × salary ÷ ${workDays} working days, plus overtime. What was actually paid is on Payroll.`}>{money(Math.round(due))}</strong>
+                      <span className="sk-sub">{days} day{days === 1 ? '' : 's'} {periodWord}{overtimeIn(s.id, periodFrom, periodTo) > 0 ? ` · overtime ${money(Math.round(overtimeIn(s.id, periodFrom, periodTo)))}` : ''}</span>
                       <span className="sk-sub">{money(s.pay_rate)} {daily ? 'a day' : 'a month'}</span>
                     </>;
                   })()}
@@ -241,8 +251,8 @@ export default function Staff() {
                     {week.map(d => {
                       const k = `${s.id}|${d}`; const v = att[k];
                       return (
-                        <button key={d} type="button" className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}`}
-                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dateText(d)}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
+                        <button key={d} type="button" className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}${isRest(d) ? ' is-rest' : ''}`}
+                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dateText(d)}${isRest(d) ? ' — rest day: paid as overtime' : ''}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
                           onClick={e => markDay(e, s.id, d)}>
                           <span className="st-dname">{dayName(d)}</span>{v === 1 ? '✓' : v === 0.5 ? '½' : d > today ? '' : '·'}
                         </button>
@@ -256,7 +266,7 @@ export default function Staff() {
           </section>
         </>
       ) : (
-        <AttendanceWeek staff={here.filter(s => s.status === 'active' && (tab === 'attendance' ? s.kind === 'employed' : s.kind !== 'employed'))} branchId={branchId} today={today} canRecord={canRecord} />
+        <AttendanceWeek restDay={restDay} staff={here.filter(s => s.status === 'active' && (tab === 'attendance' ? s.kind === 'employed' : s.kind !== 'employed'))} branchId={branchId} today={today} canRecord={canRecord} />
       )}
 
       {viewing && (
@@ -275,6 +285,7 @@ export default function Staff() {
             {viewing.status !== 'active' && <><dt>Left</dt><dd>{viewing.left_on || 'yes'}</dd></>}
             {viewing.notes && <><dt>Notes</dt><dd>{viewing.notes}</dd></>}
           </dl>
+          <OvertimePanel person={viewing} today={today} canRecord={!!viewing.branch_id && canAt('payroll.record', viewing.branch_id)} onChanged={loadAtt} />
         </Modal>
       )}
       {settings && (
@@ -375,7 +386,7 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
 }
 
 /* A week of attendance: click a day to cycle — worked a full day, half a day, not there */
-function AttendanceWeek({ staff, branchId, today, canRecord }) {
+function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
   const [monday, setMonday] = useState(() => mondayOf(today));
   const [marks, setMarks] = useState(null);       // `${staff_id}|${date}` → day_fraction
   const [busy, setBusy] = useState('');
@@ -412,7 +423,8 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
     for (const id of ids) if (!marks?.[`${id}|${date}`] && staff.some(s => s.id === id)) await mark(id, date, 1);
   }
 
-  const totalOf = id => days.reduce((t, d) => t + (marks?.[`${id}|${d}`] || 0), 0);
+  const isRest = d => new Date(`${d}T00:00:00Z`).getUTCDay() === restDay;
+  const totalOf = id => days.reduce((t, d) => t + (isRest(d) ? 0 : marks?.[`${id}|${d}`] || 0), 0);
   return (
     <>
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
@@ -426,6 +438,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord }) {
         <table className="at-table">
           <thead><tr><th>Name</th>{days.map(d => (
             <th key={d} className="at-day">{dayName(d)}
+              {isRest(d) && <span className="at-rest">overtime</span>}
               {canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
             </th>))}<th className="num">Days</th></tr></thead>
           <tbody>
@@ -493,6 +506,7 @@ function PayrollSheet({ kind, staff, today, money, currency, canRecord, canAppro
   const COLS = [
     ['Basic', l => cell(l.base), 'base'],
     ['Allowance', l => cell(l.additions), 'additions'],
+    ['Overtime', l => cell(l.overtime), 'overtime'],
     ['Gross', l => formatAmount(Number(l.gross ?? l.base)), l => Number(l.gross ?? l.base)],
     ['NSSF', l => cell(l.nssf_employee), 'nssf_employee'],
     ['PAYE', l => cell(l.paye), 'paye'],
@@ -563,7 +577,7 @@ function PersonPay({ line: l, sheet, person, money, onClose }) {
         <div className="pp-grid">
           <table className="pp-table">
             <thead><tr><th>Earnings</th><th className="num">TZS</th></tr></thead>
-            <tbody><tr><td>Basic pay</td><td className="num">{formatAmount(Number(l.base))}</td></tr>{row('Allowance', l.additions)}</tbody>
+            <tbody><tr><td>Basic pay</td><td className="num">{formatAmount(Number(l.base))}</td></tr>{row('Allowance', l.additions)}{row('Overtime', l.overtime)}</tbody>
             <tfoot><tr><td><strong>Gross pay</strong></td><td className="num"><strong>{formatAmount(gross)}</strong></td></tr></tfoot>
           </table>
           <table className="pp-table">
@@ -620,7 +634,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   const val = (l, k) => edits[l.id]?.[k] ?? (k === 'note' ? l.note ?? '' : String(Number(l[k]) || ''));
   const setVal = (l, k, v) => setEdits(m => ({ ...m, [l.id]: { ...(m[l.id] || {}), [k]: v } }));
   // net as typed: NSSF and PAYE as last worked out (they follow the additions once saved)
-  const grossOf = l => Number(l.base) + (num(val(l, 'additions')) || 0);
+  const grossOf = l => Number(l.base) + (num(val(l, 'additions')) || 0) + Number(l.overtime || 0);
   const amountOf = l => Math.max(grossOf(l) - Number(l.nssf_employee || 0) - Number(l.paye || 0) - (num(val(l, 'deductions')) || 0) - Number(l.first_payment || 0) - Number(l.advance_deductions || 0), 0);
   const total = lines.reduce((t, l) => t + amountOf(l), 0);
   const sorted = [...lines].sort((a, b) => (a.pay_basis === b.pay_basis ? nameOf(a.staff_id).localeCompare(nameOf(b.staff_id)) : a.pay_basis === 'daily' ? -1 : 1));
@@ -645,9 +659,9 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Allowance (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Allowance (TZS)</th><th className="num" title="From each person's overtime entries">Overtime (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={13} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={14} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
                   <td><strong>{nameOf(l.staff_id)}</strong>{l.part === 'advance' ? <div className="pl-help">first payment — no deductions</div> : l.part === 'balance' ? <div className="pl-help">the month, with deductions</div> : null}</td>
@@ -657,6 +671,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
                   <td className="num">{draft && canRecord
                     ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'additions')} onChange={e => setVal(l, 'additions', e.target.value)} />
                     : Number(l.additions) ? formatAmount(Number(l.additions)) : ''}</td>
+                  <td className="num">{Number(l.overtime) ? formatAmount(Number(l.overtime)) : ''}</td>
                   <td className="num">{formatAmount(grossOf(l))}</td>
                   <td className="num">{Number(l.nssf_employee) ? formatAmount(Number(l.nssf_employee)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
                   <td className="num">{Number(l.paye) ? formatAmount(Number(l.paye)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
@@ -670,7 +685,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('first_payment'))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
+            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(tot('overtime'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('first_payment'))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
           </table>
         </div>
         {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (
@@ -716,16 +731,16 @@ function WorkDaysCard() {
     supabase.from('payroll_settings').select('*').maybeSingle().then(({ data, error }) => {
       if (error) { setCfg(false); return; }
       const v = { work_days_a_month: Number(data?.work_days_a_month ?? WORK_DAYS_DEFAULT), first_half_mode: data?.first_half_mode ?? 'advance',
-        first_half_pct: Number(data?.first_half_pct ?? 50), month_pay_basis: data?.month_pay_basis ?? 'attendance' };
-      setCfg(v); setF({ ...v, work_days_a_month: String(v.work_days_a_month), first_half_pct: String(v.first_half_pct) });
+        first_half_pct: Number(data?.first_half_pct ?? 50), month_pay_basis: data?.month_pay_basis ?? 'attendance', rest_day_rate: Number(data?.rest_day_rate ?? 2) };
+      setCfg(v); setF({ ...v, work_days_a_month: String(v.work_days_a_month), first_half_pct: String(v.first_half_pct), rest_day_rate: String(v.rest_day_rate) });
     });
   }, []);
   if (cfg === false || cfg === null) return null;   // before 089
-  const changed = JSON.stringify({ ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct) }) !== JSON.stringify(cfg);
+  const changed = JSON.stringify({ ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct), rest_day_rate: Number(f.rest_day_rate) }) !== JSON.stringify(cfg);
   const set = patch => setF(x => ({ ...x, ...patch }));
   async function save() {
     setMsg(''); setBusy(true);
-    const p = { ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct) };
+    const p = { ...f, work_days_a_month: Number(f.work_days_a_month), first_half_pct: Number(f.first_half_pct), rest_day_rate: Number(f.rest_day_rate) };
     const { error } = await supabase.rpc('set_payroll_settings', { p });
     setBusy(false);
     if (error) { setMsg(dbErrorMessage(error)); return; }
@@ -738,6 +753,8 @@ function WorkDaysCard() {
         <div className="form-row">
           <label className="pe-field"><span>Working days a month</span>
             <input className="form-input" inputMode="decimal" value={f.work_days_a_month} disabled={!canSet} onChange={e => set({ work_days_a_month: e.target.value })} /></label>
+          <label className="pe-field" title="Ticking someone on the rest day adds overtime at this rate, which can be adjusted"><span>Sunday pay, times a normal day</span>
+            <input className="form-input" inputMode="decimal" value={f.rest_day_rate} disabled={!canSet} onChange={e => set({ rest_day_rate: e.target.value })} /></label>
           <label className="pe-field"><span>First payment (1st–15th), %</span>
             <input className="form-input" inputMode="decimal" value={f.first_half_pct} disabled={!canSet} onChange={e => set({ first_half_pct: e.target.value })} /></label>
           <label className="pe-field"><span>… of</span>

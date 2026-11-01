@@ -44,16 +44,20 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
     setError('');
     const [sh, at, cfg, ra] = await Promise.all([
       supabase.from('pay_sheets').select('*').neq('status', 'void').neq('cycle', 'weekly').gte('period_start', from).lte('period_start', to).order('period_start'),
-      supabase.from('staff_attendance').select('staff_id, day_fraction').gte('work_date', from).lte('work_date', to),
+      supabase.from('staff_attendance').select('staff_id, day_fraction, work_date').gte('work_date', from).lte('work_date', to),
       supabase.from('payroll_settings').select('*').maybeSingle(),
       supabase.from('statutory_rates').select('rate, effective_from').eq('code', 'nssf_employee').eq('status', 'active').lte('effective_from', to).order('effective_from', { ascending: false }).limit(1),
     ]);
-    if (sh.error || at.error) { console.error(sh.error || at.error); setError("We couldn't load payroll."); setD({ sheets: [], lines: [], days: {}, pct: 50, nssf: 0 }); return; }
+    if (sh.error || at.error) { console.error(sh.error || at.error); setError("We couldn't load payroll."); setD({ sheets: [], lines: [], days: {}, overtime: {}, pct: 50, nssf: 0 }); return; }
+    const ot = await supabase.from('staff_overtime').select('staff_id, amount').eq('status', 'recorded').gte('work_date', from).lte('work_date', to);
+    const overtime = {};
+    for (const o of ot.error ? [] : ot.data || []) overtime[o.staff_id] = (overtime[o.staff_id] || 0) + n(o.amount);
+    const restDay = n(cfg.data?.rest_day);   // a day worked then is overtime, not a normal day (102)
     const ids = (sh.data || []).map(s => s.id);
     const li = ids.length ? await supabase.from('pay_sheet_lines').select('*').in('sheet_id', ids) : { data: [] };
     const days = {};
-    for (const a of at.data || []) days[a.staff_id] = (days[a.staff_id] || 0) + n(a.day_fraction);
-    setD({ sheets: sh.data || [], lines: li.data || [], days, pct: n(cfg.data?.first_half_pct ?? 50), nssf: n(ra.data?.[0]?.rate) });
+    for (const a of at.data || []) if (new Date(`${a.work_date}T00:00:00Z`).getUTCDay() !== restDay) days[a.staff_id] = (days[a.staff_id] || 0) + n(a.day_fraction);
+    setD({ sheets: sh.data || [], lines: li.data || [], days, overtime, pct: n(cfg.data?.first_half_pct ?? 50), nssf: n(ra.data?.[0]?.rate) });
   }
   useEffect(() => { setD(null); load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,9 +81,10 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
       const statutory = s.statutory ?? true;
       const nssf = last ? n(last.nssf_employee) : statutory && salary != null ? n(salary) * d.nssf / 100 : 0;
       const additions = n(last?.additions); const paye = n(last?.paye); const other = n(last?.deductions); const loans = n(last?.advance_deductions);
-      const gross = earned + additions;
+      const overtime = d.overtime[s.id] || 0;
+      const gross = earned + additions + overtime;
       const raw = gross - nssf - paye - other - loans - firstOwed;
-      return { s, salary, days, earned, gross, additions, nssf, paye, other, loans, first, last, firstSheet: first && byId[first.sheet_id], lastSheet: last && byId[last.sheet_id], firstAmt: firstOwed, balance: Math.max(raw, 0), overpaid: raw < 0 ? -raw : 0 };
+      return { s, salary, days, earned, gross, additions, overtime, nssf, paye, other, loans, first, last, firstSheet: first && byId[first.sheet_id], lastSheet: last && byId[last.sheet_id], firstAmt: firstOwed, balance: Math.max(raw, 0), overpaid: raw < 0 ? -raw : 0 };
     }).filter(Boolean).filter(r => !q || `${r.s.full_name} ${r.s.job_title ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => a.s.full_name.localeCompare(b.s.full_name));
   }, [d, staff, search, inBranch, workDays, today, firstDue]);
@@ -114,11 +119,11 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
       </div>
       <div className="card"><div className="table-container">
         <table className="ps-table">
-          <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Salary (TZS)</th><th className="num">Earned (TZS)</th><th className="num">Allowance (TZS)</th><th className="num">First payment (TZS)</th>
+          <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Salary (TZS)</th><th className="num">Earned (TZS)</th><th className="num">Allowance (TZS)</th><th className="num">Overtime (TZS)</th><th className="num">First payment (TZS)</th>
             <th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">Loans (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
           <tbody>
-            {d === null ? <tr><td colSpan={11}><span className="skeleton" /></td></tr>
-            : rows.length === 0 ? <tr><td colSpan={11} className="text-muted">{search ? 'Nobody matches.' : 'No employees here.'}</td></tr>
+            {d === null ? <tr><td colSpan={12}><span className="skeleton" /></td></tr>
+            : rows.length === 0 ? <tr><td colSpan={12} className="text-muted">{search ? 'Nobody matches.' : 'No employees here.'}</td></tr>
             : rows.map(r => {
               const f = r.first || r.firstAmt ? standing(r.firstSheet, firstDue, today) : { text: 'None recorded', cls: 'text-muted' };
               const b = standing(r.lastSheet, lastDue, today);
@@ -129,6 +134,7 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
                   <td className="num">{r.salary == null ? <span className="text-warning">not set</span> : amt(r.salary)}</td>
                   <td className="num">{amt(r.earned)}</td>
                   <td className="num">{cell(r.additions)}</td>
+                  <td className="num">{cell(r.overtime)}</td>
                   <td className="num">{cell(r.firstAmt)}<div className={`pl-help ${f.cls}`}>{f.text}</div></td>
                   <td className="num">{cell(r.nssf)}</td>
                   <td className="num">{cell(r.paye)}</td>
@@ -140,7 +146,7 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
             })}
           </tbody>
           {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td><td className="num">{tot('days') || ''}</td>
-            {['salary', 'earned', 'additions', 'firstAmt', 'nssf', 'paye', 'other', 'loans'].map(k => <td key={k} className="num"><strong>{amt(tot(k))}</strong></td>)}
+            {['salary', 'earned', 'additions', 'overtime', 'firstAmt', 'nssf', 'paye', 'other', 'loans'].map(k => <td key={k} className="num"><strong>{amt(tot(k))}</strong></td>)}
             <td className="num"><strong>{money(Math.round(tot('balance')))}</strong></td></tr></tfoot>}
         </table>
       </div></div>
@@ -190,7 +196,7 @@ function PersonMonth({ r, month, today, money, pct, nssfPct, workDays, firstDue,
         <div className="pp-grid">
           <table className="pp-table">
             <thead><tr><th>Earnings</th><th className="num">TZS</th></tr></thead>
-            <tbody><tr><td>Earned by days attended</td><td className="num">{amt(r.earned)}</td></tr>{row('Allowance', r.additions)}</tbody>
+            <tbody><tr><td>Earned by days attended</td><td className="num">{amt(r.earned)}</td></tr>{row('Allowance', r.additions)}{row('Overtime', r.overtime)}</tbody>
             <tfoot><tr><td><strong>Gross pay</strong></td><td className="num"><strong>{amt(r.gross)}</strong></td></tr></tfoot>
           </table>
           <table className="pp-table">

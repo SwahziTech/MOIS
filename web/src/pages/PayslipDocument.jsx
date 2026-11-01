@@ -95,6 +95,7 @@ export default function PayslipDocument() {
                       : l.part === 'advance' ? `First payment of the month (salary ${formatAmount(Number(l.rate || 0))} a month)`
                       : `Salary (${formatAmount(Number(l.rate || 0))} a month)${l.part === 'balance' ? ' — the month' : ''}`}</td><td className="num">{formatAmount(Number(l.base))}</td></tr>
                     {row('Allowance', l.additions)}
+                    {row('Overtime', l.overtime)}
                   </tbody>
                   <tfoot><tr><td><strong>Gross pay</strong></td><td className="num"><strong>{formatAmount(Number(l.gross))}</strong></td></tr></tfoot>
                 </table>
