@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { HardHat, Plus, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
@@ -119,7 +120,10 @@ export default function Staff() {
   // Casuals, paid by the week: the chosen week, Monday to Saturday, then the rest day. A longer period shows its total only.
   const shownDays = isCasualTab
     ? (period === 'week' ? week : period === 'lastweek' ? Array.from({ length: 7 }, (_, i) => addDays(periodFrom, i)) : [])
-    : (period === 'month' ? week.filter(d => d >= periodFrom) : []);
+    : (period === 'month'
+      // a month starting on the rest day: that day belongs to the week just ended, so show the coming work week
+      ? (today === periodFrom && isRest(today) ? Array.from({ length: 6 }, (_, i) => addDays(today, i + 1)) : week.filter(d => d >= periodFrom))
+      : []);
   const attFrom = [monday, periodFrom].sort()[0];
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
@@ -265,6 +269,7 @@ export default function Staff() {
                     })}
                   </div>}
                   <span className="pl-help st-att-sum">{period === 'month' && !isCasualTab ? `${daysIn(s.id, [monday, periodFrom].sort()[1], today)} days this week · ` : ''}{daysIn(s.id, periodFrom, periodTo)} days {periodWord}</span>
+                  {shownDays.length === 0 && <Link className="btn btn-outline btn-sm st-att-link" onClick={e => e.stopPropagation()} to={`/staff?tab=${isCasualTab ? 'attcasual' : 'attendance'}&week=${mondayOf(periodTo)}&person=${s.id}`}>Attendance</Link>}
                 </div>
               </div>
             ))}
@@ -392,7 +397,12 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
 
 /* A week of attendance: click a day to cycle — worked a full day, half a day, not there */
 function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
-  const [monday, setMonday] = useState(() => mondayOf(today));
+  // opened from a person's card: their week (?week=), only them (?person=)
+  const [params] = useSearchParams();
+  const asked = params.get('week');
+  const [monday, setMonday] = useState(() => (asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? mondayOf(asked) : mondayOf(today)));
+  const onePerson = staff.find(x => x.id === params.get('person'));
+  const listed = onePerson ? [onePerson] : staff;
   const [marks, setMarks] = useState(null);       // `${staff_id}|${date}` → day_fraction
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -439,6 +449,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
         <span className="pl-help" style={{ marginLeft: 'auto' }}>{canRecord ? 'Click a day: ✓ full day → ½ half day → empty.' : branchId ? 'You can see attendance here.' : 'Choose a branch to mark attendance.'}</span>
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {onePerson && <p className="pl-help" style={{ marginBottom: 8 }}>Only {onePerson.full_name}. <Link to={`/staff?tab=${params.get('tab')}`}>Show everyone</Link></p>}
       <div className="card"><div className="table-container">
         <table className="at-table">
           <thead><tr><th>Name</th>{days.map(d => (
@@ -447,8 +458,8 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
               {canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
             </th>))}<th className="num">Days</th></tr></thead>
           <tbody>
-            {staff.length === 0 ? <tr><td colSpan={9} className="text-muted">No one here yet — add them under Personnel.</td></tr>
-            : [...staff].sort((a, b) => (a.kind === b.kind ? a.full_name.localeCompare(b.full_name) : a.kind === 'casual' ? -1 : 1)).map(s => (
+            {listed.length === 0 ? <tr><td colSpan={9} className="text-muted">No one here yet — add them under Personnel.</td></tr>
+            : [...listed].sort((a, b) => (a.kind === b.kind ? a.full_name.localeCompare(b.full_name) : a.kind === 'casual' ? -1 : 1)).map(s => (
               <tr key={s.id}>
                 <td><strong>{s.full_name}</strong><div className="pl-help">{s.kind ? KIND[s.kind] : ''}{s.job_title ? ` · ${s.job_title}` : ''}</div></td>
                 {days.map(d => {
