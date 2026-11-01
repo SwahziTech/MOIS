@@ -115,6 +115,11 @@ export default function Staff() {
   const [periodFrom, periodTo] = periodRange(period, today);
   const periodLabel = periodOptions.find(p => p[0] === period)[1];
   const periodWord = periodLabel.toLowerCase();
+  // the day boxes follow the period (2026-11-01). Employees: this week's days inside this month, never another month's.
+  // Casuals, paid by the week: the chosen week, Monday to Saturday, then the rest day. A longer period shows its total only.
+  const shownDays = isCasualTab
+    ? (period === 'week' ? week : period === 'lastweek' ? Array.from({ length: 7 }, (_, i) => addDays(periodFrom, i)) : [])
+    : (period === 'month' ? week.filter(d => d >= periodFrom) : []);
   const attFrom = [monday, periodFrom].sort()[0];
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
@@ -247,19 +252,19 @@ export default function Staff() {
                   {s.status !== 'active' && <span className="pl-help">left{s.left_on ? ` ${dateText(s.left_on)}` : ''}</span>}
                 </div>
                 <div className="st-att" onDoubleClick={e => e.stopPropagation()}>
-                  <div className="st-week">
-                    {week.map(d => {
+                  {shownDays.length > 0 && <div className="st-week">
+                    {shownDays.map(d => {
                       const k = `${s.id}|${d}`; const v = att[k];
                       return (
-                        <button key={d} type="button" className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}${isRest(d) ? ' is-rest' : ''}`}
+                        <button key={d} type="button" style={{ gridColumnStart: ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1 }} className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}${isRest(d) ? ' is-rest' : ''}`}
                           disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dateText(d)}${isRest(d) ? ' — rest day: paid as overtime' : ''}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
                           onClick={e => markDay(e, s.id, d)}>
                           <span className="st-dname">{dayName(d)}</span>{v === 1 ? '✓' : v === 0.5 ? '½' : d > today ? '' : '·'}
                         </button>
                       );
                     })}
-                  </div>
-                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week{period === 'week' ? '' : ` · ${daysIn(s.id, periodFrom, periodTo)} ${periodWord}`}</span>
+                  </div>}
+                  <span className="pl-help st-att-sum">{period === 'month' && !isCasualTab ? `${daysIn(s.id, [monday, periodFrom].sort()[1], today)} days this week · ` : ''}{daysIn(s.id, periodFrom, periodTo)} days {periodWord}</span>
                 </div>
               </div>
             ))}
