@@ -38,13 +38,29 @@ const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'we
 const WORK_DAYS_DEFAULT = 26;
 // the period on the staff cards (2026-11-01): what each person earned by attendance
 const PERIODS = [['month', 'This month'], ['lastmonth', 'Last month'], ['lastquarter', 'Last quarter'], ['year', 'This year']];
+// casuals are paid by the week (Monday to Sunday), so their list opens on this week
+const CASUAL_PERIODS = [['week', 'This week'], ['lastweek', 'Last week'], ...PERIODS];
 function periodRange(key, today) {
   const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));   // m: 1–12
   const day = (yr, mo, d) => new Date(Date.UTC(yr, mo - 1, d)).toISOString().slice(0, 10);
+  if (key === 'week') return [mondayOf(today), today];
+  if (key === 'lastweek') { const mon = addDays(mondayOf(today), -7); return [mon, addDays(mon, 6)]; }
   if (key === 'lastmonth') return [day(y, m - 1, 1), day(y, m, 0)];
   if (key === 'lastquarter') { const q = Math.floor((m - 1) / 3) * 3 + 1; return [day(y, q - 3, 1), day(y, q, 0)]; }
   if (key === 'year') return [`${y}-01-01`, today];
   return [`${today.slice(0, 7)}-01`, today];
+}
+// which days a period is, short: "Oct", "Jul – Sep", "26 Oct – 1 Nov", "2026"
+function periodNote(key, today) {
+  const [from, to] = periodRange(key, today);
+  const opt = o => ({ timeZone: 'UTC', ...o });
+  const mon = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ month: 'short' }));
+  const dm = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ day: 'numeric', month: 'short' }));
+  if (key === 'week') return `${dm(from)} – ${dm(addDays(from, 6))}`;
+  if (key === 'lastweek') return `${dm(from)} – ${dm(to)}`;
+  if (key === 'lastquarter') return `${mon(from)} – ${mon(to)}`;
+  if (key === 'year') return from.slice(0, 4);
+  return mon(from);
 }
 
 /*
@@ -84,9 +100,15 @@ export default function Staff() {
   }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const [period, setPeriod] = useState('month');
+  const [employeePeriod, setEmployeePeriod] = useState('month');
+  const [casualPeriod, setCasualPeriod] = useState('week');
+  const isCasualTab = tab === 'casual';
+  const period = isCasualTab ? casualPeriod : employeePeriod;
+  const setPeriod = isCasualTab ? setCasualPeriod : setEmployeePeriod;
+  const periodOptions = isCasualTab ? CASUAL_PERIODS : PERIODS;
   const [periodFrom, periodTo] = periodRange(period, today);
-  const periodWord = PERIODS.find(p => p[0] === period)[1].toLowerCase();
+  const periodLabel = periodOptions.find(p => p[0] === period)[1];
+  const periodWord = periodLabel.toLowerCase();
   const attFrom = [monday, periodFrom].sort()[0];
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
@@ -129,9 +151,11 @@ export default function Staff() {
   const inTab = useMemo(() => here.filter(ofTab), [here, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return inTab.filter(s => !q || `${s.full_name} ${s.job_title ?? ''} ${s.phone ?? ''}`.toLowerCase().includes(q))
+    // casuals change often: someone no longer working shows only for a period they worked in
+    return inTab.filter(s => !isCasualTab || s.status === 'active' || daysIn(s.id, periodFrom, periodTo) > 0)
+      .filter(s => !q || `${s.full_name} ${s.job_title ?? ''} ${s.phone ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1));
-  }, [inTab, search]);
+  }, [inTab, search, isCasualTab, att, periodFrom, periodTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const working = inTab.filter(s => s.status === 'active');
   const payTotal = working.reduce((t, s) => t + Number(s.pay_rate || 0), 0);
   // earned in the period by attendance: everyone on this tab, also anyone who has since left
@@ -179,11 +203,11 @@ export default function Staff() {
           )}
           <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…">
             <select className="form-input list-period" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-              {PERIODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {periodOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </ListToolbar>
           <section className="sk">
-            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{PERIODS.find(p => p[0] === period)[1]}</span></div>
+            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{periodLabel} · {periodNote(period, today)}</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
             : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title={tab === 'employed' ? 'No employees yet' : 'No casual labourers yet'}
                 description={tab === 'employed' ? 'Add employed staff — monthly salary, paid every 2 weeks.' : 'Add casual labourers — a day rate, paid weekly. People added on a production batch appear here.'} /></div>
@@ -225,7 +249,7 @@ export default function Staff() {
                       );
                     })}
                   </div>
-                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week · {daysIn(s.id, periodFrom, periodTo)} {periodWord}</span>
+                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week{period === 'week' ? '' : ` · ${daysIn(s.id, periodFrom, periodTo)} ${periodWord}`}</span>
                 </div>
               </div>
             ))}
