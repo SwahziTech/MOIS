@@ -2493,3 +2493,6 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .auth-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .auth-who { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: var(--text-sm); color: var(--text-muted); }
 .auth-who strong { display: block; color: var(--text-primary); font-size: var(--text-base, 1rem); }
+
+/* A period dropdown beside a search bar (2026-11-01) */
+.list-period { width: auto; min-width: 150px; flex-shrink: 0; }

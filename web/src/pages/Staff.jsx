@@ -134,6 +134,9 @@ export default function Staff() {
   }, [inTab, search]);
   const working = inTab.filter(s => s.status === 'active');
   const payTotal = working.reduce((t, s) => t + Number(s.pay_rate || 0), 0);
+  // earned in the period by attendance: everyone on this tab, also anyone who has since left
+  const earnedBy = s => daysIn(s.id, periodFrom, periodTo) * Number(s.pay_rate || 0) / (basisOf(s) === 'daily' ? 1 : workDays);
+  const earnedTotal = inTab.reduce((t, s) => t + earnedBy(s), 0);
   const noPay = working.filter(s => s.pay_rate == null).length;
   const noKind = working.filter(s => !s.kind).length;
   const inCost = working.filter(s => s.in_production_cost).length;
@@ -168,14 +171,17 @@ export default function Staff() {
             <div className="mm-stats">
               <div className="mm-stat"><span className="pl-label">{tab === 'employed' ? 'Employees' : 'Casuals'}</span><strong>{working.length} working</strong>
                 <span className="pl-help">{tab === 'employed' ? `${inCost} in product cost` : noKind ? `${noKind} not set employed/casual` : 'paid by the day'}</span></div>
-              <div className="mm-stat"><span className="pl-label">{tab === 'employed' ? 'Salaries a month' : 'Wages a full day'}</span><strong>{formatMoneyShort(payTotal, organization?.currency_code)}</strong>
-                <span className="pl-help">{tab === 'employed' ? 'paid every 2 weeks' : 'all casuals at work'}</span></div>
+              <div className="mm-stat" title="Days attended × pay rate, at today's rates. What was actually paid is on Payroll."><span className="pl-label">Earned · {periodWord}</span><strong>{formatMoneyShort(earnedTotal, organization?.currency_code)}</strong>
+                <span className="pl-help">{tab === 'employed' ? `salaries ${formatMoneyShort(payTotal, organization?.currency_code)} a month` : `wages ${formatMoneyShort(payTotal, organization?.currency_code)} a full day`}</span></div>
               <div className="mm-stat"><span className="pl-label">Pay not set</span><strong className={noPay ? 'text-warning' : ''}>{noPay}</strong>
                 <span className="pl-help">{noPay ? 'double-click to set' : 'everyone has pay'}</span></div>
             </div>
           )}
-          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…"
-            filters={[{ key: 'period', label: 'Period', value: period, onChange: setPeriod, options: PERIODS.map(([value, label]) => ({ value, label })) }]} />
+          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…">
+            <select className="form-input list-period" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
+              {PERIODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </ListToolbar>
           <section className="sk">
             <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{PERIODS.find(p => p[0] === period)[1]}</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
@@ -193,7 +199,7 @@ export default function Staff() {
                     // earned in the period: casuals days × day rate; employed days × salary ÷ working days, at today's rate
                     const daily = basisOf(s) === 'daily';
                     const days = daysIn(s.id, periodFrom, periodTo);
-                    const due = days * Number(s.pay_rate) / (daily ? 1 : workDays);
+                    const due = earnedBy(s);
                     return <>
                       <strong title={daily ? 'Days × day rate' : `Days × salary ÷ ${workDays} working days. What was actually paid is on Payroll.`}>{money(Math.round(due))}</strong>
                       <span className="sk-sub">{days} day{days === 1 ? '' : 's'} {periodWord}</span>
