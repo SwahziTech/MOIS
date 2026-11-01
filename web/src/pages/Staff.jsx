@@ -36,6 +36,16 @@ const basisOf = s => s.pay_basis || (s.kind === 'employed' ? 'monthly' : 'daily'
 const cycleOf = s => s.pay_cycle || (s.kind === 'employed' ? 'fortnightly' : 'weekly');
 // a monthly salary counted by the day: working days a month (089 setting; 26 until set)
 const WORK_DAYS_DEFAULT = 26;
+// the period on the staff cards (2026-11-01): what each person earned by attendance
+const PERIODS = [['month', 'This month'], ['lastmonth', 'Last month'], ['lastquarter', 'Last quarter'], ['year', 'This year']];
+function periodRange(key, today) {
+  const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));   // m: 1–12
+  const day = (yr, mo, d) => new Date(Date.UTC(yr, mo - 1, d)).toISOString().slice(0, 10);
+  if (key === 'lastmonth') return [day(y, m - 1, 1), day(y, m, 0)];
+  if (key === 'lastquarter') { const q = Math.floor((m - 1) / 3) * 3 + 1; return [day(y, q - 3, 1), day(y, q, 0)]; }
+  if (key === 'year') return [`${y}-01-01`, today];
+  return [`${today.slice(0, 7)}-01`, today];
+}
 
 /*
  * Staff & pay (1e, migration 071): the branch's staff — employed and casual —
@@ -74,7 +84,10 @@ export default function Staff() {
   }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const attFrom = [monday, `${today.slice(0, 7)}-01`].sort()[0];
+  const [period, setPeriod] = useState('month');
+  const [periodFrom, periodTo] = periodRange(period, today);
+  const periodWord = PERIODS.find(p => p[0] === period)[1].toLowerCase();
+  const attFrom = [monday, periodFrom].sort()[0];
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
   const canApprove = !!branchId && canAt('payroll.approve', branchId);
@@ -87,8 +100,15 @@ export default function Staff() {
   }
   useEffect(() => { load(); }, []);
   async function loadAtt() {
-    const { data } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction').gte('work_date', attFrom).lte('work_date', addDays(monday, 6));
-    setAtt(Object.fromEntries((data || []).map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
+    // a year runs past one page of results, so read it page by page
+    const rows = [];
+    for (let at = 0; ; at += 1000) {
+      const { data } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction').gte('work_date', attFrom).lte('work_date', addDays(monday, 6))
+        .order('work_date').order('staff_id').range(at, at + 999);
+      rows.push(...(data || []));
+      if ((data || []).length < 1000) break;
+    }
+    setAtt(Object.fromEntries(rows.map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
   }
   useEffect(() => { if (tab === 'employed' || tab === 'casual') loadAtt(); }, [tab, attFrom]); // eslint-disable-line react-hooks/exhaustive-deps
   // a day on the card: ✓ full → ½ half → empty (as on Attendance)
@@ -154,9 +174,10 @@ export default function Staff() {
                 <span className="pl-help">{noPay ? 'double-click to set' : 'everyone has pay'}</span></div>
             </div>
           )}
-          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…" />
+          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…"
+            filters={[{ key: 'period', label: 'Period', value: period, onChange: setPeriod, options: PERIODS.map(([value, label]) => ({ value, label })) }]} />
           <section className="sk">
-            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span></div>
+            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{PERIODS.find(p => p[0] === period)[1]}</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
             : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title={tab === 'employed' ? 'No employees yet' : 'No casual labourers yet'}
                 description={tab === 'employed' ? 'Add employed staff — monthly salary, paid every 2 weeks.' : 'Add casual labourers — a day rate, paid weekly. People added on a production batch appear here.'} /></div>
@@ -169,13 +190,13 @@ export default function Staff() {
                 </div>
                 <div className="sk-total">
                   {s.pay_rate == null ? <span className="text-warning">Pay not set</span> : (() => {
-                    // earned so far: casuals this week (days × day rate); employed this month (days × salary ÷ 26 working days)
+                    // earned in the period: casuals days × day rate; employed days × salary ÷ working days, at today's rate
                     const daily = basisOf(s) === 'daily';
-                    const days = daysIn(s.id, daily ? monday : `${today.slice(0, 7)}-01`, today);
+                    const days = daysIn(s.id, periodFrom, periodTo);
                     const due = days * Number(s.pay_rate) / (daily ? 1 : workDays);
                     return <>
-                      <strong title={daily ? 'Days this week × day rate' : `Days this month × salary ÷ ${workDays} working days`}>{money(Math.round(due))}</strong>
-                      <span className="sk-sub">{days} day{days === 1 ? '' : 's'} this {daily ? 'week' : 'month'}</span>
+                      <strong title={daily ? 'Days × day rate' : `Days × salary ÷ ${workDays} working days. What was actually paid is on Payroll.`}>{money(Math.round(due))}</strong>
+                      <span className="sk-sub">{days} day{days === 1 ? '' : 's'} {periodWord}</span>
                       <span className="sk-sub">{money(s.pay_rate)} {daily ? 'a day' : 'a month'}</span>
                     </>;
                   })()}
@@ -198,7 +219,7 @@ export default function Staff() {
                       );
                     })}
                   </div>
-                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week · {daysIn(s.id, `${today.slice(0, 7)}-01`, today)} this month</span>
+                  <span className="pl-help st-att-sum">{daysIn(s.id, monday, today)} days this week · {daysIn(s.id, periodFrom, periodTo)} {periodWord}</span>
                 </div>
               </div>
             ))}
