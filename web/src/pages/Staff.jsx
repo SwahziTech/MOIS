@@ -54,8 +54,8 @@ function periodRange(key, today) {
 function periodNote(key, today) {
   const [from, to] = periodRange(key, today);
   const opt = o => ({ timeZone: 'UTC', ...o });
-  const mon = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ month: 'short' }));
-  const dm = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ day: 'numeric', month: 'short' }));
+  const mon = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ month: 'short' })).replace('Sept', 'Sep');
+  const dm = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', opt({ day: 'numeric', month: 'short' })).replace('Sept', 'Sep');
   if (key === 'week') return `${dm(from)} – ${dm(addDays(from, 6))}`;
   if (key === 'lastweek') return `${dm(from)} – ${dm(to)}`;
   if (key === 'lastquarter') return `${mon(from)} – ${mon(to)}`;
