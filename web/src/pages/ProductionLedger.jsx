@@ -19,6 +19,25 @@ const STAGE_BADGE = { Curing: 'badge-accent', Ready: 'badge-warning', Released: 
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const addDays = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
 
+const mondayOf = d => addDays(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
+const day = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
+/** A period's first and last day. Weeks start on Monday; a Sunday counts with the week just ended */
+function periodBounds(period, today, from, to) {
+  const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));
+  const mon = mondayOf(today);
+  switch (period) {
+    case 'week': return [mon, today];
+    case 'lastweek': return [addDays(mon, -7), addDays(mon, -1)];
+    case 'month': return [day(y, m, 1), today];
+    case 'lastmonth': return [day(y, m - 1, 1), day(y, m, 0)];
+    case 'quarter': return [day(y, Math.floor((m - 1) / 3) * 3 + 1, 1), today];
+    case 'year': return [day(y, 1, 1), today];
+    case 'all': return ['0000', '9999'];
+    case 'custom': return [from, to];
+    default: return [addDays(today, -Number(period)), '9999'];
+  }
+}
+
 /** A batch's stage: Curing → Ready (curing time up) → Released; or Void */
 export const stageOf = (b, today) => (b.status === 'void' ? 'Void' : b.status === 'released' ? 'Released' : b.curing_until <= today ? 'Ready' : 'Curing');
 
@@ -27,6 +46,8 @@ export const stageOf = (b, today) => (b.status === 'void' ? 'Void' : b.status ==
  * period and stage. A day opens as the same one-screen summary shown
  * before it was saved — batches, products (main and residuals apart),
  * materials used in the recipe's units, curing and release.
+ * 2026-11-02: one product (and colour) for a period: a summary, then each batch
+ * it was cast in, newest first; leftovers from another product's mix are marked.
  */
 export default function ProductionLedger() {
   const { organization } = useAuth();
@@ -36,7 +57,7 @@ export default function ProductionLedger() {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [period, setPeriod] = useState('30');     // days back: 7 | 30 | 90 | all | custom
+  const [period, setPeriod] = useState('30');     // week | lastweek | month | lastmonth | quarter | year | 30 | 90 | all | custom
   const [from, setFrom] = useState(addDays(today, -30));
   const [to, setTo] = useState(today);
   const [stage, setStage] = useState('');
@@ -46,6 +67,12 @@ export default function ProductionLedger() {
   const [track, setTrack] = useState(null);       // teams and machines (056); null before it
   const [view, setView] = useState('days');       // days | tracking
   const [groupBy, setGroupBy] = useState('team');  // team | machine | product
+  const [productId, setProductId] = useState('');
+  const [colorId, setColorId] = useState('');
+  function chooseProduct(id) {
+    setProductId(id); setColorId('');
+    if (id && !productId && period === '30') setPeriod('week');   // one product opens on this week
+  }
 
   async function load() {
     setError('');
@@ -88,8 +115,7 @@ export default function ProductionLedger() {
 
   // One row per branch + day
   const days = useMemo(() => {
-    const lo = period === 'all' ? '0000' : period === 'custom' ? from : addDays(today, -Number(period));
-    const hi = period === 'custom' ? to : '9999';
+    const [lo, hi] = periodBounds(period, today, from, to);
     const g = {};
     for (const b of batches.filter(x => inBranch(x.branch_id) && x.batch_date >= lo && x.batch_date <= hi)) {
       const k = `${b.branch_id}|${b.batch_date}`;
@@ -172,6 +198,38 @@ export default function ProductionLedger() {
     }
     return Object.values(rows).sort((a, b) => b.pieces - a.pieces);
   }, [track, refs, days, groupBy]);
+  // the products cast at the branches in view, for the dropdown; a chosen one's colours
+  const productOptions = useMemo(() => {
+    const ids = new Set(batches.filter(b => inBranch(b.branch_id)).flatMap(b => (b.outputs || []).map(o => o.product_id)));
+    return [...ids].map(id => ({ id, name: refs?.items[`p:${id}`]?.name ?? '—' })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [batches, refs, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const colorOptions = useMemo(() => {
+    const ids = new Set(batches.filter(b => inBranch(b.branch_id)).flatMap(b => (b.outputs || []).filter(o => o.product_id === productId && o.color_id).map(o => o.color_id)));
+    return [...ids].map(id => ({ id, name: refs?.colorById[id]?.name ?? '—' })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [batches, refs, productId, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the chosen product's batches in the period: its own pieces on each; bags only where it was the main product
+  const productRows = useMemo(() => {
+    if (!productId) return [];
+    const rows = [];
+    for (const d of days) for (const b of d.batches) {
+      const st = stageOf(b, today);
+      if (b.status === 'void' || (stage && st !== stage)) continue;
+      const outs = (b.outputs || []).filter(o => o.product_id === productId && (!colorId || o.color_id === colorId));
+      if (!outs.length) continue;
+      const main = outs.some(o => o.is_primary);
+      const pieces = outs.reduce((t, o) => t + o.pieces_cast, 0);
+      const rejected = b.status === 'released' ? outs.reduce((t, o) => t + (o.pieces_passed == null ? 0 : Math.max(o.pieces_cast - o.pieces_passed, 0)), 0) : null;
+      rows.push({ id: b.id, dayKey: d.key, date: b.batch_date, branchId: b.branch_id, created: b.created_at, stage: st, main, pieces, rejected, bags: main ? Number(b.cement_bags) : null, mainPieces: main ? pieces : 0,
+        team: teamOf(b), machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
+        colours: [...new Set(outs.map(o => o.color_id && refs?.colorById[o.color_id]?.name).filter(Boolean))].join(', ') });
+    }
+    return rows.sort((a, b) => (sortBy === 'oldest' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)) || String(b.created).localeCompare(String(a.created)));
+  }, [productId, colorId, days, stage, sortBy, today, refs, track]); // eslint-disable-line react-hooks/exhaustive-deps
+  const productTotal = k => productRows.reduce((t, r) => t + Number(r[k] || 0), 0);
+  const productSqm = productId ? sqmOf(productId, productTotal('pieces')) : null;
+  const periodName = { week: 'This week', lastweek: 'Last week', month: 'This month', lastmonth: 'Last month', quarter: 'This quarter', year: 'This year', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time', custom: 'Chosen dates' }[period];
+
   const money = v => formatMoney(v, organization?.currency_code);
   const pct = v => (v == null || !isFinite(v) ? '—' : `${Math.round(v * 1000) / 10}%`);
 
@@ -179,13 +237,35 @@ export default function ProductionLedger() {
   return (
     <PageShell title="Production ledger" subtitle="Production"
       description={branchId ? `Every production day confirmed at ${branchName}.` : 'Every production day confirmed, at every branch.'}>
+      {productId && !error && (
+          <div className="mm-stats">
+            <div className="mm-stat"><span className="pl-label">Pieces · {periodName.toLowerCase()}</span><strong>{qtyText(productTotal('pieces'))}</strong><span className="pl-help">{productSqm != null ? `${qtyText(round(productSqm))} m² · ` : ''}{productRows.length} batch{productRows.length === 1 ? '' : 'es'}</span></div>
+            <div className="mm-stat" title="Only batches where this was the main product; leftovers come from another product's cement"><span className="pl-label">Cement bags</span><strong>{qtyText(round(productTotal('bags')))}</strong><span className="pl-help">{productTotal('bags') > 0 ? `${qtyText(round(productTotal('mainPieces') / productTotal('bags'), 1))} pieces a bag` : 'none as the main product'}</span></div>
+            <div className="mm-stat"><span className="pl-label">Rejected</span><strong className={productTotal('rejected') > 0 ? 'text-warning' : ''}>{qtyText(productTotal('rejected'))}</strong><span className="pl-help">of pieces released</span></div>
+          </div>
+      )}
       <div className="pled-toolbar">
-        <div className="filter-chips">
+        <select className="form-input" aria-label="Product" value={productId} onChange={e => chooseProduct(e.target.value)}>
+          <option value="">All products</option>
+          {productOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {productId && colorOptions.length > 0 && (
+          <select className="form-input" aria-label="Colour" value={colorId} onChange={e => setColorId(e.target.value)}>
+            <option value="">All colours</option>
+            {colorOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+        {!productId && <div className="filter-chips">
           <button type="button" className={`filter-chip${view === 'days' ? ' is-on' : ''}`} onClick={() => setView('days')}>Days</button>
           <button type="button" className={`filter-chip${view === 'tracking' ? ' is-on' : ''}`} disabled={!track} title={track ? '' : 'Production tracking is not set up yet'} onClick={() => setView('tracking')}>Tracking</button>
-        </div>
+        </div>}
         <select className="form-input" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="7">Last 7 days</option>
+          <option value="week">This week</option>
+          <option value="lastweek">Last week</option>
+          <option value="month">This month</option>
+          <option value="lastmonth">Last month</option>
+          <option value="quarter">This quarter</option>
+          <option value="year">This year</option>
           <option value="30">Last 30 days</option>
           <option value="90">Last 90 days</option>
           <option value="all">All time</option>
@@ -207,7 +287,34 @@ export default function ProductionLedger() {
         </select>
       </div>
 
-      {view === 'tracking' && track && (
+      {productId && (error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
+        <>
+          <div className="card"><div className="table-container">
+            <table>
+              <thead><tr><th>Date</th>{!branchId && <th>Branch</th>}{colorOptions.length > 0 && <th>Colour</th>}<th>Team</th><th>Machine</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }}>Pieces</th><th style={{ textAlign: 'right' }}>Rejected</th><th>Stage</th></tr></thead>
+              <tbody>
+                {loading ? <SkeletonRow cols={7} /> : productRows.length === 0 ? (
+                  <tr><td colSpan={9}><EmptyState icon={BookOpen} title="No production in this period" description="Try another period." /></td></tr>
+                ) : productRows.map(r => (
+                  <tr key={r.id} className="clickable-row" title="Open that day" onClick={() => setOpen(r.dayKey)}>
+                    <td style={{ fontWeight: 600 }}>{tableDate(r.date)}</td>
+                    {!branchId && <td className="text-muted">{branchNameOf(r.branchId)}</td>}
+                    {colorOptions.length > 0 && <td>{r.colours}</td>}
+                    <td className="text-sm">{r.team ?? '—'}</td>
+                    <td className="text-sm">{r.machine ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{r.bags == null ? <span className="pl-help" title="Cast from another product's mix">leftover</span> : qtyText(round(r.bags))}</td>
+                    <td style={{ textAlign: 'right' }}><strong>{qtyText(r.pieces)}</strong></td>
+                    <td style={{ textAlign: 'right' }}>{r.rejected == null ? '' : qtyText(r.rejected)}</td>
+                    <td><span className={`badge ${STAGE_BADGE[r.stage]}`}>{r.stage}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div></div>
+        </>
+      ))}
+
+      {!productId && view === 'tracking' && track && (
         <div className="card">
           <div className="pled-track-head">
             <span className="pl-help">Batches in the period above (void left out). Yield = cement the pieces imply ÷ cement used; rejects = of pieces released.</span>
@@ -240,7 +347,7 @@ export default function ProductionLedger() {
         </div>
       )}
 
-      {view === 'days' && <div className="card">
+      {!productId && view === 'days' && <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
