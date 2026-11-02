@@ -221,7 +221,8 @@ export default function ProductionLedger() {
       const pieces = outs.reduce((t, o) => t + o.pieces_cast, 0);
       const rejected = b.status === 'released' ? outs.reduce((t, o) => t + (o.pieces_passed == null ? 0 : Math.max(o.pieces_cast - o.pieces_passed, 0)), 0) : null;
       rows.push({ id: b.id, dayKey: d.key, date: b.batch_date, branchId: b.branch_id, created: b.created_at, stage: st, main, pieces, rejected, bags: main ? Number(b.cement_bags) : null, mainPieces: main ? pieces : 0,
-        team: teamOf(b), machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
+        team: b.team_name ?? track?.teams.find(x => x.id === b.team_id)?.name ?? null, people: teamOf(b), count: (b.worker_names ?? b.worker_ids ?? []).length,
+        machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
         colours: [...new Set(outs.map(o => o.color_id && refs?.colorById[o.color_id]?.name).filter(Boolean))].join(', ') });
     }
     return rows.sort((a, b) => (sortBy === 'oldest' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)) || String(b.created).localeCompare(String(a.created)));
@@ -300,7 +301,7 @@ export default function ProductionLedger() {
                     <td style={{ fontWeight: 600 }}>{tableDate(r.date)}</td>
                     {!branchId && <td className="text-muted">{branchNameOf(r.branchId)}</td>}
                     {colorOptions.length > 0 && <td>{r.colours}</td>}
-                    <td className="text-sm">{r.team ?? '—'}</td>
+                    <td className="text-sm" title={r.people ?? undefined}>{r.team ? `${r.team}${r.count ? ` (${r.count})` : ''}` : '—'}</td>
                     <td className="text-sm">{r.machine ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}>{r.bags == null ? <span className="pl-help" title="Cast from another product's mix">leftover</span> : qtyText(round(r.bags))}</td>
                     <td style={{ textAlign: 'right' }}><strong>{qtyText(r.pieces)}</strong></td>
@@ -309,6 +310,15 @@ export default function ProductionLedger() {
                   </tr>
                 ))}
               </tbody>
+              {productRows.length > 0 && (
+                <tfoot><tr>
+                  <td colSpan={3 + (branchId ? 0 : 1) + (colorOptions.length > 0 ? 1 : 0)}><strong>Total</strong></td>
+                  <td style={{ textAlign: 'right' }} title="Leftovers use another product's cement, so they add no bags"><strong>{qtyText(round(productTotal('bags')))}</strong></td>
+                  <td style={{ textAlign: 'right' }}><strong>{qtyText(productTotal('pieces'))}</strong></td>
+                  <td style={{ textAlign: 'right' }}><strong>{qtyText(productTotal('rejected'))}</strong></td>
+                  <td />
+                </tr></tfoot>
+              )}
             </table>
           </div></div>
         </>
