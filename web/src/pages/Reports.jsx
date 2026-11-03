@@ -8,6 +8,7 @@ import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadProduction, loadSales, loadSpending, loadMaterialUse, loadProfit, loadBranches, exportTable } from '../lib/reports';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
+import { useUrlTab } from '../lib/urlTab';
 import ErrorState from '../components/ErrorState';
 
 const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -33,9 +34,10 @@ export default function Reports() {
   const cur = organization?.currency_code;
   const money = v => formatMoney(Math.round(Number(v || 0)), cur);
   const short = v => formatMoneyShort(v, cur);
-  const [tab, setTab] = useState('production');
+  // the tab and dates can come in the link (?tab=, ?from=&to=): a dashboard card opens its own report
+  const [tab, setTab] = useUrlTab('production');
   const [nested, setNested] = useState('a');
-  const [range, setRange] = useState(() => [mondayOf(today), today]);   // this week first (2026-11-03)
+  const [range, setRange] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get('from') && q.get('to') ? [q.get('from'), q.get('to')] : [mondayOf(today), today]; });   // this week first (2026-11-03)
   const [from, to] = range;
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }: a tab's data, never shown under another tab

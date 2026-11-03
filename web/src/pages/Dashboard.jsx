@@ -149,12 +149,12 @@ function RoleDashboard({ isOwner }) {
       : shown === 'overview' ? (
         <>
           <div className="mm-stats">{!d ? wait : <>
-            {card('Sales', short(d.sales.total), `${d.sales.docs} orders & invoices`, '/reports')}
+            {card('Sales', short(d.sales.total), `${d.sales.docs} orders & invoices`, `/reports?tab=sales&from=${from}&to=${today}`)}
             {card('Received', short(d.sales.received), 'payments this month', '/sales')}
             {card('Customers owe', short(d.sales.owed), 'all open sales', '/customers')}
             {card('We owe', d.payables == null ? '—' : short(d.payables), 'suppliers & expenses', '/purchases')}
             {card('Production', `${formatAmount(pcsOf(d.prod))} pcs`, `${formatAmount(bagsOf(d.prod))} bags of cement`, '/production/ledger')}
-            {card('Gross margin', d.profit ? short(d.profit.margin) : '—', d.profit?.sales ? `${n1((d.profit.margin / d.profit.sales) * 100)}% of delivered` : 'nothing delivered', '/reports', 'Delivered without VAT less its production cost')}
+            {card('Gross margin', d.profit ? short(d.profit.margin) : '—', d.profit?.sales ? `${n1((d.profit.margin / d.profit.sales) * 100)}% of delivered` : 'nothing delivered', `/reports?tab=profit&from=${from}&to=${today}`, 'Delivered without VAT less its production cost')}
           </>}</div>
           <div className="card db-list">
             <div className="card-header"><h2 className="card-title">Needs attention</h2></div>
@@ -174,7 +174,7 @@ function RoleDashboard({ isOwner }) {
             {(() => { const rel = d.prod.rows.reduce((t, r) => t + r.released, 0); const rej = d.prod.rows.reduce((t, r) => t + r.rejected, 0);
               return card('Rejected', formatAmount(rej), rel ? `${n1((rej / rel) * 100)}% of released` : 'nothing released', '/production?tab=done'); })()}
             {card('Open orders', d.orders.rows.length, `${d.orders.dueSoon} due within 7 days`, '/production')}
-            {card('Over the recipe', d.mats.filter(m => m.diffPct != null && m.diffPct > 5).length, 'materials > 5% above', '/reports')}
+            {card('Over the recipe', d.mats.filter(m => m.diffPct != null && m.diffPct > 5).length, 'materials > 5% above', `/reports?tab=materials&from=${from}&to=${today}`)}
           </>}</div>
           <div className="db-two">
             <div className="card"><div className="card-header"><h2 className="card-title">Ready to release</h2></div><div className="table-container">
@@ -199,8 +199,8 @@ function RoleDashboard({ isOwner }) {
           <div className="mm-stats">{!d ? wait : <>
             {card('Products in stock', branchId ? d.low.inStock : '—', branchId ? 'with stock at the branch' : 'choose a branch', '/stock')}
             {card('Below reorder', branchId ? d.low.rows.length : '—', branchId ? 'products to make' : 'choose a branch', '/stock')}
-            {card('Materials used', short(d.mats.reduce((t, m) => t + m.cost, 0)), 'this month, at cost', '/reports')}
-            {card('Over the recipe', d.mats.filter(m => m.diffPct != null && m.diffPct > 5).length, 'materials > 5% above', '/reports')}
+            {card('Materials used', short(d.mats.reduce((t, m) => t + m.cost, 0)), 'this month, at cost', `/reports?tab=materials&from=${from}&to=${today}`)}
+            {card('Over the recipe', d.mats.filter(m => m.diffPct != null && m.diffPct > 5).length, 'materials > 5% above', `/reports?tab=materials&from=${from}&to=${today}`)}
           </>}</div>
           <div className="db-two">
             <div className="card"><div className="card-header"><h2 className="card-title">Below reorder level</h2></div><div className="table-container">
