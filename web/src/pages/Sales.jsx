@@ -1198,6 +1198,12 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
     .map(l => ({ l, quantity: String(+l.quantity), price: String(inc(l)), remove: false, done: doneOf(l.id) })));
   const [pays, setPays] = useState(() => (sale.payments || []).map(pm => ({ pm, amount: String(+pm.amount), account_id: pm.account_id ?? '', paid_on: pm.paid_on, receipt_no: pm.receipt_no ?? '', remove: false })));
   const [added, setAdded] = useState([]);   // other items added by the correction (104): { name, price }
+  // one transaction (user, 2026-11-03): a sale with one payment is paid as one — its amount follows the corrected total
+  // unless the amount is typed (or this is unticked)
+  const [oneTx, setOneTx] = useState(() => (sale.payments || []).length === 1);
+  const newTotal = r2(lines.filter(x => !x.remove).reduce((t, x) => t + (x.l.product_id ? (num(x.quantity) ?? 0) * (num(x.price) ?? 0) : (num(x.price) ?? 0)), 0)
+    + added.reduce((t, a) => t + (num(a.price) ?? 0), 0));
+  const payAmount = x => (oneTx && pays.length === 1 && !x.remove ? String(newTotal) : x.amount);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1217,7 +1223,8 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
     if (added.some(a => !a.name.trim() || !(num(a.price) > 0))) { setError('Write what each added item is, and its price.'); return; }
     lc.push(...added.map(a => ({ item_name: a.name.trim(), price: num(a.price) })));
     if (lc.length) ch.lines = lc;
-    const pc = pays.filter(x => x.remove || num(x.amount) !== Number(x.pm.amount) || x.account_id !== (x.pm.account_id ?? '') || x.paid_on !== x.pm.paid_on || x.receipt_no !== (x.pm.receipt_no ?? ''))
+    const pays2 = pays.map(x => ({ ...x, amount: payAmount(x) }));
+    const pc = pays2.filter(x => x.remove || num(x.amount) !== Number(x.pm.amount) || x.account_id !== (x.pm.account_id ?? '') || x.paid_on !== x.pm.paid_on || x.receipt_no !== (x.pm.receipt_no ?? ''))
       .map(x => (x.remove ? { id: x.pm.id, remove: true } : { id: x.pm.id, amount: num(x.amount), ...(x.account_id ? { account_id: x.account_id } : {}), paid_on: x.paid_on, receipt_no: x.receipt_no }));
     if (pc.length) ch.payments = pc;
     if (!Object.keys(ch).length) { setError('Nothing has changed.'); return; }
@@ -1275,14 +1282,18 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
           ))}</tbody>
         </table>
         <div><button type="button" className="btn btn-outline btn-sm" onClick={() => setAdded(as => [...as, { name: '', price: '' }])}><Plus size={13} /> Add other item</button></div>
+        {pays.length === 1 && (
+          <label className="text-sm flex items-center gap-4"><input type="checkbox" checked={oneTx} onChange={e => setOneTx(e.target.checked)} />
+            Paid as one transaction — the payment follows the total ({money(newTotal)})</label>
+        )}
         {pays.length > 0 && (
           <table className="rd-table">
             <thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into</th><th>Date</th><th>Receipt no.</th><th /></tr></thead>
             <tbody>{pays.map((x, i) => (
               <tr key={x.pm.id} className={x.remove ? 'text-muted' : ''}>
                 <td>{tableDate(x.pm.paid_on)}</td>
-                <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.amount}
-                  onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value } : y)))} /></td>
+                <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={payAmount(x)}
+                  onChange={e => { setOneTx(false); setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value } : y))); }} /></td>
                 <td>{accounts.length ? (
                   <select className="form-input" disabled={x.remove} value={x.account_id} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, account_id: e.target.value } : y)))}>
                     <option value="">{METHODS[x.pm.method]}</option>
