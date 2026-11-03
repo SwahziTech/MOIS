@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -88,7 +88,10 @@ function RoleDashboard({ isOwner, isSecretary = false }) {
     ['setup', 'Setup'],
   ]).filter(Boolean), [can, canAnywhere, isOwner, isSecretary]); // eslint-disable-line react-hooks/exhaustive-deps
   // the tab is in the address (?tab=), so Back returns to it; a Director view card report (?card=) is on that tab
-  const [tabParam, setTab] = useUrlTab(null);
+  const [tabParam] = useUrlTab(null);
+  // a new dashboard tab starts its page fresh: the previous page's own tab and period are dropped
+  const [, setParams] = useSearchParams();
+  const setTab = t => setParams(p => { const n = new URLSearchParams(p); n.set('tab', t); ['view', 'card', 'from', 'to', 'label', 'sale'].forEach(k => n.delete(k)); return n; });
   const tab = new URLSearchParams(window.location.search).get('card') ? 'director' : tabParam;
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
   const realPage = isSecretary && ['attendance', 'sales', 'production', 'purchases'].includes(shown);
