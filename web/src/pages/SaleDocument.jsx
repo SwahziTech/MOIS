@@ -29,7 +29,7 @@ export default function SaleDocument() {
       const { data: sale, error: err } = await supabase.from('sales')
         .select('*, lines:sale_lines(*), payments:sale_payments(*), deliveries:sale_deliveries(*, lines:sale_delivery_lines(*))').eq('id', id).maybeSingle();
       if (err || !sale) { setError("We couldn't find this sale."); return; }
-      const ids = [...new Set(sale.lines.map(l => l.product_id))];
+      const ids = [...new Set(sale.lines.map(l => l.product_id).filter(Boolean))];   // other items (104) have none
       const [org, br, cust, prods, cols] = await Promise.all([
         supabase.from('organizations').select('*').eq('id', sale.organization_id).maybeSingle(),
         supabase.from('branches').select('*').eq('id', sale.branch_id).maybeSingle(),
@@ -50,8 +50,8 @@ export default function SaleDocument() {
 
   const { sale, org, branch, customer, product, colour, account } = d;
   const money = v => formatMoney(v, org?.currency_code);
-  const nameOf = l => `${product[l.product_id]?.canonical_name ?? '—'}${l.color_id ? ` ${colour[l.color_id] ?? ''}` : ''}`;
-  const per = l => ((product[l.product_id]?.unit?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
+  const nameOf = l => (l.product_id ? `${product[l.product_id]?.canonical_name ?? '—'}${l.color_id ? ` ${colour[l.color_id] ?? ''}` : ''}` : l.item_name ?? '—');
+  const per = l => (!l.product_id ? '' : (product[l.product_id]?.unit?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs');
   const lines = [...sale.lines].sort((a, b) => a.line_no - b.line_no);
   const paid = sale.payments.reduce((t, p) => t + Number(p.amount), 0);
   const payment = sale.payments.find(p => p.id === params.get('payment'));

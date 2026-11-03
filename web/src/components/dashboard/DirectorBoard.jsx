@@ -214,7 +214,7 @@ const ReportHead = ({ card, period, onBack, go }) => (
 function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
   const sales = data.sales.filter(x => inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to)
     .sort((a, b) => (a.day === b.day ? b.no - a.no : a.day < b.day ? 1 : -1));
-  const name = l => [refs?.items[`p:${l.product_id}`]?.name ?? '—', l.color_id ? refs?.colorById[l.color_id]?.name : null].filter(Boolean).join(' ');
+  const name = l => (!l.product_id ? `${l.item_name} (other)` : null) ?? [refs?.items[`p:${l.product_id}`]?.name ?? '—', l.color_id ? refs?.colorById[l.color_id]?.name : null].filter(Boolean).join(' ');
   const unit = l => refs?.unitById[refs?.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '';
   const total = sales.reduce((t, x) => t + x.total, 0); const paid = sales.reduce((t, x) => t + x.paid, 0);
   let lastDay = null;
@@ -239,7 +239,7 @@ function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
                 <tr key={`${x.id}-${i}`} className="dd-report-row" title={`Open sale #${x.no}`} onClick={open}>
                   <td>{showDay ? tableDate(x.day) : ''}</td>
                   <td>{name(l)}</td>
-                  <td className="num">{qtyText(l.quantity)} {unit(l)}</td>
+                  <td className="num">{l.product_id ? `${qtyText(l.quantity)} ${unit(l)}` : ''}</td>
                   <td className="num">{fmt(l.total)}</td>
                   <td>{i === 0 ? (x.accounts.map(a => data.accountName[a]).filter(Boolean).join(', ') || <span className="text-muted">not paid</span>) : ''}</td>
                   <td className="num">{i === 0 && <button type="button" className="icon-btn" aria-label={`Open sale #${x.no}`} onClick={e => { e.stopPropagation(); open(); }}><ExternalLink size={14} /></button>}</td>

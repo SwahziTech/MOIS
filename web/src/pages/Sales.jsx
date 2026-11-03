@@ -213,6 +213,7 @@ export default function Sales() {
       {editing && refs && (
         <SaleEditor key={editing.upload ? `upload-${editing.at}` : 'edit'} sale={editing.id ? editing : null} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
+          canOther={canAt('sales.other_items', editing.branch_id ?? branchId, null)}
           onClose={() => setEditing(null)} onSaved={async id => {
             // a quotation made for a lead: the lead points to it and is quoted (095)
             if (editing.leadId && id) await supabase.from('leads').update({ sale_id: id, stage: 'quoted' }).eq('id', editing.leadId);
@@ -236,7 +237,7 @@ export default function Sales() {
  * the money went (account, amount, receipt no.); saved as an invoice with its
  * payments in one go (record_sale, 067).
  */
-function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, onClose, onSaved }) {
+function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, canOther = false, onClose, onSaved }) {
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id || prefill?.customer_id ? 'customer' : 'walkin');
   const [customerId, setCustomerId] = useState(sale?.customer_id ?? prefill?.customer_id ?? '');
@@ -264,7 +265,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [payMode, setPayMode] = useState('order');    // order: one payment for the whole order | items: one per item (070)
   const [itemPays, setItemPays] = useState({});       // line index → { accountId, amount, receiptNo }
   const [lines, setLines] = useState(() => (!sale && prefill?.lines ? prefill.lines.map(l => ({ productId: l.productId, colorId: l.colorId ?? '', quantity: l.quantity, price: l.price ?? '', reason: '' }))
-    : (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({
+    : (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => (!l.product_id ? { other: true, name: l.item_name ?? '', price: String(+l.total) } : {
     productId: l.product_id, colorId: l.color_id ?? '', quantity: String(+l.quantity),
     price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' }))));
   const [prices, setPrices] = useState({});        // `${product}|${colour}` → { ex, rate, source }
@@ -319,6 +320,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
 
   // preview — the database works out the real figures the same way: unit price with VAT, line total, VAT inside it
   const preview = l => {
+    if (l.other) { const t = num(l.price); return t != null ? { listInc: null, inc: t, total: t, ex: t, rate: 0, off: false, discount: 0 } : { listInc: null, inc: null, total: null }; }
     const pr = prices[key(l)];
     if (!pr) return null;
     const listInc = pr.ex != null ? r2(pr.ex * (1 + pr.rate / 100)) : null;
@@ -346,6 +348,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   async function save() {
     setError('');
     if (!lines.length) { setError('Add at least one product.'); return; }
+    const badOther = lines.find(l => l.other && (!l.name.trim() || !(num(l.price) > 0)));
+    if (badOther) { setError('Write what each other item is, and its price.'); return; }
     let cust = buyer === 'customer' ? customerId : null;
     if (buyer === 'customer' && newCust) {
       if (!newCust.name.trim()) { setError('Enter the new customer\'s name.'); return; }
@@ -372,6 +376,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       id: sale?.id, branch_id: branchId, sale_date: date, valid_until: validUntil || null, notes,
       ...(cust ? { customer_id: cust } : { walk_in_name: walkName, walk_in_phone: walkPhone }),
       lines: lines.map(l => {
+        if (l.other) return { item_name: l.name.trim(), price: num(l.price) };   // an other item (104)
         const pr = prices[key(l)];
         const inc = num(l.price);
         return { product_id: l.productId, color_id: l.colorId || null, quantity: num(l.quantity),
@@ -475,6 +480,16 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <thead><tr><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th style={{ textAlign: 'right' }}>Total</th><th /></tr></thead>
           <tbody>
             {lines.map((l, i) => {
+              if (l.other) return (
+                <tr key={i} className="sl-other">
+                  <td colSpan={2}><input className="form-input" placeholder="What is it? e.g. vipande 4&quot;" aria-label="Other item" value={l.name} onChange={e => set(i, { name: e.target.value })} />
+                    <div className="pl-help">Other item · price agreed with the buyer · no stock, no VAT</div></td>
+                  <td style={{ textAlign: 'right' }}><span className="pl-help">—</span></td>
+                  <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} placeholder="Price" aria-label="Other item price" value={l.price} onChange={e => set(i, { price: e.target.value })} /></td>
+                  <td style={{ textAlign: 'right' }}>{num(l.price) > 0 ? <strong>{money(num(l.price))}</strong> : '—'}</td>
+                  <td><button type="button" className="icon-btn" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={14} /></button></td>
+                </tr>
+              );
               const it = refs.items[`p:${l.productId}`];
               const p = preview(l);
               const av = avail[key(l)];
@@ -514,6 +529,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         </table>
         <div className="flex items-center gap-8">
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setPicking(true)}><Plus size={13} /> Add product</button>
+          {canOther && <button type="button" className="btn btn-outline btn-sm" title="Something with no price list — rejects (vipande) and the like: write it and its price" onClick={() => setLines(ls => [...ls, { other: true, name: '', price: '' }])}><Plus size={13} /> Add other item</button>}
           <span style={{ marginLeft: 'auto' }} className="sl-totals">
             <span className="pl-help">without VAT {money(r2(totals.ex))} · VAT {money(r2(totals.total - totals.ex))}</span>
             <strong>Total {money(r2(totals.total))}</strong>
@@ -536,7 +552,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                   const setX = patch => setItemPays(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
                   return (
                     <tr key={i}>
-                      <td><strong>{refs.items[`p:${l.productId}`]?.name}{l.colorId ? ` ${refs.colorById[l.colorId]?.name ?? ''}` : ''}</strong></td>
+                      <td><strong>{l.other ? l.name || 'Other item' : <>{refs.items[`p:${l.productId}`]?.name}{l.colorId ? ` ${refs.colorById[l.colorId]?.name ?? ''}` : ''}</>}</strong></td>
                       <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }}
                         value={x.amount === undefined ? String(preview(l)?.total ?? '') : x.amount} onChange={e => setX({ amount: e.target.value })} /></td>
                       <td><select className="form-input" value={x.accountId || ''} onChange={e => setX({ accountId: e.target.value })}>
@@ -612,13 +628,14 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
   const deliveries = [...(sale.deliveries || [])].sort((a, b) => b.delivery_no - a.delivery_no);
   const [confirming, setConfirming] = useState(null);   // a delivery on the way, being confirmed (096)
   const [dueEdit, setDueEdit] = useState(null);         // the due date being changed (097)
-  const given = deliveries.reduce((t, d) => t + Number(d.value), 0);
+  // other items (104) were handed over with the sale
+  const given = deliveries.reduce((t, d) => t + Number(d.value), 0) + (sale.lines || []).filter(l => !l.product_id).reduce((t, l) => t + Number(l.total), 0);
   const doneOf = lineId => deliveries.reduce((t, d) => t + (d.lines || []).filter(x => x.sale_line_id === lineId).reduce((u, x) => u + Number(x.quantity), 0), 0);
   const lineById = Object.fromEntries((sale.lines || []).map(l => [l.id, l]));
   const exOf = x => Number(x.value) / (1 + Number(lineById[x.sale_line_id]?.vat_rate ?? 0) / 100);
   const delivered = deliveries.flatMap(d => d.lines || []).reduce((t, x) => ({ ex: t.ex + exOf(x), cost: t.cost + Number(x.cost ?? 0), est: t.est + Number(x.estimated_cost ?? 0), unknown: t.unknown || x.cost == null }), { ex: 0, cost: 0, est: 0, unknown: false });
   const canHand = ['order', 'invoice'].includes(sale.stage) && (canAt('sales.create', br, null) || canAt('inventory.issue', br, null))
-    && (sale.lines || []).some(l => Number(l.quantity) - doneOf(l.id) > 1e-9);
+    && (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
 
   async function run(fn) {
     setError(''); setBusy(true);
@@ -675,9 +692,9 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               const inc = r2(Number(l.price) * (1 + Number(l.vat_rate) / 100));
               return (
                 <tr key={l.id}>
-                  <td><strong>{it?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{it?.category}</div>
+                  <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item · no stock'}</div>
                     {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))} · {l.discount_reason}</div>}</td>
-                  <td style={{ textAlign: 'right' }}>{qtyText(Number(l.quantity))} {per(l.product_id)}</td>
+                  <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}</> : <span className="pl-help">—</span>}</td>
                   <td style={{ textAlign: 'right' }}>{money(inc)}</td>
                   <td style={{ textAlign: 'right' }}>{money(Number(l.amount))}</td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(l.total))}</strong></td>
@@ -778,7 +795,7 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               <label className="pe-field"><span>For</span>
                 <select className="form-input" value={pay.sale_line_id} onChange={e => setPay({ ...pay, sale_line_id: e.target.value })}>
                   <option value="">The whole order</option>
-                  {[...sale.lines].sort((a, b) => a.line_no - b.line_no).map(l => <option key={l.id} value={l.id}>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''} — {money(Number(l.total))}</option>)}
+                  {[...sale.lines].sort((a, b) => a.line_no - b.line_no).map(l => <option key={l.id} value={l.id}>{l.product_id ? refs.items[`p:${l.product_id}`]?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''} — {money(Number(l.total))}</option>)}
                 </select></label>
             )}
             <label className="pe-field"><span>Receipt no. (optional)</span><input className="form-input" value={pay.receipt_no} onChange={e => setPay({ ...pay, receipt_no: e.target.value })} /></label>
@@ -812,7 +829,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     supabase.rpc('sales_availability', { p_branch_id: sale.branch_id }).then(({ data }) =>
       setInStore(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.on_hand)]))));
   }, [sale.branch_id]);
-  const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
+  const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => l.product_id).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
   const unitInc = l => Number(l.total) / Number(l.quantity);
   const [kind, setKind] = useState('collection');
   // filled in from the start: everything still to deliver, as far as the payments cover it (2026-10-26)
@@ -942,8 +959,8 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
 
   // by product: sold (orders + invoices), delivered, margin on delivered
   const byProduct = {};
-  const prow = (l) => (byProduct[`${l.product_id}|${l.color_id ?? ''}`] ||= { name: `${refs.items[`p:${l.product_id}`]?.name ?? '—'}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}`,
-    unit: (refs.unitById[refs.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs', qty: 0, value: 0, dqty: 0, ex: 0, cost: 0, est: 0 });
+  const prow = (l) => (byProduct[l.product_id ? `${l.product_id}|${l.color_id ?? ''}` : `other|${(l.item_name ?? '').trim().toLowerCase()}`] ||= { name: l.product_id ? `${refs.items[`p:${l.product_id}`]?.name ?? '—'}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` : `${l.item_name} (other item)`,
+    unit: !l.product_id ? '' : (refs.unitById[refs.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM' ? 'm²' : 'pcs', qty: 0, value: 0, dqty: 0, ex: 0, cost: 0, est: 0 });
   for (const x of sold) for (const l of x.lines || []) { const pr = prow(l); pr.qty += Number(l.quantity); pr.value += Number(l.total); }
   for (const x of dl) { if (!x.line) continue; const pr = prow(x.line); pr.dqty += Number(x.quantity); pr.ex += exOf(x); pr.cost += Number(x.cost ?? 0); pr.est += Number(x.estimated_cost ?? 0); }
   // by customer: sold, paid, owed (all open)
@@ -1029,9 +1046,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
   const [from, to] = period === 'range' && urlRange ? urlRange : periodRange(period, today);
   // delivered so far, per line (065)
   const doneOf = (x, lineId) => (x.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === lineId).reduce((u, y) => u + Number(y.quantity), 0), 0);
-  const stateOf = (x, l) => { const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
+  const stateOf = (x, l) => { if (!l.product_id) return 'done';   // an other item: handed over with the sale (104)
+    const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
   const paidOf = x => (x.payments || []).reduce((t, pm) => t + Number(pm.amount), 0);
-  const nameOf = l => `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}`;
+  const nameOf = l => (l.product_id ? `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` : l.item_name ?? '');
   const accName = id => accounts.find(a => a.id === id)?.name ?? '';
   // smart search: number, customer, phone, item, site, receipt no., EFD, account
   const q = search.trim().toLowerCase();
@@ -1104,8 +1122,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
-                <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
-                <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>
+                <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
+                <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
                 <td className="num">{formatAmount(Number(l.total))}</td>
                 <td className="num">{vatOn(l) ? formatAmount(Number(l.total)) : ''}</td>
@@ -1220,7 +1238,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
           <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th>Delivered</th><th /></tr></thead>
           <tbody>{lines.map((x, i) => (
             <tr key={x.l.id} className={x.remove ? 'text-muted' : ''}>
-              <td><strong>{refs.items[`p:${x.l.product_id}`]?.name}{x.l.color_id ? ` ${refs.colorById[x.l.color_id]?.name ?? ''}` : ''}</strong></td>
+              <td><strong>{x.l.product_id ? refs.items[`p:${x.l.product_id}`]?.name : x.l.item_name}{x.l.color_id ? ` ${refs.colorById[x.l.color_id]?.name ?? ''}` : ''}</strong></td>
               <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} disabled={x.remove} value={x.quantity}
                 onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {per(x.l.product_id)}</td>
               <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.price}

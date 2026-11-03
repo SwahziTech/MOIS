@@ -2541,3 +2541,4 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .dd-report-row:hover td { background: var(--bg-soft); }
 .page-back { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .page-back:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.sl-other td { background: var(--bg-soft); }

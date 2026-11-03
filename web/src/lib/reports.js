@@ -37,7 +37,7 @@ export async function loadProduction({ from, to, inBranch, refs }) {
 /** Sales: orders and invoices dated in the range — per product and per customer; payments received in the range */
 export async function loadSales({ from, to, inBranch, refs }) {
   const [s, p, c, bal] = await Promise.all([
-    supabase.from('sales').select('id, branch_id, stage, customer_id, walk_in_name, sale_date, ordered_on, invoiced_on, subtotal, vat, total, lines:sale_lines(product_id, color_id, quantity, unit_id, amount, vat, total)')
+    supabase.from('sales').select('id, branch_id, stage, customer_id, walk_in_name, sale_date, ordered_on, invoiced_on, subtotal, vat, total, lines:sale_lines(product_id, item_name, color_id, quantity, unit_id, amount, vat, total)')
       .in('stage', ['order', 'invoice']),
     supabase.from('sale_payments').select('amount, paid_on, sale:sales!inner(branch_id)').gte('paid_on', from).lte('paid_on', to),
     supabase.from('customers').select('id, name'),
@@ -52,8 +52,9 @@ export async function loadSales({ from, to, inBranch, refs }) {
     const cr = (cust[who] ||= { name: who, docs: 0, amount: 0, vat: 0, total: 0 });
     cr.docs += 1; cr.amount += Number(x.subtotal); cr.vat += Number(x.vat); cr.total += Number(x.total);
     for (const l of x.lines || []) {
-      const k = `${l.product_id}|${l.color_id ?? ''}`;
-      const pr = (prod[k] ||= { key: k, name: productLabel(refs, l.product_id, l.color_id), unit: refs.unitById[l.unit_id]?.symbol ?? '', quantity: 0, amount: 0, vat: 0, total: 0 });
+      // other items (104) by their name
+      const k = l.product_id ? `${l.product_id}|${l.color_id ?? ''}` : `other|${(l.item_name ?? '').trim().toLowerCase()}`;
+      const pr = (prod[k] ||= { key: k, name: l.product_id ? productLabel(refs, l.product_id, l.color_id) : `${l.item_name} (other item)`, unit: refs.unitById[l.unit_id]?.symbol ?? '', quantity: 0, amount: 0, vat: 0, total: 0 });
       pr.quantity += Number(l.quantity); pr.amount += Number(l.amount); pr.vat += Number(l.vat); pr.total += Number(l.total);
     }
   }
