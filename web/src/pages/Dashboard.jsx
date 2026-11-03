@@ -155,8 +155,8 @@ function RoleDashboard({ isOwner, isSecretary = false }) {
   return (
     <PageShell title="Dashboard" description={`${branchId ? branchName : 'All branches'} · ${dateText(today)}`}>
       <PageTabs tabs={tabs} value={shown} onChange={setTab} />
-      {/* today's jobs first: the meters read morning and evening (secretary, branch manager) */}
-      <MeterReadingsTask branchId={branchId} />
+      {/* the meters only on Overview (2026-11-03), leaving the other tabs to their own work */}
+      {shown === 'overview' && <MeterReadingsTask branchId={branchId} />}
       <ProofReminder branchId={branchId} inBranch={inBranch} />
       {error && <div className="alert alert-error mb-16" role="alert">{error}</div>}
 
