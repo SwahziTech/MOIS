@@ -167,7 +167,7 @@ export default function Sales() {
         <>
           {salesTabs}
           {upload && !editing && (
-            <div className="alert alert-info" role="note">Uploaded sales book: sale {upload.at + 1} of {upload.sales.length} is waiting.
+            <div className="alert alert-info" role="note">Uploaded sales: {upload.at + 1} of {upload.sales.length} waiting.
               {' '}<button type="button" className="btn btn-primary btn-sm" onClick={() => openUpload(upload)}>Continue</button>
               {' '}<button type="button" className="btn btn-outline btn-sm" onClick={() => { const q = stepUpload(); if (q) openUpload(q); }}>Skip this sale</button>
               {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={stopUpload}>Stop</button></div>
@@ -421,7 +421,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
       </>}>
       <div className="modal-form">
-        {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner} Check it, then Record sale.</div>}
+        {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
         <div className="flex items-center gap-8" role="group" aria-label="Buyer">
           <button type="button" className={`filter-chip${buyer === 'walkin' ? ' is-on' : ''}`} onClick={() => setBuyer('walkin')}>Walk-in buyer</button>
           <button type="button" className={`filter-chip${buyer === 'customer' ? ' is-on' : ''}`} onClick={() => setBuyer('customer')}>Customer</button>
@@ -448,7 +448,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                 </div>
               ) : <button type="button" className="btn btn-outline btn-sm" onClick={() => setPromote({ name: walkName || known.name, phone: walkPhone || known.phone, tin: '', address: '' })}>Add their details</button>}
             </div>
-          ) : <p className="pl-help">Bought before ({known.count} sale) — details filled in.</p>
+          ) : <p className="pl-help">Bought before ({known.count})</p>
         )}
         {buyer === 'walkin' ? null : newCust ? (
           <div className="form-row">
@@ -476,7 +476,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         {short.length > 0 && (
           <div className="alert alert-warning" role="alert">
             <strong>Not enough in stock:</strong> {short.map(x => `${x.name} — ${qtyText(r2(x.q))} ${x.unit} ordered, ${qtyText(r2(x.av))} available`).join('; ')}.
-            <span className="pl-help"> You can still record it, but the goods can't leave until the stock is there.</span>
+            
           </div>
         )}
         <table className="rd-table sl-table">
@@ -486,7 +486,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
               if (l.other) return (
                 <tr key={i} className="sl-other">
                   <td colSpan={2}><input className="form-input" placeholder="What is it? e.g. vipande 4&quot;" aria-label="Other item" value={l.name} onChange={e => set(i, { name: e.target.value })} />
-                    <div className="pl-help">Other item · price agreed with the buyer · no stock, no VAT</div></td>
+                    <div className="pl-help" title="Price agreed with the buyer · no stock, no VAT">Other item</div></td>
                   <td style={{ textAlign: 'right' }}><span className="pl-help">—</span></td>
                   <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} placeholder="Price" aria-label="Other item price" value={l.price} onChange={e => set(i, { price: e.target.value })} /></td>
                   <td style={{ textAlign: 'right' }}>{num(l.price) > 0 ? <strong>{money(num(l.price))}</strong> : '—'}</td>
@@ -566,7 +566,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                 })}</tbody>
               </table>
             ) : <>
-            {activeAccounts.length === 0 && <p className="pl-help">No receiving accounts set for this branch yet — a manager adds them under Sales ⚙. Until then a payment is recorded as cash.</p>}
+            {activeAccounts.length === 0 && <p className="pl-help">No accounts yet (Sales ⚙) — recorded as cash.</p>}
             {pays.map((x, i) => (
               <div key={i} className="form-row" style={{ alignItems: 'flex-end' }}>
                 {activeAccounts.length > 0 && <label className="pe-field"><span>Into account (required)</span>
@@ -584,7 +584,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             ))}
             <div className="flex items-center gap-8">
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPays(ps => [...ps.map(y => ({ ...y, amount: y.auto ? String(r2(totals.total)) : y.amount, auto: false })), { accountId: '', amount: '', receiptNo: '', auto: false }])}><Plus size={13} /> Split into another account</button>
-              <span className="pl-help" style={{ marginLeft: 'auto' }}>Nothing paid yet? Set the amount to 0 — it stays owed.</span>
+              <span className="pl-help" style={{ marginLeft: 'auto' }}>Not paid yet? Amount 0.</span>
             </div>
             </>}
             <label className="pe-field"><span>EFD receipt no. (optional)</span><input className="form-input" value={efd} onChange={e => setEfd(e.target.value)} /></label>
@@ -996,9 +996,9 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
           {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
         </select>
-        <span className="pl-help">Orders and invoices by their date; payments and deliveries by theirs. Owed is everything still open.</span>
+        <span className="pl-help">By date of sale, payment and delivery.</span>
       </div>
-      {queued.length > 0 && <p className="pl-help" style={{ margin: '0 0 8px' }}>{queued.length} quotation{queued.length === 1 ? '' : 's'} in the period, worth {money(sum(queued, x => Number(x.total)))}, not yet ordered.</p>}
+      {queued.length > 0 && <p className="pl-help" style={{ margin: '0 0 8px' }}>{queued.length} quotation{queued.length === 1 ? '' : 's'} not ordered · {money(sum(queued, x => Number(x.total)))}</p>}
       <div className="so-grid">
         <section className="card">
           <div className="card-header"><h2 className="card-title">By product</h2></div>
@@ -1118,7 +1118,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
           { key: 'vat', label: 'VAT', value: vat, onChange: setVat,
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
-      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
+      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]}</p>
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
@@ -1244,7 +1244,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
         <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{direct ? 'Correct' : 'Send for approval'}</button></>}>
       <div className="modal-form">
-        <p className="text-xs text-muted">{direct ? 'As Technical admin the correction applies at once.' : 'A manager\'s correction waits for an admin under Approvals.'} It is kept with the sale as it was before.</p>
+        <p className="text-xs text-muted">{direct ? 'Applies at once.' : 'Goes to Approvals.'} The old version is kept.</p>
         <div className="form-row">
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
           <label className="pe-field"><span>Site</span><input className="form-input" value={site} onChange={e => setSite(e.target.value)} /></label>
@@ -1265,7 +1265,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
                 onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {per(x.l.product_id)}</> : <span className="pl-help">other item</span>}</td>
               <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.price}
                 onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)))} /></td>
-              <td className="pl-help">{x.done > 0 ? `${qtyText(x.done)} ${per(x.l.product_id)} delivered — can't go below` : 'none'}</td>
+              <td className="pl-help">{x.done > 0 ? `${qtyText(x.done)} ${per(x.l.product_id)}` : '—'}</td>
               <td>{x.done === 0 && <label className="text-xs flex items-center gap-4"><input type="checkbox" checked={x.remove} onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, remove: e.target.checked } : y)))} /> remove</label>}</td>
             </tr>
           ))}

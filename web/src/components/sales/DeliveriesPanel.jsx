@@ -42,7 +42,7 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
     <>
       {rows !== null && (
         <div className="mm-stats">
-          <div className="mm-stat"><span className="pl-label">On the way</span><strong className={onWay.length ? 'text-warning' : ''}>{onWay.length}</strong><span className="pl-help">{onWay.length ? 'waiting for proof of delivery' : 'none out'}</span></div>
+          <div className="mm-stat"><span className="pl-label">On the way</span><strong className={onWay.length ? 'text-warning' : ''}>{onWay.length}</strong><span className="pl-help">{onWay.length ? 'awaiting proof' : 'none out'}</span></div>
           <div className="mm-stat"><span className="pl-label">Delivered today</span><strong>{here.filter(r => r.kind === 'delivery' && (r.delivered_at || '').slice(0, 10) === today).length}</strong><span className="pl-help">{here.filter(r => r.kind === 'collection' && r.delivered_on === today).length} collected</span></div>
           <div className="mm-stat"><span className="pl-label">This month</span><strong>{here.filter(r => (r.delivered_on || '').startsWith(month)).length}</strong><span className="pl-help">deliveries & collections</span></div>
         </div>
@@ -104,7 +104,7 @@ export function ConfirmDelivery({ delivery, who, onClose, onDone }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !f.received_by.trim()} onClick={save}>Confirm delivered</button></>}>
       <div className="modal-form">
-        <p className="pl-help">For {who}{delivery.driver ? ` · driver ${delivery.driver}` : ''}. Check the signed delivery note before confirming.</p>
+        <p className="pl-help">For {who}{delivery.driver ? ` · driver ${delivery.driver}` : ''}</p>
         <div className="form-row">
           <label className="pe-field" style={{ flex: 2 }}><span>Received by (at the site)</span><input className="form-input" autoFocus value={f.received_by} onChange={e => setF({ ...f, received_by: e.target.value })} /></label>
           <label className="pe-field"><span>When</span><input type="datetime-local" className="form-input" value={f.at} onChange={e => setF({ ...f, at: e.target.value })} /></label>

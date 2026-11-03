@@ -92,15 +92,15 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send to directors</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Sale #{sale.sale_no} · paid {dateText(payment.paid_on)}{payment.receipt_no ? ` · receipt ${payment.receipt_no}` : ''}. Due within {PROOF_DAYS} days of the payment.</p>
+        <p className="pl-help">Sale #{sale.sale_no} · paid {dateText(payment.paid_on)}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">A director asked: {proof.note}</div>}
         <div className="ru-file-row">
           <div className="ru-thumb">{preview ? <img src={preview} alt="The proof" /> : <FileImage size={24} aria-hidden="true" />}</div>
-          <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : proof?.file_name ? `Kept: ${proof.file_name}` : 'A photo of the bank slip or receipt, or a PDF.'}</div>
+          <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : proof?.file_name ? `Kept: ${proof.file_name}` : 'Bank slip or receipt (photo or PDF)'}</div>
           <label className="btn btn-outline btn-sm"><Upload size={14} /> {file || proof?.file_path ? 'Replace photo' : 'Choose photo or PDF'}
             <input type="file" accept="image/*,application/pdf" hidden onChange={pick} /></label>
         </div>
-        <label className="pe-field"><span>Or paste the transaction SMS (muamala)</span>
+        <label className="pe-field"><span>Or paste the SMS (muamala)</span>
           <textarea className="form-input" rows={4} value={text} onChange={e => setText(e.target.value)} /></label>
       </div>
     </Modal>
@@ -136,11 +136,11 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, onClo
           : <button type="button" className="btn btn-outline" onClick={() => setAsking(true)}>Query</button>}
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('confirm')}>Confirm received</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · receipt ${payment.receipt_no}` : ''}</p>
+        <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
           : url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Proof of payment" className="pp-photo" /></a> : <span className="skeleton" />)}
         {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
-        {asking && <label className="pe-field"><span>What is wrong? (the branch sees this)</span>
+        {asking && <label className="pe-field"><span>What's wrong?</span>
           <input className="form-input" autoFocus value={note} onChange={e => setNote(e.target.value)} placeholder="Amount on the slip is different" /></label>}
       </div>
     </Modal>
@@ -247,7 +247,7 @@ export function ProofReminder({ branchId, inBranch }) {
   return (
     <div className={`alert ${n.late ? 'alert-error' : 'alert-warning'} pp-reminder`} role="note">
       <Receipt size={16} aria-hidden="true" />
-      <span><strong>{n.todo} payment{n.todo === 1 ? '' : 's'} need proof</strong>{n.late ? ` · ${n.late} late or queried` : ''} — add the bank slip or SMS within {PROOF_DAYS} days.</span>
+      <span><strong>{n.todo} payment{n.todo === 1 ? '' : 's'} need proof</strong>{n.late ? ` · ${n.late} late` : ''}</span>
       <Link to="/sales?tab=receipts" className="btn btn-outline btn-sm">Add proof</Link>
     </div>
   );

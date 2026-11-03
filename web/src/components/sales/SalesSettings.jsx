@@ -60,7 +60,7 @@ export default function SalesSettings({ onClose }) {
           )}
         </div>
         <div className="card-body" style={{ paddingTop: 6 }}>
-          <p className="text-xs text-muted mb-8">Where customers' money goes — each payment names one, and each is a column in the sales book. Retired accounts stay on past payments.</p>
+          <p className="text-xs text-muted mb-8">Where customers pay. Each is a column in the sales book.</p>
           {rows === null ? <p className="pl-help">Loading…</p> : rows.length === 0 ? <p className="pl-help">No accounts yet.</p> : rows.map((a, i) => (
             <div key={a.id} className="ptc-head" style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
               <strong className={a.status !== 'active' ? 'text-muted' : ''}>{a.name}</strong>
@@ -86,7 +86,7 @@ export default function SalesSettings({ onClose }) {
                 <Plus size={13} /> Add account</button>
             </div>
           )}
-          {!canEdit && <p className="pl-help">A manager adds and changes accounts.</p>}
+          {!canEdit && <p className="pl-help">Managers edit accounts.</p>}
           {error && <p className="text-xs text-error">{error}</p>}
         </div>
       </section>
@@ -114,7 +114,7 @@ function PaymentTermsCard() {
     <section className="card">
       <div className="card-header"><h2 className="card-title">Payment terms</h2></div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Days a customer has to pay after an order or invoice. 0 = due at once. A customer can have their own (Customers › Edit); a sale's due date can be changed on the sale.</p>
+        <p className="text-xs text-muted mb-8">Days to pay after an order or invoice (0 = at once).</p>
         <div className="flex items-center gap-8">
           <input className="form-input" style={{ width: 90 }} inputMode="numeric" aria-label="Payment days" value={days} disabled={!canSet} onChange={e => setDays(e.target.value)} />
           <span className="text-sm">days</span>
