@@ -1011,14 +1011,17 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
 function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onOpen }) {
   // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
   const cur = currency ? ` (${currency})` : '';
-  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
+  // opened from a dashboard card: that card's period (?from=&to=&label=)
+  const [params] = useSearchParams();
+  const urlRange = params.get('from') && params.get('to') ? [params.get('from'), params.get('to')] : null;
+  const [period, setPeriod] = useState(urlRange ? 'range' : 'week');   // this week first (2026-11-03)
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
   const [delivery, setDelivery] = useState('');       // '' | not | part | done
   const [payment, setPayment] = useState('');         // '' | owed | paid
   const [account, setAccount] = useState('');         // '' | an account id
   const [vat, setVat] = useState('');                 // '' | with | without
-  const [from, to] = periodRange(period, today);
+  const [from, to] = period === 'range' && urlRange ? urlRange : periodRange(period, today);
   // delivered so far, per line (065)
   const doneOf = (x, lineId) => (x.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === lineId).reduce((u, y) => u + Number(y.quantity), 0), 0);
   const stateOf = (x, l) => { const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
@@ -1071,7 +1074,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
           { key: 'period', label: 'Period', value: period, onChange: setPeriod,
-            options: [...weekPeriods(today), { value: 'month', label: 'This month' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
+            options: [...(urlRange ? [{ value: 'range', label: params.get('label') || 'Chosen period' }] : []), ...weekPeriods(today), { value: 'month', label: 'This month' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
           { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
             options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
@@ -1081,7 +1084,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
           { key: 'vat', label: 'VAT', value: vat, onChange: setVat,
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
-      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
+      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
@@ -1094,7 +1097,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
             {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
             : rows.map(({ x, l, first, last, span, perItem, band, multi, shade, showDate }) => (
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
-                <td>{showDate ? x.sale_date : ''}</td>
+                <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
                 <td>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</td>
                 <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></td>

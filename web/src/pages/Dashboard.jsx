@@ -164,10 +164,10 @@ function RoleDashboard({ isOwner }) {
         <>
           <div className="mm-stats">{!d ? wait : <>
             {card('Cast this month', `${formatAmount(pcsOf(d.prod))} pcs`, `${d.prod.batches} batches`, '/production/ledger')}
-            {card('Cement', `${formatAmount(bagsOf(d.prod))} bags`, `wastani ${bagsOf(d.prod) ? n1(d.prod.rows.reduce((t, r) => t + r.pieces + r.leftovers, 0) / bagsOf(d.prod)) : '—'} a bag`)}
+            {card('Cement', `${formatAmount(bagsOf(d.prod))} bags`, `wastani ${bagsOf(d.prod) ? n1(d.prod.rows.reduce((t, r) => t + r.pieces + r.leftovers, 0) / bagsOf(d.prod)) : '—'} a bag`, '/production/ledger')}
             {card('Curing now', `${formatAmount(d.curing.pieces)} pcs`, `${d.curing.ready.length} batch${d.curing.ready.length === 1 ? '' : 'es'} ready to release`, '/production')}
             {(() => { const rel = d.prod.rows.reduce((t, r) => t + r.released, 0); const rej = d.prod.rows.reduce((t, r) => t + r.rejected, 0);
-              return card('Rejected', formatAmount(rej), rel ? `${n1((rej / rel) * 100)}% of released` : 'nothing released'); })()}
+              return card('Rejected', formatAmount(rej), rel ? `${n1((rej / rel) * 100)}% of released` : 'nothing released', '/production?tab=done'); })()}
             {card('Open orders', d.orders.rows.length, `${d.orders.dueSoon} due within 7 days`, '/production')}
             {card('Over the recipe', d.mats.filter(m => m.diffPct != null && m.diffPct > 5).length, 'materials > 5% above', '/reports')}
           </>}</div>
@@ -220,7 +220,7 @@ function RoleDashboard({ isOwner }) {
             {card('Sales', short(d.sales.total), `${d.sales.docs} orders & invoices`, '/sales')}
             {card('Received', short(d.sales.received), 'payments this month', '/sales')}
             {card('Customers owe', short(d.sales.owed), 'all open sales', '/customers')}
-            {card('VAT', short(d.sales.vat), 'on this month\'s sales')}
+            {card('VAT', short(d.sales.vat), 'on this month\'s sales', '/sales?tab=book')}
           </>}</div>
           <div className="card"><div className="card-header"><h2 className="card-title">Latest sales</h2></div><div className="table-container">
             <table><thead><tr><th>Date</th><th>No.</th><th>Customer</th><th>Stage</th><th className="num">Total (TZS)</th><th className="num">Owed (TZS)</th></tr></thead>

@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
-import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
-import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
+import { loadInventoryRefs, orgToday } from '../../lib/inventory';
+import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
-const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month' };
 const DROPDOWN = [['Monthly', [['month', 'This month'], ['lastmonth', 'Last month']]],
   ['Quarterly', [['quarter', 'This quarter'], ['lastquarter', 'Last quarter']]], ['Yearly', [['year', 'This year'], ['lastyear', 'Last year']]]];
 const LAST_OF = { week: 'lastweek', month: 'lastmonth', quarter: 'lastquarter', year: 'lastyear' };
@@ -41,11 +40,7 @@ function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
     </div>
   );
 }
-const CARD = {
-  sales: { title: 'Sales', heads: ['Received (TZS)'], to: '/sales', page: 'Open Sales' },
-  cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
-  purchases: { title: 'Purchases', showItems: true, heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases', page: 'Open Purchases' },
-};
+const CARD = { sales: { to: '/sales' }, cash: { to: '/weekly-cash' }, purchases: { to: '/purchases' } };
 
 const Block = ({ title, note, to, children }) => (
   <section className="dd-block">
@@ -71,8 +66,7 @@ export default function DirectorBoard() {
   const { branchId, branchName, branches, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
-  const [params, setParams] = useSearchParams();
-  const openCard = CARD[params.get('card')] ? params.get('card') : null;
+  const navigate = useNavigate();
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
@@ -91,11 +85,12 @@ export default function DirectorBoard() {
   }
   useEffect(() => { load(); }, [branchId, branches.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const open = card => setParams(p => { const n = new URLSearchParams(p); n.set('card', card); return n; });
+  // a card opens its page (user, 2026-11-03); Sales opens the Sales book on the same period
+  const open = card => navigate(card === 'sales'
+    ? `/sales?tab=book&from=${period.from}&to=${period.to}&label=${encodeURIComponent(period.label)}` : CARD[card].to);
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
   const bar = <PeriodBar period={period} periods={periods} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
-  if (openCard && d.money) return <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} />;
 
   const { needs, money, curing } = d;
   const c = money && cardsFor(money, period, inBranch);
@@ -187,36 +182,3 @@ export default function DirectorBoard() {
   );
 }
 
-/* A card opened: the chosen period's rows, newest first */
-function CardHistory({ card, data, inBranch, today, short, period, periodKey, bar }) {
-  const by = grainOf(periodKey);
-  const [, setParams] = useSearchParams();
-  const cfg = CARD[card];
-  const rows = useMemo(() => historyFor(data, card, by, inBranch, today, period), [data, card, by, inBranch, today, period]);
-  const cols = ['a', 'b', 'c'].slice(0, cfg.heads.length);
-  const back = () => setParams(p => { const n = new URLSearchParams(p); n.delete('card'); return n; });
-  return (
-    <div className="dd">
-      <div className="dd-back">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={back}><ArrowLeft size={15} /> Dashboard</button>
-        <strong>{cfg.title}</strong>
-        <Link to={cfg.to} className="btn btn-outline btn-sm">{cfg.page}</Link>
-      </div>
-      {bar}
-      <div className="card"><div className="table-container">
-        <table>
-          <thead><tr><th>{BY_HEAD[by]}</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
-          <tbody>
-            {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 4 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
-            : rows.map(r => <tr key={r.key}><td>{r.label}</td>{cfg.showItems && (() => { const its = Object.values(r.items || {}); return <>
-                <td>{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{i.name}</div>)}</td>
-                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{qtyText(i.qty)} {i.unit}</div>)}</td>
-                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
-              </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
-          </tbody>
-          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
-        </table>
-      </div></div>
-    </div>
-  );
-}
