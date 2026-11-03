@@ -20,6 +20,7 @@ import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import NumberInput from '../components/NumberInput';
+import PeriodSelect, { usePeriod } from '../components/PeriodSelect';
 
 const LOAD_ERROR = "We couldn't load purchases. Please try again.";
 const PAYMENT_LABEL = { paid: 'Paid', part_paid: 'Part-paid', unpaid: 'Unpaid', void: 'Void' };
@@ -48,7 +49,9 @@ export default function Purchases() {
   const money = v => formatMoney(v, organization?.currency_code);
   const canRecordAt = id => !!id && canAt('procurement.receive', id, null);
 
-  const [tab,       setTab]       = useState(null);   // null until loaded: opens on "Waiting" only when something waits
+  const [tab,       setTab]       = useState(null);
+  const today = orgToday(organization?.timezone);
+  const period = usePeriod(today);   // this week first; or a dashboard card's period   // null until loaded: opens on "Waiting" only when something waits
   const [pendingReq, setPendingReq] = useState([]);   // purchases sent for approval, not yet decided
   const [refs,      setRefs]      = useState(null);
   const [materials, setMaterials] = useState([]);   // with branch_id (032)
@@ -193,9 +196,11 @@ export default function Purchases() {
   // Technical admin (system.manage): may delete a purchase entered wrongly (040)
   const isTechAdmin = canManage('system.manage');
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
+  const purchasesShown = purchasesHere.filter(p => period.has(p.purchase_date));
   const vatRateOf = b => vatRates[b] ?? DEFAULT_VAT;
   const catName = id => expCats.find(c => c.id === id)?.name ?? '—';
   const expensesHere = expenses.filter(e => inBranch(e.branch_id) && (!expChip || e.category_id === expChip));
+  const expensesShown = expensesHere.filter(e => period.has(e.expense_date));
   const expensePay = e => (e.status === 'void' ? 'void' : Number(e.amount_paid) >= Number(e.amount) ? 'paid' : Number(e.amount_paid) > 0 ? 'part_paid' : 'unpaid');
   const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
   const owed = purchasesHere.filter(p => p.status === 'recorded').reduce((s, p) => s + Math.max(Number(totals[p.id]?.balance ?? 0), 0), 0);
@@ -232,6 +237,7 @@ export default function Purchases() {
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
+            {(tab === 'purchases' || tab === 'expenses') && <div className="card-body period-row" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['month', 'This month'], ['lastmonth', 'Last month'], ['all', 'All time']]} /></div>}
             {tab === 'waiting' && (
               <table>
                 <thead><tr><th>Received</th><th>Store</th><th>Goods</th><th>Received by</th><th aria-label="Actions" /></tr></thead>
@@ -283,9 +289,9 @@ export default function Purchases() {
                     </tr>
                     );
                   })}
-                  {loading ? <SkeletonRow cols={8} /> : purchasesHere.length === 0 ? (
+                  {loading ? <SkeletonRow cols={8} /> : purchasesShown.length === 0 ? (
                     pendingHere.length ? null : <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
-                  ) : purchasesHere.map(p => {
+                  ) : purchasesShown.map(p => {
                     const t = totals[p.id];
                     const priceOfTx = Object.fromEntries((p.lines || []).map(l => [l.transaction_id, l.unit_price]));
                     const ls = (txByMove[p.movement_id] || []).filter(x => x.material_id);
@@ -337,9 +343,9 @@ export default function Purchases() {
                 <table>
                   <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
                   <tbody>
-                    {loading ? <SkeletonRow cols={8} /> : expensesHere.length === 0 ? (
+                    {loading ? <SkeletonRow cols={8} /> : expensesShown.length === 0 ? (
                       <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No expenses yet" description="Electricity (LUKU), water, office tools, equipment… — use Record expense." /></td></tr>
-                    ) : expensesHere.map(e => {
+                    ) : expensesShown.map(e => {
                       const pay = expensePay(e);
                       return (
                         <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>

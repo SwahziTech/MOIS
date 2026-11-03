@@ -38,5 +38,12 @@ export function periodRange(key, today) {
   if (wk) return wk;
   if (key === 'all') return ['0000-01-01', '9999-12-31'];
   if (key === 'month') return [`${today.slice(0, 7)}-01`, today];
+  if (key === 'lastmonth') { const first = `${today.slice(0, 7)}-01`; return [`${shift(first, -1).slice(0, 7)}-01`, shift(first, -1)]; }
   return [shift(today, -Number(key)), today];
+}
+
+/** The period key whose dates are exactly [from, to] (a card's period sent in a link), or null */
+export function keyForRange(from, to, today) {
+  const keys = [...weekPeriods(today).map(p => p.value), 'month', 'lastmonth'];
+  return keys.find(k => { const [a, b] = periodRange(k, today); return a === from && b === to; }) ?? null;
 }

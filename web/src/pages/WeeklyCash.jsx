@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney, formatMoneyShort, formatAmount, dateText, tableDate } from '../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../lib/inventory';
+import PeriodSelect, { usePeriod } from '../components/PeriodSelect';
 import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, writeWeeklySheet } from '../lib/weeklyCashExcel';
 import PageShell from '../components/PageShell';
@@ -38,6 +39,7 @@ export default function WeeklyCash() {
   const { branchId, branchName } = useBranch();
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
+  const period = usePeriod(today);   // this week first; or a dashboard card's period
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(null);       // a request, or { new: true }
@@ -97,6 +99,7 @@ export default function WeeklyCash() {
   }, [data, spentIn, today]);
 
   const here = data?.requests || [];
+  const shownWeeks = here.filter(r => r.week_ending >= period.from && addDays(r.week_ending, -6) <= period.to);
   const thisWeek = here.find(r => r.week_ending === saturdayOf(today) && !['cancelled', 'rejected'].includes(r.status));
   const lastClosed = ledger[addDays(saturdayOf(today), -7)];
   const canPrepare = !!branchId && canAt('cash.request', branchId);
@@ -114,12 +117,13 @@ export default function WeeklyCash() {
             <div className="mm-stat"><span className="pl-label">With directors</span><strong className={here.some(r => r.status === 'with_directors') ? 'text-warning' : ''}>{here.filter(r => r.status === 'with_directors').length}</strong><span className="pl-help">waiting for approval</span></div>
             <div className="mm-stat"><span className="pl-label">Last week's balance</span><strong>{lastClosed ? money(lastClosed.closing) : '—'}</strong><span className="pl-help">{lastClosed ? `spent ${formatMoneyShort(lastClosed.spent, organization?.currency_code)}` : 'from the first request on'}</span></div>
           </div>
+          <div className="period-row"><PeriodSelect period={period} today={today} extra={[['month', 'This month'], ['lastmonth', 'Last month'], ['all', 'All time']]} /></div>
           <div className="card"><div className="table-container">
             <table>
               <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
               <tbody>
-                {here.length === 0 ? <tr><td colSpan={7} className="text-muted">No weekly requests yet — New weekly request, or import this week's Excel sheet.</td></tr>
-                : here.map(r => {
+                {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No weekly requests yet — New weekly request, or import this week's Excel sheet.</>}</td></tr>
+                : shownWeeks.map(r => {
                   const w = ledger[r.week_ending];
                   return (
                     <tr key={r.id} className="clickable-row" onClick={() => setOpen(r)}>

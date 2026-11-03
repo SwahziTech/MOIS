@@ -2532,3 +2532,10 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .ru-same { color: var(--text-muted); font-size: var(--text-xs); }
 .ru-grid-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dd-reset { flex: none; white-space: nowrap; }
+/* Period dropdowns: small everywhere (2026-11-03) */
+select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; min-height: 32px; padding: 4px 28px 4px 10px; font-size: var(--text-sm); }
+.period-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 8px; }
+.period-row .pl-help { margin-right: auto; }
+.dd-step { width: 32px; height: 32px; }
+.dd-report-row { cursor: pointer; }
+.dd-report-row:hover td { background: var(--bg-soft); }

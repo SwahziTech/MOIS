@@ -95,13 +95,16 @@ async function loadNeeds({ inBranch, today }) {
 
 /** Everything the cards and their detail pages count, once; a period is then only a filter */
 export async function loadMoneyData() {
-  const [pa, mv, cr, pu, tot, ba] = await Promise.all([
+  const [pa, mv, cr, pu, tot, ba, sa, ac] = await Promise.all([
     supabase.from('sale_payments').select('paid_on, amount, sale:sales!inner(branch_id)'),
     supabase.from('cash_movements').select('branch_id, day, direction, amount, kind'),
     supabase.from('cash_requests').select('branch_id, week_ending, status, opening_balance'),
     supabase.from('purchases').select('id, branch_id, purchase_date, lines:purchase_lines(line_amount, tx:inventory_transactions(entered_quantity, material:materials(name), unit:units!inventory_transactions_entered_unit_id_fkey(symbol)))').neq('status', 'void'),
     supabase.from('purchase_totals').select('purchase_id, total, amount_paid, balance'),
     supabase.from('production_batches').select('branch_id, batch_date, cement_bags, status, outputs:production_batch_outputs(is_primary), rejects:production_batch_rejects(pieces)').neq('status', 'void'),
+    // the sales made (2026-11-03: the Sales card counts these, as the Sales book lists them)
+    supabase.from('sales').select('id, sale_no, branch_id, sale_date, total, lines:sale_lines(line_no, product_id, color_id, quantity, total), payments:sale_payments(account_id, amount)').in('stage', ['order', 'invoice']),
+    supabase.from('payment_accounts').select('id, name'),
   ]);
   const err = pa.error || mv.error || cr.error || pu.error;
   if (err) throw err;
@@ -113,6 +116,10 @@ export async function loadMoneyData() {
     purchases: (pu.data || []).map(p => ({ branch_id: p.branch_id, day: p.purchase_date, total: n(totals[p.id]?.total), paid: n(totals[p.id]?.amount_paid), toPay: Math.max(n(totals[p.id]?.balance), 0),
       items: (p.lines || []).filter(l => l.tx?.material?.name).map(l => ({ name: l.tx.material.name, unit: l.tx.unit?.symbol ?? '', qty: n(l.tx.entered_quantity), amount: n(l.line_amount) })) })),
     batches: (ba.data || []).filter(b => (b.outputs || []).some(o => o.is_primary)),
+    sales: (sa.data || []).map(x => ({ id: x.id, no: x.sale_no, branch_id: x.branch_id, day: x.sale_date, total: n(x.total),
+      paid: sum(x.payments || [], p => p.amount), accounts: [...new Set((x.payments || []).map(p => p.account_id).filter(Boolean))],
+      lines: (x.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({ product_id: l.product_id, color_id: l.color_id, quantity: n(l.quantity), total: n(l.total) })) })),
+    accountName: Object.fromEntries((ac.data || []).map(a => [a.id, a.name])),
   };
 }
 
@@ -120,14 +127,15 @@ const SPENT = new Set(['purchase', 'expense', 'wages', 'statutory']);
 
 /** Sales received, weekly cash and purchases for one period */
 export function cardsFor(data, { from, to, compare }, inBranch) {
-  const received = (a, b) => sum(data.received.filter(x => inBranch(x.branch_id) && inRange(x.day, a, b)), x => x.amount);
+  const made = (a, b) => sum(data.sales.filter(x => inBranch(x.branch_id) && inRange(x.day, a, b)), x => x.total);
   const moves = data.moves.filter(x => inBranch(x.branch_id));
   const sentIn = (a, b) => sum(moves.filter(x => x.kind === 'topup' && inRange(x.day, a, b)), x => x.amount);
   const spentIn = (a, b) => sum(moves.filter(x => SPENT.has(x.kind) && inRange(x.day, a, b)), x => x.amount);
   const bought = data.purchases.filter(x => inBranch(x.branch_id) && inRange(x.day, from, to));
   return {
-    sales: received(from, to),
-    salesBefore: compare ? received(compare.from, compare.to) : null,
+    sales: made(from, to),
+    salesCount: data.sales.filter(x => inBranch(x.branch_id) && inRange(x.day, from, to)).length,
+    salesBefore: compare ? made(compare.from, compare.to) : null,
     sent: sentIn(from, to),
     spent: spentIn(from, to),
     left: weeklyCashLeft(data, to, inBranch),

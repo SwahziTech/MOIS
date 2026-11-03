@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
-import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
-import { loadInventoryRefs, orgToday } from '../../lib/inventory';
-import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, cardsFor, productionFor, trendFrom, monthShort } from '../../lib/directorBoard';
+import { formatAmount, formatMoneyShort, dateText, tableDate } from '../../lib/format';
+import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
+import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
@@ -40,7 +40,14 @@ function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
     </div>
   );
 }
-const CARD = { sales: { to: '/sales' }, cash: { to: '/weekly-cash' }, purchases: { to: '/purchases' } };
+const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month' };
+const CARD = {
+  sales: { title: 'Sales', to: '/sales?tab=book', page: 'Open Sales book' },
+  cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
+  purchases: { title: 'Purchases', showItems: true, heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases?tab=purchases', page: 'Open Purchases' },
+};
+// a page opened on the dashboard's period
+const pageFor = (card, period, extra = '') => `${CARD[card].to}${CARD[card].to.includes('?') ? '&' : '?'}from=${period.from}&to=${period.to}&label=${encodeURIComponent(period.label)}${extra}`;
 
 const Block = ({ title, note, to, children }) => (
   <section className="dd-block">
@@ -67,6 +74,8 @@ export default function DirectorBoard() {
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
   const navigate = useNavigate();
+  const [openCard, setOpenCard] = useState(null);   // a card's report, shown here (2026-11-03)
+  const [refs, setRefs] = useState(null);
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
@@ -78,6 +87,7 @@ export default function DirectorBoard() {
     setError(''); setD(null); setStock(undefined);
     try {
       const refs = await loadInventoryRefs();
+      setRefs(refs);
       setD(await loadDirectorBoard({ inBranch, today, refs }));
       // stock at cost asks the database item by item, so it follows when ready
       loadStockBlock({ inBranch, branchId, branches, today, refs }).then(setStock).catch(e => { console.error(e); setStock(null); });
@@ -85,12 +95,17 @@ export default function DirectorBoard() {
   }
   useEffect(() => { load(); }, [branchId, branches.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // a card opens its page (user, 2026-11-03); Sales opens the Sales book on the same period
-  const open = card => navigate(card === 'sales'
-    ? `/sales?tab=book&from=${period.from}&to=${period.to}&label=${encodeURIComponent(period.label)}` : CARD[card].to);
+  // a card opens its report here; its rows and open icon go to the real page (user, 2026-11-03)
+  const open = card => setOpenCard(card);
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
   const bar = <PeriodBar period={period} periods={periods} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
+  if (openCard && d.money) {
+    const back = () => setOpenCard(null);
+    return openCard === 'sales'
+      ? <SalesReport data={d.money} refs={refs} inBranch={inBranch} short={short} period={period} bar={bar} onBack={back} go={navigate} />
+      : <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} onBack={back} go={navigate} />;
+  }
 
   const { needs, money, curing } = d;
   const c = money && cardsFor(money, period, inBranch);
@@ -118,7 +133,7 @@ export default function DirectorBoard() {
         <div className="dd-cards">
           <button type="button" className="dd-num dd-num-big" onClick={() => open('sales')}>
             <span className="pl-label">Sales</span><strong>{short(c.sales)}</strong>
-            <span className="pl-help">received, not yet approved{change == null ? '' : ` · ${change >= 0 ? '+' : ''}${change}% vs ${period.compare.label}`}</span>
+            <span className="pl-help">{c.salesCount} sale{c.salesCount === 1 ? '' : 's'} made{change == null ? '' : ` · ${change >= 0 ? '+' : ''}${change}% vs ${period.compare.label}`}</span>
           </button>
           <button type="button" className="dd-num" onClick={() => open('cash')}>
             <span className="pl-label">Weekly cash</span><strong>{short(c.sent)} sent</strong>
@@ -182,3 +197,85 @@ export default function DirectorBoard() {
   );
 }
 
+
+const ReportHead = ({ card, period, onBack, go }) => (
+  <div className="dd-back">
+    <button type="button" className="btn btn-ghost btn-sm" onClick={onBack}><ArrowLeft size={15} /> Dashboard</button>
+    <strong>{CARD[card].title}</strong>
+    <button type="button" className="btn btn-outline btn-sm" onClick={() => go(pageFor(card, period))}><ExternalLink size={14} /> {CARD[card].page}</button>
+  </div>
+);
+
+/* The Sales card opened: a short summary, then each product sold — date, product, quantity, amount, account.
+   A row (or its icon) opens that sale in the Sales book. */
+function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
+  const sales = data.sales.filter(x => inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to)
+    .sort((a, b) => (a.day === b.day ? b.no - a.no : a.day < b.day ? 1 : -1));
+  const name = l => [refs?.items[`p:${l.product_id}`]?.name ?? '—', l.color_id ? refs?.colorById[l.color_id]?.name : null].filter(Boolean).join(' ');
+  const unit = l => refs?.unitById[refs?.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '';
+  const total = sales.reduce((t, x) => t + x.total, 0); const paid = sales.reduce((t, x) => t + x.paid, 0);
+  let lastDay = null;
+  return (
+    <div className="dd">
+      <ReportHead card="sales" period={period} onBack={onBack} go={go} />
+      {bar}
+      <div className="mm-stats">
+        <div className="mm-stat"><span className="pl-label">Sales</span><strong>{sales.length}</strong><span className="pl-help">{period.label.toLowerCase()}</span></div>
+        <div className="mm-stat"><span className="pl-label">Value</span><strong>{short(total)}</strong><span className="pl-help">orders and invoices</span></div>
+        <div className="mm-stat"><span className="pl-label">Paid</span><strong>{short(paid)}</strong><span className="pl-help">{total > paid ? `${short(total - paid)} still owed` : 'all paid'}</span></div>
+      </div>
+      <div className="card"><div className="table-container">
+        <table>
+          <thead><tr><th>Date</th><th>Product</th><th className="num">Qty</th><th className="num">Amount (TZS)</th><th>Account</th><th aria-label="Open" /></tr></thead>
+          <tbody>
+            {sales.length === 0 ? <tr><td colSpan={6} className="text-muted">No sales in this period.</td></tr>
+            : sales.flatMap(x => x.lines.map((l, i) => {
+              const showDay = x.day !== lastDay; lastDay = x.day;
+              const open = () => go(pageFor('sales', period, `&sale=${x.id}`));
+              return (
+                <tr key={`${x.id}-${i}`} className="dd-report-row" title={`Open sale #${x.no}`} onClick={open}>
+                  <td>{showDay ? tableDate(x.day) : ''}</td>
+                  <td>{name(l)}</td>
+                  <td className="num">{qtyText(l.quantity)} {unit(l)}</td>
+                  <td className="num">{fmt(l.total)}</td>
+                  <td>{i === 0 ? (x.accounts.map(a => data.accountName[a]).filter(Boolean).join(', ') || <span className="text-muted">not paid</span>) : ''}</td>
+                  <td className="num">{i === 0 && <button type="button" className="icon-btn" aria-label={`Open sale #${x.no}`} onClick={e => { e.stopPropagation(); open(); }}><ExternalLink size={14} /></button>}</td>
+                </tr>
+              );
+            }))}
+          </tbody>
+          {sales.length > 0 && <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{short(total)}</strong></td><td colSpan={2} /></tr></tfoot>}
+        </table>
+      </div></div>
+    </div>
+  );
+}
+
+/* Weekly cash or Purchases opened: the period's rows, newest first; a row opens the page on the period */
+function CardHistory({ card, data, inBranch, today, short, period, periodKey, bar, onBack, go }) {
+  const by = grainOf(periodKey);
+  const cfg = CARD[card];
+  const rows = useMemo(() => historyFor(data, card, by, inBranch, today, period), [data, card, by, inBranch, today, period]);
+  const cols = ['a', 'b', 'c'].slice(0, cfg.heads.length);
+  const openRow = r => go(by === 'day' ? pageFor(card, { from: r.key, to: r.key, label: tableDate(r.key) }) : pageFor(card, period));
+  return (
+    <div className="dd">
+      <ReportHead card={card} period={period} onBack={onBack} go={go} />
+      {bar}
+      <div className="card"><div className="table-container">
+        <table>
+          <thead><tr><th>{BY_HEAD[by]}</th>{cfg.showItems && <><th>Item</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></>}{cfg.heads.map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.length === 0 ? <tr><td colSpan={cols.length + (cfg.showItems ? 4 : 1)} className="text-muted">Nothing recorded yet.</td></tr>
+            : rows.map(r => <tr key={r.key} className="dd-report-row" title={`Open ${cfg.title}`} onClick={() => openRow(r)}><td>{r.label}</td>{cfg.showItems && (() => { const its = Object.values(r.items || {}); return <>
+                <td>{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{i.name}</div>)}</td>
+                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{qtyText(i.qty)} {i.unit}</div>)}</td>
+                <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
+              </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
+          </tbody>
+          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+        </table>
+      </div></div>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
-import { weekPeriods, weekLabel, periodRange } from '../lib/periods';
+import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -92,6 +92,9 @@ export default function Sales() {
     }
   }
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // opened on one sale (?sale=, from the Director view's sales report)
+  const [saleParams] = useSearchParams();
+  useEffect(() => { const id = saleParams.get('sale'); if (id && sales?.some(x => x.id === id)) setViewing(id); }, [sales === null]); // eslint-disable-line react-hooks/exhaustive-deps
   // opened from a lead (Customers › Leads › Make quotation, 095): a new quotation for its customer
   const [params, setParams] = useSearchParams();
   useEffect(() => {
@@ -1013,8 +1016,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
   const cur = currency ? ` (${currency})` : '';
   // opened from a dashboard card: that card's period (?from=&to=&label=)
   const [params] = useSearchParams();
-  const urlRange = params.get('from') && params.get('to') ? [params.get('from'), params.get('to')] : null;
-  const [period, setPeriod] = useState(urlRange ? 'range' : 'week');   // this week first (2026-11-03)
+  const sentRange = params.get('from') && params.get('to') ? [params.get('from'), params.get('to')] : null;
+  const known = sentRange && keyForRange(sentRange[0], sentRange[1], today);   // one of the usual choices opens on it
+  const urlRange = known ? null : sentRange;
+  const [period, setPeriod] = useState(known || (urlRange ? 'range' : 'week'));   // this week first (2026-11-03)
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
   const [delivery, setDelivery] = useState('');       // '' | not | part | done
