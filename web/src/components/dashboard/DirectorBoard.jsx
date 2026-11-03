@@ -15,19 +15,21 @@ const DROPDOWN = [['Monthly', [['month', 'This month'], ['lastmonth', 'Last mont
   ['Quarterly', [['quarter', 'This quarter'], ['lastquarter', 'Last quarter']]], ['Yearly', [['year', 'This year'], ['lastyear', 'Last year']]]];
 const LAST_OF = { week: 'lastweek', month: 'lastmonth', quarter: 'lastquarter', year: 'lastyear' };
 
-/* Arrows through today → each day back to Monday → last week → last month; the date; the period dropdown.
-   Opens on this week (user, 2026-11-03); the dropdown offers this week, its days (today, yesterday … Monday) and last week first */
+/* Opens on this week (user, 2026-11-03). From it › goes to today and ‹ to last week; from today ‹ steps back a day at a
+   time to Monday, then last week, then last month. Away from this week a small This week button brings it back.
+   The dropdown: this week, its days (today, yesterday … Monday), last week, then months, quarters and years. */
 function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
   const steps = useMemo(() => periodSteps(today), [today]);
   const at = steps.indexOf(periodKey);
   const earlier = at >= 0 ? steps[at + 1] : LAST_OF[periodKey];
-  const later = at >= 0 ? steps[at - 1] : Object.keys(LAST_OF).find(k => LAST_OF[k] === periodKey) ?? (periodKey === 'week' ? null : 'today');
+  const later = at >= 0 ? steps[at - 1] : Object.keys(LAST_OF).find(k => LAST_OF[k] === periodKey) ?? 'today';
   const days = periods.filter(p => steps.includes(p.key) && p.key !== 'lastweek' && p.key !== 'lastmonth');
   return (
     <div className="dd-period">
       <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
       <span><strong>{period.label}</strong> · {period.note}</span>
+      {periodKey !== 'week' && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => setPeriodKey('week')}>This week</button>}
       <select className="form-input dd-select" aria-label="Period" value={periodKey} onChange={e => setPeriodKey(e.target.value)}>
         <optgroup label="Weekly">
           <option value="week">This week</option>

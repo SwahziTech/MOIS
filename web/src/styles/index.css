@@ -2531,3 +2531,4 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .ru-grid td input[type=date] { min-width: 130px; }
 .ru-same { color: var(--text-muted); font-size: var(--text-xs); }
 .ru-grid-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dd-reset { flex: none; white-space: nowrap; }
