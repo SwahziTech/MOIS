@@ -43,7 +43,7 @@ export default function Branches() {
   };
 
   return (
-    <PageShell title="Branches" subtitle="Organization" description="Your branches and the stores in each.">
+    <PageShell title="Branches" subtitle="Organization">
       {error ? (
         <ErrorState message={error} onRetry={load} />
       ) : loading ? (

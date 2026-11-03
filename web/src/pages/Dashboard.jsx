@@ -137,7 +137,7 @@ function RoleDashboard({ isOwner }) {
   ].filter(Boolean) : [];
 
   return (
-    <PageShell title="Dashboard" description={`An overview of ${branchId ? branchName : 'every branch'} — ${dateText(today)}.`}>
+    <PageShell title="Dashboard" description={`${branchId ? branchName : 'All branches'} · ${dateText(today)}`}>
       <PageTabs tabs={tabs} value={shown} onChange={setTab} />
       {/* today's jobs first: the meters read morning and evening (secretary, branch manager) */}
       <MeterReadingsTask branchId={branchId} />

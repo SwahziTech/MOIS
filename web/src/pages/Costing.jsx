@@ -113,7 +113,7 @@ export default function Costing() {
 
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
-      description={branchId ? `Material cost, price without VAT and margin per product at ${branchName}; finished stock at cost.` : 'Pick a branch in the sidebar to see its costing.'}>
+      description={branchId ? branchName : 'Pick a branch in the sidebar'}>
       {!branchId ? (
         <div className="card"><EmptyState icon={Calculator} title="Pick a branch" description="Costs, prices and stock are per branch." /></div>
       ) : (

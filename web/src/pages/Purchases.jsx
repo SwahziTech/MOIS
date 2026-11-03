@@ -215,7 +215,6 @@ export default function Purchases() {
 
   return (
     <PageShell title="Purchases" subtitle="Inventory" onSettings={() => setExpSettings(true)}
-      description="The money side of materials received: supplier, cost, payment — and each branch's material costs."
       actions={expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
         <button type="button" className="btn btn-outline" onClick={() => setEditingExpense('new')}>
           <Plus size={14} /> Record expense

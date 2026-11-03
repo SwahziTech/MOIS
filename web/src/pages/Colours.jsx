@@ -42,7 +42,6 @@ export default function Colours() {
     <PageShell
       title="Colours"
       subtitle="Master Data"
-      description="The colours your products come in; each category chooses its own."
       primaryAction={canWrite && (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
           <Plus size={14} /> New Colour

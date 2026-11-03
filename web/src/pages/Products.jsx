@@ -190,7 +190,6 @@ export default function Products() {
     <PageShell
       title="Products"
       subtitle="Master Data"
-      description="Every product, its size and coverage, yield per bag and the stock on hand."
       primaryAction={(canWrite || canCatalogue) && (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}>
           <Plus size={14} /> New Product

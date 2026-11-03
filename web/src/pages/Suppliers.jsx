@@ -87,7 +87,6 @@ export default function Suppliers() {
     <PageShell
       title="Suppliers"
       subtitle="Master Data"
-      description="Who you buy from — what you bought, how often, and what's still to pay."
       primaryAction={canWrite && (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={14} /> New Supplier</button>
       )}

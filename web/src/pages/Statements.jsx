@@ -41,7 +41,7 @@ export default function Statements() {
 
   return (
     <PageShell title="Statements" subtitle="Finance & Accounting"
-      description={`Profit & loss, the balance sheet, account statements and who owes whom — ${where}.`}>
+      description={where.charAt(0).toUpperCase() + where.slice(1)}>
       <PageTabs tabs={[['financial', 'Financial'], ['accounts', 'Accounts'], ['parties', 'Customers & suppliers']]} value={tab} onChange={setTab} />
       {tab === 'accounts' ? <AccountStatement {...props} /> : tab === 'parties' ? <Parties {...props} /> : <Financial {...props} />}
     </PageShell>

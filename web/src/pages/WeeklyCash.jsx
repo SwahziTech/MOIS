@@ -106,7 +106,7 @@ export default function WeeklyCash() {
 
   return (
     <PageShell title="Weekly cash" subtitle="Finance"
-      description={branchId ? `What ${branchName} asks for each week, its approval and payment, and what last week's money went on.` : 'Pick a branch in the sidebar.'}
+      description={branchId ? branchName : 'Pick a branch in the sidebar'}
       primaryAction={canPrepare && data && <button type="button" className="btn btn-primary" onClick={() => setOpen({ new: true })}><Plus size={15} /> New weekly request</button>}>
       {!branchId ? <div className="card"><EmptyState icon={Wallet} title="Pick a branch" description="Weekly cash is per branch." /></div>
       : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>

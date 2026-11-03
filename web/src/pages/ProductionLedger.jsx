@@ -235,7 +235,7 @@ export default function ProductionLedger() {
   const openDay = days.find(d => d.key === open);
   return (
     <PageShell title="Production ledger" subtitle="Production"
-      description={branchId ? `Every production day confirmed at ${branchName}.` : 'Every production day confirmed, at every branch.'}>
+      description={branchId ? branchName : 'All branches'}>
       {productId && !error && (
           <div className="mm-stats">
             <div className="mm-stat"><span className="pl-label">Pieces · {periodName.toLowerCase()}</span><strong>{qtyText(productTotal('pieces'))}</strong><span className="pl-help">{productSqm != null ? `${qtyText(round(productSqm))} m² · ` : ''}{productRows.length} batch{productRows.length === 1 ? '' : 'es'}</span></div>

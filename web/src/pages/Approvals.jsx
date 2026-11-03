@@ -104,8 +104,7 @@ export default function Approvals() {
   const when = ts => tableDateTime(ts);
 
   return (
-    <PageShell title="Approvals" subtitle="Overview"
-      description="Price changes and stock corrections waiting for an admin, those already settled, and proofs of sale payments for a director to confirm.">
+    <PageShell title="Approvals" subtitle="Overview">
       <PageTabs value={tab} onChange={setTab} tabs={[['pending', `Waiting (${waiting})`], ['settled', 'Settled'], ['payments', 'Payments']]} />
 
       {tab === 'payments' ? <PaymentProofsList branchId={branchId} inBranch={inBranch} directorView /> : <div className="card">

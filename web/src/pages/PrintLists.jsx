@@ -29,7 +29,7 @@ export default function PrintLists() {
 
   return (
     <PageShell title="Print lists" subtitle="Document Center"
-      description={branchId ? `Lists of ${branchName} to print or save as PDF.` : 'Pick a branch in the sidebar — each list is for one branch.'}>
+      description={branchId ? branchName : 'Pick a branch in the sidebar'}>
       <div className="flex items-center gap-8" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
         <span className="pl-label">Period for dated lists</span>
         <input type="date" className="form-input" style={{ width: 160 }} aria-label="From" max={to} value={from} onChange={e => setRange([e.target.value || from, to])} />

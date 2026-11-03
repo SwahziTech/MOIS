@@ -57,7 +57,7 @@ export default function DailyReport() {
 
   return (
     <PageShell title="Daily report" subtitle="Reports"
-      description={branchId ? `The day at ${branchName}: written from MOIS, checked against a written report, or uploaded and saved.` : 'Choose a branch to see its daily report.'}>
+      description={branchId ? branchName : 'Pick a branch in the sidebar'}>
       <PageTabs tabs={[['write', 'From MOIS'], ['compare', 'Compare a report'], ...(branchId && canAt('production.create', branchId, null) ? [['upload', 'Upload a report']] : [])]} value={tab} onChange={setTab} />
       {!branchId ? <div className="card"><EmptyState icon={FileText} title="Choose a branch" description="The daily report is one branch's day." /></div>
       : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>

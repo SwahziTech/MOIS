@@ -105,7 +105,6 @@ export default function UsersPage() {
     <PageShell
       title="Users"
       subtitle="Organization"
-      description="Who can sign in, their role and which branch or store it covers."
       primaryAction={canInvite && (
         <button type="button" className="btn btn-primary" onClick={() => { setNotice(''); setInviting(true); }}>
           <UserPlus size={14} /> Invite person

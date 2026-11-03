@@ -136,8 +136,7 @@ export default function ReviewQueue() {
   const cols = canResolve ? 3 : 2;
 
   return (
-    <PageShell title="Review queue" subtitle="Master Data"
-      description="Records with missing or uncertain data, and the standing name decisions imports follow.">
+    <PageShell title="Review queue" subtitle="Master Data">
       <PageTabs value={tab} onChange={k => setParams(k === 'decisions' ? { tab: 'decisions' } : {})}
         tabs={[['flags', `Open flags (${inView.length})`], ['decisions', 'Decisions']]} />
       {tab === 'decisions' ? <Decisions /> : <>

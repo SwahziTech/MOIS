@@ -80,7 +80,7 @@ export default function CashFlow() {
 
   return (
     <PageShell title={tab === 'monthly' ? 'Monthly' : 'Cash flow'} subtitle="Finance" onSettings={() => setSettings(true)}
-      description={`Money in and out by account — ${branchId ? branchName : 'all branches'}.`}>
+      description={branchId ? branchName : 'All branches'}>
       {tab !== 'monthly' && <PageTabs tabs={[['accounts', 'Accounts'], ['forecast', 'Forecast']]} value={tab} onChange={setTab} />}
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : accounts === null ? <div className="card"><span className="skeleton" /></div>

@@ -147,7 +147,6 @@ export default function Stock() {
     <PageShell
       title="Stock"
       subtitle="Inventory"
-      description="What's on hand, worked out from every recorded movement."
       actions={
         <label className="text-sm flex items-center gap-8" style={{ whiteSpace: 'nowrap' }}>
           Stock as of

@@ -159,8 +159,7 @@ export default function Sales() {
 
   return (
     <PageShell title={onInvoices ? 'Invoices' : 'Sales'} subtitle="Sales"
-      description={onInvoices ? `Quotations, orders and invoices${branchId ? ` at ${branchName}` : ' at every branch'}.`
-        : branchId ? `The sales book at ${branchName}: each sale, where the money went, and where the goods went.` : 'The sales book at every branch.'}
+      description={branchId ? branchName : 'All branches'}
       onSettings={() => setShowSettings(true)}
       actions={canSell && <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button>}
       primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>

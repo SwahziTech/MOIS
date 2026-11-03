@@ -198,7 +198,6 @@ export default function Materials() {
     <PageShell
       title="Materials"
       subtitle="Master Data"
-      description="Raw materials, the units they're counted and bought in, and which branch uses them."
       primaryAction={canAdd && (
         <button type="button" className="btn btn-primary"
           onClick={() => setEditing({ kind: { materials: 'material', categories: 'category', units: 'unit' }[tab], row: {} })}>

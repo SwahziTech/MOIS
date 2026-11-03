@@ -192,9 +192,7 @@ export default function Staff() {
     : [['attendance', 'Employees'], ['attcasual', 'Casuals']];
   return (
     <PageShell title={{ personnel: 'Personnel', attendance: 'Attendance', payroll: 'Payroll' }[page]} subtitle="HR" onSettings={() => setSettings(true)}
-      description={page === 'attendance' ? `Who worked each day${branchId ? ` at ${branchName}` : ' — choose a branch to mark attendance'}.`
-        : page === 'payroll' ? `Each pay period from attendance: pay, allowances, deductions and net${branchId ? ` at ${branchName}` : ''}.`
-        : branchId ? `Employees, casual labourers and teams at ${branchName}.` : 'Staff at every branch — choose a branch to add staff.'}
+      description={branchId ? branchName : 'All branches'}
       primaryAction={(tab === 'employed' || tab === 'casual') && canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({ kind: tab })}><Plus size={15} /> {tab === 'employed' ? 'New employee' : 'New casual'}</button>}>
       <PageTabs tabs={pageTabs} value={tab} onChange={t => { setTab(t); setSearch(''); }} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>

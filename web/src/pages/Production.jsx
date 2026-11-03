@@ -165,9 +165,7 @@ export default function Production() {
   const page = current === 'planner' ? 'planner' : current === 'variance' ? 'variance' : 'production';
   return (
     <PageShell title={{ production: 'Production', planner: 'Planner', variance: 'Material variance' }[page]} subtitle="Production" onSettings={() => setShowSettings(true)}
-      description={page === 'planner' ? `Production orders and capacity${branchId ? ` at ${branchName}` : ''}: what to make next.`
-        : page === 'variance' ? 'Materials taken against what the recipes needed, batch by batch.'
-        : branchId ? `Batches cast at ${branchName}: materials used, pieces cast, curing and quality release.` : 'Batches cast at every branch — pick a branch in the sidebar to log batches.'}>
+      description={branchId ? branchName : 'All branches'}>
       {page === 'production' && <PageTabs value={current} onChange={setTab} tabs={[
         ...(canRecord ? [['log', 'Production']] : []),
         ['curing', `Curing (${curing.length})`],

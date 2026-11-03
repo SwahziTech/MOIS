@@ -163,7 +163,7 @@ export default function Reports() {
 
   return (
     <PageShell title="Reports" subtitle="Reports"
-      description={`Production, sales, spending, materials, profit and branches — ${where}.`}>
+      description={where.charAt(0).toUpperCase() + where.slice(1)}>
       <PageTabs tabs={TABS} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>

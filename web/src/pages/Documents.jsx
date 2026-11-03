@@ -50,7 +50,7 @@ export default function Documents() {
 
   return (
     <PageShell title="Documents" subtitle="Document Center"
-      description={`Find and print any invoice, receipt, delivery note, goods received note, purchase order or payslip — ${branchId ? branchName : 'all branches'}.`}>
+      description={branchId ? branchName : 'All branches'}>
       {tabs.length > 1 && <PageTabs tabs={tabs} value={tab} onChange={t => { setTab(t); setSearch(''); }} />}
       {tabs.length === 0 ? <div className="card"><EmptyState icon={FileText} title="No documents for you" description="Your role doesn't open sales, purchasing or payroll." /></div> : (
         <>

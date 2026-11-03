@@ -65,7 +65,7 @@ export default function Customers() {
   const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
 
   return (
-    <PageShell title="Customers" subtitle="Sales & Costing" description="Customers shared by every branch, what each owes and for how long, their history and statements."
+    <PageShell title="Customers" subtitle="Sales & Costing"
       primaryAction={canEdit && tab === 'customers' && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={15} /> New customer</button>}>
       <PageTabs tabs={[['customers', 'Customers'], ['leads', 'Leads'], ['owing', `Statements & aging${owing.length ? ` (${owing.length})` : ''}`]]} value={tab} onChange={setTab} />
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (

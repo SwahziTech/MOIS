@@ -156,7 +156,6 @@ export default function Pricing() {
     <PageShell
       title="Pricing"
       subtitle="Master Data"
-      description="Each branch's prices incl. VAT, and how other colours are priced per category."
     >
       <PageTabs value={tab} onChange={setTab} tabs={[['prices', 'Product prices'], ['colours', 'Colour pricing']]} />
       {tab === 'prices' && (

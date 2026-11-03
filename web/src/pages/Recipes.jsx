@@ -132,7 +132,6 @@ export default function Recipes() {
     <PageShell
       title="Recipes / BOM"
       subtitle="Master Data"
-      description="Each branch's mix per category and colour — saved versions are kept, never edited."
       primaryAction={canWrite ? (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({ recipe: null })}>
           <Plus size={14} /> New Recipe
