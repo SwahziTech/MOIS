@@ -51,6 +51,19 @@ export default function Sales() {
   const [view, setView] = useUrlTab('book');      // book | list | deliveries | overview (the book first — 2026-10-26); list = the sidebar's Invoices
   const [accounts, setAccounts] = useState([]);   // receiving accounts (067)
   const [showSettings, setShowSettings] = useState(false);
+  // sales typed from an uploaded sales book (Daily report › Upload a report, 2026-11-03): each opens
+  // in Record sale in turn; the place reached is kept on this tab, so closing or a refresh carries on
+  const uploadKey = `mois.upload.sales.${organization?.id}.${branchId}`;
+  const [upload, setUpload] = useState(null);   // { at, sales }
+  const openUpload = q => setEditing({ book: true, upload: true, at: q.at, prefill: q.sales[q.at] });
+  function stepUpload() {
+    const q = { ...upload, at: upload.at + 1 };
+    if (q.at >= q.sales.length) { try { sessionStorage.removeItem(uploadKey); } catch { /* ignore */ } setUpload(null); return null; }
+    try { sessionStorage.setItem(uploadKey, JSON.stringify(q)); } catch { /* ignore */ }
+    setUpload(q);
+    return q;
+  }
+  function stopUpload() { try { sessionStorage.removeItem(uploadKey); } catch { /* ignore */ } setUpload(null); }
 
   async function load() {
     setError('');
@@ -100,6 +113,15 @@ export default function Sales() {
   }, [sales, search, stage, branchId, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSell = branchId && canAt('sales.create', branchId, null);
+  useEffect(() => {
+    if (!organization?.id || !branchId || !refs || !canSell) return;
+    let q = null;
+    try { q = JSON.parse(sessionStorage.getItem(uploadKey) || 'null'); } catch { /* ignore */ }
+    if (!q?.sales?.length || q.at >= q.sales.length) { setUpload(null); return; }
+    setUpload(q);
+    setView('book');
+    openUpload(q);
+  }, [uploadKey, !!refs, canSell]); // eslint-disable-line react-hooks/exhaustive-deps
   // what sells most at the branch (sale lines, last 90 days) — the product search lists it first (2026-10-26)
   const soldCount = useMemo(() => {
     const since = new Date(new Date(`${today}T00:00:00Z`).getTime() - 90 * 864e5).toISOString().slice(0, 10);
@@ -138,6 +160,12 @@ export default function Sales() {
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
           {salesTabs}
+          {upload && !editing && (
+            <div className="alert alert-info" role="note">Uploaded sales book: sale {upload.at + 1} of {upload.sales.length} is waiting.
+              {' '}<button type="button" className="btn btn-primary btn-sm" onClick={() => openUpload(upload)}>Continue</button>
+              {' '}<button type="button" className="btn btn-outline btn-sm" onClick={() => { const q = stepUpload(); if (q) openUpload(q); }}>Skip this sale</button>
+              {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={stopUpload}>Stop</button></div>
+          )}
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
             refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
           {view === 'deliveries' && <DeliveriesPanel branchId={branchId} inBranch={inBranch} canAct={!!canSell} today={today} search={search} />}
@@ -179,11 +207,13 @@ export default function Sales() {
       )}
 
       {editing && refs && (
-        <SaleEditor sale={editing.id ? editing : null} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
+        <SaleEditor key={editing.upload ? `upload-${editing.at}` : 'edit'} sale={editing.id ? editing : null} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
           onClose={() => setEditing(null)} onSaved={async id => {
             // a quotation made for a lead: the lead points to it and is quoted (095)
             if (editing.leadId && id) await supabase.from('leads').update({ sale_id: id, stage: 'quoted' }).eq('id', editing.leadId);
+            // an uploaded sale saved: the next one opens
+            if (editing.upload) { const q = stepUpload(); setEditing(null); await load(); if (q) openUpload(q); return; }
             setEditing(null); await load(); setViewing(id);
           }} />
       )}
@@ -206,8 +236,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id || prefill?.customer_id ? 'customer' : 'walkin');
   const [customerId, setCustomerId] = useState(sale?.customer_id ?? prefill?.customer_id ?? '');
-  const [walkName, setWalkName] = useState(sale?.walk_in_name ?? '');
-  const [walkPhone, setWalkPhone] = useState(sale?.walk_in_phone ?? '');
+  const [walkName, setWalkName] = useState(sale?.walk_in_name ?? prefill?.walk_in_name ?? '');
+  const [walkPhone, setWalkPhone] = useState(sale?.walk_in_phone ?? prefill?.walk_in_phone ?? '');
   const [newCust, setNewCust] = useState(null);   // { name, phone, tin } while adding one
   const [promote, setPromote] = useState(null);   // { name, phone, tin, address } — a walk-in buyer's third purchase (069)
   const digits = v => (v || '').replace(/\D/g, '');
@@ -218,18 +248,21 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     if (field === 'name') setWalkName(v); else setWalkPhone(v);
     if (w) { setWalkName(w.name); setWalkPhone(w.phone); if (!site && w.site) setSite(w.site); }
   }
-  const [date, setDate] = useState(sale?.sale_date ?? today);
+  const [date, setDate] = useState(sale?.sale_date ?? prefill?.sale_date ?? today);
   const [validUntil, setValidUntil] = useState(sale?.valid_until ?? '');
   const [notes, setNotes] = useState(sale?.notes ?? prefill?.notes ?? '');
   const [site, setSite] = useState(sale?.site ?? prefill?.site ?? '');
-  const [efd, setEfd] = useState('');
+  const [efd, setEfd] = useState(prefill?.efd_receipt_no ?? '');
   const activeAccounts = accounts.filter(a => a.status === 'active');
-  const [pays, setPays] = useState([{ accountId: '', amount: '', receiptNo: '', auto: true }]);   // auto: follows the total until typed
+  const [pays, setPays] = useState(() => (prefill?.payments?.length
+    ? prefill.payments.map(x => ({ accountId: x.accountId || '', amount: x.amount ?? '', receiptNo: x.receiptNo || '', auto: false }))
+    : [{ accountId: '', amount: '', receiptNo: '', auto: true }]));   // auto: follows the total until typed
   const [payMode, setPayMode] = useState('order');    // order: one payment for the whole order | items: one per item (070)
   const [itemPays, setItemPays] = useState({});       // line index → { accountId, amount, receiptNo }
-  const [lines, setLines] = useState(() => (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({
+  const [lines, setLines] = useState(() => (!sale && prefill?.lines ? prefill.lines.map(l => ({ productId: l.productId, colorId: l.colorId ?? '', quantity: l.quantity, price: l.price ?? '', reason: '' }))
+    : (sale?.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({
     productId: l.product_id, colorId: l.color_id ?? '', quantity: String(+l.quantity),
-    price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' })));
+    price: Number(l.price) !== Number(l.list_price) ? String(r2(Number(l.price) * (1 + Number(l.vat_rate) / 100))) : '', reason: l.discount_reason ?? '' }))));
   const [prices, setPrices] = useState({});        // `${product}|${colour}` → { ex, rate, source }
   const [listPrices, setListPrices] = useState({}); // product id → the price list's prices as the customer pays them (the picker)
   const [avail, setAvail] = useState({});          // `${product}|${colour}` → available
@@ -376,6 +409,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
       </>}>
       <div className="modal-form">
+        {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner} Check it, then Record sale.</div>}
         <div className="flex items-center gap-8" role="group" aria-label="Buyer">
           <button type="button" className={`filter-chip${buyer === 'walkin' ? ' is-on' : ''}`} onClick={() => setBuyer('walkin')}>Walk-in buyer</button>
           <button type="button" className={`filter-chip${buyer === 'customer' ? ' is-on' : ''}`} onClick={() => setBuyer('customer')}>Customer</button>

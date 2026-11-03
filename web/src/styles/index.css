@@ -2522,3 +2522,12 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .ru-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .ru-actions .pl-help { margin-right: auto; }
 .ru-kept { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ru-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.ru-thumb { position: relative; }
+.ru-thumb-x { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--bg-surface); color: var(--text-secondary); cursor: pointer; line-height: 1; }
+.ru-grid td { padding: 4px; }
+.ru-grid td .form-input { min-width: 90px; padding: 4px 6px; }
+.ru-grid td .form-input.num { min-width: 70px; max-width: 110px; }
+.ru-grid td input[type=date] { min-width: 130px; }
+.ru-same { color: var(--text-muted); font-size: var(--text-xs); }
+.ru-grid-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

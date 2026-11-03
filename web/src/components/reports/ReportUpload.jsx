@@ -8,6 +8,7 @@ import { formatAmount, dateText, tableDate } from '../../lib/format';
 import { loadDayFacts, readReport, bestMatch, words } from '../../lib/dailyReport';
 import { useProductionLists } from '../production/BatchNotes';
 import NumberInput from '../NumberInput';
+import SalesUpload from './SalesUpload';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(String(v).replace(/,/g, '')));
 const KINDS = [['production', 'Production report'], ['sales', 'Sales sheet'], ['stock', 'Stock count'], ['past_sales', 'Past sales']];
@@ -22,7 +23,9 @@ const KINDS = [['production', 'Production report'], ['sales', 'Sales sheet'], ['
  * is. Saving keeps the photo and text, records the meter readings, and hands
  * the batches to Production, where each goes through the usual form — recipe,
  * stock and yield checks — before the day is saved.
- * Production report only for now; sales, stock count and past sales follow.
+ * Sales sheet and past sales (2026-11-03): a typing grid beside the pages,
+ * handed to Sales › Record sale one sale at a time (components/reports/SalesUpload).
+ * Stock count follows.
  */
 export default function ReportUpload({ refs, branchId, branchName, today }) {
   const { organization, canAt } = useAuth();
@@ -30,8 +33,8 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
   const [lists] = useProductionLists(branchId);
   const [kind, setKind] = useState('production');
   const [date, setDate] = useState(today);
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState('');
+  const [salesStats, setSalesStats] = useState(null);   // the sales grid's summary, shown in the summary cards
+  const [files, setFiles] = useState([]);       // [{ file, preview }] — the pages, kept with the day
   const [text, setText] = useState('');
   const [read, setRead] = useState(null);       // { batches, meters, cementStore } once read
   const [facts, setFacts] = useState(null);     // what MOIS holds for the day
@@ -67,16 +70,32 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
     setKept(err ? [] : data || []);
   }
   useEffect(() => { loadDay(); }, [branchId, date]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => () => files.forEach(x => x.preview && URL.revokeObjectURL(x.preview)), [files]);
 
-  function pickFile(e) {
-    const f = e.target.files?.[0];
+  function pickFiles(e) {
+    const picked = [...(e.target.files || [])];
     e.target.value = '';
-    if (!f) return;
-    if (f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; }
+    if (!picked.length) return;
+    if (picked.some(f => f.size > 10 * 1024 * 1024)) { setError('A file is over 10 MB. Take the photo again at a smaller size.'); return; }
     setError('');
-    setFile(f);
-    setPreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : '');
+    setFiles(fs => [...fs, ...picked.map(f => ({ file: f, preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : '' }))]);
+  }
+  // the pages and the text, kept with the branch and day (103)
+  async function keep(reportKind, reportText) {
+    const at = Date.now();
+    const rows = [];
+    for (const [i, { file }] of files.entries()) {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const path = `${organization.id}/${branchId}/${date}/${at}-${i + 1}.${ext}`;
+      const up = await supabase.storage.from('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (up.error) throw up.error;
+      rows.push({ file_path: path, file_name: file.name });
+    }
+    if (!rows.length && reportText) rows.push({});
+    for (const [i, r] of rows.entries()) {
+      const { error: err } = await supabase.rpc('record_report_upload', { p: { branch_id: branchId, report_date: date, kind: reportKind, ...r, report_text: i === 0 ? reportText || null : null } });
+      if (err) throw err;
+    }
   }
 
   // a written colour in the product's line ("TOFALI 5 RED") → that colour, if the product comes in it
@@ -143,18 +162,8 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
     if (toType) { setError(`Fill the ${toType} red box${toType === 1 ? '' : 'es'} first.`); return; }
     setBusy(true);
     try {
-      // 1. the photo and the text, kept with the day
-      let path = null;
-      if (file) {
-        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-        path = `${organization.id}/${branchId}/${date}/${Date.now()}.${ext}`;
-        const up = await supabase.storage.from('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
-        if (up.error) throw up.error;
-      }
-      if (path || text.trim()) {
-        const { error: err } = await supabase.rpc('record_report_upload', { p: { branch_id: branchId, report_date: date, kind, file_path: path, file_name: file?.name ?? null, report_text: text.trim() || null } });
-        if (err) throw err;
-      }
+      // 1. the photos and the text, kept with the day
+      await keep('production', text.trim());
       // 2. meter readings not yet in MOIS
       const readings = read.meters.filter(m => m.meterId).flatMap(m => ['morning', 'evening']
         .filter(s => num(m[s]) != null && had(m.meterId, s) == null).map(s => ({ meter_id: m.meterId, slot: s, reading: num(m[s]) })));
@@ -177,7 +186,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
         navigate('/production?tab=log');
         return;
       }
-      setRead(null); setText(''); setFile(null); setPreview(''); setTried(false);
+      setRead(null); setText(''); setFiles([]); setTried(false);
       await loadDay();
     } catch (e) {
       setError(dbErrorMessage(e, "We couldn't save the report. Please try again."));
@@ -196,35 +205,48 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
   const pieces = read ? read.batches.reduce((t, b) => t + (num(b.pieces) || 0) + b.leftovers.reduce((s, l) => s + (num(l.pieces) || 0), 0), 0) : 0;
   return (
     <>
-      <div className="mm-stats">
+      {kind === 'production' && <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Read</span><strong>{read ? `${nBatches} batch${nBatches === 1 ? '' : 'es'}` : '—'}</strong><span className="pl-help">{read ? `${formatAmount(pieces)} pcs · ${read.meters.length} meter${read.meters.length === 1 ? '' : 's'}` : 'paste the report, then Read'}</span></div>
         <div className="mm-stat"><span className="pl-label">To type</span><strong className={toType ? 'text-warning' : ''}>{read ? toType : '—'}</strong><span className="pl-help">details the report doesn't hold</span></div>
         <div className="mm-stat"><span className="pl-label">Already in MOIS</span><strong className={already ? 'text-warning' : ''}>{facts ? `${formatAmount(already)} pcs` : '…'}</strong><span className="pl-help">for {tableDate(date)}{kept.length ? ` · ${kept.length} upload${kept.length === 1 ? '' : 's'} kept` : ''}</span></div>
-      </div>
+      </div>}
+      {kind !== 'production' && kind !== 'stock' && <div className="mm-stats">
+        <div className="mm-stat"><span className="pl-label">Sales</span><strong>{salesStats?.sales ?? 0}</strong><span className="pl-help">{salesStats ? `${salesStats.rows} row${salesStats.rows === 1 ? '' : 's'}${salesStats.span ? ` · ${salesStats.span}` : ''}` : 'type the rows below'}</span></div>
+        <div className="mm-stat"><span className="pl-label">Value</span><strong>Tsh {formatAmount(salesStats?.value ?? 0)}</strong><span className="pl-help">paid Tsh {formatAmount(salesStats?.paid ?? 0)}</span></div>
+        <div className="mm-stat"><span className="pl-label">To type</span><strong className={salesStats?.toType ? 'text-warning' : ''}>{salesStats?.toType ?? 0}</strong><span className="pl-help">red boxes</span></div>
+      </div>}
 
       <div className="filter-chips" style={{ margin: '12px 0 8px' }}>
         {KINDS.map(([k, label]) => (
           <button key={k} type="button" className={`filter-chip${kind === k ? ' is-on' : ''}`} onClick={() => setKind(k)}
-            title={k === 'production' ? undefined : 'Coming next'}>{label}{k === 'production' ? '' : ' · soon'}</button>
+            title={k === 'stock' ? 'Coming next' : undefined}>{label}{k === 'stock' ? ' · soon' : ''}</button>
         ))}
       </div>
 
-      {kind !== 'production' ? (
-        <div className="card"><div className="card-body"><p className="text-sm">{KINDS.find(x => x[0] === kind)[1]} uploads come next, the same way: the photo is read, you type what's missing, then save.</p></div></div>
+      <div className="card ru-file"><div className="card-body">
+        <div className="ru-thumbs">
+          {files.length ? files.map((x, i) => (
+            <div key={i} className="ru-thumb" title={x.file.name}>{x.preview ? <img src={x.preview} alt={`Page ${i + 1}`} /> : <FileImage size={24} aria-hidden="true" />}
+              <button type="button" className="ru-thumb-x" aria-label={`Remove page ${i + 1}`} onClick={() => setFiles(fs => fs.filter((_, j) => j !== i))}>×</button></div>
+          )) : <div className="ru-thumb"><FileImage size={28} aria-hidden="true" /></div>}
+        </div>
+        <div className="ru-file-info">
+          <strong>{files.length ? `${files.length} page${files.length === 1 ? '' : 's'}` : 'No photo yet'}</strong>
+          <span className="pl-help">{files.length ? 'Kept with the day when you save.' : kind === 'production' ? 'A photo or PDF of the report. Reading it by AI comes later; for now paste the text below too.' : 'Photos of the sales book. Reading them by AI comes later; for now type the rows below while looking at them.'}</span>
+          <label className="pe-field" style={{ maxWidth: 200, marginTop: 8 }}><span>{kind === 'past_sales' ? 'Day the pages were uploaded' : 'Day of the report'}</span>
+            <input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value || today)} /></label>
+          {kind === 'production' && read?.readDate && read.readDate !== date && <span className="pl-help text-warning">The report says {dateText(read.readDate)}.</span>}
+        </div>
+        <label className="btn btn-outline btn-sm"><Upload size={14} /> {files.length ? 'Add page' : 'Choose photo or PDF'}
+          <input type="file" accept="image/*,application/pdf" multiple hidden onChange={pickFiles} /></label>
+      </div></div>
+
+      {kind === 'stock' ? (
+        <div className="card"><div className="card-body"><p className="text-sm">Stock count uploads come next, the same way: the sheet is read, you type what's missing, then it goes to the normal stock count.</p></div></div>
+      ) : kind !== 'production' ? (
+        <SalesUpload key={kind} refs={refs} branchId={branchId} today={today} day={date} past={kind === 'past_sales'} keep={keep} onStats={setSalesStats} />
       ) : (
         <>
-          <div className="card ru-file"><div className="card-body">
-            <div className="ru-thumb">{preview ? <img src={preview} alt="The report" /> : <FileImage size={28} aria-hidden="true" />}</div>
-            <div className="ru-file-info">
-              <strong>{file ? file.name : 'No photo yet'}</strong>
-              <span className="pl-help">{file ? 'Kept with the day when you save.' : 'A photo or PDF of the report. Reading it by AI comes later; for now paste the text below too.'}</span>
-              <label className="pe-field" style={{ maxWidth: 200, marginTop: 8 }}><span>Day of the report</span>
-                <input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value || today)} /></label>
-              {read?.readDate && read.readDate !== date && <span className="pl-help text-warning">The report says {dateText(read.readDate)}.</span>}
-            </div>
-            <label className="btn btn-outline btn-sm"><Upload size={14} /> {file ? 'Replace photo' : 'Choose photo or PDF'}
-              <input type="file" accept="image/*,application/pdf" hidden onChange={pickFile} /></label>
-          </div></div>
 
           <div className="card"><div className="card-body">
             <label className="pe-field"><span>The report's text (as sent on WhatsApp)</span>
