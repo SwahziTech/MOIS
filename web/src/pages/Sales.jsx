@@ -1197,6 +1197,7 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
   const [lines, setLines] = useState(() => [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no)
     .map(l => ({ l, quantity: String(+l.quantity), price: String(inc(l)), remove: false, done: doneOf(l.id) })));
   const [pays, setPays] = useState(() => (sale.payments || []).map(pm => ({ pm, amount: String(+pm.amount), account_id: pm.account_id ?? '', paid_on: pm.paid_on, receipt_no: pm.receipt_no ?? '', remove: false })));
+  const [added, setAdded] = useState([]);   // other items added by the correction (104): { name, price }
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1213,6 +1214,8 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
     const lc = lines.filter(x => x.remove || num(x.quantity) !== Number(x.l.quantity) || num(x.price) !== inc(x.l))
       .map(x => (x.remove ? { id: x.l.id, remove: true }
         : { id: x.l.id, product_id: x.l.product_id, color_id: x.l.color_id, quantity: num(x.quantity), price: num(x.price) }));   // the price charged a unit (069)
+    if (added.some(a => !a.name.trim() || !(num(a.price) > 0))) { setError('Write what each added item is, and its price.'); return; }
+    lc.push(...added.map(a => ({ item_name: a.name.trim(), price: num(a.price) })));
     if (lc.length) ch.lines = lc;
     const pc = pays.filter(x => x.remove || num(x.amount) !== Number(x.pm.amount) || x.account_id !== (x.pm.account_id ?? '') || x.paid_on !== x.pm.paid_on || x.receipt_no !== (x.pm.receipt_no ?? ''))
       .map(x => (x.remove ? { id: x.pm.id, remove: true } : { id: x.pm.id, amount: num(x.amount), ...(x.account_id ? { account_id: x.account_id } : {}), paid_on: x.paid_on, receipt_no: x.receipt_no }));
@@ -1253,15 +1256,25 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
           <tbody>{lines.map((x, i) => (
             <tr key={x.l.id} className={x.remove ? 'text-muted' : ''}>
               <td><strong>{x.l.product_id ? refs.items[`p:${x.l.product_id}`]?.name : x.l.item_name}{x.l.color_id ? ` ${refs.colorById[x.l.color_id]?.name ?? ''}` : ''}</strong></td>
-              <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} disabled={x.remove} value={x.quantity}
-                onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {per(x.l.product_id)}</td>
+              <td style={{ textAlign: 'right' }}>{x.l.product_id ? <><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} disabled={x.remove} value={x.quantity}
+                onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, quantity: e.target.value } : y)))} /> {per(x.l.product_id)}</> : <span className="pl-help">other item</span>}</td>
               <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} disabled={x.remove} value={x.price}
                 onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)))} /></td>
               <td className="pl-help">{x.done > 0 ? `${qtyText(x.done)} ${per(x.l.product_id)} delivered — can't go below` : 'none'}</td>
               <td>{x.done === 0 && <label className="text-xs flex items-center gap-4"><input type="checkbox" checked={x.remove} onChange={e => setLines(ls => ls.map((y, j) => (j === i ? { ...y, remove: e.target.checked } : y)))} /> remove</label>}</td>
             </tr>
+          ))}
+          {added.map((a, i) => (
+            <tr key={`add${i}`} className="sl-other">
+              <td><input className="form-input" placeholder="What is it? e.g. vipande" aria-label="Other item" value={a.name} onChange={e => setAdded(as => as.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)))} /></td>
+              <td style={{ textAlign: 'right' }}><span className="pl-help">other item</span></td>
+              <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} placeholder="Price" aria-label="Other item price" value={a.price} onChange={e => setAdded(as => as.map((y, j) => (j === i ? { ...y, price: e.target.value } : y)))} /></td>
+              <td className="pl-help">no stock, no VAT</td>
+              <td><button type="button" className="icon-btn" aria-label="Remove added item" onClick={() => setAdded(as => as.filter((_, j) => j !== i))}><Trash2 size={14} /></button></td>
+            </tr>
           ))}</tbody>
         </table>
+        <div><button type="button" className="btn btn-outline btn-sm" onClick={() => setAdded(as => [...as, { name: '', price: '' }])}><Plus size={13} /> Add other item</button></div>
         {pays.length > 0 && (
           <table className="rd-table">
             <thead><tr><th>Payment</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into</th><th>Date</th><th>Receipt no.</th><th /></tr></thead>
