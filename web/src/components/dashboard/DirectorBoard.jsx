@@ -11,24 +11,29 @@ import ErrorState from '../ErrorState';
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
 const BY_HEAD = { day: 'Date', week: 'Week', month: 'Month' };
-const DROPDOWN = [['Weekly', [['week', 'This week'], ['lastweek', 'Last week']]], ['Monthly', [['month', 'This month'], ['lastmonth', 'Last month']]],
+const DROPDOWN = [['Monthly', [['month', 'This month'], ['lastmonth', 'Last month']]],
   ['Quarterly', [['quarter', 'This quarter'], ['lastquarter', 'Last quarter']]], ['Yearly', [['year', 'This year'], ['lastyear', 'Last year']]]];
 const LAST_OF = { week: 'lastweek', month: 'lastmonth', quarter: 'lastquarter', year: 'lastyear' };
 
-/* Arrows through today → each day back to Monday → last week → last month; the date; the period dropdown */
-function PeriodBar({ period, periodKey, setPeriodKey, today }) {
+/* Arrows through today → each day back to Monday → last week → last month; the date; the period dropdown.
+   Opens on this week (user, 2026-11-03); the dropdown offers this week, its days (today, yesterday … Monday) and last week first */
+function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
   const steps = useMemo(() => periodSteps(today), [today]);
   const at = steps.indexOf(periodKey);
   const earlier = at >= 0 ? steps[at + 1] : LAST_OF[periodKey];
-  const later = at >= 0 ? steps[at - 1] : Object.keys(LAST_OF).find(k => LAST_OF[k] === periodKey) ?? 'today';
-  const isDay = !DROPDOWN.some(([, o]) => o.some(([k]) => k === periodKey));
+  const later = at >= 0 ? steps[at - 1] : Object.keys(LAST_OF).find(k => LAST_OF[k] === periodKey) ?? (periodKey === 'week' ? null : 'today');
+  const days = periods.filter(p => steps.includes(p.key) && p.key !== 'lastweek' && p.key !== 'lastmonth');
   return (
     <div className="dd-period">
       <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
       <span><strong>{period.label}</strong> · {period.note}</span>
-      <select className="form-input dd-select" aria-label="Period" value={isDay ? 'today' : periodKey} onChange={e => setPeriodKey(e.target.value)}>
-        <option value="today">Day</option>
+      <select className="form-input dd-select" aria-label="Period" value={periodKey} onChange={e => setPeriodKey(e.target.value)}>
+        <optgroup label="Weekly">
+          <option value="week">This week</option>
+          {days.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+          <option value="lastweek">Last week</option>
+        </optgroup>
         {DROPDOWN.map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
       </select>
     </div>
@@ -69,7 +74,7 @@ export default function DirectorBoard() {
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
-  const [periodKey, setPeriodKey] = useState('today');
+  const [periodKey, setPeriodKey] = useState('week');
   const periods = useMemo(() => periodsFor(today), [today]);
   const period = periods.find(p => p.key === periodKey);
 
@@ -87,7 +92,7 @@ export default function DirectorBoard() {
   const open = card => setParams(p => { const n = new URLSearchParams(p); n.set('card', card); return n; });
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
-  const bar = <PeriodBar period={period} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
+  const bar = <PeriodBar period={period} periods={periods} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
   if (openCard && d.money) return <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} />;
 
   const { needs, money, curing } = d;

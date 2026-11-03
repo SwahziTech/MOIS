@@ -50,7 +50,7 @@ export function periodsFor(today) {
   const lastYear = String(Number(year) - 1);
   const earlier = Array.from({ length: Math.max(daysSinceMonday(today) - 1, 0) }, (_, i) => {
     const d = dayShift(today, -(i + 2));
-    return { key: `day-${i + 2}`, label: `${i + 2} days ago`, note: dateText(d), from: d, to: d, compare: { from: dayShift(d, -1), to: dayShift(d, -1), label: 'the day before' } };
+    return { key: `day-${i + 2}`, label: utc(d).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }), note: dateText(d), from: d, to: d, compare: { from: dayShift(d, -1), to: dayShift(d, -1), label: 'the day before' } };
   });
   return [
     { key: 'today', label: 'Today', note: dateText(today), from: today, to: today, compare: { from: y, to: y, label: 'yesterday' } },
