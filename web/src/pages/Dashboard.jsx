@@ -12,6 +12,7 @@ import PageShell from '../components/PageShell';
 import { useUrlTab } from '../lib/urlTab';
 import { PageTabs } from '../components/ListControls';
 import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
+import { ProofReminder } from '../components/sales/PaymentProofs';
 import DirectorBoard from '../components/dashboard/DirectorBoard';
 import { primaryRole } from '../lib/menu';
 
@@ -140,6 +141,7 @@ function RoleDashboard({ isOwner }) {
       <PageTabs tabs={tabs} value={shown} onChange={setTab} />
       {/* today's jobs first: the meters read morning and evening (secretary, branch manager) */}
       <MeterReadingsTask branchId={branchId} />
+      <ProofReminder branchId={branchId} inBranch={inBranch} />
       {error && <div className="alert alert-error mb-16" role="alert">{error}</div>}
 
       {shown === 'director' ? <DirectorBoard />

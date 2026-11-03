@@ -2542,3 +2542,10 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .page-back { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .page-back:hover { color: var(--text-primary); border-color: var(--border-strong); }
 .sl-other td { background: var(--bg-soft); }
+/* Proof of payment (105) */
+.pp-reminder { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pp-reminder > span { flex: 1; min-width: 200px; }
+.pp-photo { max-width: 100%; max-height: 420px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+.pp-sms { white-space: pre-wrap; font-family: var(--font-body); font-size: var(--text-sm); background: var(--bg-soft); border-radius: var(--radius-md); padding: 10px; margin: 0; }
+.ru-file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sb-approval { margin-top: 4px; font-size: var(--text-xs); }

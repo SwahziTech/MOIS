@@ -3,6 +3,7 @@ import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
+import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs } from '../components/sales/PaymentProofs';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -51,6 +52,7 @@ export default function Sales() {
   const [viewing, setViewing] = useState(null);   // a sale id
   const [view, setView] = useUrlTab('book');      // book | list | deliveries | overview (the book first — 2026-10-26); list = the sidebar's Invoices
   const [accounts, setAccounts] = useState([]);   // receiving accounts (067)
+  const [proofs, setProofs] = useState({});       // payment id → its proof (105)
   const [showSettings, setShowSettings] = useState(false);
   // sales typed from an uploaded sales book (Daily report › Upload a report, 2026-11-03): each opens
   // in Record sale in turn; the place reached is kept on this tab, so closing or a refresh carries on
@@ -81,6 +83,7 @@ export default function Sales() {
         supabase.from('customers').select('*').order('name'),
       ]);
       const ac = await supabase.from('payment_accounts').select('*').order('display_order').order('name');
+      setProofs(await loadProofs());
       setAccounts(ac.error ? [] : ac.data || []);
       if (s.error) throw s.error;
       setRefs(r);
@@ -152,7 +155,7 @@ export default function Sales() {
   // page order (locked): heading → summary cards → these tabs → search/filters → list
   // the sidebar shows this page twice (2026-10-30): Sales (book, deliveries, overview) and Invoices (the quotations & invoices list)
   const onInvoices = view === 'list';
-  const salesTabs = !onInvoices && <PageTabs tabs={[['book', 'Sales book'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
+  const salesTabs = !onInvoices && <PageTabs tabs={[['book', 'Sales book'], ['receipts', 'Receipts'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title={onInvoices ? 'Invoices' : 'Sales'} subtitle="Sales"
@@ -171,7 +174,8 @@ export default function Sales() {
               {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={stopUpload}>Stop</button></div>
           )}
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
-            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} onOpen={id => setViewing(id)} />}
+            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} proofs={proofs} onOpen={id => setViewing(id)} />}
+          {view === 'receipts' && <PaymentProofsList branchId={branchId} inBranch={inBranch} directorView={!canSell && canAt('sales.confirm_payments', branchId, null)} />}
           {view === 'deliveries' && <DeliveriesPanel branchId={branchId} inBranch={inBranch} canAct={!!canSell} today={today} search={search} />}
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} />}
           {view === 'list' && <>
@@ -223,7 +227,7 @@ export default function Sales() {
           }} />
       )}
       {open && refs && !editing && (
-        <SaleView sale={open} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
+        <SaleView sale={open} proofs={proofs} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
           onEdit={() => setEditing(open)} onClose={() => setViewing(null)} onChanged={load} />
       )}
       {showSettings && <SalesSettings onClose={() => { setShowSettings(false); load(); }} />}
@@ -605,7 +609,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
 }
 
 /** One sale: its lines and totals, payments, and what can be done next */
-function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
+function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
+  const [proofFor, setProofFor] = useState(null);    // a payment getting its proof (105)
+  const [reviewFor, setReviewFor] = useState(null);  // a payment a director checks
   const [paying, setPaying] = useState(false);
   const [pay, setPay] = useState({ amount: '', method: 'cash', reference: '', paid_on: today, account_id: '', receipt_no: '', sale_line_id: '' });
   const activeAccounts = accounts.filter(a => a.status === 'active');
@@ -714,13 +720,20 @@ function SaleView({ sale, accounts = [], refs, buyer, customer, money, today, ca
               <table className="rd-table"><tbody>
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
                   <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · receipt ${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
-                    <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
+                    <td><ProofBadge state={proofState(p, proofs[p.id], today)} />{proofs[p.id]?.status === 'queried' && <div className="pl-help text-error">{proofs[p.id].note}</div>}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {proofs[p.id] && proofs[p.id].status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewFor(p)}>Check</button>}
+                      {proofs[p.id]?.status !== 'confirmed' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setProofFor(p)}>{proofs[p.id] ? 'Replace proof' : 'Add proof'}</button>}
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
                 ))}
               </tbody></table>
             )}
             <p className="pl-help">Goods leave up to the value paid: {money(r2(Math.max(paid - given, 0)))} can leave now.</p>
           </section>
         )}
+        {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
+        {reviewFor && <ReviewModal payment={reviewFor} sale={sale} proof={proofs[reviewFor.id]} buyer={buyer} account={accountName(reviewFor.account_id) ?? METHODS[reviewFor.method]} money={money}
+          onClose={() => setReviewFor(null)} onSaved={() => { setReviewFor(null); onChanged(); }} />}
         {deliveries.length > 0 && (
           <section>
             <h3 className="modal-section-title">Delivered · {money(r2(given))} of {money(Number(sale.total))}</h3>
@@ -1028,7 +1041,7 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
  * under the account that received it (on the sale's first row); receipt no.;
  * site. Click a row for the sale. Totals at the foot.
  */
-function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onOpen }) {
+function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, proofs = {}, onOpen }) {
   // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
   const cur = currency ? ` (${currency})` : '';
   // opened from a dashboard card: that card's period (?from=&to=&label=)
@@ -1121,7 +1134,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
             : rows.map(({ x, l, first, last, span, perItem, band, multi, shade, showDate }) => (
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
-                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}</td>}
+                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
+                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
                 <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>

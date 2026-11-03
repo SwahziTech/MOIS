@@ -3,6 +3,7 @@ import { CheckSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
+import { PaymentProofsList } from '../components/sales/PaymentProofs';
 import { dbErrorMessage } from '../lib/masterData';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
@@ -35,13 +36,13 @@ const STATUS_BADGE = { pending: 'badge-warning', approved: 'badge-success', reje
  */
 export default function Approvals() {
   const { session, canManage } = useAuth();
-  const { inBranch } = useBranch();
+  const { inBranch, branchId } = useBranch();
   const [rows,    setRows]    = useState([]);
   const [people,  setPeople]  = useState({});
   const [branches, setBranches] = useState({});
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [tab,     setTab]     = useState('pending');
+  const [tab,     setTab]     = useState(() => (new URLSearchParams(window.location.search).get('tab') === 'payments' ? 'payments' : 'pending'));
   const [busy,    setBusy]    = useState(null);
   const [notes,   setNotes]   = useState({});    // request id → admin's note
   const [rowError, setRowError] = useState({});  // request id → message
@@ -104,10 +105,10 @@ export default function Approvals() {
 
   return (
     <PageShell title="Approvals" subtitle="Overview"
-      description="Price changes and stock corrections waiting for an admin, and those already settled.">
-      <PageTabs value={tab} onChange={setTab} tabs={[['pending', `Waiting (${waiting})`], ['settled', 'Settled']]} />
+      description="Price changes and stock corrections waiting for an admin, those already settled, and proofs of sale payments for a director to confirm.">
+      <PageTabs value={tab} onChange={setTab} tabs={[['pending', `Waiting (${waiting})`], ['settled', 'Settled'], ['payments', 'Payments']]} />
 
-      <div className="card">
+      {tab === 'payments' ? <PaymentProofsList branchId={branchId} inBranch={inBranch} directorView /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
@@ -167,7 +168,7 @@ export default function Approvals() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
       {(() => {
         const r = rows.find(x => x.id === open);
         if (!r) return null;

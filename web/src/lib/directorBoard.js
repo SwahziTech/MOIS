@@ -77,16 +77,19 @@ export function periodSteps(today) {
 }
 
 async function loadNeeds({ inBranch, today }) {
-  const [ch, cr, ps, pr] = await Promise.all([
+  const [ch, cr, ps, pr, pp] = await Promise.all([
     supabase.from('pending_changes').select('branch_id').eq('status', 'pending'),
     supabase.from('cash_requests').select('branch_id').eq('status', 'with_directors'),
     supabase.from('pay_sheets').select('branch_id, status, period_end').in('status', ['draft', 'approved']),
     supabase.from('purchase_requests').select('branch_id').eq('status', 'waiting'),
+    // proofs of payment waiting for a director (105)
+    supabase.from('sale_payment_proofs').select('branch_id').eq('status', 'waiting'),
   ]);
   const pay = (ps.data || []).filter(x => inBranch(x.branch_id));
   return [
     { key: 'requests', count: (pr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'purchase requests waiting', to: '/purchases?tab=requests' },
     { key: 'cash', count: (cr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'weekly cash requests', to: '/weekly-cash' },
+    { key: 'proofs', count: (pp.data || []).filter(x => inBranch(x.branch_id)).length, label: 'payments to confirm', to: '/approvals?tab=payments' },
     { key: 'approvals', count: (ch.data || []).filter(x => !x.branch_id || inBranch(x.branch_id)).length, label: 'approvals waiting', to: '/approvals' },
     { key: 'pay-approve', count: pay.filter(x => x.status === 'draft' && x.period_end < today).length, label: 'pay sheets to approve', to: '/staff?tab=pay' },
     { key: 'pay-pay', count: pay.filter(x => x.status === 'approved').length, label: 'pay sheets to pay', to: '/staff?tab=pay' },
