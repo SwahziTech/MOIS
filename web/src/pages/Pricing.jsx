@@ -272,7 +272,7 @@ export default function Pricing() {
                                 {rule.items.length === 0 && <span className="text-muted">—</span>}
                               </div>
                             </td>
-                          </> : <td colSpan={3} className="text-muted">No colour pricing — colours other than the base have no price here.</td>}
+                          </> : <td colSpan={3} className="text-muted">No colour pricing.</td>}
                           {(canWrite || canProposeAt(b)) && (
                             <td style={{ textAlign: 'right' }}>
                               <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingRule({ category: cat, branch: b, rule })}>
@@ -439,7 +439,7 @@ function PriceModal({ product, branch, row, organization, usualVatRate, vatColum
     return (
       <Modal title={`${product.canonical_name} — ${branch.name}`} onClose={onClose}
         footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
-        <p className="text-sm">Sent for an admin's approval. The price changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+        <p className="text-sm">Sent for approval — see <strong>Approvals</strong>.</p>
       </Modal>
     );
   }
@@ -454,14 +454,14 @@ function PriceModal({ product, branch, row, organization, usualVatRate, vatColum
       </>}>
       <form id="price-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {viaApproval && <div className="alert alert-info" role="note">Price changes need an admin's approval: this is sent to the Approvals queue.</div>}
-        <p className="text-sm text-muted">Base price{product.unit?.symbol ? ` · stocked in ${product.unit.symbol}` : ''}{otherColours.length ? ". Other colours follow the category's colour pricing unless you set them below." : '.'}</p>
+        {viaApproval && <div className="alert alert-info" role="note">Needs approval.</div>}
+        <p className="text-sm text-muted">Base price{product.unit?.symbol ? ` · stocked in ${product.unit.symbol}` : ''}</p>
         <div className="flex items-center gap-8" role="group" aria-label="Price typed with or without VAT">
           <span className="text-sm">The price I type</span>
           <button type="button" className={`filter-chip${!exVat ? ' is-on' : ''}`} aria-pressed={!exVat} onClick={() => switchVat(false)}>includes VAT</button>
           <button type="button" className={`filter-chip${exVat ? ' is-on' : ''}`} aria-pressed={exVat} onClick={() => switchVat(true)}>excludes VAT</button>
         </div>
-        <p className="text-xs text-muted">{byArea ? 'Counted in m²: priced per m².' : 'Counted in pieces: priced per piece.'} The unit is set on the product (Products).</p>
+        <p className="text-xs text-muted">{byArea ? 'Per m²' : 'Per piece'} (set on the product).</p>
         {byArea ? (
           <div className="form-row">
             <div className="form-group">
@@ -611,7 +611,7 @@ function RuleModal({ category, branch, rule, organization, viaApproval, colourNa
     submitted ? (
       <Modal title={`${catLabel} — ${branch.name} colour pricing`} onClose={onClose}
         footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
-        <p className="text-sm">Sent for an admin's approval. The colour pricing changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+        <p className="text-sm">Sent for approval — see <strong>Approvals</strong>.</p>
       </Modal>
     ) :
     <Modal title={`${catLabel} — ${branch.name} colour pricing`} onClose={onClose}
@@ -623,7 +623,7 @@ function RuleModal({ category, branch, rule, organization, viaApproval, colourNa
       </>}>
       <form id="rule-form" className="modal-form" onSubmit={save}>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
-        {viaApproval && <div className="alert alert-info" role="note">Colour pricing changes need an admin's approval: this is sent to the Approvals queue.</div>}
+        {viaApproval && <div className="alert alert-info" role="note">Needs approval.</div>}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rule-base">Base colour</label>

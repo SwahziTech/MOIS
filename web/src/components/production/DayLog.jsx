@@ -457,7 +457,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           {' '}<button type="button" className="btn btn-outline btn-sm" onClick={() => nextFromUpload(form)}>Skip this batch</button></div>
       )}
       {upload?.done && staged.length > 0 && (
-        <div className="alert alert-info" role="note">The uploaded report's batches are on the list. Check them, then save the day.</div>
+        <div className="alert alert-info" role="note">Uploaded batches are on the list.</div>
       )}
       {restored && staged.length > 0 && (
         <div className="alert alert-info" role="note">Your unsaved list from earlier is back: {staged.length} batch{staged.length === 1 ? '' : 'es'} not saved yet, dated {dateText(date)}.</div>
@@ -701,7 +701,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
               <ul style={{ margin: '6px 0 0 18px' }}>
                 {already.map((a, i) => <li key={i}>{a.label} · {qtyText(a.bags)} bags — {a.how} {dateTimeText(a.at)}</li>)}
               </ul>
-              <span className="pl-help">Check Production › Curing or Approvals first. Save anyway only if these are genuinely extra batches.</span>
+              <span className="pl-help">Save only if these are extra batches.</span>
             </div>
           )}
           <DaySummary day={daySummary()} currency={organization?.currency_code} />

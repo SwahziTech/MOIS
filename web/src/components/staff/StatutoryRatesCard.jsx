@@ -47,7 +47,7 @@ export default function StatutoryRatesCard() {
   }
 
   if (rates === false) {   // before 088: say so rather than an empty window
-    return <section className="card"><div className="card-body"><p className="text-sm text-muted">Payroll settings aren’t set up on this system yet (statutory rates and working days). Ask the Technical admin.</p></div></section>;
+    return <section className="card"><div className="card-body"><p className="text-sm text-muted">Payroll settings aren’t set up. Ask the Technical admin.</p></div></section>;
   }
   const toVerify = (rates || []).filter(r => !r.verified_at).length;
   const bandsText = b => (b || []).map(x => `${x.rate}% from ${formatAmount(Number(x.from))}`).join(' · ');
@@ -133,7 +133,7 @@ function RateForm({ rate, today, busy, onCancel, onSave }) {
       {f.code === 'sdl' && <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={f.count_casuals} onChange={e => set({ count_casuals: e.target.checked })} /> Casual labourers count as employees (and their pay carries SDL) — ask TRA</label>}
       {f.code === 'paye' && (
         <div className="sr-bands">
-          <span className="pl-help">Monthly bands: the percent taxed on pay above each amount (the first band starts at 0).</span>
+          <span className="pl-help">Percent taxed above each amount.</span>
           {f.bands.map((b, i) => (
             <div key={i} className="flex items-center gap-8">
               <span className="text-sm">From</span>

@@ -412,7 +412,7 @@ export default function StockImport() {
           ) : (
             <p className="flex items-center gap-8"><CheckCircle2 size={18} className="text-success" /> Posted {result.lines} opening-balance lines in {result.movements} movement{result.movements === 1 ? '' : 's'}.</p>
           )}
-          {result.decisions > 0 && <p className="text-sm text-muted">{result.decisions} name{result.decisions === 1 ? '' : 's'} recorded as decisions — see Review queue → Decisions.</p>}
+          {result.decisions > 0 && <p className="text-sm text-muted">{result.decisions} name{result.decisions === 1 ? '' : 's'} saved as decisions.</p>}
           <div className="flex gap-8">
             <button type="button" className="btn btn-primary" onClick={() => navigate('/movements')}>See movements</button>
             <button type="button" className="btn btn-outline" onClick={() => navigate('/stock')}>See stock</button>
@@ -432,12 +432,12 @@ export default function StockImport() {
                   <option value="">Choose…</option>
                   {warehouses.filter(w => inBranch(w.branch_id) || w.id === warehouseId).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
                 </select>
-                {!warehouses.length && catalog && <span className="form-hint">You need stock-adjustment permission at a store to import opening balances.</span>}
+                {!warehouses.length && catalog && <span className="form-hint">You can't adjust stock at any store.</span>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="imp-date">Stock as of</label>
                 <input id="imp-date" type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value)} />
-                <span className="form-hint">Applies to every line unless you change a line's own date below.</span>
+                <span className="form-hint">For every line unless changed below.</span>
               </div>
             </div>
             {!matched && drafts.some(d => !d.warehouse_id || inBranch(catalog?.branchOfWarehouse?.[d.warehouse_id])) && (

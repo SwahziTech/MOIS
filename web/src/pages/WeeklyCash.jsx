@@ -122,7 +122,7 @@ export default function WeeklyCash() {
             <table>
               <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
               <tbody>
-                {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No weekly requests yet — New weekly request, or import this week's Excel sheet.</>}</td></tr>
+                {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
                 : shownWeeks.map(r => {
                   const w = ledger[r.week_ending];
                   return (
@@ -140,7 +140,7 @@ export default function WeeklyCash() {
               </tbody>
             </table>
           </div></div>
-          <p className="pl-help" style={{ marginTop: 8 }}>A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week.</p>
+          <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
         </>
       )}
       {open && <RequestModal request={open.new ? null : open} branchId={branchId} branchName={branchName} data={data} ledger={ledger} today={today} money={money}
@@ -247,7 +247,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
             </tbody>
             <tfoot><tr><td /><td><strong>Spent · balance</strong></td><td /><td /><td className="num"><strong>{money(lastWeek.spent)}</strong></td><td className="num"><strong>{money(lastWeek.closing)}</strong></td></tr></tfoot>
           </table>
-        ) : <p className="pl-help">{firstEver ? 'The first week: type the balance brought forward below.' : 'No week before this one yet.'}</p>}
+        ) : <p className="pl-help">{firstEver ? 'First week: type the balance brought forward.' : 'No week before this one yet.'}</p>}
 
         <h3 className="modal-section-title">This week's needs</h3>
         <div className="form-row">
@@ -259,7 +259,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
             <input ref={fileRef} type="file" accept=".xlsx" hidden onChange={e => { if (e.target.files?.[0]) importFile(e.target.files[0]); e.target.value = ''; }} />
             <button type="button" className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import Excel sheet</button>
             {prevLive && <button type="button" className="btn btn-ghost btn-sm" onClick={copyLast}><Copy size={14} /> Start from last week's lines</button>}
-            <span className="pl-help">The sheet's "needs this week" table (DESCRIPTION · QTY · AMOUNT) is read; check it before saving.</span>
+            <span className="pl-help">Check the lines before saving.</span>
           </div>
         )}
         <table className="rd-table">

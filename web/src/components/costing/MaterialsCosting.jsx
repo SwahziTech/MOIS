@@ -109,7 +109,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
           </table>
         </div></div>
       )}
-      <p className="pl-help" style={{ marginTop: 8 }}>From Production: each batch's materials, costed oldest stock first with VAT included — the material part of every product's production cost. Purchases › Material costs shows prices paid.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"From Production: each batch's materials, costed oldest stock first with VAT included — the material part of every product's production cost. Purchases › Material costs shows prices paid."}>How it's worked out</p>
     </>
   );
 }

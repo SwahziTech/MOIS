@@ -195,7 +195,7 @@ export default function Production() {
               <div className="bulk-bar">
                 <label className="bulk-all"><input type="checkbox" checked={ready.length > 0 && ready.every(b => picked.has(b.id))}
                   onChange={e => setPicked(e.target.checked ? new Set(ready.map(b => b.id)) : new Set())} /> Select all ({ready.length})</label>
-                <span className="pl-help">{picked.size ? `${picked.size} selected` : 'Tick batches to release them together — every piece passes.'}</span>
+                <span className="pl-help">{picked.size ? `${picked.size} selected` : 'Tick batches to release together.'}</span>
                 <button type="button" className="btn btn-primary btn-sm" disabled={!picked.size || bulk?.running} onClick={() => setBulk({ confirm: true })}>
                   Release selected ({picked.size})
                 </button>
@@ -279,7 +279,7 @@ export default function Production() {
           </> : <button type="button" className="btn btn-primary" disabled={bulk.running} onClick={() => setBulk(null)}>Close</button>}>
           {bulk.confirm ? (
             <div className="flex flex-col gap-8">
-              <p className="text-sm">Every piece of these batches passes and moves into Finished Goods, dated each batch's production day. A batch with rejects: use its own <strong>Release…</strong> instead.</p>
+              <p className="text-sm">All pieces pass to Finished Goods. Rejects? Use the batch's own <strong>Release…</strong> instead.</p>
               {earlyPicked.length > 0 && (
                 <label className="pe-field"><span>{earlyPicked.length} of them {earlyPicked.length === 1 ? 'is' : 'are'} still curing — why release early? (required)</span>
                   <input className="form-input" autoFocus value={bulkNote} placeholder="e.g. 7 days only" onChange={e => setBulkNote(e.target.value)} /></label>
@@ -365,7 +365,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
         <button type="submit" form="release-form" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy}>Release</button>
       </>}>
       <form id="release-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">Curing until {dateText(batch.curing_until)}. All pieces pass unless you enter rejects — passed pieces move into Finished Goods and rejected ones leave stock, both dated the production day ({dateText(batch.batch_date)}); the date below is the day of this quality release.</p>
+        <p className="text-sm text-muted">Curing until {dateText(batch.curing_until)}. Pieces pass unless you enter rejects.</p>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="rl-fg">Into</label>
@@ -444,7 +444,7 @@ function VoidModal({ batch, name, onClose, onSaved }) {
         <button type="button" className={`btn btn-danger-outline${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Void batch</button>
       </>}>
       <div className="modal-form">
-        <p className="text-sm">Voiding reverses the pieces put into curing and the materials taken out of the store. The batch stays on record, marked void.</p>
+        <p className="text-sm">Reverses the pieces and materials. The batch stays, marked void.</p>
         <input className="form-input" placeholder="Reason" aria-label="Reason for voiding" value={reason} onChange={e => setReason(e.target.value)} />
       </div>
     </Modal>

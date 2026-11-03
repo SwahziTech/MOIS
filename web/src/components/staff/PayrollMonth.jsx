@@ -214,9 +214,9 @@ function PersonMonth({ r, month, today, money, pct, nssfPct, workDays, firstDue,
             <label className="pe-field"><span>Other deductions</span><NumberInput step="any" min="0" className="form-input" value={form.deductions} onChange={e => setForm({ ...form, deductions: e.target.value })} /></label>
             <label className="pe-field" style={{ flex: 1 }}><span>Note</span><input className="form-input" placeholder="e.g. what the deduction is for" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label>
           </div>
-        ) : !r.last ? <p className="pl-help">Allowance and other deductions open once the month-end payment starts (the first attendance from the 16th).</p>
+        ) : !r.last ? <p className="pl-help" title={"Allowance and other deductions open once the month-end payment starts (the first attendance from the 16th)."}>Opens with the month-end payment.</p>
           : r.lastSheet?.status !== 'draft' ? <p className="pl-help">This payment is {r.lastSheet?.status}, so it no longer changes.</p> : null}
-        {r.overpaid > 0 && <p className="pl-help text-warning">The first payment and deductions are more than what was earned by {Math.round(r.overpaid).toLocaleString('en-US')}; the balance stops at 0.</p>}
+        {r.overpaid > 0 && <p className="pl-help text-warning">Paid {Math.round(r.overpaid).toLocaleString('en-US')} more than earned; balance stops at 0.</p>}
       </div>
     </Modal>
   );

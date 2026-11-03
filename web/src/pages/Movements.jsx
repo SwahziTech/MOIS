@@ -223,7 +223,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
         </div>
         {canReverse && (
           requested ? (
-            <div className="alert alert-info" role="status">Reversal sent for an admin's approval — follow it under Approvals.</div>
+            <div className="alert alert-info" role="status">Reversal sent for approval.</div>
           ) : confirm ? (
             <div className="confirm-box">
               <p className="text-sm">Reversing posts the exact opposite of this movement. Both stay on record.{reverseNeedsApproval ? " A reversal needs an admin's approval: it is sent to the Approvals queue." : ''}</p>

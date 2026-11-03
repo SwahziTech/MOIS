@@ -220,7 +220,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {note && <p className="text-sm text-success" role="status">{note}</p>}
         {orders === null ? <span className="skeleton" />
-          : orders === false ? <div className="pl-empty">Production orders aren't switched on yet (migration 048).</div>
+          : orders === false ? <div className="pl-empty">Production orders aren't switched on yet.</div>
           : shownOrders.length === 0 ? <div className="pl-empty">{show === 'open' ? (canPlan ? 'No open orders — plan one with the simulator below, then "Add to order".' : 'No open orders.') : `No ${STATUS_LABEL[show].toLowerCase()} orders.`}</div>
           : shownOrders.map(o => {
             const st = standing(o);
@@ -290,7 +290,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
             <label className="po-field"><span className="pl-label">Due date</span>
               <input type="date" className="form-input" value={draft.due_date} min={today} onChange={e => setDraft(d => ({ ...d, due_date: e.target.value }))} /></label>
           </div>
-          {draft.lines.length === 0 ? <div className="pl-empty">No products yet — choose one in the simulator, set the target, then "Add to order".</div> : (
+          {draft.lines.length === 0 ? <div className="pl-empty">No products yet.</div> : (
             <div className="po-lines">
               {draft.lines.map((l, i) => {
                 const per = sqmPer(l.productId);

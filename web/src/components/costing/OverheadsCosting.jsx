@@ -90,7 +90,7 @@ export default function OverheadsCosting({ branchId, currency }) {
           )}
         </div></div>
       )}
-      <p className="pl-help" style={{ marginTop: 8 }}>From Purchases › Expenses (categories ticked as production costs under Purchases ⚙). A month's overheads are shared over that month's batches by cement bags — on the expense's machine when it names one — and go into each product's production cost. Electricity is costed from the meters; labour comes with HR.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"From Purchases › Expenses (categories ticked as production costs under Purchases ⚙). A month's overheads are shared over that month's batches by cement bags — on the expense's machine when it names one — and go into each product's production cost. Electricity is costed from the meters; labour comes with HR."}>How it's worked out</p>
     </>
   );
 }

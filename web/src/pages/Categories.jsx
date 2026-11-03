@@ -271,7 +271,7 @@ function CategoryModal({ category, organizationId, palette, units, cats, takenRe
           <div className="form-group">
             <label className="form-label" htmlFor="cat-parent">Group under</label>
             {isGroup ? (
-              <p className="text-sm text-muted">This is a group — {cats.childrenOf(category.id).map(c => c.name).join(', ')} sit under it. Groups go one level deep.</p>
+              <p className="text-sm text-muted">Group of: {cats.childrenOf(category.id).map(c => c.name).join(', ')}</p>
             ) : (
               <select id="cat-parent" className="form-input" value={parentId} onChange={e => setParentId(e.target.value)}>
                 <option value="">No group</option>
@@ -284,7 +284,7 @@ function CategoryModal({ category, organizationId, palette, units, cats, takenRe
             <label className="form-label" htmlFor="cat-tol">Default yield tolerance (± pieces per bag)</label>
             <NumberInput id="cat-tol" step="any" min="0" className="form-input" placeholder="Organization default"
               value={tolerance} onChange={e => setTolerance(e.target.value)} />
-            <span className="form-hint">For this category's products unless a product sets its own. 0 means exactly the average yield.</span>
+            <span className="form-hint" title={"For this category's products unless a product sets its own. 0 means exactly the average yield."}>0 = exactly the average yield.</span>
           </div>
         </div>
 

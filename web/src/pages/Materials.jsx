@@ -538,7 +538,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
               {canShare && <option value="">All branches (shared)</option>}
               {ownBranchChoices.map(b => <option key={b.id} value={b.id}>{b.name} only</option>)}
             </select>
-            <span className="form-hint">A branch's own material is for a local input only that branch uses. An org admin can make it shared later.</span>
+            <span className="form-hint" title={"A branch's own material is for a local input only that branch uses. An org admin can make it shared later."}>Only this branch uses it.</span>
           </div>
         ) : material.branch_id && (
           <p className="text-sm">
@@ -582,7 +582,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
           <section>
             <h3 className="modal-section-title">Status</h3>
             {material.status === 'active' && usage.active > 0 ? (
-              <p className="text-sm text-muted">Used by {usage.active} active recipe line{usage.active === 1 ? '' : 's'}. Save those recipes without it before deactivating.</p>
+              <p className="text-sm text-muted">In {usage.active} recipe line{usage.active === 1 ? '' : 's'} — remove it there first.</p>
             ) : (
               <>
                 <p className="text-sm text-muted" style={{ marginBottom: 8 }}>
@@ -696,7 +696,7 @@ function FormerSources({ material, branches, suppliers, unitById }) {
   return (
     <section>
       <h3 className="modal-section-title">Where it was bought (history)</h3>
-      <p className="text-xs text-muted mb-8">Suppliers are now recorded on each receipt, so these are no longer edited.</p>
+      <p className="text-xs text-muted mb-8">Suppliers are set on each receipt.</p>
       <ul className="history-list">
         {sources.map(x => (
           <li key={x.id} className="text-sm">

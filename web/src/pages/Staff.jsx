@@ -703,7 +703,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
           </table>
         </div>
         {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (
-          <p className="pl-help">Employer on top of pay: NSSF {formatAmount(tot('nssf_employer'))} · WCF {formatAmount(tot('wcf'))} · SDL {formatAmount(tot('sdl'))} — with PAYE and employee NSSF, {money(tot('nssf_employer') + tot('wcf') + tot('sdl') + tot('nssf_employee') + tot('paye'))} to remit.</p>
+          <p className="pl-help">Employer on top of pay: NSSF {formatAmount(tot('nssf_employer'))} · WCF {formatAmount(tot('wcf'))} · SDL {formatAmount(tot('sdl'))} · to remit {money(tot('nssf_employer') + tot('wcf') + tot('sdl') + tot('nssf_employee') + tot('paye'))}</p>
         )}
         {sheet.status === 'approved' && canApprove && (
           <div className="form-row">

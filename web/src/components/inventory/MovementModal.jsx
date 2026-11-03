@@ -243,7 +243,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
     return (
       <Modal title={def.noun} onClose={onPosted}
         footer={<button type="button" className="btn btn-primary" onClick={onPosted}>Done</button>}>
-        <p className="text-sm">Sent for an admin's approval. Stock changes once it is approved — follow it under <strong>Approvals</strong>.</p>
+        <p className="text-sm">Sent for approval — see <strong>Approvals</strong>.</p>
       </Modal>
     );
   }
@@ -399,7 +399,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
               <Plus size={13} /> Add item
             </button>
             {withCost && <p className="text-xs text-muted mt-8">Cost is optional, per unit as entered (e.g. per bag).</p>}
-            {type === 'receipt' && <p className="text-xs text-muted mt-8">What it cost, and the supplier's invoice and payment, are recorded on the purchase (Purchases page) — by the secretary or branch manager.</p>}
+            {type === 'receipt' && <p className="text-xs text-muted mt-8">Cost and payment go on the purchase (Purchases).</p>}
           </section>
 
           <div className="form-group">
@@ -520,7 +520,7 @@ function RepeatChoices({ repeats, type, def, wh, items, unitById, colorById, war
           </div>
         );
       })}
-      <p className="text-xs text-muted">Corrections are posted as adjustments or reversals — nothing is deleted from the history.</p>
+      <p className="text-xs text-muted">Nothing is deleted.</p>
     </div>
   );
 }

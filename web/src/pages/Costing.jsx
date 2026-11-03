@@ -246,7 +246,7 @@ function BenchModal({ target, organizationId, money, onClose, onSaved }) {
       <div className="modal-form">
         <label className="pe-field"><span>Revenue a cement bag (TZS)</span>
           <NumberInput step="any" min="0" className="form-input" autoFocus value={value} onChange={e => setValue(e.target.value)} /></label>
-        <p className="pl-help">Each product: its price without VAT × its yield a bag (m² or pieces). Products below this show in amber. Seen by the Technical admin only.{target != null ? ` Now: ${money(target)}.` : ''}</p>
+        <p className="pl-help" title="Each product: its price without VAT × its yield a bag (m² or pieces). Seen by the Technical admin only.">Below this shows in amber.{target != null ? ` Now: ${money(target)}.` : ''}</p>
       </div>
     </Modal>
   );

@@ -108,8 +108,8 @@ function ProfitLoss({ today, money, short, inBranch, branchId, where }) {
           </table>
         </div></div>
       )}
-      {d?.noCost > 0 && <p className="pl-help" style={{ marginTop: 8 }}>{d.noCost} delivered line{d.noCost === 1 ? ' has' : 's have'} no production cost yet, so the margin is higher than it will be.</p>}
-      <p className="pl-help" style={{ marginTop: 4 }}>Sales and cost as goods were delivered; expenses as recorded; wages of production staff are inside the cost of the goods.</p>
+      {d?.noCost > 0 && <p className="pl-help" style={{ marginTop: 8 }}>{d.noCost} delivered line{d.noCost === 1 ? '' : 's'} without cost — margin too high.</p>}
+      <p className="pl-help" style={{ marginTop: 4 }} title={"Sales and cost as goods were delivered; expenses as recorded; wages of production staff are inside the cost of the goods."}>Sales and cost as delivered.</p>
     </>
   );
 }
@@ -136,7 +136,7 @@ function BalanceSheet({ today, money, short, inBranch, branchId, branchIds, wher
         <div className="mm-stat"><span className="pl-label">Owners&apos; share</span><strong className={d.equity < 0 ? 'text-warning' : ''}>{short(d.equity)}</strong><span className="pl-help">today, {dateText(today)}</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <span className="pl-help">As of today. Machines, buildings and loans aren&apos;t recorded in MOIS, so they&apos;re not here.</span>
+        <span className="pl-help" title={"As of today. Machines, buildings and loans aren't recorded in MOIS, so they're not here."}>As of today.</span>
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       <div className="card"><div className="table-container">
@@ -153,8 +153,8 @@ function BalanceSheet({ today, money, short, inBranch, branchId, branchIds, wher
           <tfoot><tr><td><strong>Owners&apos; share (held − owed)</strong></td><td className="num"><strong>{money(d.equity)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      {d.uncosted > 0 && <p className="pl-help" style={{ marginTop: 8 }}>{d.uncosted} stock item{d.uncosted === 1 ? ' has' : 's have'} some quantity with no cost yet — the stock figures are lower than they will be.</p>}
-      {d.accounts === 0 && <p className="pl-help">No payment accounts here yet — cash shows 0. They&apos;re added under Sales ⚙; opening balances under Cash flow ⚙.</p>}
+      {d.uncosted > 0 && <p className="pl-help" style={{ marginTop: 8 }}>{d.uncosted} stock item{d.uncosted === 1 ? '' : 's'} partly without cost — stock too low.</p>}
+      {d.accounts === 0 && <p className="pl-help">No accounts yet (Sales ⚙).</p>}
     </>
   );
 }
@@ -223,7 +223,7 @@ function AccountStatement({ today, money, short, inBranch, where }) {
           <tfoot><tr><td /><td><strong>Closing balance</strong></td><td /><td className="num"><strong>{amt(st.tin)}</strong></td><td className="num"><strong>{amt(st.tout)}</strong></td><td className="num"><strong>{money(st.closing)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>{sel.opening_date ? `Counted from the opening balance on ${dateText(sel.opening_date)}.` : 'No opening balance set — set it under Cash flow ⚙.'} Newest first.</p>
+      <p className="pl-help" style={{ marginTop: 8 }}>{sel.opening_date ? `From the opening balance, ${dateText(sel.opening_date)}.` : 'No opening balance (Cash flow ⚙).'}</p>
     </>
   );
 }
@@ -302,7 +302,7 @@ function Parties({ today, money, inBranch, branchId }) {
           </table>
         )}
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>Each statement covers 1 January this year to today.</p>
+      <p className="pl-help" style={{ marginTop: 8 }}>1 January to today.</p>
     </>
   );
 }

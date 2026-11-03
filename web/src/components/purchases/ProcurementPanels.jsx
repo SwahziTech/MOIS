@@ -147,7 +147,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
         {canAsk && <button type="button" className="btn btn-primary btn-sm" onClick={() => setAsking(true)}><Plus size={14} /> Ask for materials or expenses</button>}
-        <span className="pl-help">Open a request to approve it, order it, then confirm what was bought.</span>
+        <span className="pl-help">Open a request to approve and order it.</span>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
@@ -403,7 +403,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
         {canMake && <button type="button" className="btn btn-primary btn-sm" onClick={() => setMaking({})}><Plus size={14} /> New purchase order</button>}
-        <span className="pl-help">Goods arrive as purchases: choose the order when recording them. Print the order for the supplier, or keep it in MOIS.</span>
+        <span className="pl-help">Print it for the supplier, or keep it in MOIS.</span>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
@@ -588,7 +588,7 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
           </table>
         )}
         <label className="pe-field"><span>Notes (optional — printed on the order)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
-        <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={sent} onChange={e => setSent(e.target.checked)} /> Sent to the supplier (print it from the list); leave unticked to keep it in MOIS only</label>
+        <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={sent} onChange={e => setSent(e.target.checked)} /> Sent to the supplier</label>
       </div>
     </Modal>
   );

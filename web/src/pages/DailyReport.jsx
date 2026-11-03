@@ -79,7 +79,7 @@ export default function DailyReport() {
             <label className="pe-field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><span>Day</span>
               <input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value || today)} /></label>
             {tab === 'write' && <button type="button" className="btn btn-primary btn-sm" disabled={!text} onClick={copy}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy report</>}</button>}
-            <span className="pl-help" title="Production from the day's batches (pieces of the main product, cement, wastani = all pieces ÷ bags, leftovers as MABAKI, team = people ticked on the batches); cement in the branch's stores at the end of the day; each meter's morning and evening readings and the units used.">From the day's batches, stores and meter readings.</span>
+            <span className="pl-help" title="Production from the day's batches (pieces of the main product, cement, wastani = all pieces ÷ bags, leftovers as MABAKI, team = people ticked on the batches); cement in the branch's stores at the end of the day; each meter's morning and evening readings and the units used.">From the day's records.</span>
           </div>
           {tab === 'write' ? (
             <div className="card"><div className="card-body">

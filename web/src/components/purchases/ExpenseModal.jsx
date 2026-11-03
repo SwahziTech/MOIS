@@ -179,7 +179,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
         </button>
       </>}>
       <form id="expense-form" className="modal-form" onSubmit={save}>
-        <p className="text-sm text-muted">Spending that is not stock — electricity (LUKU), water, office tools, equipment… It does not change stock or material costs.</p>
+        <p className="text-sm text-muted">Not stock: LUKU, water, tools…</p>
         <div className="form-row">
           {isNew && !branchId && (
             <div className="form-group">
@@ -236,7 +236,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
             </div>
           </div>
         )}
-        {isElectricity && <span className="form-hint">As printed on the token receipt. An old debt taken off is not part of these units' price.</span>}
+        {isElectricity && <span className="form-hint" title={"As printed on the token receipt. An old debt taken off is not part of these units' price."}>As on the token receipt.</span>}
         {token && <div className="alert alert-info">LUKU token: {Number(token.units)} units on its meter. To change it, void it and enter it again.</div>}
         <div className="form-group">
           <label className="form-label" htmlFor="ex-what">What was it?</label>
@@ -266,7 +266,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
             <select id="ex-machine" className="form-input" value={machineId} onChange={e => setMachineId(e.target.value)}>
               <option value="">The whole branch</option>{machines.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-            <span className="form-hint">A production cost: Costing shares it over this month's batches on the machine (or all the branch's), by cement bags.</span>
+            <span className="form-hint" title={"A production cost: Costing shares it over this month's batches on the machine (or all the branch's), by cement bags."}>Production cost.</span>
           </div>
         )}
         <div className="form-row">

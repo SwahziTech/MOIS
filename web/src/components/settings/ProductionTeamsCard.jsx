@@ -91,7 +91,7 @@ export default function ProductionTeamsCard() {
         )}
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Every batch records its team and machine; who worked is ticked on each batch from the branch's staff (HR › Staff), as teams change day to day. Retired ones stay on past batches. New ones can also be added in the batch form. A machine's crew (e.g. 9-12) is the people it takes to run, whatever the bags — products without it use their bags a person (Products).</p>
+        <p className="text-xs text-muted mb-8" title={"Every batch records its team and machine; who worked is ticked on each batch from the branch's staff (HR › Staff), as teams change day to day. Retired ones stay on past batches. New ones can also be added in the batch form. A machine's crew (e.g. 9-12) is the people it takes to run, whatever the bags — products without it use their bags a person (Products)."}>Teams and machines for batches.</p>
         {!data ? <p className="text-sm text-muted">Loading…</p> : (
           <>
             <h3 className="ptc-title">Teams</h3>

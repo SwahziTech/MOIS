@@ -30,7 +30,7 @@ export default function OverheadCategoriesCard({ onChanged }) {
     <section className="card">
       <div className="card-header"><h2 className="card-title">Production costs</h2></div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Tick the expense categories that are production costs (diesel, repairs, molds…). Their expenses stay here; Costing shares them over the month's batches by cement bags — over a machine's batches when the expense names one. Electricity (meter readings) and wages (HR) are never counted twice.</p>
+        <p className="text-xs text-muted mb-8" title={"Tick the expense categories that are production costs (diesel, repairs, molds…). Their expenses stay here; Costing shares them over the month's batches by cement bags — over a machine's batches when the expense names one. Electricity (meter readings) and wages (HR) are never counted twice."}>Tick the categories that are production costs.</p>
         {cats === null ? <p className="text-sm text-muted">Loading…</p> : cats.map(c => {
           const fixed = /^\s*(electricity|wages)\b/i.test(c.name);
           return (

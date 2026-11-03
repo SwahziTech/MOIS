@@ -185,13 +185,13 @@ export default function SalesUpload({ refs, branchId, today, day, past, keep, on
       </div>
         <div className="card-body ru-grid-foot">
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setRows(rs => [...rs, ...Array.from({ length: 5 }, () => blank(past ? rs.filter(used).at(-1)?.date ?? '' : day))])}><Plus size={14} /> Add 5 rows</button>
-          <span className="pl-help">One row a product. Rows with the same {past ? 'date and ' : ''}receipt number are one sale. Leave the price empty for the price list's.</span>
+          <span className="pl-help">Same {past ? 'date and ' : ''}receipt = one sale. Empty price = price list.</span>
         </div>
       </div>
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="ru-actions">
-        <span className="pl-help">Each sale opens in Record sale, filled in; check it and save it there, one by one.</span>
+        <span className="pl-help">Opens in Record sale, one at a time.</span>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>
           {sales.length ? `Save and open ${sales.length} sale${sales.length === 1 ? '' : 's'} in Sales` : 'Save'}</button>
       </div>

@@ -192,7 +192,7 @@ function IdentityChoice({ choice, productId, name, refs, busy, run, onBack }) {
               onClick={() => setParts(ps => ({ ...ps, [key(r)]: [...rowsFor(r), { productId: '', qty: '' }] }))}>+ another product</button>
           </div>
         ))}
-        <span className="text-xs text-muted">Each part moves to its product, dated when the stock was first recorded. "{name}" is then retired.</span>
+        <span className="text-xs text-muted">Each part moves to its product; "{name}" is retired.</span>
       </> : <span className="text-sm">"{name}" has no stock to divide — choose another option.</span>)}
       {choice === 'keep' && <>
         <span className="text-sm">"{name}" stays as a product of its own.</span>

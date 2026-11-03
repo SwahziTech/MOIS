@@ -102,7 +102,7 @@ export default function LabourCosting({ branchId, currency }) {
           </table>
         )}
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>From HR, as the pay sheets pay it: each production person's days attended × day rate (a salary ÷ working days a month), plus the employer's NSSF, WCF and SDL — shared over that day's batches by cement bags. Office and running staff are left out (untick them in Staff).</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"From HR, as the pay sheets pay it: each production person's days attended × day rate (a salary ÷ working days a month), plus the employer's NSSF, WCF and SDL — shared over that day's batches by cement bags. Office and running staff are left out (untick them in Staff)."}>How it's worked out</p>
     </>
   );
 }

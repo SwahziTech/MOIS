@@ -54,7 +54,7 @@ export default function PowerMetersCard() {
         )}
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Each LUKU meter and the machines it feeds. Its day use (morning → evening) is charged to that day's batches on these machines; nights (lights) stay a running cost. Tokens: Record expense → Electricity. Readings: Purchases › Electricity.</p>
+        <p className="text-xs text-muted mb-8" title={"Each LUKU meter and the machines it feeds. Its day use (morning → evening) is charged to that day's batches on these machines; nights (lights) stay a running cost. Tokens: Record expense → Electricity. Readings: Purchases › Electricity."}>Each meter and the machines it feeds.</p>
         {!data ? <p className="text-sm text-muted">Loading…</p> : (
           <>
             {data.meters.length === 0 && <p className="text-sm text-muted">No meters yet.</p>}

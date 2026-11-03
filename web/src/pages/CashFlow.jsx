@@ -143,7 +143,7 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
         <input type="date" className="form-input" style={{ width: 160 }} aria-label="To" min={from} max={today} value={to} onChange={e => setRange([from, e.target.value || to])} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRange([`${today.slice(0, 7)}-01`, today])}>This month</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRange(lastMonth(today))}>Last month</button>
-        <span className="pl-help">{sel ? `${sel.name} — click it again to see all` : 'Click an account to see only its movements'}</span>
+        <span className="pl-help">{sel ? `${sel.name} · click again for all` : 'Click an account to filter'}</span>
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!shown.length} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       <div className="card"><div className="table-container">
@@ -205,7 +205,7 @@ function MonthlyTab({ accs, mv, by, setBy, today, money, short }) {
           </tbody>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>Money as it moved, newest first. Opening and closing are the cash in the accounts (with their opening balances) and money recorded without an account; amounts in TZS.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"Money as it moved, newest first. Opening and closing are the cash in the accounts (with their opening balances) and money recorded without an account; amounts in TZS."}>Newest first.</p>
     </>
   );
 }
@@ -273,7 +273,7 @@ function ForecastTab({ cashNow, inBranch, money, short, today }) {
           <tfoot><tr><td><strong>Cash after</strong></td><td className="num"><strong>{money(after)}</strong></td></tr></tfoot>
         </table>
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>What is owed today: sales carry due dates (overdue apart); bills from suppliers don't yet — this shows where cash stands if everything owed were settled.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"What is owed today: sales carry due dates (overdue apart); bills from suppliers don't yet — this shows where cash stands if everything owed were settled."}>Owed today, both ways.</p>
     </>
   );
 }
@@ -299,7 +299,7 @@ function OpeningBalances({ accounts, canSet, today, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
         {canSet && <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>Save</button>}</>}>
       <div className="modal-form">
-        <p className="pl-help">Each account's balance on a date (e.g. counted cash, the bank statement). Money in and out after that date adds up from there. Set by the branch manager or a director.</p>
+        <p className="pl-help" title={"Each account's balance on a date (e.g. counted cash, the bank statement). Money in and out after that date adds up from there. Set by the branch manager or a director."}>Balance on a date; later money adds up from there.</p>
         <div className="table-container">
           <table>
             <thead><tr><th>Account</th><th className="num">Opening balance (TZS)</th><th>On</th></tr></thead>

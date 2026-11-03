@@ -40,7 +40,7 @@ export function BranchVatCard() {
     <section className="card">
       <div className="card-header"><h2 className="card-title">VAT per branch</h2></div>
       <div className="card-body" style={{ paddingTop: 6 }}>
-        <p className="text-xs text-muted mb-8">Used on the branch's purchases and expenses: ticked, VAT = amount × rate/(100 + rate). Set by the branch manager; 0 = not VAT-registered.</p>
+        <p className="text-xs text-muted mb-8" title={"Used on the branch's purchases and expenses: ticked, VAT = amount × rate/(100 + rate). Set by the branch manager; 0 = not VAT-registered."}>0 = not VAT-registered.</p>
         {rows.map(b => (
           <div key={b.id} className="flex items-center gap-8" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
             <span className="text-sm" style={{ width: 140, color: 'var(--text-muted)' }}>{b.name}</span>
@@ -198,7 +198,7 @@ export function CuringDays({ canEdit }) {
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Save</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
       </span>
-      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>How long a batch cures before its quality release. Applies to every product.</span>
+      <span className="text-xs text-muted" style={{ fontWeight: 400 }}>Days before quality release.</span>
       {error && <span className="text-xs text-error">{error}</span>}
     </span>
   );

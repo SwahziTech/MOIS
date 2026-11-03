@@ -83,7 +83,7 @@ export default function InviteUserModal({ roles, branches, warehouses, onClose, 
           <label className="form-label" htmlFor="invite-email">Email address (optional)</label>
           <input id="invite-email" type="email" className="form-input"
             value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" />
-          <div className="form-hint">Leave it empty to get a link and code to send yourself, by WhatsApp for example. They create their own login, with an email or a username.</div>
+          <div className="form-hint" title={"Leave it empty to get a link and code to send yourself, by WhatsApp for example. They create their own login, with an email or a username."}>Empty: you get a link and code to send.</div>
         </div>
       </form>
     </Modal>

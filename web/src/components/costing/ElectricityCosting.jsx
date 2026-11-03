@@ -109,7 +109,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
           <table>
             <thead><tr><th>Day</th><th>Meter</th><th className="num">Day units</th><th className="num">Cost (TZS)</th><th className="num">Batches</th><th className="num">Cement bags</th><th className="num">Units a bag</th><th className="num">A bag (TZS)</th></tr></thead>
             <tbody>
-              {days.length === 0 ? <tr><td colSpan={8} className="text-muted">No day use in this period — readings are entered under Purchases › Electricity.</td></tr>
+              {days.length === 0 ? <tr><td colSpan={8} className="text-muted">No day use in this period.</td></tr>
               : days.map(d => {
                 const k = `${d.meter_id}|${d.day}`; const isOpen = openDay === k;
                 return (
@@ -162,7 +162,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
           </table>
         )}
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>From Purchases › Electricity (each meter's day use, morning → evening) and Production (the batches on that meter's machines). A day's cost is shared over its batches by cement bags, and within a batch over its products by cement taken — the same figure that goes into each product's production cost. Idle days and nights are not charged to products.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"From Purchases › Electricity (each meter's day use, morning → evening) and Production (the batches on that meter's machines). A day's cost is shared over its batches by cement bags, and within a batch over its products by cement taken — the same figure that goes into each product's production cost. Idle days and nights are not charged to products."}>How it's worked out</p>
     </>
   );
 }

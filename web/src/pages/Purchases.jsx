@@ -630,7 +630,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     if (past.length < AUTOFILL_AFTER) return null;
     const [a, z] = past;
     const one = p => `${dateText(p.date)} · ${supplierName(p.supplierId)} · ${qtyText(p.qty)} ${refs.unitById[p.unitId]?.symbol ?? ''} at ${money(p.price)}`;
-    if (a.opening) return <div className="text-xs text-muted purchase-hint">Price filled from the opening stock cost: {money(a.price)} per {refs.unitById[a.unitId]?.symbol ?? 'unit'} ({dateText(a.date)}). Change it if this purchase is different.</div>;
+    if (a.opening) return <div className="text-xs text-muted purchase-hint">From opening stock cost: {money(a.price)} per {refs.unitById[a.unitId]?.symbol ?? 'unit'} ({dateText(a.date)}).</div>;
     return (
       <div className="text-xs text-muted purchase-hint">
         Filled from the last {z ? '2 purchases' : 'purchase'}: {[a, z].filter(Boolean).map(one).join('; ')}.{z && a.price !== z.price && a.unitId === z.unitId ? ` The price changed from ${money(z.price)} to ${money(a.price)}.` : ''} Change anything that is different this time.
@@ -753,7 +753,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
             {vatShown && (
               <div className="flex flex-col gap-4 mt-4">
                 <div className="text-sm">VAT: <strong>{money(vat)}</strong> <span className="text-muted">= {money(round2(subtotal))} × {vatRate}/{100 + vatRate}</span></div>
-                <span className="form-hint">Worked out from the goods amount. VAT is not part of the materials' cost.</span>
+                <span className="form-hint">From the goods amount; not in material cost.</span>
               </div>
             )}
           </div>
@@ -801,7 +801,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
             <h3 className="modal-section-title">Entered wrongly?</h3>
             {voiding ? (
               <div className="confirm-box">
-                <p className="text-sm">Voiding keeps it on record and puts the receipt back under "Waiting for details". The goods stay in stock — to undo them, reverse the receipt (that needs approval).</p>
+                <p className="text-sm" title={"Voiding keeps it on record and puts the receipt back under \"Waiting for details\". The goods stay in stock — to undo them, reverse the receipt (that needs approval)."}>Back to "Waiting for details". Goods stay in stock.</p>
                 <input className="form-input" placeholder="Reason" aria-label="Reason for voiding" value={voidReason} onChange={e => setVoidReason(e.target.value)} />
                 <div className="flex gap-8">
                   <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={voidIt}>Void purchase</button>

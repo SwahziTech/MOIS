@@ -465,7 +465,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
         )}
 
         {readOnly ? (
-          <p className="text-sm text-muted">This recipe is retired — all its versions are archived. Version history is below.</p>
+          <p className="text-sm text-muted">Retired. History below.</p>
         ) : (
           <>
             <section>
@@ -525,7 +525,7 @@ function RecipeModal({ recipe, versions, allRecipes, categories, materials, unit
               <section>
                 <h3 className="modal-section-title">Products using this recipe ({linked.size})</h3>
                 {categoryProducts.length === 0 ? (
-                  <p className="text-sm text-muted">No products of this category in {branchName}'s list — add them on the Products page first.</p>
+                  <p className="text-sm text-muted">No products of this category at {branchName} (Products).</p>
                 ) : (
                   <div className="choice-chips">
                     {categoryProducts.map(p => (

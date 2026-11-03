@@ -98,7 +98,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
       <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
         {canAt('procurement.request', branchId) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setAsking(true)}>Request top-up</button>}
-        <span className="pl-help">Readings morning (asubuhi) and evening (jioni). A top-up: ask for a meter → the branch manager approves → an order → when bought, the token is recorded (directors, or the secretary or branch manager) and the meter is topped up.</span>
+        <span className="pl-help" title={"Readings morning (asubuhi) and evening (jioni). A top-up: ask for a meter → the branch manager approves → an order → when bought, the token is recorded (directors, or the secretary or branch manager) and the meter is topped up."}>Morning (asubuhi) and evening (jioni).</span>
       </div>
       <PageTabs nested tabs={[['days', 'Days'], ['topups', `Top-ups${data.topups.some(q => ['waiting', 'approved', 'ordered'].includes(q.status)) ? ` (${data.topups.filter(q => ['waiting', 'approved', 'ordered'].includes(q.status)).length})` : ''}`], ['readings', 'Readings'], ['tokens', 'Tokens']]} value={tab} onChange={setTab} />
       <div className="card"><div className="table-container">
@@ -190,7 +190,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
           </table>
         )}
       </div></div>
-      <p className="pl-help" style={{ marginTop: 8 }}>Day use = morning − evening; night use = evening − next morning (lights). Tokens loaded in between are added. Units are priced oldest token first. Costing charges day use to that day's batches on the meter's machines, by cement bags; nights are a running cost.</p>
+      <p className="pl-help" style={{ marginTop: 8 }} title={"Day use = morning − evening; night use = evening − next morning (lights). Tokens loaded in between are added. Units are priced oldest token first. Costing charges day use to that day's batches on the meter's machines, by cement bags; nights are a running cost."}>Day = morning − evening.</p>
       {reading && <ReadingsModal meters={data.meters.filter(m => m.status === 'active')} readings={data.readings} today={today}
         onClose={() => setReading(false)} onSaved={async () => { setReading(false); await load(); }} />}
       {asking && <TopupModal meters={data.meters.filter(m => m.status === 'active')} onClose={() => setAsking(false)} onSaved={async () => { setAsking(false); setTab('topups'); await load(); }} />}
@@ -247,7 +247,7 @@ export function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
             })}
           </tbody>
         </table>
-        <p className="pl-help">The units left on each meter. Read in the morning before work and in the evening after — the evening can be added later. A token loaded during the day: enter it first (Record expense → Electricity).</p>
+        <p className="pl-help" title={"The units left on each meter. Read in the morning before work and in the evening after — the evening can be added later. A token loaded during the day: enter it first (Record expense → Electricity)."}>Units left on each meter.</p>
       </div>
     </Modal>
   );
@@ -366,7 +366,7 @@ export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Record and top up</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Asked {dateText(q.requested_on)}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}. Paid from the directors' account; the meter is topped up with the units, an Electricity expense is made and the order closes.</p>
+        <p className="pl-help">Asked {dateText(q.requested_on)}{l.amount != null ? ` · ${money(Number(l.amount))}` : ''}</p>
         <label className="pe-field"><span>Paste the LUKU message (optional — fills the form)</span>
           <textarea className="form-input" rows={3} placeholder="Malipo yamekamilika… TOKEN … KWH Cost … VAT … TOTAL TZS …" value={pasted} onChange={e => fromMessage(e.target.value)} /></label>
         <div className="form-row">{field('units', 'Units bought (kWh)', { autoFocus: true })}{field('amount', 'Paid (TZS)')}

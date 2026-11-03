@@ -247,7 +247,7 @@ export default function ProductEditModal({ product, organization, categories, un
         {branchId && !isNew && branchRow?.id && (
           <label className="pe-field"><span>Bags a person at {branchName}</span>
             <input className="form-input" inputMode="decimal" placeholder="e.g. 3 or 2-3 (blank: the machine's crew)" disabled={!canBranch} value={perPerson} onChange={e => setPerPerson(e.target.value)} />
-            <span className="pl-help">Labour norm: cement bags one person casts in a day. Press products take the press crew instead (Production ⚙).</span>
+            <span className="pl-help" title={"Labour norm: cement bags one person casts in a day. Press products take the press crew instead (Production ⚙)."}>Bags one person casts a day.</span>
           </label>
         )}
         {!isNew && canWrite && (

@@ -195,7 +195,7 @@ export default function DirectorBoard() {
           })}
         </Block>
       )}
-      <p className="pl-help">{branchId ? branchName : 'All branches'} · {dateText(today)}. Days left are an estimate from the last 14 days&apos; use. Money out counts only what&apos;s recorded in MOIS.</p>
+      <p className="pl-help" title="Days left: from the last 14 days' use. Money out: only what's recorded in MOIS.">{branchId ? branchName : 'All branches'} · {dateText(today)}</p>
     </div>
   );
 }

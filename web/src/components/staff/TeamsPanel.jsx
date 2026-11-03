@@ -201,7 +201,7 @@ function TeamEdit({ team, staff, allStaff, organizationId, teams, onClose, onCha
             );
           })}
         </div>
-        <p className="pl-help">Tick to add, untick to take out. Choosing this team on a batch ticks its active members — untick anyone not on that batch (they stay in the team). Recorded batches never change.</p>
+        <p className="pl-help" title={"Tick to add, untick to take out. Choosing this team on a batch ticks its active members — untick anyone not on that batch (they stay in the team). Recorded batches never change."}>Tick to add, untick to remove.</p>
       </div>
     </Modal>
   );

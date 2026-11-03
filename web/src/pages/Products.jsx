@@ -464,7 +464,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
                       onChange={e => setOwnEdit(o => ({ ...o, tolerance: e.target.value }))} />
                   </div>
                 </div>
-                <p className="text-xs text-muted">Applies to every {categoryLabel} product of size {own?.size}{own?.strength ? ` ${own.strength}` : ''} at {branchName} — the size's yield is shared, {branchName}'s mix may differ.</p>
+                <p className="text-xs text-muted">Applies to every {categoryLabel} product of size {own?.size}{own?.strength ? ` ${own.strength}` : ''} at {branchName}.</p>
                 <div className="flex gap-8">
                   <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveOwn}>Save</button>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOwnEdit(null)}>Cancel</button>
@@ -494,7 +494,7 @@ function ProductDetail({ product: p, spec, stock, carried, branchId, branchName,
             confirm ? (
               <div className="confirm-box">
                 <p className="text-sm">{isCarried ? `Remove ${p.canonical_name} from ${branchName}'s catalogue?` : `Add ${p.canonical_name} to ${branchName}'s catalogue?`}</p>
-                {isCarried && total !== 0 && <p className="text-xs text-muted">{branchName} still holds {fmt(total)} {unit}. Removing it only hides it from {branchName}'s list; the stock stays.</p>}
+                {isCarried && total !== 0 && <p className="text-xs text-muted">{branchName} still holds {fmt(total)} {unit} — the stock stays.</p>}
                 <div className="flex gap-8">
                   <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => setCarried(!isCarried)}>{isCarried ? 'Yes, remove it' : 'Yes, add it'}</button>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)}>Cancel</button>

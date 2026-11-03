@@ -171,7 +171,7 @@ function FixOpeningModal({ dup, refs, whById, onClose, onFixed }) {
           <div className="confirm-box text-sm">
             <span className="form-label">{viaApproval ? 'Will be sent for approval' : 'Will be posted'}</span>
             <ul className="double-entry-entries">{steps.map((s, i) => <li key={i}>{s.summary}</li>)}</ul>
-            <span className="text-xs text-muted">Nothing is deleted: the history keeps both entries and these corrections.</span>
+            <span className="text-xs text-muted">Nothing is deleted.</span>
           </div>
         )}
         {target && steps.length === 0 && choice !== 'both' && <p className="text-xs text-muted">Nothing to post.</p>}

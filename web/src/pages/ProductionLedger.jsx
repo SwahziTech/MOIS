@@ -324,7 +324,7 @@ export default function ProductionLedger() {
       {!productId && view === 'tracking' && track && (
         <div className="card">
           <div className="pled-track-head">
-            <span className="pl-help">Batches in the period above (void left out). Yield = cement the pieces imply ÷ cement used; rejects = of pieces released.</span>
+            <span className="pl-help" title={"Batches in the period above (void left out). Yield = cement the pieces imply ÷ cement used; rejects = of pieces released."}>Void batches left out.</span>
             <div className="filter-chips">
               {[['team', 'Team'], ['machine', 'Machine'], ['product', 'Product']].map(([k, l]) => (
                 <button type="button" key={k} className={`filter-chip${groupBy === k ? ' is-on' : ''}`} onClick={() => setGroupBy(k)}>{l}</button>

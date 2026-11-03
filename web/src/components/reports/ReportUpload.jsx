@@ -232,7 +232,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
         </div>
         <div className="ru-file-info">
           <strong>{files.length ? `${files.length} page${files.length === 1 ? '' : 's'}` : 'No photo yet'}</strong>
-          <span className="pl-help">{files.length ? 'Kept with the day when you save.' : kind === 'production' ? 'A photo or PDF of the report. Reading it by AI comes later; for now paste the text below too.' : 'Photos of the sales book. Reading them by AI comes later; for now type the rows below while looking at them.'}</span>
+          <span className="pl-help">{files.length ? 'Kept with the day when you save.' : kind === 'production' ? 'Photo or PDF of the report; paste its text below.' : 'Photos of the sales book; type the rows below.'}</span>
           <label className="pe-field" style={{ maxWidth: 200, marginTop: 8 }}><span>{kind === 'past_sales' ? 'Day the pages were uploaded' : 'Day of the report'}</span>
             <input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value || today)} /></label>
           {kind === 'production' && read?.readDate && read.readDate !== date && <span className="pl-help text-warning">The report says {dateText(read.readDate)}.</span>}
@@ -242,7 +242,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
       </div></div>
 
       {kind === 'stock' ? (
-        <div className="card"><div className="card-body"><p className="text-sm">Stock count uploads come next, the same way: the sheet is read, you type what's missing, then it goes to the normal stock count.</p></div></div>
+        <div className="card"><div className="card-body"><p className="text-sm">Coming next.</p></div></div>
       ) : kind !== 'production' ? (
         <SalesUpload key={kind} refs={refs} branchId={branchId} today={today} day={date} past={kind === 'past_sales'} keep={keep} onStats={setSalesStats} />
       ) : (
@@ -345,7 +345,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
           {error && <div className="alert alert-error" role="alert">{error}</div>}
           {read && (
             <div className="ru-actions">
-              <span className="pl-help">Batches open in Production one by one, with the materials and stock checks, before the day is saved.</span>
+              <span className="pl-help">Opens in Production, one batch at a time.</span>
               <button type="button" className="btn btn-outline" onClick={() => { setRead(null); setTried(false); setError(''); }}>Cancel</button>
               <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>
                 {nBatches ? `Save and open ${nBatches} batch${nBatches === 1 ? '' : 'es'} in Production` : 'Save readings'}</button>
