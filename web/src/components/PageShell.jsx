@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useEmbedded } from '../lib/urlTab';
 import { groupOf, atEntry } from './Sidebar';
 import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
@@ -14,11 +15,19 @@ import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react'
 export default function PageShell({ title, subtitle, description, primaryAction, actions, onSettings, children }) {
   const loc = useLocation();
   const navigate = useNavigate();
+  const embedded = useEmbedded();
   // Back (2026-11-03): one step back through the pages, tabs and reports opened in MOIS; hidden on the first page
   const canGoBack = (window.history.state?.idx ?? 0) > 0;
   const { can } = useAuth();
   const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
+  // inside the secretary's dashboard (2026-11-03): no heading of its own — its buttons, then the page
+  if (embedded) return (
+    <div className="page-embedded">
+      {(primaryAction || actions) && <div className="page-embedded-actions">{actions}{primaryAction}</div>}
+      {children}
+    </div>
+  );
   return (
     <main className="page-content animate-fadeIn">
       <nav className="page-breadcrumb" aria-label="Breadcrumb">

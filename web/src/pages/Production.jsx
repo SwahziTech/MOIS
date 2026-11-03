@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
-import { Factory } from 'lucide-react';
+import { Factory, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -165,6 +165,7 @@ export default function Production() {
   const page = current === 'planner' ? 'planner' : current === 'variance' ? 'variance' : 'production';
   return (
     <PageShell title={{ production: 'Production', planner: 'Planner', variance: 'Material variance' }[page]} subtitle="Production" onSettings={() => setShowSettings(true)}
+      primaryAction={page === 'production' && canRecord && current !== 'log' && <button type="button" className="btn btn-primary" onClick={() => setTab('log')}><Plus size={15} /> New production</button>}
       description={branchId ? branchName : 'All branches'}>
       {page === 'production' && <PageTabs value={current} onChange={setTab} tabs={[
         ...(canRecord ? [['log', 'Production']] : []),

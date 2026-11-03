@@ -9,7 +9,11 @@ import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadProduction, loadSales, loadMaterialUse, loadProfit } from '../lib/reports';
 import { loadCuring, loadOpenOrders, loadLowStock, loadPayables, loadRecentSales, loadWaiting } from '../lib/dashboard';
 import PageShell from '../components/PageShell';
-import { useUrlTab } from '../lib/urlTab';
+import { useUrlTab, Embedded } from '../lib/urlTab';
+import Staff from './Staff';
+import Sales from './Sales';
+import Production from './Production';
+import Purchases from './Purchases';
 import { PageTabs } from '../components/ListControls';
 import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
 import { ProofReminder } from '../components/sales/PaymentProofs';
@@ -57,28 +61,37 @@ export default function Dashboard() {
   if (primaryRole(userRoles) === 'director') {
     return <PageShell title="Dashboard" subtitle="Overview"><DirectorBoard /></PageShell>;
   }
-  return <RoleDashboard isOwner={primaryRole(userRoles) === 'owner'} />;
+  return <RoleDashboard isOwner={primaryRole(userRoles) === 'owner'} isSecretary={primaryRole(userRoles) === 'secretary'} />;
 }
 
-function RoleDashboard({ isOwner }) {
+function RoleDashboard({ isOwner, isSecretary = false }) {
   const { organization, can, canAnywhere } = useAuth();
   const { branchId, branchName, inBranch, branches } = useBranch();
   const today = orgToday(organization?.timezone);
   const cur = organization?.currency_code;
   const short = v => formatMoneyShort(v, cur);
   const sees = code => (canAnywhere ?? can)(code);
-  const tabs = useMemo(() => [
+  // the secretary (2026-11-03): the pages used every day for entering data, in that order
+  const tabs = useMemo(() => (isSecretary ? [
+    ['overview', 'Overview'],
+    sees('staff.view') && ['attendance', 'Attendance'],
+    sees('sales.view') && ['sales', 'Sales'],
+    sees('production.view') && ['production', 'Production'],
+    (sees('procurement.view') || sees('procurement.receive')) && ['purchases', 'Purchases'],
+    sees('inventory.view') && ['inventory', 'Inventory'],
+  ] : [
     isOwner && ['director', 'Director view'],
     sees('products.manage') && ['overview', 'Overview'],
     sees('production.view') && ['production', 'Production'],
     sees('inventory.view') && ['inventory', 'Inventory'],
     sees('sales.view') && ['sales', 'Sales'],
     ['setup', 'Setup'],
-  ].filter(Boolean), [can, canAnywhere, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]).filter(Boolean), [can, canAnywhere, isOwner, isSecretary]); // eslint-disable-line react-hooks/exhaustive-deps
   // the tab is in the address (?tab=), so Back returns to it; a Director view card report (?card=) is on that tab
   const [tabParam, setTab] = useUrlTab(null);
   const tab = new URLSearchParams(window.location.search).get('card') ? 'director' : tabParam;
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
+  const realPage = isSecretary && ['attendance', 'sales', 'production', 'purchases'].includes(shown);
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }
   const [error, setError] = useState('');
@@ -87,7 +100,7 @@ function RoleDashboard({ isOwner }) {
 
   useEffect(() => { loadInventoryRefs().then(setRefs).catch(() => setError('Failed to load dashboard data.')); }, []);
   useEffect(() => {
-    if (!refs || shown === 'setup' || shown === 'director') return;
+    if (!refs || shown === 'setup' || shown === 'director' || realPage) return;
     const req = ++reqRef.current; const forTab = shown;
     setError(''); setLoaded(null);
     const args = { from, to: today, today, inBranch, branchId, refs, branches };
@@ -144,7 +157,14 @@ function RoleDashboard({ isOwner }) {
       <ProofReminder branchId={branchId} inBranch={inBranch} />
       {error && <div className="alert alert-error mb-16" role="alert">{error}</div>}
 
-      {shown === 'director' ? <DirectorBoard />
+      {realPage ? (
+        // the real page, with its own buttons and tabs (its tab kept under ?view=)
+        shown === 'attendance' ? <Embedded fallback="attendance"><Staff /></Embedded>
+        : shown === 'sales' ? <Embedded fallback="book"><Sales /></Embedded>
+        : shown === 'production' ? <Embedded fallback="curing"><Production /></Embedded>
+        : <Embedded><Purchases /></Embedded>
+      )
+      : shown === 'director' ? <DirectorBoard />
       : shown === 'setup' ? <SetupCounts branchId={branchId} branchName={branchName} inBranch={inBranch} />
       : shown === 'overview' ? (
         <>

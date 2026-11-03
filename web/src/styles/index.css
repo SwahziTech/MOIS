@@ -2551,3 +2551,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sb-approval { margin-top: 4px; font-size: var(--text-xs); }
 /* tables inside a window don't freeze their header (it covered rows when scrolled) */
 .modal thead th { position: static; }
+/* a page shown inside the secretary's dashboard (2026-11-03) */
+.page-embedded-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
