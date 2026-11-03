@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
+import { weekPeriods, weekLabel, periodRange } from '../lib/periods';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -921,19 +922,20 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
  * product and by customer. Figures as saved; nothing re-priced here.
  */
 function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf }) {
-  const [period, setPeriod] = useState('30');
-  const from = period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
+  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
+  const [from, to] = periodRange(period, today);
+  const inP = d => d >= from && d <= to;
   const live = sales.filter(x => x.stage === 'order' || x.stage === 'invoice');
-  const sold = live.filter(x => x.sale_date >= from);
-  const payments = live.flatMap(x => (x.payments || []).map(pm => ({ ...pm, sale: x }))).filter(pm => pm.paid_on >= from);
-  const deliveries = live.flatMap(x => (x.deliveries || []).map(d => ({ ...d, sale: x }))).filter(d => d.delivered_on >= from);
+  const sold = live.filter(x => inP(x.sale_date));
+  const payments = live.flatMap(x => (x.payments || []).map(pm => ({ ...pm, sale: x }))).filter(pm => inP(pm.paid_on));
+  const deliveries = live.flatMap(x => (x.deliveries || []).map(d => ({ ...d, sale: x }))).filter(d => inP(d.delivered_on));
   const owed = live.reduce((t, x) => t + Number(x.total) - (x.payments || []).reduce((u, pm) => u + Number(pm.amount), 0), 0);
   const lineOf = Object.fromEntries(live.flatMap(x => x.lines || []).map(l => [l.id, l]));
   const dl = deliveries.flatMap(d => (d.lines || []).map(x => ({ ...x, line: lineOf[x.sale_line_id], sale: d.sale })));
   const exOf = x => Number(x.value) / (1 + Number(x.line?.vat_rate ?? 0) / 100);
   const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
   const delivered = { value: sum(deliveries, d => Number(d.value)), ex: sum(dl, exOf), cost: sum(dl, x => Number(x.cost ?? 0)), est: sum(dl, x => Number(x.estimated_cost ?? 0)) };
-  const queued = sales.filter(x => x.stage === 'quotation' && x.sale_date >= from);
+  const queued = sales.filter(x => x.stage === 'quotation' && inP(x.sale_date));
 
   // by product: sold (orders + invoices), delivered, margin on delivered
   const byProduct = {};
@@ -960,7 +962,8 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
+          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
         </select>
         <span className="pl-help">Orders and invoices by their date; payments and deliveries by theirs. Owed is everything still open.</span>
       </div>
@@ -1008,15 +1011,14 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
 function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onOpen }) {
   // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
   const cur = currency ? ` (${currency})` : '';
-  const [period, setPeriod] = useState('month');
+  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
   const [delivery, setDelivery] = useState('');       // '' | not | part | done
   const [payment, setPayment] = useState('');         // '' | owed | paid
   const [account, setAccount] = useState('');         // '' | an account id
   const [vat, setVat] = useState('');                 // '' | with | without
-  const monthStart = today.slice(0, 8) + '01';
-  const from = period === 'month' ? monthStart : period === 'all' ? '0000' : new Date(new Date(`${today}T00:00:00Z`).getTime() - Number(period) * 864e5).toISOString().slice(0, 10);
+  const [from, to] = periodRange(period, today);
   // delivered so far, per line (065)
   const doneOf = (x, lineId) => (x.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === lineId).reduce((u, y) => u + Number(y.quantity), 0), 0);
   const stateOf = (x, l) => { const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
@@ -1029,7 +1031,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
     ...(x.lines || []).map(nameOf), ...(x.payments || []).flatMap(pm => [pm.receipt_no, accName(pm.account_id)])]
     .filter(Boolean).some(t => String(t).toLowerCase().includes(q));
   const lineOk = (x, l) => (!delivery || stateOf(x, l) === delivery) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
-  const inPeriod = sales.filter(x => x.sale_date >= from && matches(x)
+  const inPeriod = sales.filter(x => x.sale_date >= from && x.sale_date <= to && matches(x)
       && (!payment || (payment === 'owed') === (Number(x.total) - paidOf(x) > 0.004))
       && (!account || (x.payments || []).some(pm => pm.account_id === account))
       && (x.lines || []).some(l => lineOk(x, l)))
@@ -1069,7 +1071,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
           { key: 'period', label: 'Period', value: period, onChange: setPeriod,
-            options: [{ value: 'month', label: 'This month' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
+            options: [...weekPeriods(today), { value: 'month', label: 'This month' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
           { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
             options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
@@ -1079,7 +1081,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, onO
           { key: 'vat', label: 'VAT', value: vat, onChange: setVat,
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
-      <p className="pl-help" style={{ margin: '0 0 8px' }}>{{ month: 'This month', 7: 'Last 7 days', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
+      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]} · orders and invoices (quotations live under Quotations & invoices).</p>
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>

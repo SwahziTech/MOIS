@@ -12,6 +12,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
 import { peopleOf, labourNorm } from '../components/production/BatchNotes';
 import { formatMoney, dateText, tableDate } from '../lib/format';
+import { weekPeriods, weekRange, weekLabel } from '../lib/periods';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
 const STAGES = ['Curing', 'Ready', 'Released', 'Void'];
@@ -19,15 +20,13 @@ const STAGE_BADGE = { Curing: 'badge-accent', Ready: 'badge-warning', Released: 
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const addDays = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
 
-const mondayOf = d => addDays(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
 const day = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
 /** A period's first and last day. Weeks start on Monday; a Sunday counts with the week just ended */
 function periodBounds(period, today, from, to) {
   const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));
-  const mon = mondayOf(today);
+  const wk = weekRange(period, today);   // this week, its days, last week
+  if (wk) return wk;
   switch (period) {
-    case 'week': return [mon, today];
-    case 'lastweek': return [addDays(mon, -7), addDays(mon, -1)];
     case 'month': return [day(y, m, 1), today];
     case 'lastmonth': return [day(y, m - 1, 1), day(y, m, 0)];
     case 'quarter': return [day(y, Math.floor((m - 1) / 3) * 3 + 1, 1), today];
@@ -57,7 +56,7 @@ export default function ProductionLedger() {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [period, setPeriod] = useState('30');     // week | lastweek | month | lastmonth | quarter | year | 30 | 90 | all | custom
+  const [period, setPeriod] = useState('week');   // this week first (2026-11-03); its days, lastweek | month | lastmonth | quarter | year | 30 | 90 | all | custom
   const [from, setFrom] = useState(addDays(today, -30));
   const [to, setTo] = useState(today);
   const [stage, setStage] = useState('');
@@ -71,7 +70,6 @@ export default function ProductionLedger() {
   const [colorId, setColorId] = useState('');
   function chooseProduct(id) {
     setProductId(id); setColorId('');
-    if (id && !productId && period === '30') setPeriod('week');   // one product opens on this week
   }
 
   async function load() {
@@ -229,7 +227,7 @@ export default function ProductionLedger() {
   }, [productId, colorId, days, stage, sortBy, today, refs, track]); // eslint-disable-line react-hooks/exhaustive-deps
   const productTotal = k => productRows.reduce((t, r) => t + Number(r[k] || 0), 0);
   const productSqm = productId ? sqmOf(productId, productTotal('pieces')) : null;
-  const periodName = { week: 'This week', lastweek: 'Last week', month: 'This month', lastmonth: 'Last month', quarter: 'This quarter', year: 'This year', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time', custom: 'Chosen dates' }[period];
+  const periodName = weekLabel(period, today) ?? { week: 'This week', lastweek: 'Last week', month: 'This month', lastmonth: 'Last month', quarter: 'This quarter', year: 'This year', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time', custom: 'Chosen dates' }[period];
 
   const money = v => formatMoney(v, organization?.currency_code);
   const pct = v => (v == null || !isFinite(v) ? '—' : `${Math.round(v * 1000) / 10}%`);
@@ -261,8 +259,7 @@ export default function ProductionLedger() {
           <button type="button" className={`filter-chip${view === 'tracking' ? ' is-on' : ''}`} disabled={!track} title={track ? '' : 'Production tracking is not set up yet'} onClick={() => setView('tracking')}>Tracking</button>
         </div>}
         <select className="form-input" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="week">This week</option>
-          <option value="lastweek">Last week</option>
+          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           <option value="month">This month</option>
           <option value="lastmonth">Last month</option>
           <option value="quarter">This quarter</option>

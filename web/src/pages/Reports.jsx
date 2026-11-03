@@ -35,7 +35,7 @@ export default function Reports() {
   const short = v => formatMoneyShort(v, cur);
   const [tab, setTab] = useState('production');
   const [nested, setNested] = useState('a');
-  const [range, setRange] = useState(() => [`${today.slice(0, 7)}-01`, today]);
+  const [range, setRange] = useState(() => [mondayOf(today), today]);   // this week first (2026-11-03)
   const [from, to] = range;
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }: a tab's data, never shown under another tab
@@ -61,10 +61,12 @@ export default function Reports() {
   const where = branchId ? branchName : 'all branches';
   const title = `${TABS.find(t => t[0] === tab)[1]} — ${where}, ${from} to ${to}`;
   const presets = [
+    ['This week', [mondayOf(today), today]],
+    ['Today', [today, today]],
+    ...(today !== mondayOf(today) ? [['Yesterday', [addDays(today, -1), addDays(today, -1)]]] : []),
+    ['Last week', [addDays(mondayOf(today), -7), addDays(mondayOf(today), -1)]],
     ['This month', [`${today.slice(0, 7)}-01`, today]],
     ['Last month', [prevMonthStart(today), monthEnd(prevMonthStart(today))]],
-    ['This week', [mondayOf(today), today]],
-    ['Last 7 days', [addDays(today, -6), today]],
     ['This year', [`${today.slice(0, 4)}-01-01`, today]],
   ];
   const card = (label, figure, note, title2) => (

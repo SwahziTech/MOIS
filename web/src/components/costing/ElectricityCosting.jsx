@@ -2,6 +2,9 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
+import { orgToday } from '../../lib/inventory';
+import { weekPeriods, periodRange } from '../../lib/periods';
 import { formatMoney, formatAmount, tableDate } from '../../lib/format';
 import { PageTabs } from '../ListControls';
 import EmptyState from '../EmptyState';
@@ -9,7 +12,6 @@ import ErrorState from '../ErrorState';
 
 const units = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v);
 const r2 = n => Math.round(n * 100) / 100;
-const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 
 /*
  * Electricity on Costing (1e, 2026-10-27): the direct production cost of
@@ -21,7 +23,9 @@ const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10)
  */
 export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
   const money = v => formatMoney(v, currency);
-  const [period, setPeriod] = useState('30');
+  const { organization } = useAuth();
+  const today = orgToday(organization?.timezone);
+  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
   const [view, setView] = useState('days');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -29,13 +33,13 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
 
   async function load() {
     setError('');
-    const since = daysAgo(Number(period));
+    const [since, until] = periodRange(period, today);
     const [m, mm, d, b, sp] = await Promise.all([
       supabase.from('power_meters').select('id, name, status').eq('branch_id', branchId).order('name'),
       supabase.from('power_meter_machines').select('meter_id, machine_id'),
-      supabase.from('power_daily').select('*').eq('branch_id', branchId).gte('day', since).order('day', { ascending: false }),
+      supabase.from('power_daily').select('*').eq('branch_id', branchId).gte('day', since).lte('day', until).order('day', { ascending: false }),
       supabase.from('production_batches').select('id, batch_date, machine_id, cement_bags, outputs:production_batch_outputs(product_id, color_id, pieces_cast, cement_share)')
-        .eq('branch_id', branchId).gte('batch_date', since).neq('status', 'void'),
+        .eq('branch_id', branchId).gte('batch_date', since).lte('batch_date', until).neq('status', 'void'),
       supabase.from('product_specs').select('product_id, pcs_per_sqm'),
     ]);
     if (m.error || d.error) { console.error(m.error || d.error); setError("We couldn't load electricity costs."); return; }
@@ -95,7 +99,8 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <PageTabs nested tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
         <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
+          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
         </select>
         <Link to="/purchases?tab=electricity" className="btn btn-ghost btn-sm">Readings & tokens ›</Link>
       </div>

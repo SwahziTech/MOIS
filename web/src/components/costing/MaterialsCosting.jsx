@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
+import { orgToday } from '../../lib/inventory';
+import { weekPeriods, weekLabel, periodRange } from '../../lib/periods';
 import { formatMoney, formatMoneyShort, formatAmount } from '../../lib/format';
 import { materialStockValue, qtyText } from '../../lib/inventory';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
 
-const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 const r2 = n => Math.round(n * 100) / 100;
 
 /*
@@ -18,7 +20,9 @@ const r2 = n => Math.round(n * 100) / 100;
  */
 export default function MaterialsCosting({ branchId, refs, currency }) {
   const money = v => formatMoney(v, currency);
-  const [period, setPeriod] = useState('30');
+  const { organization } = useAuth();
+  const today = orgToday(organization?.timezone);
+  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
   const [used, setUsed] = useState(null);
   const [stock, setStock] = useState({});
   const [error, setError] = useState('');
@@ -27,7 +31,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
     setError('');
     const { data, error: err } = await supabase.from('production_batch_materials')
       .select('material_id, stock_quantity, cost, batch:production_batches!inner(batch_date, branch_id, status)')
-      .eq('batch.branch_id', branchId).neq('batch.status', 'void').gte('batch.batch_date', daysAgo(Number(period)));
+      .eq('batch.branch_id', branchId).neq('batch.status', 'void').gte('batch.batch_date', periodRange(period, today)[0]).lte('batch.batch_date', periodRange(period, today)[1]);
     if (err) { console.error(err); setError("We couldn't load material costs."); return; }
     setUsed(data || []);
   }
@@ -68,7 +72,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
   const totalUsed = rows.reduce((t, r) => t + r.cost, 0);
   const top = rows.find(r => r.cost > 0);
   const stockTotal = rows.reduce((t, r) => t + (r.stockValue || 0), 0);
-  const label = { 7: 'last 7 days', 30: 'last 30 days', 90: 'last 90 days', 365: 'last 12 months' }[period];
+  const label = weekLabel(period, today)?.toLowerCase() ?? { 30: 'last 30 days', 90: 'last 90 days', 365: 'last 12 months' }[period];
 
   return (
     <>
@@ -79,7 +83,8 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
         <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
+          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
         </select>
       </div>
       {rows.length === 0 ? <div className="card"><EmptyState icon={Layers} title="Nothing used in this period" description="Materials taken by production batches show here, with their cost." /></div> : (

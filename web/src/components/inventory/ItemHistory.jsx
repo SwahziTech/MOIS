@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { qtyText, orgToday } from '../../lib/inventory';
 import { formatMoney, dateTimeText } from '../../lib/format';
 import { useAuth } from '../../hooks/useAuth';
+import { weekPeriods, periodRange } from '../../lib/periods';
 import Modal from '../Modal';
 
 const LABEL = {
@@ -15,7 +16,7 @@ const LABEL = {
 const PRODUCTION = new Set(['production_use', 'production_output', 'curing_out', 'curing_in']);
 const groupOf = t => (t.buy ? 'purchase' : PRODUCTION.has(t.transaction_type) ? 'production' : 'movement');
 const GROUPS = [['all', 'All'], ['purchase', 'Purchases'], ['production', 'Production'], ['movement', 'Other']];
-const PERIODS = [['all', 'All time'], ['week', 'This week'], ['month', 'This month']];
+const PERIODS = [['month', 'This month'], ['all', 'All time']];   // after the week periods (2026-11-03)
 const r2 = n => Math.round(n * 100) / 100;
 
 /**
@@ -34,7 +35,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
   const money = v => formatMoney(v, organization?.currency_code);
   const [rows, setRows] = useState(null);
   const [group, setGroup] = useState(mode === 'purchases' ? 'purchase' : 'all');
-  const [period, setPeriod] = useState('all');
+  const [period, setPeriod] = useState('week');
   const [newestFirst, setNewestFirst] = useState(true);
   const [open, setOpen] = useState(null);
   const [people, setPeople] = useState({});
@@ -68,14 +69,9 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
     return () => { live = false; };
   }, [item.id, item.kind, branchId]);
 
-  const since = useMemo(() => {
-    const d = new Date(`${today}T00:00:00Z`);
-    if (period === 'week') { d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); }
-    if (period === 'month') return `${today.slice(0, 7)}-01`;
-    return null;
-  }, [period, today]);
+  const [since, until] = useMemo(() => periodRange(period, today), [period, today]);
 
-  const shown = (rows || []).filter(x => (group === 'all' || groupOf(x) === group) && (!since || x.transaction_date >= since));
+  const shown = (rows || []).filter(x => (group === 'all' || groupOf(x) === group) && x.transaction_date >= since && x.transaction_date <= until);
   const ordered = newestFirst ? [...shown].reverse() : shown;
   const counts = Object.fromEntries(GROUPS.map(([k]) => [k, (rows || []).filter(x => k === 'all' || groupOf(x) === k).length]));
 
@@ -86,6 +82,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
           counts[k] > 0 || k === 'all' ? <button key={k} type="button" className={`filter-chip${group === k ? ' is-on' : ''}`} onClick={() => setGroup(k)}>{l} {counts[k] ? `(${counts[k]})` : ''}</button> : null
         ))}
         <select className="form-input ih-select" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
+          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           {PERIODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewestFirst(v => !v)}>{newestFirst ? 'Newest first' : 'Oldest first'} ⇅</button>
