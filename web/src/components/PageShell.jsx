@@ -1,7 +1,7 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { groupOf, atEntry } from './Sidebar';
-import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
  * PageShell — the standard page frame (2026-10-17). No top bar: the page
@@ -13,12 +13,16 @@ import { ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 // a page that shares a sidebar entry with others (Review queue, Products, Procurement, Cash flow) shows them as tabs under the heading (2026-10-30)
 export default function PageShell({ title, subtitle, description, primaryAction, actions, onSettings, children }) {
   const loc = useLocation();
+  const navigate = useNavigate();
+  // Back (2026-11-03): one step back through the pages, tabs and reports opened in MOIS; hidden on the first page
+  const canGoBack = (window.history.state?.idx ?? 0) > 0;
   const { can } = useAuth();
   const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
   return (
     <main className="page-content animate-fadeIn">
       <nav className="page-breadcrumb" aria-label="Breadcrumb">
+        {canGoBack && <button type="button" className="page-back" title="Back to where you were" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Back</button>}
         <Link to="/">Home</Link>
         {subtitle && (
           <>

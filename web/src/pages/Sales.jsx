@@ -123,7 +123,7 @@ export default function Sales() {
     try { q = JSON.parse(sessionStorage.getItem(uploadKey) || 'null'); } catch { /* ignore */ }
     if (!q?.sales?.length || q.at >= q.sales.length) { setUpload(null); return; }
     setUpload(q);
-    setView('book');
+    setView('book', true);
     openUpload(q);
   }, [uploadKey, !!refs, canSell]); // eslint-disable-line react-hooks/exhaustive-deps
   // what sells most at the branch (sale lines, last 90 days) — the product search lists it first (2026-10-26)

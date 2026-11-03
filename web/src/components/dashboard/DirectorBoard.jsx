@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
@@ -74,7 +74,10 @@ export default function DirectorBoard() {
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
   const navigate = useNavigate();
-  const [openCard, setOpenCard] = useState(null);   // a card's report, shown here (2026-11-03)
+  // a card's report, shown here (2026-11-03); kept in the address (?card=) so Back closes it
+  const [params, setParams] = useSearchParams();
+  const openCard = CARD[params.get('card')] ? params.get('card') : null;
+  const setOpenCard = card => setParams(p => { const n = new URLSearchParams(p); if (card) n.set('card', card); else n.delete('card'); return n; });
   const [refs, setRefs] = useState(null);
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed

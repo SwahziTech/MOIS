@@ -9,6 +9,7 @@ import { orgToday, loadInventoryRefs } from '../lib/inventory';
 import { loadProduction, loadSales, loadMaterialUse, loadProfit } from '../lib/reports';
 import { loadCuring, loadOpenOrders, loadLowStock, loadPayables, loadRecentSales, loadWaiting } from '../lib/dashboard';
 import PageShell from '../components/PageShell';
+import { useUrlTab } from '../lib/urlTab';
 import { PageTabs } from '../components/ListControls';
 import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
 import DirectorBoard from '../components/dashboard/DirectorBoard';
@@ -73,7 +74,9 @@ function RoleDashboard({ isOwner }) {
     sees('sales.view') && ['sales', 'Sales'],
     ['setup', 'Setup'],
   ].filter(Boolean), [can, canAnywhere, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.search).get('card') ? 'director' : null));
+  // the tab is in the address (?tab=), so Back returns to it; a Director view card report (?card=) is on that tab
+  const [tabParam, setTab] = useUrlTab(null);
+  const tab = new URLSearchParams(window.location.search).get('card') ? 'director' : tabParam;
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }
