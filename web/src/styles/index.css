@@ -2505,3 +2505,20 @@ thead th { box-shadow: inset 0 -1px 0 var(--border-strong); }
 .ot-form { align-items: flex-end; flex-wrap: wrap; }
 
 .st-att-link { align-self: flex-end; }
+
+/* Daily report › Upload a report (2026-11-03) */
+.ru-file .card-body { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.ru-thumb { width: 84px; height: 104px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-soft); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--text-muted); flex-shrink: 0; }
+.ru-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ru-file-info { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+.ru-paste { min-height: 160px; }
+.ru-h { font-size: var(--text-md); font-weight: 600; margin: 4px 0 8px; }
+.ru-h:not(:first-child) { margin-top: 18px; }
+.ru-table td { vertical-align: top; }
+.ru-table td .form-input { min-width: 110px; }
+.ru-table td .form-input.num { min-width: 80px; max-width: 120px; text-align: right; }
+.ru-table td > .pl-help { display: block; }
+.ru-leftover td { border-top: none; }
+.ru-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ru-actions .pl-help { margin-right: auto; }
+.ru-kept { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }

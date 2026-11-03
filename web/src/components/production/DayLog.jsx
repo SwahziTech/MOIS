@@ -70,6 +70,38 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
   const [confirming, setConfirming] = useState(false);
   const [already, setAlready] = useState([]);      // staged batches that look already saved (or waiting for approval) for this date
+  // An uploaded report's batches (Daily report › Upload a report), each loaded into the form in turn
+  const uploadKey = `mois.upload.queue.${organization?.id}.${branchId}`;
+  const [upload, setUpload] = useState(null);   // { date, forms, next, done }
+  const [uploadClash, setUploadClash] = useState(false);
+  // read once the company and branch are known (the form can open a moment before); the place
+  // reached is kept on this tab until the last batch, so a refresh carries on from it
+  const keepUpload = q => { try { if (q) sessionStorage.setItem(uploadKey, JSON.stringify(q)); else sessionStorage.removeItem(uploadKey); } catch { /* ignore */ } };
+  useEffect(() => {
+    if (!organization?.id || !branchId) return;
+    let q = null;
+    try { q = JSON.parse(sessionStorage.getItem(uploadKey) || 'null'); } catch { /* ignore */ }
+    if (!q?.forms?.length) return;
+    // the listed batches all save under one date: a different day waits until they are saved or cleared
+    if (staged.length && date !== q.date) { setUpload(q); setUploadClash(true); return; }
+    const at = Math.min(q.at ?? 0, q.forms.length - 1);
+    setUploadClash(false);
+    setDate(q.date);
+    setEditingId(null);
+    setForm({ ...emptyForm(), ...q.forms[at] });
+    setUpload({ ...q, next: at + 1 });
+  }, [uploadKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  function nextFromUpload(form0) {
+    if (upload?.next != null && upload.next < upload.forms.length) {
+      setForm({ ...emptyForm(), ...upload.forms[upload.next] });
+      keepUpload({ date: upload.date, forms: upload.forms, at: upload.next });
+      setUpload(u => ({ ...u, next: u.next + 1 }));
+      return true;
+    }
+    if (upload?.next != null) { keepUpload(null); setUpload(u => ({ ...u, done: true })); }
+    if (form0) setForm(nextForm(form0));
+    return false;
+  }
 
   // Before saving: the same product, colour and bags already recorded (or sent for approval) on this date
   // at this branch? Shown in the confirm window — saving is still allowed, e.g. a genuine second batch.
@@ -299,7 +331,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       team: tracked ? teamLabel(lists, form.teamId, form.workerIds) : null, machine: tracked ? lists.machines.find(m => m.id === form.machineId)?.name : null };
     setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
     setEditingId(null);
-    setForm(nextForm(form));   // "allow other products" goes back to the default too; the machine stays, the team doesn't
+    // the next batch from an uploaded report, else a fresh form ("allow other products" back to the default; the machine stays, the team doesn't)
+    if (editingId) setForm(nextForm(form)); else nextFromUpload(form);
   }
   function editStaged(item) {
     setForm(item.form);
@@ -415,6 +448,16 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       {picking && (
         <ProductPicker items={carried} cats={cats} usage={usage} wastani={wastani} onClose={() => setPicking(false)}
           onPick={id => { setPicking(false); set({ productId: id, colorId: '', leftovers: [], edits: {}, allowOther: false }); }} />
+      )}
+      {uploadClash && (
+        <div className="alert alert-warning" role="note">An uploaded report for {dateText(upload.date)} is waiting. Save or clear the {staged.length} batch{staged.length === 1 ? '' : 'es'} listed for {dateText(date)} first, then open it again from Daily report.</div>
+      )}
+      {upload?.next != null && !upload.done && (
+        <div className="alert alert-info" role="note">From the uploaded report: batch {upload.next} of {upload.forms.length}. Check the materials, then Add to list.
+          {' '}<button type="button" className="btn btn-outline btn-sm" onClick={() => nextFromUpload(form)}>Skip this batch</button></div>
+      )}
+      {upload?.done && staged.length > 0 && (
+        <div className="alert alert-info" role="note">The uploaded report's batches are on the list. Check them, then save the day.</div>
       )}
       {restored && staged.length > 0 && (
         <div className="alert alert-info" role="note">Your unsaved list from earlier is back: {staged.length} batch{staged.length === 1 ? '' : 'es'} not saved yet, dated {dateText(date)}.</div>

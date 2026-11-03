@@ -16,6 +16,8 @@ import { supabase } from './supabase';
  * loadDayFacts reads what MOIS holds for a branch and day; writeReport turns
  * it into the text; readReport reads a written/pasted report back; compare
  * lines the two up.
+ * 2026-11-03: an uploaded report (pasted text now, a photo read by AI later)
+ * is read the same way; its date comes from TAREHE.
  */
 
 const num = v => Number(String(v).replace(/,/g, ''));
@@ -103,9 +105,19 @@ export function writeReport(facts, { branchName, date }) {
   return out.join('\n').trim();
 }
 
-/** A written or pasted report read back → { products, cementStore, meters } (what could be read) */
+/** "TAREHE 02/11/26" → '2026-11-02' (null when not found or not a real day) */
+export function readDate(text) {
+  const m = String(text || '').toUpperCase().match(/TAREHE\s*[:.]?\s*(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{2,4})/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  const iso = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== iso ? null : iso;
+}
+
+/** A written or pasted report read back → { date, products, cementStore, meters } (what could be read) */
 export function readReport(text) {
-  const res = { products: [], cementStore: null, meters: [] };
+  const res = { date: readDate(text), products: [], cementStore: null, meters: [] };
   let prod = null; let meter = null;
   for (const raw of String(text || '').split(/\r?\n/)) {
     const line = raw.trim();
@@ -134,19 +146,20 @@ export function readReport(text) {
     if (!prod) continue;
     const team = U.match(/TEAM\s+WATU\s*([\d]+)/) || U.match(/WATU\s*([\d]+)/);
     if (team) { prod.people = num(team[1]); continue; }
-    if (/MABAKI/.test(U) && pcs) { prod.leftovers.push({ name: U.slice(0, U.search(/PCS/)).trim(), pieces: num(pcs[1]) }); continue; }
+    if (/MABAKI/.test(U) && pcs) { prod.leftovers.push({ name: U.slice(0, U.search(/PCS/)).replace(/\(?MABAKI\)?/g, '').trim(), pieces: num(pcs[1]) }); continue; }
     if (pcs && prod.pieces == null) { prod.pieces = num(pcs[1]); if (cem) prod.cement = num(cem[1]); }
   }
   return res;
 }
 
 // words of a name, for matching a written name to MOIS's ("C/STONE PRESS CM 80" ↔ "Curbstone Press 80cm")
-const words = s => String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && w !== 'cm' && w !== 'pcs');
-function bestMatch(name, list) {
+export const words = s => String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && w !== 'cm' && w !== 'pcs');
+export function bestMatch(name, list) {
   const a = words(name); let best = null; let score = 0;
   for (const x of list) {
     const b = words(x.name);
-    const s = a.filter(w => b.some(v => v === w || (w.length >= 3 && (v.startsWith(w) || w.startsWith(v))))).length;
+    // longer words weigh more: "paving" says more than a lone "6"
+    const s = a.filter(w => b.some(v => v === w || (/^\d+$/.test(w) && v.replace(/(cm|mm)$/, '') === w) || (w.length >= 3 && (v.startsWith(w) || w.startsWith(v))))).reduce((t, w) => t + w.length, 0);
     if (s > score) { best = x; score = s; }
   }
   return best;

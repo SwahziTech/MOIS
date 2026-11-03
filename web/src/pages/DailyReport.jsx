@@ -9,6 +9,8 @@ import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
+import ReportUpload from '../components/reports/ReportUpload';
+import { useUrlTab } from '../lib/urlTab';
 
 const close = (a, b) => Math.abs(a - b) < 0.5;
 
@@ -18,12 +20,14 @@ const close = (a, b) => Math.abs(a - b) < 0.5;
  *               Swahili format, ready to copy and send;
  *   Compare   — a written or pasted report read back and lined up against
  *               MOIS: production, cement in store, each meter.
+ *   Upload    — (2026-11-03) a report uploaded, read, completed by hand and
+ *               saved as entries (components/reports/ReportUpload).
  */
 export default function DailyReport() {
-  const { organization } = useAuth();
+  const { organization, canAt } = useAuth();
   const { branchId, branchName } = useBranch();
   const today = orgToday(organization?.timezone);
-  const [tab, setTab] = useState('write');
+  const [tab, setTab] = useUrlTab('write');
   const [date, setDate] = useState(today);
   const [refs, setRefs] = useState(null);
   const [facts, setFacts] = useState(null);
@@ -53,10 +57,11 @@ export default function DailyReport() {
 
   return (
     <PageShell title="Daily report" subtitle="Reports"
-      description={branchId ? `The day at ${branchName}: written from MOIS, or a written report checked against it.` : 'Choose a branch to see its daily report.'}>
-      <PageTabs tabs={[['write', 'From MOIS'], ['compare', 'Compare a report']]} value={tab} onChange={setTab} />
+      description={branchId ? `The day at ${branchName}: written from MOIS, checked against a written report, or uploaded and saved.` : 'Choose a branch to see its daily report.'}>
+      <PageTabs tabs={[['write', 'From MOIS'], ['compare', 'Compare a report'], ...(branchId && canAt('production.create', branchId, null) ? [['upload', 'Upload a report']] : [])]} value={tab} onChange={setTab} />
       {!branchId ? <div className="card"><EmptyState icon={FileText} title="Choose a branch" description="The daily report is one branch's day." /></div>
       : error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
+      : tab === 'upload' ? (refs ? <ReportUpload key={branchId} refs={refs} branchId={branchId} branchName={branchName} today={today} /> : <div className="card"><div className="card-body"><span className="skeleton" /></div></div>)
       : (
         <>
           <div className="mm-stats">
