@@ -39,11 +39,13 @@ export function formatAmount(value) {
 }
 
 /** Money in short, for the note under a summary figure (2026-10-27): "Tsh 29.3M", "Tsh 845K" */
+// Summary cards only (2026-11-03, the user): never K — whole numbers ("Tsh 235,000"); M from 10 million
+// and B from a billion, where a whole number can't fit. Tables and details always use the full figure.
 export function formatMoneyShort(value, currencyCode) {
   if (value == null) return '—';
   const a = Math.abs(value);
-  const n = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}M` : a >= 1e4 ? `${Math.round(a / 1e3)}K` : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(a);
-  return `${value < 0 ? '−' : ''}${LOCAL_SYMBOL[currencyCode] ?? currencyCode ?? ''} ${n.replace('.0', '')}`.trim();
+  const n = a >= 1e9 ? `${(a / 1e9).toFixed(2)}B` : a >= 1e7 ? `${(a / 1e6).toFixed(1)}M` : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(a);
+  return `${value < 0 ? '−' : ''}${LOCAL_SYMBOL[currencyCode] ?? currencyCode ?? ''} ${n.replace(/\.0+([MB])$/, '$1')}`.trim();
 }
 
 /**

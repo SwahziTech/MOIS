@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
-import { formatAmount, formatMoneyShort, dateText, tableDate } from '../../lib/format';
+import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from '../../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
@@ -73,6 +73,7 @@ export default function DirectorBoard() {
   const { branchId, branchName, branches, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
+  const full = v => formatMoney(Math.round(Number(v || 0)), organization?.currency_code);   // tables: the whole figure, Tsh on totals
   const navigate = useNavigate();
   // a card's report, shown here (2026-11-03); kept in the address (?card=) so Back closes it
   const [params, setParams] = useSearchParams();
@@ -106,7 +107,7 @@ export default function DirectorBoard() {
   if (openCard && d.money) {
     const back = () => setOpenCard(null);
     return openCard === 'sales'
-      ? <SalesReport data={d.money} refs={refs} inBranch={inBranch} short={short} period={period} bar={bar} onBack={back} go={navigate} />
+      ? <SalesReport data={d.money} refs={refs} inBranch={inBranch} short={short} full={full} period={period} bar={bar} onBack={back} go={navigate} />
       : <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} onBack={back} go={navigate} />;
   }
 
@@ -211,7 +212,7 @@ const ReportHead = ({ card, period, onBack, go }) => (
 
 /* The Sales card opened: a short summary, then each product sold — date, product, quantity, amount, account.
    A row (or its icon) opens that sale in the Sales book. */
-function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
+function SalesReport({ data, refs, inBranch, short, full, period, bar, onBack, go }) {
   const sales = data.sales.filter(x => inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to)
     .sort((a, b) => (a.day === b.day ? b.no - a.no : a.day < b.day ? 1 : -1));
   const name = l => (!l.product_id ? `${l.item_name} (other)` : null) ?? [refs?.items[`p:${l.product_id}`]?.name ?? '—', l.color_id ? refs?.colorById[l.color_id]?.name : null].filter(Boolean).join(' ');
@@ -247,7 +248,7 @@ function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
               );
             }))}
           </tbody>
-          {sales.length > 0 && <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{short(total)}</strong></td><td colSpan={2} /></tr></tfoot>}
+          {sales.length > 0 && <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{full(total)}</strong></td><td colSpan={2} /></tr></tfoot>}
         </table>
       </div></div>
     </div>
@@ -255,7 +256,7 @@ function SalesReport({ data, refs, inBranch, short, period, bar, onBack, go }) {
 }
 
 /* Weekly cash or Purchases opened: the period's rows, newest first; a row opens the page on the period */
-function CardHistory({ card, data, inBranch, today, short, period, periodKey, bar, onBack, go }) {
+function CardHistory({ card, data, inBranch, today, short, full, period, periodKey, bar, onBack, go }) {
   const by = grainOf(periodKey);
   const cfg = CARD[card];
   const rows = useMemo(() => historyFor(data, card, by, inBranch, today, period), [data, card, by, inBranch, today, period]);
@@ -276,7 +277,7 @@ function CardHistory({ card, data, inBranch, today, short, period, periodKey, ba
                 <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
               </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}</td>)}</tr>)}
           </tbody>
-          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{short(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
+          {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{full(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>
       </div></div>
     </div>
