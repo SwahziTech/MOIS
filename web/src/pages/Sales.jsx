@@ -642,6 +642,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
   const delivered = deliveries.flatMap(d => d.lines || []).reduce((t, x) => ({ ex: t.ex + exOf(x), cost: t.cost + Number(x.cost ?? 0), est: t.est + Number(x.estimated_cost ?? 0), unknown: t.unknown || x.cost == null }), { ex: 0, cost: 0, est: 0, unknown: false });
   const canHand = ['order', 'invoice'].includes(sale.stage) && (canAt('sales.create', br, null) || canAt('inventory.issue', br, null))
     && (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
+  const goodsLeft = (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
 
   async function run(fn) {
     setError(''); setBusy(true);
@@ -698,7 +699,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
               const inc = r2(Number(l.price) * (1 + Number(l.vat_rate) / 100));
               return (
                 <tr key={l.id}>
-                  <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item · no stock'}</div>
+                  <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item'}</div>
                     {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))} · {l.discount_reason}</div>}</td>
                   <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}</> : <span className="pl-help">—</span>}</td>
                   <td style={{ textAlign: 'right' }}>{money(inc)}</td>
@@ -715,20 +716,20 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
 
         {sale.stage !== 'quotation' && sale.stage !== 'cancelled' && (
           <section>
-            <h3 className="modal-section-title">Payments · paid {money(paid)}{owed > 0 ? ` · ${money(owed)} owed` : ' · paid in full'}</h3>
+            <h3 className="modal-section-title">Paid {money(paid)}{owed > 0 ? <span className="text-warning"> · {money(owed)} owed</span> : ''}</h3>
             {(sale.payments || []).length === 0 ? <p className="pl-help">No payment yet.</p> : (
               <table className="rd-table"><tbody>
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
-                  <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · receipt ${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
+                  <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · #${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
                     <td><ProofBadge state={proofState(p, proofs[p.id], today)} />{proofs[p.id]?.status === 'queried' && <div className="pl-help text-error">{proofs[p.id].note}</div>}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {proofs[p.id] && proofs[p.id].status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewFor(p)}>Check</button>}
                       {proofs[p.id]?.status !== 'confirmed' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setProofFor(p)}>{proofs[p.id] ? 'Replace proof' : 'Add proof'}</button>}
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={13} /> Receipt</button></td></tr>
+                      <button type="button" className="icon-btn" aria-label="Print receipt" title="Print receipt" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={15} /></button></td></tr>
                 ))}
               </tbody></table>
             )}
-            <p className="pl-help">Goods leave up to the value paid: {money(r2(Math.max(paid - given, 0)))} can leave now.</p>
+            {goodsLeft && <p className="pl-help" title="Goods leave up to the value paid">Can leave now: {money(r2(Math.max(paid - given, 0)))}</p>}
           </section>
         )}
         {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
@@ -736,7 +737,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           onClose={() => setReviewFor(null)} onSaved={() => { setReviewFor(null); onChanged(); }} />}
         {deliveries.length > 0 && (
           <section>
-            <h3 className="modal-section-title">Delivered · {money(r2(given))} of {money(Number(sale.total))}</h3>
+            <h3 className="modal-section-title">Delivered {money(r2(deliveries.reduce((t, d) => t + Number(d.value), 0)))}</h3>
             <table className="rd-table"><tbody>
               {deliveries.map(d => (
                 <tr key={d.id}>
@@ -748,22 +749,20 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {d.status === 'on_the_way' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(d)}>Delivered…</button>}
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={13} /> Delivery note</button></td>
+                    <button type="button" className="icon-btn" aria-label="Print delivery note" title="Print delivery note" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={15} /></button></td>
                 </tr>
               ))}
             </tbody></table>
-            <p className="text-sm">
-              Delivered without VAT <strong>{money(r2(delivered.ex))}</strong> · cost <strong>{money(r2(delivered.cost))}</strong>
-              {delivered.est > 0.5 && <span className="co-est-txt"> ({money(r2(delivered.est))} estimated at price)</span>}
-              {' · '}margin <strong className={delivered.ex - delivered.cost < 0 ? 'text-error' : ''}>{money(r2(delivered.ex - delivered.cost))}</strong>
-              {delivered.unknown && <span className="pl-help"> · part with no cost known</span>}
+            <p className="text-sm" title={`Without VAT ${money(r2(delivered.ex))} · cost ${money(r2(delivered.cost))}${delivered.est > 0.5 ? ` (${money(r2(delivered.est))} estimated at price)` : ''}${delivered.unknown ? ' · part with no cost known' : ''}`}>
+              Margin <strong className={delivered.ex - delivered.cost < 0 ? 'text-error' : ''}>{money(r2(delivered.ex - delivered.cost))}</strong>
+              {(delivered.est > 0.5 || delivered.unknown) && <span className="pl-help"> · estimated</span>}
             </p>
           </section>
         )}
         {sale.stage === 'invoice' && canAt('invoices.create', br, null) && (
           <div className="flex items-center gap-8">
-            <span className="text-sm">EFD receipt</span>
-            <input className="form-input" style={{ maxWidth: 220 }} value={efd} onChange={e => setEfd(e.target.value)} placeholder="Receipt number" />
+            <span className="text-sm">EFD</span>
+            <input className="form-input" style={{ maxWidth: 200 }} value={efd} onChange={e => setEfd(e.target.value)} placeholder="Number" />
             {efd !== (sale.efd_receipt_no ?? '') && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => toStage('efd', { efd_receipt_no: efd })}>Save</button>}
           </div>
         )}
@@ -772,7 +771,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           <section>
             <h3 className="modal-section-title">Corrections</h3>
             {[...sale.corrections].sort((a, b) => b.applied_at.localeCompare(a.applied_at)).map(c => (
-              <p key={c.id} className="text-sm">{dateText(c.applied_at)} — {c.reason}</p>
+              <p key={c.id} className="text-sm">{tableDate(c.applied_at)} · {c.reason}</p>
             ))}
           </section>
         )}

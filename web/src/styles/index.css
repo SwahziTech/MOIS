@@ -2549,3 +2549,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .pp-sms { white-space: pre-wrap; font-family: var(--font-body); font-size: var(--text-sm); background: var(--bg-soft); border-radius: var(--radius-md); padding: 10px; margin: 0; }
 .ru-file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sb-approval { margin-top: 4px; font-size: var(--text-xs); }
+/* tables inside a window don't freeze their header (it covered rows when scrolled) */
+.modal thead th { position: static; }
