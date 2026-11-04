@@ -517,16 +517,15 @@ function PayrollSheet({ kind, staff, today, money, currency, canRecord, canAppro
   const dedOf = l => Number(l.nssf_employee || 0) + Number(l.paye || 0) + Number(l.deductions || 0) + Number(l.advance_deductions || 0);
   const short = v => formatMoneyShort(v, currency);
   const cell = v => (Number(v) ? formatAmount(Number(v)) : '');
+  // casuals: basic, gross, other deductions only — no allowance, overtime, NSSF, PAYE or advance (user, 2026-11-04)
+  const employed = kind === 'employed';
   const COLS = [
     ['Basic', l => cell(l.base), 'base'],
-    ['Allowance', l => cell(l.additions), 'additions'],
-    ['Overtime', l => cell(l.overtime), 'overtime'],
+    ...(employed ? [['Allowance', l => cell(l.additions), 'additions'], ['Overtime', l => cell(l.overtime), 'overtime']] : []),
     ['Gross', l => formatAmount(Number(l.gross ?? l.base)), l => Number(l.gross ?? l.base)],
-    ['NSSF', l => cell(l.nssf_employee), 'nssf_employee'],
-    ['PAYE', l => cell(l.paye), 'paye'],
+    ...(employed ? [['NSSF', l => cell(l.nssf_employee), 'nssf_employee'], ['PAYE', l => cell(l.paye), 'paye']] : []),
     ['Other deductions', l => cell(l.deductions), 'deductions'],
-    ...(kind === 'employed' ? [['First payment', l => cell(l.first_payment), 'first_payment']] : []),
-    ['Advance', l => cell(l.advance_deductions), 'advance_deductions'],
+    ...(employed ? [['First payment', l => cell(l.first_payment), 'first_payment'], ['Advance', l => cell(l.advance_deductions), 'advance_deductions']] : []),
   ];
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (sheets === null) return <div className="card"><span className="skeleton" /></div>;
@@ -630,6 +629,8 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   useEffect(() => { load(); }, [id]);
   const nameOf = sid => staff.find(s => s.id === sid)?.full_name ?? '';
   const draft = sheet?.status === 'draft';
+  // a casuals' sheet: no allowance, overtime, NSSF, PAYE, first payment or advance columns (2026-11-04)
+  const casual = lines.length ? lines.every(l => staff.find(p => p.id === l.staff_id)?.kind === 'casual') : sheet?.cycle === 'weekly';
   const run = async (fn, after) => {
     setError(''); setBusy(true);
     const { error: err } = await fn();
@@ -673,33 +674,33 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
         <div className="table-container">
           <table className="ps-table">
-            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th><th className="num">Allowance (TZS)</th><th className="num" title="From each person's overtime entries">Overtime (TZS)</th><th className="num">Gross (TZS)</th><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th><th className="num">Other deductions (TZS)</th><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th><th className="num">Net (TZS)</th><th>Note</th></tr></thead>
+            <thead><tr><th>Name</th><th className="num">Days</th><th className="num">Rate (TZS)</th><th className="num">Pay (TZS)</th>{!casual && <><th className="num">Allowance (TZS)</th><th className="num" title="From each person's overtime entries">Overtime (TZS)</th></>}<th className="num">Gross (TZS)</th>{!casual && <><th className="num">NSSF (TZS)</th><th className="num">PAYE (TZS)</th></>}<th className="num">Other deductions (TZS)</th>{!casual && <><th className="num">First payment (TZS)</th><th className="num">Advances (TZS)</th></>}<th className="num">Net (TZS)</th><th>Note</th></tr></thead>
             <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={14} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
+              {sorted.length === 0 ? <tr><td colSpan={casual ? 8 : 14} className="text-muted">No one on this sheet — no days attended in the period.</td></tr>
               : sorted.map(l => (
                 <tr key={l.id}>
                   <td><strong>{nameOf(l.staff_id)}</strong>{l.part === 'advance' ? <div className="pl-help">first payment — no deductions</div> : l.part === 'balance' ? <div className="pl-help">the month, with deductions</div> : null}</td>
                   <td className="num">{l.days != null ? Number(l.days) : <span className="pl-help">—</span>}</td>
                   <td className="num">{l.rate == null ? <span className="text-warning">not set</span> : <>{formatAmount(Number(l.rate))}<span className="pl-help"> {l.pay_basis === 'daily' ? '/day' : '/month'}</span></>}</td>
                   <td className="num">{formatAmount(Number(l.base))}</td>
-                  <td className="num">{draft && canRecord
+                  {!casual && <><td className="num">{draft && canRecord
                     ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'additions')} onChange={e => setVal(l, 'additions', e.target.value)} />
                     : Number(l.additions) ? formatAmount(Number(l.additions)) : ''}</td>
-                  <td className="num">{Number(l.overtime) ? formatAmount(Number(l.overtime)) : ''}</td>
+                  <td className="num">{Number(l.overtime) ? formatAmount(Number(l.overtime)) : ''}</td></>}
                   <td className="num">{formatAmount(grossOf(l))}</td>
-                  <td className="num">{Number(l.nssf_employee) ? formatAmount(Number(l.nssf_employee)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
-                  <td className="num">{Number(l.paye) ? formatAmount(Number(l.paye)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
+                  {!casual && <><td className="num">{Number(l.nssf_employee) ? formatAmount(Number(l.nssf_employee)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td>
+                  <td className="num">{Number(l.paye) ? formatAmount(Number(l.paye)) : <span className="pl-help">{l.statutory ? '0' : '—'}</span>}</td></>}
                   <td className="num">{draft && canRecord
                     ? <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={val(l, 'deductions')} onChange={e => setVal(l, 'deductions', e.target.value)} />
                     : Number(l.deductions) ? formatAmount(Number(l.deductions)) : ''}</td>
-                  <td className="num" title="The month's first payment, already paid">{Number(l.first_payment) ? formatAmount(Number(l.first_payment)) : ''}</td>
-                  <td className="num" title="Advances and loans taken back (Advances tab)">{Number(l.advance_deductions) ? formatAmount(Number(l.advance_deductions)) : ''}</td>
+                  {!casual && <><td className="num" title="The month's first payment, already paid">{Number(l.first_payment) ? formatAmount(Number(l.first_payment)) : ''}</td>
+                  <td className="num" title="Advances and loans taken back (Advances tab)">{Number(l.advance_deductions) ? formatAmount(Number(l.advance_deductions)) : ''}</td></>}
                   <td className="num"><strong>{formatAmount(amountOf(l))}</strong></td>
                   <td>{draft && canRecord ? <input className="form-input" style={{ width: 140 }} placeholder="e.g. advance" value={val(l, 'note')} onChange={e => setVal(l, 'note', e.target.value)} /> : l.note || ''}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num">{formatAmount(tot('overtime'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td><td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td><td className="num">{formatAmount(tot('first_payment'))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td><td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
+            <tfoot><tr><td colSpan={casual ? 4 : 5}><strong>Total</strong></td>{!casual && <td className="num">{formatAmount(tot('overtime'))}</td>}<td className="num">{formatAmount(lines.reduce((t, l) => t + grossOf(l), 0))}</td>{!casual && <><td className="num">{formatAmount(tot('nssf_employee'))}</td><td className="num">{formatAmount(tot('paye'))}</td></>}<td className="num">{formatAmount(lines.reduce((t, l) => t + (num(val(l, 'deductions')) || 0), 0))}</td>{!casual && <><td className="num">{formatAmount(tot('first_payment'))}</td><td className="num">{formatAmount(tot('advance_deductions'))}</td></>}<td className="num"><strong>{money(total)}</strong></td><td /></tr></tfoot>
           </table>
         </div>
         {(tot('nssf_employer') + tot('wcf') + tot('sdl')) > 0 && (
