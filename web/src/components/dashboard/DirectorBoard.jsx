@@ -9,6 +9,8 @@ import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, ca
 import ErrorState from '../ErrorState';
 import { loadProofs } from '../sales/PaymentProofs';
 import { PayModal, PaidList } from './DirectorPayments';
+import { PayPurchaseModal } from '../purchases/ProcurementPanels';
+import { supabase } from '../../lib/supabase';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
@@ -117,6 +119,7 @@ export default function DirectorBoard() {
   );
   if (openCard && d.money) {
     const back = () => setOpenCard(null);
+    if (openCard === 'purchases') return <PurchasesReport data={d.money} inBranch={inBranch} full={full} currency={organization?.currency_code} canPay={canPay} period={period} bar={bar} onBack={back} go={navigate} onPaid={load} />;
     return openCard === 'sales'
       ? <SalesReport data={d.money} refs={refs} inBranch={inBranch} short={short} full={full} period={period} bar={bar} onBack={back} go={navigate} />
       : <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} full={full} period={period} periodKey={periodKey} bar={bar} onBack={back} go={navigate} />;
@@ -315,6 +318,60 @@ function CardHistory({ card, data, inBranch, today, short, full, period, periodK
           {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{full(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>
       </div></div>
+    </div>
+  );
+}
+
+/* The Purchases card opened (2026-11-04): each purchase — supplier, product, quantity, price, amount,
+   paid, to pay — whether it is paid, and Pay (the payment window, with the slip) */
+function PurchasesReport({ data, inBranch, full, currency, canPay, period, bar, onBack, go, onPaid }) {
+  const [paying, setPaying] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const rows = data.purchases.filter(x => x.id && inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to)
+    .sort((a, b) => (a.day === b.day ? 0 : a.day < b.day ? 1 : -1));
+  const sum = k => rows.reduce((t, x) => t + x[k], 0);
+  const status = x => (x.toPay <= 0.004 ? ['Paid', 'badge-success'] : x.paid > 0 ? ['Part paid', 'badge-warning'] : ['Not paid', 'badge-error']);
+  async function openPay(x) {
+    const { data: ac } = await supabase.from('payment_accounts').select('id, name, status').eq('branch_id', x.branch_id).order('display_order').order('name');
+    setAccounts((ac || []).filter(a => a.status === 'active'));
+    setPaying(x);
+  }
+  let lastDay = null;
+  return (
+    <div className="dd">
+      <ReportHead card="purchases" period={period} onBack={onBack} go={go} />
+      {bar}
+      <div className="card"><div className="table-container">
+        <table>
+          <thead><tr><th>Date</th><th>Supplier</th><th>Product</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th>
+            <th className="num">Paid (TZS)</th><th className="num">To pay (TZS)</th><th>Status</th><th aria-label="Pay" /></tr></thead>
+          <tbody>
+            {rows.length === 0 ? <tr><td colSpan={10} className="text-muted">No purchases in this period.</td></tr>
+            : rows.flatMap(x => (x.items.length ? x.items : [{ name: '—', unit: '', qty: 0, price: 0, amount: x.total }]).map((i, k) => {
+              const showDay = k === 0 && x.day !== lastDay; if (k === 0) lastDay = x.day;
+              const [label, badge] = status(x);
+              return (
+                <tr key={`${x.id}-${k}`}>
+                  <td>{showDay ? tableDate(x.day) : ''}</td>
+                  <td>{k === 0 ? <>{x.supplier || '—'}{x.ref ? <div className="pl-help">{x.ref}</div> : null}</> : ''}</td>
+                  <td>{i.name}</td>
+                  <td className="num">{i.qty ? `${qtyText(i.qty)} ${i.unit}` : ''}</td>
+                  <td className="num">{i.price ? fmt(i.price) : ''}</td>
+                  <td className="num">{fmt(i.amount)}</td>
+                  <td className="num">{k === 0 ? fmt(x.paid) : ''}</td>
+                  <td className="num">{k === 0 ? <strong className={x.toPay > 0.004 ? 'text-warning' : ''}>{fmt(x.toPay)}</strong> : ''}</td>
+                  <td>{k === 0 && <span className={`badge ${badge}`}>{label}</span>}</td>
+                  <td style={{ textAlign: 'right' }}>{k === 0 && canPay && x.toPay > 0.004 && <button type="button" className="btn btn-primary btn-sm" onClick={() => openPay(x)}>Pay</button>}</td>
+                </tr>
+              );
+            }))}
+          </tbody>
+          {rows.length > 0 && <tfoot><tr><td colSpan={5}><strong>Total</strong></td><td className="num"><strong>{full(sum('total'))}</strong></td>
+            <td className="num"><strong>{full(sum('paid'))}</strong></td><td className="num"><strong>{full(sum('toPay'))}</strong></td><td colSpan={2} /></tr></tfoot>}
+        </table>
+      </div></div>
+      {paying && <PayPurchaseModal purchase={paying.raw} total={paying.total} supplierName={paying.supplier || 'the supplier'} accounts={accounts} currency={currency}
+        onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await onPaid(); }} />}
     </div>
   );
 }
