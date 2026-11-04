@@ -81,6 +81,18 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
       }
       const { error: err } = await supabase.rpc('submit_payment_proof', { p: { payment_id: payment.id, file_path: path, file_name: file?.name ?? null, sms_text: text.trim() || null } });
       if (err) throw err;
+      // a copy kept on this device (2026-11-04, the user): the slip, else the SMS as text
+      try {
+        const base = `sale-${sale.sale_no}-${payment.paid_on}`;
+        const blob = file ?? (text.trim() ? new Blob([text.trim()], { type: 'text/plain' }) : null);
+        if (blob) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = file ? `${base}-${file.name.replace(/[^\w.-]+/g, '_')}` : `${base}-sms.txt`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }
+      } catch { /* the proof is posted; the copy is a convenience */ }
       onSaved();
     } catch (e) {
       setError(dbErrorMessage(e, "We couldn't send the proof. Please try again."));
