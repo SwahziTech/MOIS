@@ -2555,3 +2555,9 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .page-embedded-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
 .dd-pay { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .drop-over { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: var(--radius-md); }
+/* proof previews (2026-11-04) */
+.ru-thumb-btn { padding: 0; cursor: pointer; flex-direction: column; gap: 2px; font: inherit; }
+.ru-thumb-btn:disabled { cursor: default; }
+.ru-thumb-tag { font-size: var(--text-xs); font-weight: 600; }
+.pp-big { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-out; }
+.pp-big .pp-photo { width: 100%; max-height: 60vh; object-fit: contain; }

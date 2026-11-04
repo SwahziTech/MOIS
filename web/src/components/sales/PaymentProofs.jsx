@@ -7,6 +7,7 @@ import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
 import { formatMoney, dateText, tableDate } from '../../lib/format';
 import Modal from '../Modal';
+import ProofPreview from '../ProofPreview';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -106,12 +107,11 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · paid {dateText(payment.paid_on)}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">A director asked: {proof.note}</div>}
-        <div className="ru-file-row">
-          <div className="ru-thumb">{preview ? <img src={preview} alt="The proof" /> : <FileImage size={24} aria-hidden="true" />}</div>
+        <ProofPreview file={file}>
           <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : proof?.file_name ? `Kept: ${proof.file_name}` : 'Bank slip or receipt (photo or PDF)'}</div>
           <label className="btn btn-outline btn-sm"><Upload size={14} /> {file || proof?.file_path ? 'Replace photo' : 'Choose photo or PDF'}
             <input type="file" accept="image/*,application/pdf" hidden onChange={pick} /></label>
-        </div>
+        </ProofPreview>
         <label className="pe-field"><span>Or paste the SMS (muamala)</span>
           <textarea className="form-input" rows={4} value={text} onChange={e => setText(e.target.value)} /></label>
       </div>

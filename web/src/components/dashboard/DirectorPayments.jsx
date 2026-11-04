@@ -8,6 +8,7 @@ import { orgToday } from '../../lib/inventory';
 import { formatMoney, dateText, tableDate } from '../../lib/format';
 import NumberInput from '../NumberInput';
 import Modal from '../Modal';
+import ProofPreview from '../ProofPreview';
 
 /*
  * What directors pay (106, 2026-11-04, the user): one Pay window — choose what
@@ -164,12 +165,11 @@ export function PayModal({ onClose, onSaved }) {
           )}
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} /></label>
         </div>
-        <div className="ru-file-row">
-          <div className="ru-thumb">{preview ? <img src={preview} alt="The proof" /> : <FileImage size={24} aria-hidden="true" />}</div>
+        <ProofPreview file={file}>
           <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : 'Proof: photo or PDF of the slip'}</div>
           <label className="btn btn-outline btn-sm"><Upload size={14} /> {file ? 'Replace' : 'Choose'}
             <input type="file" accept="image/*,application/pdf" hidden onChange={pick} /></label>
-        </div>
+        </ProofPreview>
         <label className="pe-field"><span>Or paste the SMS</span><textarea className="form-input" rows={3} value={sms} onChange={e => setSms(e.target.value)} /></label>
       </div>
     </Modal>
