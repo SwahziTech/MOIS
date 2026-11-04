@@ -90,7 +90,7 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
     <Modal title={`Proof of payment · ${money(Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send to directors</button></>}>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Post proof</button></>}>
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · paid {dateText(payment.paid_on)}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">A director asked: {proof.note}</div>}
@@ -107,9 +107,10 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
   );
 }
 
-/* A director looks at the proof: confirm, or query with a note */
-export function ReviewModal({ payment, sale, proof, buyer, account, money, onClose, onSaved }) {
+/* The proof of a payment, seen by everyone responsible (2026-11-04); a director also confirms it or queries it */
+export function ReviewModal({ payment, sale, proof, buyer, account, money, canReview = true, onClose, onSaved }) {
   const [url, setUrl] = useState('');
+  const [saveUrl, setSaveUrl] = useState('');   // the same file, as a download (kept on the device)
   const [note, setNote] = useState('');
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -117,6 +118,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, onClo
   useEffect(() => {
     if (!proof?.file_path) return;
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+    const name = `sale-${sale.sale_no}-${payment.paid_on}-${(proof.file_name || 'proof').replace(/[^\w.-]+/g, '_')}`;
+    supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [proof?.file_path]);
   async function act(action) {
     setError('');
@@ -129,14 +132,17 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, onClo
   }
   const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
   return (
-    <Modal title={`Confirm payment · ${money(Number(payment.amount))}`} onClose={onClose}
+    <Modal title={`Payment proof · ${money(Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
-        {asking ? <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('query')}>Send query</button>
-          : <button type="button" className="btn btn-outline" onClick={() => setAsking(true)}>Query</button>}
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('confirm')}>Confirm received</button></>}>
+        {canReview && (asking ? <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('query')}>Send query</button>
+          : <button type="button" className="btn btn-outline" onClick={() => setAsking(true)}>Query</button>)}
+        {canReview && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('confirm')}>Confirm received</button>}</>}>
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
+        {proof?.status === 'confirmed' && <p className="text-sm"><span className="badge badge-success">Confirmed</span>{proof.reviewed_at ? ` ${dateText(proof.reviewed_at)}` : ''}</p>}
+        {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
         {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
           : url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Proof of payment" className="pp-photo" /></a> : <span className="skeleton" />)}
         {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
@@ -211,7 +217,8 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
                   <td><ProofBadge state={x.state} />{pr?.status === 'queried' && <div className="pl-help text-error">{pr.note}</div>}
                     {pr && <div className="pl-help">{[pr.file_path && 'photo', pr.sms_text && 'SMS'].filter(Boolean).join(' + ')}</div>}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {canReview && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewing(x)}>Check</button>}
+                    {canReview ? <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewing(x)}>Check</button>
+                      : pr && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReviewing(x)}>View</button>}
                     {canAdd && <button type="button" className="btn btn-outline btn-sm" onClick={() => setAdding(x)}><Receipt size={13} /> {pr ? 'Replace proof' : 'Add proof'}</button>}
                   </td>
                 </tr>
@@ -222,6 +229,7 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
       </div></div>
       {adding && <ProofModal payment={adding} sale={adding.sale} proof={proofs[adding.id]} money={money} onClose={() => setAdding(null)} onSaved={async () => { setAdding(null); await load(); }} />}
       {reviewing && <ReviewModal payment={reviewing} sale={reviewing.sale} proof={proofs[reviewing.id]} buyer={buyer(reviewing)} account={accName(reviewing)} money={money}
+        canReview={proofs[reviewing.id]?.status !== 'confirmed' && canAt('sales.confirm_payments', reviewing.sale.branch_id, null)}
         onClose={() => setReviewing(null)} onSaved={async () => { setReviewing(null); await load(); }} />}
     </>
   );
@@ -232,7 +240,7 @@ export function ProofReminder({ branchId, inBranch }) {
   const { organization, canAt } = useAuth();
   const today = orgToday(organization?.timezone);
   const [n, setN] = useState(null);
-  const can = !!branchId && canAt('sales.create', branchId, null);
+  const can = !!branchId && canAt('sales.create', branchId, null) && !canAt('sales.confirm_payments', branchId, null);
   useEffect(() => {
     if (!can) return;
     Promise.all([

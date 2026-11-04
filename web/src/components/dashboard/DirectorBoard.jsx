@@ -7,6 +7,7 @@ import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
+import { loadProofs } from '../sales/PaymentProofs';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
@@ -212,8 +213,21 @@ const ReportHead = ({ card, period, onBack, go }) => (
 
 /* The Sales card opened: a short summary, then each product sold — date, product, quantity, amount, account.
    A row (or its icon) opens that sale in the Sales book. */
+// each sale's proof of payment (2026-11-04): not posted, waiting for a director, queried, or approved
+const PROOF_STATE = { none: ['No proof', 'badge-neutral'], waiting: ['Waiting', 'badge-warning'], queried: ['Queried', 'badge-error'], approved: ['Approved', 'badge-success'], unpaid: ['Not paid', 'badge-neutral'] };
+function proofOfSale(x, proofs) {
+  if (!x.payments.length) return 'unpaid';
+  const st = x.payments.map(p => proofs[p.id]?.status ?? 'none');
+  return st.includes('queried') ? 'queried' : st.includes('none') ? 'none' : st.includes('waiting') ? 'waiting' : 'approved';
+}
 function SalesReport({ data, refs, inBranch, short, full, period, bar, onBack, go }) {
-  const sales = data.sales.filter(x => inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to)
+  const [proofs, setProofs] = useState(null);
+  const [show, setShow] = useState('');   // a proof state, or '' for all
+  useEffect(() => { loadProofs().then(setProofs); }, []);
+  const inPeriod = data.sales.filter(x => inBranch(x.branch_id) && x.day >= period.from && x.day <= period.to);
+  const stateOf = x => (proofs ? proofOfSale(x, proofs) : null);
+  const count = k => inPeriod.filter(x => stateOf(x) === k).length;
+  const sales = inPeriod.filter(x => !show || stateOf(x) === show)
     .sort((a, b) => (a.day === b.day ? b.no - a.no : a.day < b.day ? 1 : -1));
   const name = l => (!l.product_id ? `${l.item_name} (other)` : null) ?? [refs?.items[`p:${l.product_id}`]?.name ?? '—', l.color_id ? refs?.colorById[l.color_id]?.name : null].filter(Boolean).join(' ');
   const unit = l => refs?.unitById[refs?.items[`p:${l.product_id}`]?.stockUnitId]?.symbol ?? '';
@@ -228,11 +242,15 @@ function SalesReport({ data, refs, inBranch, short, full, period, bar, onBack, g
         <div className="mm-stat"><span className="pl-label">Value</span><strong>{short(total)}</strong><span className="pl-help">orders and invoices</span></div>
         <div className="mm-stat"><span className="pl-label">Paid</span><strong>{short(paid)}</strong><span className="pl-help">{total > paid ? `${short(total - paid)} still owed` : 'all paid'}</span></div>
       </div>
+      <div className="filter-chips" style={{ margin: '0 0 8px' }} aria-label="Proof of payment">
+        {[['', 'All', inPeriod.length], ...['none', 'waiting', 'queried', 'approved'].map(k => [k, PROOF_STATE[k][0], count(k)])].map(([k, l, c]) => (
+          <button key={k || 'all'} type="button" className={`filter-chip${show === k ? ' is-on' : ''}`} onClick={() => setShow(k)}>{l} ({c})</button>))}
+      </div>
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>Product</th><th className="num">Qty</th><th className="num">Amount (TZS)</th><th>Account</th><th aria-label="Open" /></tr></thead>
+          <thead><tr><th>Date</th><th>Product</th><th className="num">Qty</th><th className="num">Amount (TZS)</th><th>Account</th><th>Proof</th><th aria-label="Open" /></tr></thead>
           <tbody>
-            {sales.length === 0 ? <tr><td colSpan={6} className="text-muted">No sales in this period.</td></tr>
+            {sales.length === 0 ? <tr><td colSpan={7} className="text-muted">{show ? 'None here.' : 'No sales in this period.'}</td></tr>
             : sales.flatMap(x => x.lines.map((l, i) => {
               const showDay = x.day !== lastDay; lastDay = x.day;
               const open = () => go(pageFor('sales', period, `&sale=${x.id}`));
@@ -243,12 +261,13 @@ function SalesReport({ data, refs, inBranch, short, full, period, bar, onBack, g
                   <td className="num">{l.product_id ? `${qtyText(l.quantity)} ${unit(l)}` : ''}</td>
                   <td className="num">{fmt(l.total)}</td>
                   <td>{i === 0 ? (x.accounts.map(a => data.accountName[a]).filter(Boolean).join(', ') || <span className="text-muted">not paid</span>) : ''}</td>
+                  <td>{i === 0 && stateOf(x) && <span className={`badge ${PROOF_STATE[stateOf(x)][1]}`}>{PROOF_STATE[stateOf(x)][0]}</span>}</td>
                   <td className="num">{i === 0 && <button type="button" className="icon-btn" aria-label={`Open sale #${x.no}`} onClick={e => { e.stopPropagation(); open(); }}><ExternalLink size={14} /></button>}</td>
                 </tr>
               );
             }))}
           </tbody>
-          {sales.length > 0 && <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{full(total)}</strong></td><td colSpan={2} /></tr></tfoot>}
+          {sales.length > 0 && <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{full(total)}</strong></td><td colSpan={3} /></tr></tfoot>}
         </table>
       </div></div>
     </div>

@@ -722,7 +722,9 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
                   <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · #${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
                     <td><ProofBadge state={proofState(p, proofs[p.id], today)} />{proofs[p.id]?.status === 'queried' && <div className="pl-help text-error">{proofs[p.id].note}</div>}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {proofs[p.id] && proofs[p.id].status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewFor(p)}>Check</button>}
+                      {proofs[p.id] && (proofs[p.id].status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null)
+                        ? <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewFor(p)}>Check</button>
+                        : <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReviewFor(p)}>View</button>)}
                       {proofs[p.id]?.status !== 'confirmed' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setProofFor(p)}>{proofs[p.id] ? 'Replace proof' : 'Add proof'}</button>}
                       <button type="button" className="icon-btn" aria-label="Print receipt" title="Print receipt" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={15} /></button></td></tr>
                 ))}
@@ -733,6 +735,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
         )}
         {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
         {reviewFor && <ReviewModal payment={reviewFor} sale={sale} proof={proofs[reviewFor.id]} buyer={buyer} account={accountName(reviewFor.account_id) ?? METHODS[reviewFor.method]} money={money}
+          canReview={proofs[reviewFor.id]?.status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null)}
           onClose={() => setReviewFor(null)} onSaved={() => { setReviewFor(null); onChanged(); }} />}
         {deliveries.length > 0 && (
           <section>

@@ -106,7 +106,7 @@ export async function loadMoneyData() {
     supabase.from('purchase_totals').select('purchase_id, total, amount_paid, balance'),
     supabase.from('production_batches').select('branch_id, batch_date, cement_bags, status, outputs:production_batch_outputs(is_primary), rejects:production_batch_rejects(pieces)').neq('status', 'void'),
     // the sales made (2026-11-03: the Sales card counts these, as the Sales book lists them)
-    supabase.from('sales').select('id, sale_no, branch_id, sale_date, total, lines:sale_lines(line_no, product_id, item_name, color_id, quantity, total), payments:sale_payments(account_id, amount)').in('stage', ['order', 'invoice']),
+    supabase.from('sales').select('id, sale_no, branch_id, sale_date, total, lines:sale_lines(line_no, product_id, item_name, color_id, quantity, total), payments:sale_payments(id, account_id, amount, paid_on)').in('stage', ['order', 'invoice']),
     supabase.from('payment_accounts').select('id, name'),
   ]);
   const err = pa.error || mv.error || cr.error || pu.error;
@@ -120,7 +120,7 @@ export async function loadMoneyData() {
       items: (p.lines || []).filter(l => l.tx?.material?.name).map(l => ({ name: l.tx.material.name, unit: l.tx.unit?.symbol ?? '', qty: n(l.tx.entered_quantity), amount: n(l.line_amount) })) })),
     batches: (ba.data || []).filter(b => (b.outputs || []).some(o => o.is_primary)),
     sales: (sa.data || []).map(x => ({ id: x.id, no: x.sale_no, branch_id: x.branch_id, day: x.sale_date, total: n(x.total),
-      paid: sum(x.payments || [], p => p.amount), accounts: [...new Set((x.payments || []).map(p => p.account_id).filter(Boolean))],
+      paid: sum(x.payments || [], p => p.amount), payments: (x.payments || []).map(p => ({ id: p.id, paid_on: p.paid_on })), accounts: [...new Set((x.payments || []).map(p => p.account_id).filter(Boolean))],
       lines: (x.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({ product_id: l.product_id, item_name: l.item_name, color_id: l.color_id, quantity: n(l.quantity), total: n(l.total) })) })),
     accountName: Object.fromEntries((ac.data || []).map(a => [a.id, a.name])),
   };
