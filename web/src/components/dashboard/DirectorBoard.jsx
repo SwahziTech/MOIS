@@ -8,6 +8,7 @@ import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
 import { loadProofs } from '../sales/PaymentProofs';
+import { PayModal, PaidList } from './DirectorPayments';
 
 const fmt = v => formatAmount(Math.round(Number(v || 0)));
 const SHOW = 5;
@@ -46,6 +47,7 @@ const CARD = {
   sales: { title: 'Sales', to: '/sales?tab=book', page: 'Open Sales book' },
   cash: { title: 'Weekly cash', heads: ['Sent (TZS)', 'Spent (TZS)'], to: '/weekly-cash', page: 'Open Weekly cash' },
   purchases: { title: 'Purchases', showItems: true, heads: ['Bought (TZS)', 'Paid (TZS)', 'To pay (TZS)'], to: '/purchases?tab=purchases', page: 'Open Purchases' },
+  paid: { title: 'Paid by directors', to: '/cash-flow', page: 'Open Cash flow' },   // 106
 };
 // a page opened on the dashboard's period
 const pageFor = (card, period, extra = '') => `${CARD[card].to}${CARD[card].to.includes('?') ? '&' : '?'}from=${period.from}&to=${period.to}&label=${encodeURIComponent(period.label)}${extra}`;
@@ -70,7 +72,9 @@ const Line = ({ to, label, value, warn }) => {
  * choice. Until receipts are approved in MOIS (stage 2), Sales says so.
  */
 export default function DirectorBoard() {
-  const { organization } = useAuth();
+  const { organization, can } = useAuth();
+  const [paying, setPaying] = useState(false);   // the Pay window (106)
+  const canPay = can('finance.pay');
   const { branchId, branchName, branches, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
@@ -105,6 +109,12 @@ export default function DirectorBoard() {
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (!d) return <div className="dd"><div className="card"><div className="card-body"><span className="skeleton" /></div></div></div>;
   const bar = <PeriodBar period={period} periods={periods} periodKey={periodKey} setPeriodKey={setPeriodKey} today={today} />;
+  if (openCard === 'paid') return (
+    <div className="dd">
+      <ReportHead card="paid" period={period} onBack={() => setOpenCard(null)} go={navigate} />
+      <PaidList />
+    </div>
+  );
   if (openCard && d.money) {
     const back = () => setOpenCard(null);
     return openCard === 'sales'
@@ -131,6 +141,12 @@ export default function DirectorBoard() {
           </div>
         </section>
       ) : <p className="pl-help">Nothing needs you right now.</p>}
+
+      <div className="dd-pay">
+        {canPay && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPaying(true)}>Pay</button>}
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => open('paid')}>Paid by directors</button>
+      </div>
+      {paying && <PayModal onClose={() => setPaying(false)} onSaved={() => { setPaying(false); open('paid'); }} />}
 
       {bar}
 

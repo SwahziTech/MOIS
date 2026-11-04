@@ -2553,3 +2553,4 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .modal thead th { position: static; }
 /* a page shown inside the secretary's dashboard (2026-11-03) */
 .page-embedded-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.dd-pay { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
