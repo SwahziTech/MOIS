@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, FileImage } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
@@ -617,11 +617,17 @@ function CloseModal({ po, cancel, onClose, onDone }) {
 
 /* ---------- Paying a purchase ---------- */
 export function PayPurchaseModal({ purchase, total, supplierName, accounts, currency, onClose, onSaved }) {
-  const { organization } = useAuth();
+  const { organization, canAt } = useAuth();
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, currency);
   const [payments, setPayments] = useState([]);
-  const [f, setF] = useState({ amount: '', paid_on: today, account_id: '', method: 'cash', reference: '' });
+  // the whole amount owed, ready to change (2026-11-04)
+  const owedAtStart = r2(Number(total) - Number(purchase.amount_paid));
+  const [f, setF] = useState({ amount: owedAtStart > 0 ? String(owedAtStart) : '', paid_on: today, account_id: '', method: 'cash', reference: '' });
+  // a director's payment carries its proof (106): the slip or the SMS, kept with Paid by directors
+  const withProof = canAt('finance.pay', purchase.branch_id, null);
+  const [file, setFile] = useState(null);
+  const [sms, setSms] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -632,10 +638,27 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
   async function save() {
     setError('');
     if (!(num(f.amount) > 0)) { setError('Enter the amount paid.'); return; }
+    if (withProof && !file && !sms.trim()) { setError('Add the proof: a photo or the SMS.'); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('record_purchase_payment', { p_purchase: purchase.id, p: { amount: num(f.amount), paid_on: f.paid_on, account_id: f.account_id || null, method: f.account_id ? null : f.method, reference: f.reference } });
+    if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    if (withProof) {
+      try {
+        let path = null;
+        if (file) {
+          const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+          path = `${organization.id}/${purchase.branch_id}/dp/${Date.now()}.${ext}`;
+          const up = await supabase.storage.from('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
+          if (up.error) throw up.error;
+        }
+        const { error: e2 } = await supabase.rpc('post_director_payment', { p: { branch_id: purchase.branch_id, kind: 'supplier', ref_id: purchase.id, description: supplierName,
+          amount: num(f.amount), account_id: f.account_id || null, paid_on: f.paid_on, file_path: path, file_name: file?.name ?? null, sms_text: sms.trim() || null } });
+        if (e2) throw e2;
+      } catch (e) {
+        setBusy(false); setError(`Paid, but the proof was not kept: ${dbErrorMessage(e)}`); return;
+      }
+    }
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
   }
   return (
@@ -661,6 +684,15 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
             </select></label>}
           <label className="pe-field"><span>Reference (optional)</span><input className="form-input" value={f.reference} onChange={e => setF({ ...f, reference: e.target.value })} /></label>
         </div>
+        {withProof && <>
+          <div className="ru-file-row">
+            <div className="ru-thumb"><FileImage size={24} aria-hidden="true" /></div>
+            <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : 'Proof: photo or PDF of the slip'}</div>
+            <label className="btn btn-outline btn-sm"><Upload size={14} /> {file ? 'Replace' : 'Choose'}
+              <input type="file" accept="image/*,application/pdf" hidden onChange={e => { const x = e.target.files?.[0]; e.target.value = ''; if (x) setFile(x); }} /></label>
+          </div>
+          <label className="pe-field"><span>Or paste the SMS</span><textarea className="form-input" rows={3} value={sms} onChange={e => setSms(e.target.value)} /></label>
+        </>}
       </div>
     </Modal>
   );
