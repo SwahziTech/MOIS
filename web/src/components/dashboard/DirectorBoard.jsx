@@ -119,7 +119,7 @@ export default function DirectorBoard() {
     const back = () => setOpenCard(null);
     return openCard === 'sales'
       ? <SalesReport data={d.money} refs={refs} inBranch={inBranch} short={short} full={full} period={period} bar={bar} onBack={back} go={navigate} />
-      : <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} period={period} periodKey={periodKey} bar={bar} onBack={back} go={navigate} />;
+      : <CardHistory card={openCard} data={d.money} inBranch={inBranch} today={today} short={short} full={full} period={period} periodKey={periodKey} bar={bar} onBack={back} go={navigate} />;
   }
 
   const { needs, money, curing } = d;
