@@ -2561,3 +2561,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .ru-thumb-tag { font-size: var(--text-xs); font-weight: 600; }
 .pp-big { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-out; }
 .pp-big .pp-photo { width: 100%; max-height: 60vh; object-fit: contain; }
+.pl-allow { justify-self: start; align-self: flex-start; width: fit-content; }
+.pl-allow > span { cursor: default; }

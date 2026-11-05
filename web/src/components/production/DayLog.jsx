@@ -612,8 +612,11 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             <h4 className="pl-subtitle">Residuals (secondary products)</h4>
             <button type="button" className="btn btn-outline btn-sm" disabled={!main} onClick={() => setPickingResidual('new')}><Plus size={13} /> Add residual product</button>
           </div>
+          {/* only the box toggles it, and residuals already entered stay (2026-11-05): unticking drops only those outside the main product's category */}
           {isManager && main && (
-            <label className="pl-allow"><input type="checkbox" checked={form.allowOther} onChange={e => set({ allowOther: e.target.checked, leftovers: [] })} /> Allow other products for this batch</label>
+            <span className="pl-allow"><input type="checkbox" id="pl-allow-other" aria-label="Allow other products for this batch" checked={form.allowOther}
+              onChange={e => set({ allowOther: e.target.checked, leftovers: e.target.checked ? form.leftovers : form.leftovers.filter(l => !l.productId || refs.items[`p:${l.productId}`]?.categoryId === main?.categoryId) })} />
+              <span>Allow other products for this batch</span></span>
           )}
           {form.leftovers.map((l, i) => {
             const b = bands[l.productId];
