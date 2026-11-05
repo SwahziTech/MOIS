@@ -44,7 +44,10 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const saved = useMemo(() => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }, [key]);
   // A refresh opens on today; unsaved batches keep their day, since they all save under this one date
   const [date,   setDate]   = useState(saved?.staged?.length ? saved?.date ?? today : today);
-  const [rawId,  setRawId]  = useState(saved?.rawId ?? rawStores.find(w => w.type === 'raw_materials')?.id ?? rawStores[0]?.id ?? '');
+  const defaultRaw = () => rawStores.find(w => w.type === 'raw_materials')?.id ?? rawStores[0]?.id ?? '';
+  const [rawId,  setRawId]  = useState(() => (rawStores.some(w => w.id === saved?.rawId) ? saved.rawId : defaultRaw()));
+  // a blank or unknown store (saved while the branch's stores weren't loaded yet) falls back to the raw materials store (2026-11-05)
+  useEffect(() => { if (rawStores.length && !rawStores.some(w => w.id === rawId)) setRawId(defaultRaw()); }, [rawStores.length, rawId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form,   setForm]   = useState(saved?.form ? { ...saved.form, teamId: '', workerIds: null } : emptyForm());
   // lists saved before 2026-10-21 lack the per-product detail: rebuild it from what was sent
   const [staged, setStaged] = useState(() => (saved?.staged ?? []).map(x => (x.outputs ? x : {
@@ -156,10 +159,16 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   }, [staged.length]);
 
   // What the store holds now (the server re-checks at save)
+  // the other stores' materials too: a shortage in one can point to the store that has them (2026-11-05)
+  const [otherStock, setOtherStock] = useState({});   // warehouse id → material id → quantity
   async function loadStock() {
     if (!rawId) return;
-    const { data } = await supabase.from('stock_balances').select('material_id, quantity').eq('warehouse_id', rawId).not('material_id', 'is', null);
-    setStock(Object.fromEntries((data || []).map(r => [r.material_id, Number(r.quantity)])));
+    const ids = rawStores.map(w => w.id);
+    const { data } = await supabase.from('stock_balances').select('warehouse_id, material_id, quantity').in('warehouse_id', ids.length ? ids : [rawId]).not('material_id', 'is', null);
+    const by = {};
+    for (const r of data || []) (by[r.warehouse_id] ||= {})[r.material_id] = Number(r.quantity);
+    setOtherStock(by);
+    setStock(by[rawId] || {});
   }
   useEffect(() => { loadStock(); }, [rawId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -222,6 +231,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       source: isBag || edited !== undefined ? 'counted' : 'recipe' };
   });
   const shortLines = lines.filter(l => l.short);
+  // another store at the branch that holds everything this batch is short of
+  const betterStore = shortLines.length ? rawStores.find(w => w.id !== rawId && shortLines.every(l => (otherStock[w.id]?.[l.material_id] ?? 0) + 1e-9 >= (l.need ?? Infinity))) : null;
 
   // A residual's colour is the main product's: the same colour by name (Red
   // with Red, Grey with Grey); a plain main product's residuals are White.
@@ -551,7 +562,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         {shortLines.length > 0 && (
           <div className="alert alert-error flex items-center gap-8" role="alert">
             <AlertTriangle size={15} />
-            <span>Not enough {shortLines.map(l => refs.items[`m:${l.material_id}`]?.name).join(', ')} in stock — the branch manager should check the stock first.</span>
+            <span>Not enough {shortLines.map(l => refs.items[`m:${l.material_id}`]?.name).join(', ')} in {refs.warehouses.find(w => w.id === rawId)?.name ?? 'this store'}.
+              {betterStore ? '' : ' The branch manager should check the stock.'}</span>
+            {betterStore && <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setRawId(betterStore.id)}>Use {betterStore.name}</button>}
           </div>
         )}
       </section>
