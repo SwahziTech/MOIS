@@ -633,6 +633,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                 </div>
                 <ColourChip id={residualColour(it)} />
                 <NumberInput step="1" min="0" className="pl-num" style={{ width: 90 }} placeholder="Pcs" aria-label="Residual pieces" value={l.pieces}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setPickingResidual('new'); } }}   /* Enter: the next residual (2026-11-05) */
                   onChange={e => set({ leftovers: form.leftovers.map((x, j) => (j === i ? { ...x, pieces: e.target.value } : x)) })} />
                 <button type="button" className="icon-btn" aria-label="Remove residual" onClick={() => set({ leftovers: form.leftovers.filter((_, j) => j !== i) })}><Trash2 size={14} /></button>
               </div>
