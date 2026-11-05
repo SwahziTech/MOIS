@@ -442,7 +442,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           onPick={id => {
             const at = pickingResidual;
             setPickingResidual(null);
-            set({ leftovers: at === 'new' ? [...form.leftovers, { productId: id, pieces: '' }] : form.leftovers.map((x, j) => (j === at ? { ...x, productId: id } : x)) });
+            // a new residual goes on top, its pieces box ready to type in (2026-11-05)
+            set({ leftovers: at === 'new' ? [{ productId: id, pieces: '' }, ...form.leftovers] : form.leftovers.map((x, j) => (j === at ? { ...x, productId: id } : x)) });
+            setTimeout(() => document.querySelectorAll('.pl-res input[aria-label="Residual pieces"]')[at === 'new' ? 0 : at]?.focus(), 50);
           }} />
       )}
       {picking && (
