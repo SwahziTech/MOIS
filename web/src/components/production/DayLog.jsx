@@ -437,7 +437,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   return (
     <div className="pl">
       {pickingResidual !== null && (
-        <ProductPicker title="Select residual product" usage={usage} wastani={wastani} cats={cats} onClose={() => setPickingResidual(null)}
+        <ProductPicker title="Select residual product" keepOnClose usage={usage} wastani={wastani} cats={cats} onClose={() => setPickingResidual(null)}
           items={leftoverChoices.filter(c => !form.leftovers.some((x, j) => x.productId === c.id && j !== pickingResidual))}
           onPick={id => {
             const at = pickingResidual;

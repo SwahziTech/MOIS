@@ -11,9 +11,12 @@ import { productOrder } from '../../lib/categories';
  * items: products to choose from; usage: product id → batches; wastani: product id → pcs per bag
  * capacity (planner only): product id → the branch's molds / bags a day; shown on each card when given
  * metaOf (sales): item → the card's detail line instead of size and wastani (available, unit price)
+ * keepOnClose (residuals, 2026-11-05): the product reached with Tab is added when the window is closed
+ * by clicking outside or Esc; Enter in the search adds the first one shown
  */
-export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, usageLabel = ['batch', 'batches'], wastani = {}, capacity = null, metaOf = null, onPick, onClose }) {
+export default function ProductPicker({ title = 'Select primary product', items, cats, usage = {}, usageLabel = ['batch', 'batches'], wastani = {}, capacity = null, metaOf = null, keepOnClose = false, onPick, onClose }) {
   const [q, setQ] = useState('');
+  const [hit, setHit] = useState(null);   // the card reached with Tab
   const [cat, setCat] = useState('');
   // chips in the organization's category order
   const chips = useMemo(() => [...new Map(items.map(i => [i.categoryId, i.category])).entries()]
@@ -24,12 +27,13 @@ export default function ProductPicker({ title = 'Select primary product', items,
     .sort((a, b) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0) || order(a, b));
 
   return (
-    <Modal title={title} onClose={onClose} size="lg">
+    <Modal title={title} onClose={() => (keepOnClose && hit ? onPick(hit) : onClose())} size="lg">
       <div className="pp">
         <p className="pl-help">Filter by product name or category.</p>
         <div className="search-wrapper pp-search">
           <Search size={15} className="search-icon" />
-          <input type="search" className="search-input" autoFocus placeholder="Search by product name…" value={q} onChange={e => setQ(e.target.value)} aria-label="Search products" />
+          <input type="search" className="search-input" autoFocus placeholder="Search by product name…" value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
+            onKeyDown={e => { if (e.key === 'Enter' && shown[0]) { e.preventDefault(); onPick(shown[0].id); } }} />
         </div>
         <div className="pp-chips">
           <button type="button" className={`filter-chip${!cat ? ' is-on' : ''}`} onClick={() => setCat('')}>All</button>
@@ -40,7 +44,7 @@ export default function ProductPicker({ title = 'Select primary product', items,
         <div className="pp-list">
           {shown.length === 0 && <div className="pl-empty">No product matches.</div>}
           {shown.map((i, n) => (
-            <button type="button" key={i.id} className="pp-card" onClick={() => onPick(i.id)}>
+            <button type="button" key={i.id} className="pp-card" onClick={() => onPick(i.id)} onFocus={() => setHit(i.id)}>
               <span className="pp-head"><span className="pp-n">#{n + 1}</span><strong>{i.name}</strong>
                 {capacity?.[i.id]?.molds ? <span className="pp-cap">{capOf(capacity[i.id])}</span>
                   : capOf(capacity?.[i.id]) && <span className="pp-cap is-none" title="A guide, not a limit">~{capOf(capacity[i.id])}</span>}
