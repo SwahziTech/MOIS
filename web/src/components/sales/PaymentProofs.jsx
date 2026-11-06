@@ -9,6 +9,7 @@ import { formatMoney, dateText, tableDate } from '../../lib/format';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
+import { SlipCanvas, markedSlipBlob } from './SlipMark';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -118,17 +119,20 @@ export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSave
 /* The proof of a payment, seen by everyone responsible (2026-11-04); a director also confirms it or queries it */
 /*
  * The director's mark (2026-11-06, the user): two boxes beside the slip — green ✓
- * received, red ✗ query. A tap stamps the box with the director's initials and
- * the time, like a signature on the paper slip; it shows on the slip from then on.
+ * received, red ✗ query, stamped with the director's initials and the time.
+ * On a photo slip (109) the boxes pick the pen and the director draws the tick
+ * or cross on the slip itself, as on WhatsApp before; a PDF or SMS is marked
+ * with a tap on the box.
  */
 const initialsOf = p => (p ? ([p.first_name, p.last_name].filter(Boolean).map(w => w[0]).join('') || (p.email || '?')[0]).toUpperCase() : '');
 const stampTime = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-function MarkBox({ kind, stamp, disabled, onTap }) {
+function MarkBox({ kind, stamp, disabled, picked, draw, onTap }) {
   const ok = kind === 'confirm';
   return (
     <div className="pp-mark-wrap">
-      <button type="button" className={`pp-mark pp-mark-${ok ? 'ok' : 'no'}${stamp ? ' is-on' : ''}`} disabled={disabled}
-        title={ok ? 'Tap to confirm the money was received' : 'Tap to query this slip'} onClick={onTap}>
+      <button type="button" className={`pp-mark pp-mark-${ok ? 'ok' : 'no'}${stamp || picked ? ' is-on' : ''}`} disabled={disabled} aria-pressed={draw ? !!picked : undefined}
+        title={draw ? (ok ? 'Then draw a tick on the slip' : 'Then draw a cross on the slip') : ok ? 'Tap to confirm the money was received' : 'Tap to query this slip'} onClick={onTap}>
+        {!stamp && picked && <span className="pp-mark-sign">{ok ? '✓' : '✗'}</span>}
         {stamp && <><span className="pp-mark-sign">{ok ? '✓' : '✗'}</span><span className="pp-mark-who">{stamp.who}</span><span className="pp-mark-at">{stamp.at}</span></>}
       </button>
       <span className="pl-help">{ok ? 'Received' : 'Query'}</span>
@@ -139,6 +143,8 @@ function MarkBox({ kind, stamp, disabled, onTap }) {
 export function ReviewModal({ payment, sale, proof, buyer, account, money, canReview = true, onClose, onSaved }) {
   const { profile } = useAuth();
   const [stamp, setStamp] = useState(null);   // { kind, who, at }
+  const [pen, setPen] = useState(null);       // green | red: drawing on the photo slip
+  const [strokes, setStrokes] = useState(proof?.mark?.strokes ?? []);
   useEffect(() => {
     if (!proof?.reviewed_by || proof.status === 'waiting') return;
     supabase.from('profiles').select('id, first_name, last_name, email').eq('id', proof.reviewed_by).maybeSingle()
@@ -156,38 +162,67 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     const name = proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'jpg');
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [proof?.file_path]);
+  const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
+  const isPhoto = !!proof?.file_path && !isPdf;
   async function act(action) {
     setError('');
+    if (isPhoto && !strokes.length) { setError('Draw your mark on the slip first.'); return; }
     if (action === 'query' && !note.trim()) { setError('Say what is wrong with the proof.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('review_payment_proof', { p_payment: payment.id, p_action: action, p_note: action === 'query' ? note.trim() : null });
+    const { error: err } = await supabase.rpc('review_payment_proof', { p_payment: payment.id, p_action: action, p_note: action === 'query' ? note.trim() : null,
+      p_mark: isPhoto ? { strokes } : null });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     // the stamp shows a moment before the window closes
     setStamp({ kind: action, who: initialsOf(profile), at: stampTime(Date.now()) });
-    setTimeout(onSaved, 1200);
+    setPen(null);
+    setTimeout(onSaved, 1500);
   }
   const open = canReview && !stamp && !busy;
-  const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
+  const markColor = pen || proof?.mark?.color || (stamp?.kind === 'query' ? 'red' : 'green');
+  // keep the marked slip: the photo with the tick and stamp drawn in
+  async function saveMarked(e) {
+    if (!isPhoto || !strokes.length || !stamp || !url) return;
+    e.preventDefault();
+    try {
+      const blob = await markedSlipBlob(url, { color: markColor, strokes }, `${stamp.who} · ${stamp.at}`);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (proof.file_name || 'slip.jpg').replace(/\.[^.]+$/, '') + '_marked.jpg';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch { window.location.href = saveUrl; }
+  }
+  const pick = kind => {
+    setError('');
+    if (!isPhoto) { if (kind === 'confirm') act('confirm'); else setAsking(true); return; }
+    const c = kind === 'confirm' ? 'green' : 'red';
+    if (pen !== c) setStrokes([]);
+    setPen(c);
+    setAsking(kind === 'query');
+  };
   return (
     <Modal title={`Payment proof · ${money(Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
-        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download>Save to device</a>}
+        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download onClick={saveMarked}>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
-        {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('query')}>Send query</button>}</>}>
+        {pen && !stamp && strokes.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => setStrokes([])}>Clear</button>}
+        {pen === 'green' && !stamp && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !strokes.length} onClick={() => act('confirm')}>Sign as received</button>}
+        {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy || (isPhoto && !strokes.length)} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
         <div className="pp-review">
           <div className="pp-review-slip">
             {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
-              : url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Proof of payment" className="pp-photo" /></a> : <span className="skeleton" />)}
+              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open ? pen : null} onStrokes={setStrokes} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
+            {open && isPhoto && <span className="pl-help">{pen ? (pen === 'green' ? 'Draw a tick on the slip.' : 'Draw a cross on the slip.') : 'Pick ✓ or ✗, then draw it on the slip.'}</span>}
             {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
           </div>
           {(canReview || stamp) && (
             <div className="pp-marks">
-              <MarkBox kind="confirm" stamp={stamp?.kind === 'confirm' ? stamp : null} disabled={!open} onTap={() => act('confirm')} />
-              <MarkBox kind="query" stamp={stamp?.kind === 'query' ? stamp : null} disabled={!open} onTap={() => { setAsking(true); setError(''); }} />
+              <MarkBox kind="confirm" stamp={stamp?.kind === 'confirm' ? stamp : null} disabled={!open} draw={isPhoto} picked={pen === 'green'} onTap={() => pick('confirm')} />
+              <MarkBox kind="query" stamp={stamp?.kind === 'query' ? stamp : null} disabled={!open} draw={isPhoto} picked={pen === 'red'} onTap={() => pick('query')} />
             </div>
           )}
         </div>

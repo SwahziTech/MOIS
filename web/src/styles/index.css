@@ -2600,3 +2600,11 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .pp-mark-who { font-weight: 700; font-size: var(--text-sm); letter-spacing: .04em; }
 .pp-mark-at { font-size: var(--text-xs); color: var(--text-secondary); }
 @media (max-width: 560px) { .pp-review { flex-direction: column; } .pp-marks { flex-direction: row; } }
+/* drawing the mark on the slip (109, 2026-11-06) */
+.slip-canvas { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.slip-canvas .pp-photo { display: block; user-select: none; -webkit-user-drag: none; }
+.slip-canvas canvas { position: absolute; left: 0; top: 0; touch-action: none; }
+.slip-canvas.is-drawing canvas { cursor: crosshair; }
+.slip-canvas.is-drawing { outline: 2px dashed var(--border-strong); outline-offset: 3px; border-radius: var(--radius-md); }
+.slip-stamp { position: absolute; right: 8px; bottom: 8px; line-height: 1.2; font-weight: 700; font-size: var(--text-sm); background: rgba(255, 255, 255, .85); padding: 2px 6px; border-radius: var(--radius-sm); }
+.pp-mark[aria-pressed="true"] { background: var(--bg-soft); }
