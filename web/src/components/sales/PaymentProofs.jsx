@@ -9,7 +9,7 @@ import { formatMoney, dateText, tableDate } from '../../lib/format';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
-import { SlipCanvas, markedSlipBlob } from './SlipMark';
+import { SlipCanvas, markedSlipBlob, READY_MARK } from './SlipMark';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -145,6 +145,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   const [stamp, setStamp] = useState(null);   // { kind, who, at }
   const [pen, setPen] = useState(null);       // green | red: drawing on the photo slip
   const [strokes, setStrokes] = useState(proof?.mark?.strokes ?? []);
+  const [ready, setReady] = useState(false);   // the box's ready mark is on the slip; drawing replaces it
   useEffect(() => {
     if (!proof?.reviewed_by || proof.status === 'waiting') return;
     supabase.from('profiles').select('id, first_name, last_name, email').eq('id', proof.reviewed_by).maybeSingle()
@@ -188,7 +189,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
       const blob = await markedSlipBlob(url, { color: markColor, strokes }, `${stamp.who} · ${stamp.at}`);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (proof.file_name || 'slip.jpg').replace(/\.[^.]+$/, '') + '_marked.jpg';
+      a.download = (proof.file_name || 'slip.jpg').replace(/\.[^.]+$/, '') + '_marked.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     } catch { window.location.href = saveUrl; }
@@ -197,7 +198,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     setError('');
     if (!isPhoto) { if (kind === 'confirm') act('confirm'); else setAsking(true); return; }
     const c = kind === 'confirm' ? 'green' : 'red';
-    if (pen !== c) setStrokes([]);
+    if (pen !== c) { setStrokes(READY_MARK[c]); setReady(true); }
     setPen(c);
     setAsking(kind === 'query');
   };
@@ -206,7 +207,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {saveUrl && <a href={saveUrl} className="btn btn-ghost" download onClick={saveMarked}>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
-        {pen && !stamp && strokes.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => setStrokes([])}>Clear</button>}
+        {pen && !stamp && strokes.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => { setStrokes([]); setReady(false); }}>Clear</button>}
         {pen === 'green' && !stamp && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !strokes.length} onClick={() => act('confirm')}>Sign as received</button>}
         {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy || (isPhoto && !strokes.length)} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
@@ -215,8 +216,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         <div className="pp-review">
           <div className="pp-review-slip">
             {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
-              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open ? pen : null} onStrokes={setStrokes} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
-            {open && isPhoto && <span className="pl-help">{pen ? (pen === 'green' ? 'Draw a tick on the slip.' : 'Draw a cross on the slip.') : 'Pick ✓ or ✗, then draw it on the slip.'}</span>}
+              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open ? pen : null} onStrokes={v => { setStrokes(v); setReady(false); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
+            {open && isPhoto && <span className="pl-help">{pen ? (ready ? 'Draw over it to sign in your own hand, or sign as it is.' : 'Clear to start again.') : 'Tick ✓ or ✗.'}</span>}
             {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
           </div>
           {(canReview || stamp) && (
