@@ -7,7 +7,7 @@ import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
-import { loadProofs } from '../sales/PaymentProofs';
+import { loadProofs, WaitingSlips } from '../sales/PaymentProofs';
 import { PayModal, PaidList } from './DirectorPayments';
 import { PayPurchaseModal } from '../purchases/ProcurementPanels';
 import { supabase } from '../../lib/supabase';
@@ -77,6 +77,7 @@ export default function DirectorBoard() {
   const { organization, can } = useAuth();
   const [paying, setPaying] = useState(false);   // the Pay window (106)
   const canPay = can('finance.pay');
+  const canConfirm = can('sales.confirm_payments');   // the waiting slips show as lines to check
   const { branchId, branchName, branches, inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const short = v => formatMoneyShort(v, organization?.currency_code);
@@ -140,8 +141,9 @@ export default function DirectorBoard() {
         <section className="dd-block dd-needs">
           <div className="dd-head"><span>Needs you now</span><span className="pl-help">{needs.reduce((t, x) => t + x.count, 0)} items</span></div>
           <div className="dd-needs-row">
-            {needs.map(x => <Link key={x.key} to={x.to} className="dd-need"><strong>{x.count}</strong><span>{x.label}</span></Link>)}
+            {needs.filter(x => !(canConfirm && x.key === 'proofs')).map(x => <Link key={x.key} to={x.to} className="dd-need"><strong>{x.count}</strong><span>{x.label}</span></Link>)}
           </div>
+          {canConfirm && <WaitingSlips inBranch={inBranch} onChanged={load} />}
         </section>
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 

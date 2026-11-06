@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Upload, FileImage, Receipt } from 'lucide-react';
+import { Upload, FileImage, FileText, MessageSquare, Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -265,6 +265,64 @@ export function ProofReminder({ branchId, inBranch }) {
       <Receipt size={16} aria-hidden="true" />
       <span><strong>{n.todo} payment{n.todo === 1 ? '' : 's'} need proof</strong>{n.late ? ` · ${n.late} late` : ''}</span>
       <Link to="/sales?tab=receipts" className="btn btn-outline btn-sm">Add proof</Link>
+    </div>
+  );
+}
+
+/*
+ * The slips waiting for a director, each on its own line in the Director view's
+ * "Needs you now" (2026-11-06, the user): thumbnail, sale, buyer, amount, date —
+ * Check opens the slip to confirm or query it there.
+ */
+function SlipThumb({ proof }) {
+  const [url, setUrl] = useState('');
+  const isPdf = /\.pdf$/i.test(proof.file_path ?? '');
+  useEffect(() => {
+    if (!proof.file_path || isPdf) return;
+    supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+  }, [proof.file_path]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <span className="ru-thumb" aria-hidden="true">
+      {url ? <img src={url} alt="" /> : isPdf ? <><FileText size={18} /><span className="ru-thumb-tag">PDF</span></> : proof.file_path ? <FileImage size={18} /> : <MessageSquare size={18} />}
+    </span>
+  );
+}
+
+export function WaitingSlips({ inBranch, onChanged }) {
+  const { organization, canAt } = useAuth();
+  const today = orgToday(organization?.timezone);
+  const money = v => formatMoney(v, organization?.currency_code);
+  const [rows, setRows] = useState(null);
+  const [accounts, setAccounts] = useState({});
+  const [reviewing, setReviewing] = useState(null);
+  async function load() {
+    const [pr, ac] = await Promise.all([
+      supabase.from('sale_payment_proofs').select('*, payment:sale_payments!inner(id, paid_on, amount, method, receipt_no, account_id, sale:sales!inner(id, sale_no, branch_id, walk_in_name, customer:customers(name)))').eq('status', 'waiting'),
+      supabase.from('payment_accounts').select('id, name'),
+    ]);
+    setRows((pr.data || []).filter(x => inBranch(x.branch_id)).sort((a, b) => b.payment.paid_on.localeCompare(a.payment.paid_on)));
+    setAccounts(Object.fromEntries((ac.data || []).map(a => [a.id, a.name])));
+  }
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!rows?.length) return null;
+  const buyer = x => x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in';
+  const accName = x => accounts[x.payment.account_id] ?? ({ cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' }[x.payment.method]);
+  return (
+    <div className="dd-slips">
+      {rows.map(x => {
+        const late = proofState(x.payment, x, today) === 'overdue';
+        return (
+          <button key={x.id} type="button" className="dd-slip" onClick={() => setReviewing(x)}>
+            <SlipThumb proof={x} />
+            <span className="dd-slip-text"><strong>Sale #{x.payment.sale.sale_no} · {buyer(x)}</strong>
+              <span className="pl-help">{money(Number(x.payment.amount))} · {dateText(x.payment.paid_on)}{late ? <span className="text-warning"> · overdue</span> : null}</span></span>
+            <span className="btn btn-primary btn-sm">Check</span>
+          </button>
+        );
+      })}
+      {reviewing && <ReviewModal payment={reviewing.payment} sale={reviewing.payment.sale} proof={reviewing} buyer={buyer(reviewing)} account={accName(reviewing)} money={money}
+        canReview={canAt('sales.confirm_payments', reviewing.branch_id, null)}
+        onClose={() => setReviewing(null)} onSaved={async () => { setReviewing(null); await load(); onChanged?.(); }} />}
     </div>
   );
 }
