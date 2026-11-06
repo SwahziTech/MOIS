@@ -198,7 +198,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     setError('');
     if (!isPhoto) { if (kind === 'confirm') act('confirm'); else setAsking(true); return; }
     const c = kind === 'confirm' ? 'green' : 'red';
-    if (pen !== c) { setStrokes(READY_MARK[c]); setReady(true); }
+    // a hand drawing stays and takes the box's colour; the ready mark is swapped
+    if (pen !== c && (ready || !strokes.length)) { setStrokes(READY_MARK[c]); setReady(true); }
     setPen(c);
     setAsking(kind === 'query');
   };
@@ -216,8 +217,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         <div className="pp-review">
           <div className="pp-review-slip">
             {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
-              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open ? pen : null} onStrokes={v => { setStrokes(v); setReady(false); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
-            {open && isPhoto && <span className="pl-help">{pen ? (ready ? 'Draw over it to sign in your own hand, or sign as it is.' : 'Clear to start again.') : 'Tick ✓ or ✗.'}</span>}
+              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open && isPhoto ? pen || 'green' : null} onStrokes={v => { setStrokes(v); setReady(false); if (!pen) setPen('green'); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
+            {open && isPhoto && <span className="pl-help">{!strokes.length ? 'Tick a box, or draw ✓ or ✗ on the slip with your finger.' : ready ? 'Or draw over it with your finger to sign in your own hand.' : pen === 'red' ? 'Clear to start again.' : 'Green is received; tap the red box to query instead.'}</span>}
             {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
           </div>
           {(canReview || stamp) && (
