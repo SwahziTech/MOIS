@@ -17,7 +17,8 @@ import ProofPreview from '../ProofPreview';
  * payment. Supplier, weekly cash and salaries go through MOIS's own payment
  * step first (record_purchase_payment, cash_request_step 'pay', pay_pay_sheet);
  * then the proof is kept. The branch manager, the secretary and the other
- * directors mark it Seen, so everyone knows the order or request is paid.
+ * directors could mark it Seen; 2026-11-06 the user: no reminder notes — the paid
+ * transaction shows its own status and slip where it lives (e.g. the purchase).
  */
 const KINDS = [['supplier', 'Supplier'], ['expense', 'Expense / bill'], ['weekly_cash', 'Weekly cash'], ['salaries', 'Salaries'], ['other', 'Other']];
 const KIND_LABEL = Object.fromEntries(KINDS);
@@ -176,7 +177,7 @@ export function PayModal({ onClose, onSaved }) {
   );
 }
 
-/* Paid by directors: each payment, its proof, and who has seen it; Seen for those who haven't */
+/* Paid by directors: each payment and its proof, newest first */
 export function PaidList({ days = 60 }) {
   const { organization, session } = useAuth();
   const { inBranch } = useBranch();
@@ -215,20 +216,17 @@ export function PaidList({ days = 60 }) {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>For</th><th className="num">Amount (TZS)</th><th>Proof</th><th>Seen by</th><th aria-label="Actions" /></tr></thead>
+          <thead><tr><th>Date</th><th>For</th><th className="num">Amount (TZS)</th><th>Proof</th></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={6} className="text-muted">No payments yet.</td></tr>
+            {rows === null ? <tr><td colSpan={4}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={4} className="text-muted">No payments yet.</td></tr>
             : shown.map(r => {
-              const by = seenBy(r.id);
               return (
                 <tr key={r.id}>
                   <td>{tableDate(r.paid_on)}</td>
                   <td>{KIND_LABEL[r.kind]}{r.description ? ` · ${r.description}` : ''}</td>
                   <td className="num">{Number(r.amount).toLocaleString('en-US')}</td>
                   <td><button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewing(r)}><Eye size={13} /> {r.file_path ? 'Slip' : 'SMS'}</button></td>
-                  <td className="text-sm">{by.length ? by.map(s => people[s.user_id] ?? 'someone').join(', ') : <span className="text-muted">nobody yet</span>}</td>
-                  <td style={{ textAlign: 'right' }}>{!by.some(s => s.user_id === me) && <button type="button" className="btn btn-primary btn-sm" onClick={() => markSeen(r.id)}>Seen</button>}</td>
                 </tr>
               );
             })}
@@ -240,7 +238,7 @@ export function PaidList({ days = 60 }) {
   );
 }
 
-function ProofView({ row, onClose }) {
+export function ProofView({ row, onClose }) {
   const { organization } = useAuth();
   const [url, setUrl] = useState('');
   const [saveUrl, setSaveUrl] = useState('');

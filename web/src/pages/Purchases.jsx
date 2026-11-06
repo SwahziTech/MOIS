@@ -21,6 +21,7 @@ import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import NumberInput from '../components/NumberInput';
 import PeriodSelect, { usePeriod } from '../components/PeriodSelect';
+import { ProofView } from '../components/dashboard/DirectorPayments';
 
 const LOAD_ERROR = "We couldn't load purchases. Please try again.";
 const PAYMENT_LABEL = { paid: 'Paid', part_paid: 'Part-paid', unpaid: 'Unpaid', void: 'Void' };
@@ -196,6 +197,14 @@ export default function Purchases() {
   // Technical admin (system.manage): may delete a purchase entered wrongly (040)
   const isTechAdmin = canManage('system.manage');
   const purchasesHere = purchases.filter(p => inBranch(p.branch_id));
+  // the proofs of what directors paid on each purchase (106), shown on the purchase itself
+  const [slips, setSlips] = useState({});   // purchase id → [director payment]
+  const [slipOpen, setSlipOpen] = useState(null);
+  useEffect(() => {
+    supabase.from('director_payments').select('*').eq('kind', 'supplier').then(({ data }) => {
+      const m = {}; for (const d of data || []) (m[d.ref_id] ||= []).push(d); setSlips(m);
+    });
+  }, [purchases.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const purchasesShown = purchasesHere.filter(p => period.has(p.purchase_date));
   const vatRateOf = b => vatRates[b] ?? DEFAULT_VAT;
   const catName = id => expCats.find(c => c.id === id)?.name ?? '—';
@@ -309,6 +318,7 @@ export default function Purchases() {
                         <td>
                           <span className={`badge ${PAYMENT_BADGE[t?.payment_status] ?? 'badge-neutral'}`}>{PAYMENT_LABEL[t?.payment_status] ?? '—'}</span>
                           {t?.payment_status === 'part_paid' && <div className="text-xs text-muted">{money(t.balance)} to pay</div>}
+                          {(slips[p.id] || []).map(d => <button key={d.id} type="button" className="link-btn text-xs" style={{ display: 'block' }} onClick={() => setSlipOpen(d)}>{d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)}</button>)}
                           {p.status === 'void' && <div className="text-xs text-muted">{p.void_reason}</div>}
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -418,6 +428,7 @@ export default function Purchases() {
       )}
       {tokenFor && <BuyModal q={tokenFor} meterName={tokenFor.meterName} today={orgToday(organization?.timezone)} money={money}
         onClose={() => setTokenFor(null)} onSaved={async () => { setTokenFor(null); setOrdersKey(k => k + 1); await load(); }} />}
+      {slipOpen && <ProofView row={slipOpen} onClose={() => setSlipOpen(null)} />}
       {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
         accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}
       {deleting && (

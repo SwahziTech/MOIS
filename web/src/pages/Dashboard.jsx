@@ -17,7 +17,6 @@ import Purchases from './Purchases';
 import { PageTabs } from '../components/ListControls';
 import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
 import { ProofReminder } from '../components/sales/PaymentProofs';
-import { PaidReminder } from '../components/dashboard/DirectorPayments';
 import DirectorBoard from '../components/dashboard/DirectorBoard';
 import { primaryRole } from '../lib/menu';
 
@@ -159,7 +158,6 @@ function RoleDashboard({ isOwner, isSecretary = false }) {
       {/* the meters only on Overview (2026-11-03), leaving the other tabs to their own work */}
       {shown === 'overview' && <MeterReadingsTask branchId={branchId} />}
       <ProofReminder branchId={branchId} inBranch={inBranch} />
-      <PaidReminder branchId={branchId} inBranch={inBranch} />
       {error && <div className="alert alert-error mb-16" role="alert">{error}</div>}
 
       {realPage ? (
