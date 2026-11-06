@@ -9,6 +9,7 @@ import { formatMoney, dateText, tableDate } from '../../lib/format';
 import NumberInput from '../NumberInput';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
+import { proofName, extOf } from '../../lib/proofName';
 
 /*
  * What directors pay (106, 2026-11-04, the user): one Pay window — choose what
@@ -64,10 +65,10 @@ export function PayModal({ onClose, onSaved }) {
         const bal = Object.fromEntries((t.data || []).map(x => [x.purchase_id, x]));
         const sup = Object.fromEntries((s.data || []).map(x => [x.id, x.name]));
         setOptions((p.data || []).filter(x => x.status !== 'void' && Number(bal[x.id]?.balance) > 0.004)
-          .map(x => ({ id: x.id, owes: Number(bal[x.id].balance), label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` })));
+          .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` })));
       } else if (kind === 'expense') {
         const { data } = await supabase.from('expenses').select('id, expense_date, description, amount, amount_paid, status').eq('branch_id', br).neq('status', 'void').order('expense_date', { ascending: false }).limit(100);
-        setOptions((data || []).map(x => ({ id: x.id, owes: Math.max(Number(x.amount) - Number(x.amount_paid || 0), 0) || Number(x.amount),
+        setOptions((data || []).map(x => ({ id: x.id, who: x.description, owes: Math.max(Number(x.amount) - Number(x.amount_paid || 0), 0) || Number(x.amount),
           label: `${tableDate(x.expense_date)} · ${x.description ?? 'Expense'} · ${money(Number(x.amount))}` })));
       } else if (kind === 'weekly_cash') {
         const { data } = await supabase.from('cash_requests').select('id, week_ending, status, lines:cash_request_lines(amount, approved_amount)').eq('branch_id', br).eq('status', 'approved').order('week_ending', { ascending: false });
@@ -118,7 +119,8 @@ export function PayModal({ onClose, onSaved }) {
           if (up.error) throw up.error;
         }
         const { error: err } = await supabase.rpc('post_director_payment', { p: { branch_id: br, kind, ref_id: ref || null, description: desc.trim() || null,
-          amount: num(amount), account_id: accountId || null, paid_on: paidOn, file_path: path, file_name: file?.name ?? null, sms_text: sms.trim() || null } });
+          amount: num(amount), account_id: accountId || null, paid_on: paidOn, file_path: path, file_name: file ? proofName({ kind: `Paid-${{ supplier: 'Supplier', expense: 'Expense', weekly_cash: 'WeeklyCash', salaries: 'Salaries', other: 'Other' }[kind]}`,
+          who: (options || []).find(o => o.id === ref)?.who || desc.trim() || (branches || []).find(b => b.id === br)?.name, amount: num(amount), date: paidOn }, extOf(file)) : null, sms_text: sms.trim() || null } });
         if (err) throw err;
       } catch (e) {
         throw new Error(`${needsRef ? 'Paid, but the proof was not kept: ' : ''}${dbErrorMessage(e)}`);
@@ -240,7 +242,7 @@ export function ProofView({ row, onClose }) {
   useEffect(() => {
     if (!row.file_path) return;
     supabase.storage.from('director-proofs').createSignedUrl(row.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
-    supabase.storage.from('director-proofs').createSignedUrl(row.file_path, 600, { download: `paid-${row.paid_on}-${(row.file_name || 'proof').replace(/[^\w.-]+/g, '_')}` })
+    supabase.storage.from('director-proofs').createSignedUrl(row.file_path, 600, { download: row.file_name || `Paid_${row.paid_on}.jpg` })
       .then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [row.file_path]); // eslint-disable-line react-hooks/exhaustive-deps
   const isPdf = /\.pdf$/i.test(row.file_path ?? '');

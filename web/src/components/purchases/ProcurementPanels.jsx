@@ -8,6 +8,7 @@ import { qtyText, orgToday } from '../../lib/inventory';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
 import ProofBox from '../ProofBox';
+import { proofName, extOf } from '../../lib/proofName';
 
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const r2 = n => Math.round(n * 100) / 100;
@@ -653,7 +654,7 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
           if (up.error) throw up.error;
         }
         const { error: e2 } = await supabase.rpc('post_director_payment', { p: { branch_id: purchase.branch_id, kind: 'supplier', ref_id: purchase.id, description: supplierName,
-          amount: num(f.amount), account_id: f.account_id || null, paid_on: f.paid_on, file_path: path, file_name: file?.name ?? null, sms_text: sms.trim() || null } });
+          amount: num(f.amount), account_id: f.account_id || null, paid_on: f.paid_on, file_path: path, file_name: file ? proofName({ kind: 'Paid-Supplier', who: supplierName, amount: num(f.amount), date: f.paid_on }, extOf(file)) : null, sms_text: sms.trim() || null } });
         if (e2) throw e2;
       } catch (e) {
         setBusy(false); setError(`Paid, but the proof was not kept: ${dbErrorMessage(e)}`); return;

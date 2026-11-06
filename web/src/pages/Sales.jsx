@@ -733,7 +733,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
             {goodsLeft && <p className="pl-help" title="Goods leave up to the value paid">Can leave now: {money(r2(Math.max(paid - given, 0)))}</p>}
           </section>
         )}
-        {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
+        {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} buyer={buyer} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
         {reviewFor && <ReviewModal payment={reviewFor} sale={sale} proof={proofs[reviewFor.id]} buyer={buyer} account={accountName(reviewFor.account_id) ?? METHODS[reviewFor.method]} money={money}
           canReview={proofs[reviewFor.id]?.status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null)}
           onClose={() => setReviewFor(null)} onSaved={() => { setReviewFor(null); onChanged(); }} />}

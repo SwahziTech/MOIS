@@ -8,6 +8,7 @@ import { orgToday } from '../../lib/inventory';
 import { formatMoney, dateText, tableDate } from '../../lib/format';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
+import { proofName, extOf } from '../../lib/proofName';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -54,7 +55,9 @@ export async function loadProofs() {
 }
 
 /* Add (or replace) the proof of one payment: a photo/PDF, the SMS text, or both — one step */
-export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
+export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSaved }) {
+  // the file is named after its transaction (2026-11-06)
+  const nameOf = ext => proofName({ kind: `Sale-${sale.sale_no}`, who: buyer ?? sale.customer?.name ?? sale.walk_in_name ?? 'Walk-in', amount: payment.amount, date: payment.paid_on }, ext);
   const { organization } = useAuth();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
@@ -80,16 +83,15 @@ export function ProofModal({ payment, sale, proof, money, onClose, onSaved }) {
         const up = await supabase.storage.from('payment-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
         if (up.error) throw up.error;
       }
-      const { error: err } = await supabase.rpc('submit_payment_proof', { p: { payment_id: payment.id, file_path: path, file_name: file?.name ?? null, sms_text: text.trim() || null } });
+      const { error: err } = await supabase.rpc('submit_payment_proof', { p: { payment_id: payment.id, file_path: path, file_name: file ? nameOf(extOf(file)) : null, sms_text: text.trim() || null } });
       if (err) throw err;
       // a copy kept on this device (2026-11-04, the user): the slip, else the SMS as text
       try {
-        const base = `sale-${sale.sale_no}-${payment.paid_on}`;
         const blob = file ?? (text.trim() ? new Blob([text.trim()], { type: 'text/plain' }) : null);
         if (blob) {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          a.download = file ? `${base}-${file.name.replace(/[^\w.-]+/g, '_')}` : `${base}-sms.txt`;
+          a.download = nameOf(file ? extOf(file) : 'txt');
           document.body.appendChild(a); a.click(); a.remove();
           setTimeout(() => URL.revokeObjectURL(a.href), 4000);
         }
@@ -124,7 +126,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   useEffect(() => {
     if (!proof?.file_path) return;
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
-    const name = `sale-${sale.sale_no}-${payment.paid_on}-${(proof.file_name || 'proof').replace(/[^\w.-]+/g, '_')}`;
+    const name = proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'jpg');
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [proof?.file_path]);
   async function act(action) {
@@ -233,7 +235,7 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
           </tbody>
         </table>
       </div></div>
-      {adding && <ProofModal payment={adding} sale={adding.sale} proof={proofs[adding.id]} money={money} onClose={() => setAdding(null)} onSaved={async () => { setAdding(null); await load(); }} />}
+      {adding && <ProofModal payment={adding} sale={adding.sale} proof={proofs[adding.id]} buyer={buyer(adding)} money={money} onClose={() => setAdding(null)} onSaved={async () => { setAdding(null); await load(); }} />}
       {reviewing && <ReviewModal payment={reviewing} sale={reviewing.sale} proof={proofs[reviewing.id]} buyer={buyer(reviewing)} account={accName(reviewing)} money={money}
         canReview={proofs[reviewing.id]?.status !== 'confirmed' && canAt('sales.confirm_payments', reviewing.sale.branch_id, null)}
         onClose={() => setReviewing(null)} onSaved={async () => { setReviewing(null); await load(); }} />}
