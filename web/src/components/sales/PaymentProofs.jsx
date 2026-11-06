@@ -198,8 +198,9 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     setError('');
     if (!isPhoto) { if (kind === 'confirm') act('confirm'); else setAsking(true); return; }
     const c = kind === 'confirm' ? 'green' : 'red';
-    // a hand drawing stays and takes the box's colour; the ready mark is swapped
-    if (pen !== c && (ready || !strokes.length)) { setStrokes(READY_MARK[c]); setReady(true); }
+    // the box decides: ticking it puts its mark on the slip, over anything drawn (2026-11-06, the user).
+    // MOIS never reads the drawn shape — the decision is always the box ticked.
+    setStrokes(READY_MARK[c]); setReady(true);
     setPen(c);
     setAsking(kind === 'query');
   };
@@ -217,8 +218,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         <div className="pp-review">
           <div className="pp-review-slip">
             {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
-              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open && isPhoto ? pen || 'green' : null} onStrokes={v => { setStrokes(v); setReady(false); if (!pen) setPen('green'); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
-            {open && isPhoto && <span className="pl-help">{!strokes.length ? 'Tick a box, or draw ✓ or ✗ on the slip with your finger.' : ready ? 'Or draw over it with your finger to sign in your own hand.' : pen === 'red' ? 'Clear to start again.' : 'Green is received; tap the red box to query instead.'}</span>}
+              : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open && isPhoto ? pen || 'ink' : null} onStrokes={v => { setStrokes(v); setReady(false); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
+            {open && isPhoto && <span className="pl-help">{!pen ? (strokes.length ? 'Now tick ✓ Received or ✗ Query: the box decides.' : 'Tick ✓ or ✗ in a box. You may also sign on the slip with your finger.') : ready ? 'Or draw over it with your finger to sign in your own hand.' : 'Clear to start again.'}</span>}
             {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
           </div>
           {(canReview || stamp) && (

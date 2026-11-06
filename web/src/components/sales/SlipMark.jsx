@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
  * so the mark sits in the same place at any size; the stamp (initials, time)
  * sits in the corner.
  */
-export const MARK_COLOR = { green: '#22c55e', red: '#ef4444' };
+export const MARK_COLOR = { green: '#22c55e', red: '#ef4444', ink: '#3b82f6' };   // ink: drawn before a box is ticked
 // the mark put on the slip as soon as a box is ticked (2026-11-06, the user); drawing replaces it
 export const READY_MARK = {
   green: [[[0.30, 0.52], [0.42, 0.66], [0.72, 0.30]]],
