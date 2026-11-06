@@ -116,7 +116,34 @@ export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSave
 }
 
 /* The proof of a payment, seen by everyone responsible (2026-11-04); a director also confirms it or queries it */
+/*
+ * The director's mark (2026-11-06, the user): two boxes beside the slip — green ✓
+ * received, red ✗ query. A tap stamps the box with the director's initials and
+ * the time, like a signature on the paper slip; it shows on the slip from then on.
+ */
+const initialsOf = p => (p ? ([p.first_name, p.last_name].filter(Boolean).map(w => w[0]).join('') || (p.email || '?')[0]).toUpperCase() : '');
+const stampTime = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function MarkBox({ kind, stamp, disabled, onTap }) {
+  const ok = kind === 'confirm';
+  return (
+    <div className="pp-mark-wrap">
+      <button type="button" className={`pp-mark pp-mark-${ok ? 'ok' : 'no'}${stamp ? ' is-on' : ''}`} disabled={disabled}
+        title={ok ? 'Tap to confirm the money was received' : 'Tap to query this slip'} onClick={onTap}>
+        {stamp && <><span className="pp-mark-sign">{ok ? '✓' : '✗'}</span><span className="pp-mark-who">{stamp.who}</span><span className="pp-mark-at">{stamp.at}</span></>}
+      </button>
+      <span className="pl-help">{ok ? 'Received' : 'Query'}</span>
+    </div>
+  );
+}
+
 export function ReviewModal({ payment, sale, proof, buyer, account, money, canReview = true, onClose, onSaved }) {
+  const { profile } = useAuth();
+  const [stamp, setStamp] = useState(null);   // { kind, who, at }
+  useEffect(() => {
+    if (!proof?.reviewed_by || proof.status === 'waiting') return;
+    supabase.from('profiles').select('id, first_name, last_name, email').eq('id', proof.reviewed_by).maybeSingle()
+      .then(({ data }) => setStamp({ kind: proof.status === 'confirmed' ? 'confirm' : 'query', who: initialsOf(data), at: proof.reviewed_at ? stampTime(proof.reviewed_at) : '' }));
+  }, [proof?.id, proof?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const [url, setUrl] = useState('');
   const [saveUrl, setSaveUrl] = useState('');   // the same file, as a download (kept on the device)
   const [note, setNote] = useState('');
@@ -136,24 +163,34 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     const { error: err } = await supabase.rpc('review_payment_proof', { p_payment: payment.id, p_action: action, p_note: action === 'query' ? note.trim() : null });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
-    onSaved();
+    // the stamp shows a moment before the window closes
+    setStamp({ kind: action, who: initialsOf(profile), at: stampTime(Date.now()) });
+    setTimeout(onSaved, 1200);
   }
+  const open = canReview && !stamp && !busy;
   const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
   return (
     <Modal title={`Payment proof · ${money(Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {saveUrl && <a href={saveUrl} className="btn btn-ghost" download>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
-        {canReview && (asking ? <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('query')}>Send query</button>
-          : <button type="button" className="btn btn-outline" onClick={() => setAsking(true)}>Query</button>)}
-        {canReview && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('confirm')}>Confirm received</button>}</>}>
+        {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
-        {proof?.status === 'confirmed' && <p className="text-sm"><span className="badge badge-success">Confirmed</span>{proof.reviewed_at ? ` ${dateText(proof.reviewed_at)}` : ''}</p>}
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
-        {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
-          : url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Proof of payment" className="pp-photo" /></a> : <span className="skeleton" />)}
-        {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
+        <div className="pp-review">
+          <div className="pp-review-slip">
+            {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
+              : url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Proof of payment" className="pp-photo" /></a> : <span className="skeleton" />)}
+            {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
+          </div>
+          {(canReview || stamp) && (
+            <div className="pp-marks">
+              <MarkBox kind="confirm" stamp={stamp?.kind === 'confirm' ? stamp : null} disabled={!open} onTap={() => act('confirm')} />
+              <MarkBox kind="query" stamp={stamp?.kind === 'query' ? stamp : null} disabled={!open} onTap={() => { setAsking(true); setError(''); }} />
+            </div>
+          )}
+        </div>
         {asking && <label className="pe-field"><span>What's wrong?</span>
           <input className="form-input" autoFocus value={note} onChange={e => setNote(e.target.value)} placeholder="Amount on the slip is different" /></label>}
       </div>

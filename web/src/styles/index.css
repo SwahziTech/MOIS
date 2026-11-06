@@ -2585,3 +2585,18 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .dd-slip .ru-thumb { width: 40px; height: 40px; flex: none; }
 .dd-slip-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
 .dd-slip-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* the director's mark beside the slip (2026-11-06) */
+.pp-review { display: flex; gap: 20px; align-items: flex-start; }
+.pp-review-slip { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pp-marks { display: flex; flex-direction: column; gap: 14px; flex: none; }
+.pp-mark-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pp-mark { width: 92px; height: 72px; border-radius: var(--radius-md); border: 3px solid; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.1; }
+.pp-mark-ok { border-color: var(--color-success, #3fa34d); color: var(--color-success, #3fa34d); }
+.pp-mark-no { border-color: var(--color-error, #d64545); color: var(--color-error, #d64545); }
+.pp-mark:disabled { cursor: default; }
+.pp-mark:disabled:not(.is-on) { opacity: .35; }
+.pp-mark:not(:disabled):hover { background: var(--bg-soft); }
+.pp-mark-sign { font-size: 1.6rem; font-weight: 700; }
+.pp-mark-who { font-weight: 700; font-size: var(--text-sm); letter-spacing: .04em; }
+.pp-mark-at { font-size: var(--text-xs); color: var(--text-secondary); }
+@media (max-width: 560px) { .pp-review { flex-direction: column; } .pp-marks { flex-direction: row; } }
