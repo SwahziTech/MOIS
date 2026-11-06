@@ -7,7 +7,7 @@ import { dbErrorMessage } from '../../lib/masterData';
 import { qtyText, orgToday } from '../../lib/inventory';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
-import ProofPreview from '../ProofPreview';
+import ProofBox from '../ProofBox';
 
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const r2 = n => Math.round(n * 100) / 100;
@@ -686,12 +686,7 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
           <label className="pe-field"><span>Reference (optional)</span><input className="form-input" value={f.reference} onChange={e => setF({ ...f, reference: e.target.value })} /></label>
         </div>
         {withProof && <>
-          <ProofPreview file={file}>
-            <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : 'Proof: photo or PDF of the slip'}</div>
-            <label className="btn btn-outline btn-sm"><Upload size={14} /> {file ? 'Replace' : 'Choose'}
-              <input type="file" accept="image/*,application/pdf" hidden onChange={e => { const x = e.target.files?.[0]; e.target.value = ''; if (x) setFile(x); }} /></label>
-          </ProofPreview>
-          <label className="pe-field"><span>Or paste the SMS</span><textarea className="form-input" rows={3} value={sms} onChange={e => setSms(e.target.value)} /></label>
+          <ProofBox file={file} onFile={f => setFile(f && f.size > 10 * 1024 * 1024 ? file : f)} text={sms} onText={setSms} />
         </>}
       </div>
     </Modal>

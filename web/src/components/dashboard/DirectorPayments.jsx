@@ -8,7 +8,7 @@ import { orgToday } from '../../lib/inventory';
 import { formatMoney, dateText, tableDate } from '../../lib/format';
 import NumberInput from '../NumberInput';
 import Modal from '../Modal';
-import ProofPreview from '../ProofPreview';
+import ProofBox from '../ProofBox';
 
 /*
  * What directors pay (106, 2026-11-04, the user): one Pay window — choose what
@@ -86,7 +86,7 @@ export function PayModal({ onClose, onSaved }) {
   }
   function pick(e) {
     const f = e.target.files?.[0]; e.target.value = '';
-    if (!f) return;
+    if (!f) { setFile(null); return; }   // removed in the proof box
     if (f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB.'); return; }
     setError(''); setFile(f); setPreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : '');
   }
@@ -166,12 +166,7 @@ export function PayModal({ onClose, onSaved }) {
           )}
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} /></label>
         </div>
-        <ProofPreview file={file}>
-          <div className="pl-help" style={{ flex: 1 }}>{file ? file.name : 'Proof: photo or PDF of the slip'}</div>
-          <label className="btn btn-outline btn-sm"><Upload size={14} /> {file ? 'Replace' : 'Choose'}
-            <input type="file" accept="image/*,application/pdf" hidden onChange={pick} /></label>
-        </ProofPreview>
-        <label className="pe-field"><span>Or paste the SMS</span><textarea className="form-input" rows={3} value={sms} onChange={e => setSms(e.target.value)} /></label>
+        <ProofBox file={file} onFile={f => pick({ target: { files: f ? [f] : [], value: '' } })} text={sms} onText={setSms} />
       </div>
     </Modal>
   );

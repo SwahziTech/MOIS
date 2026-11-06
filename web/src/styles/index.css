@@ -2563,3 +2563,18 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .pp-big .pp-photo { width: 100%; max-height: 60vh; object-fit: contain; }
 .pl-allow { justify-self: start; align-self: flex-start; width: fit-content; }
 .pl-allow > span { cursor: default; }
+/* the proof box: like a message box (2026-11-06) */
+.proof-box { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-surface); padding: 8px 10px 6px; display: flex; flex-direction: column; gap: 6px; }
+.proof-box:focus-within { border-color: var(--accent); }
+.proof-box-files { display: flex; gap: 6px; flex-wrap: wrap; }
+.proof-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 3px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-soft); max-width: 100%; }
+.proof-chip-kept { padding: 4px 8px; font-size: var(--text-xs); color: var(--text-muted); }
+.proof-chip-thumb { width: 40px; height: 40px; border-radius: var(--radius-sm); overflow: hidden; border: 0; padding: 0; background: var(--bg-surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); }
+.proof-chip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.proof-chip-name { font-size: var(--text-xs); color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proof-chip-x { border: 0; background: none; color: var(--text-muted); cursor: pointer; padding: 2px; display: flex; }
+.proof-chip-x:hover { color: var(--text-primary); }
+.proof-box-text { border: 0; outline: none; resize: vertical; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--text-sm); min-height: 56px; padding: 2px 0; }
+.proof-box-bar { display: flex; align-items: center; gap: 8px; }
+.proof-box-add { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); }
+.proof-box-add:hover { color: var(--text-primary); border-color: var(--text-secondary); }
