@@ -1151,8 +1151,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
-                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}
-                  {Number(x.vat) > 0 && !x.efd_receipt_no && <div><span className="badge badge-warning sb-approval" title="This sale carries VAT: add its EFD receipt number">EFD to fill</span></div>}</td>}
+                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
                 <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
@@ -1163,11 +1162,11 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
                 {perItem ? <>
                   {cols.map((a, i) => <td key={a.id} className={`num${i === 0 ? ' sb-acc-start' : ''}`}>{paidTo(x, a.id, l.id) > 0 ? formatAmount(paidTo(x, a.id, l.id)) : ''}</td>)}
                   {hasOther && <td className={`num${cols.length ? '' : ' sb-acc-start'}`}>{paidTo(x, 'other', l.id) > 0 ? formatAmount(paidTo(x, 'other', l.id)) : ''}</td>}
-                  <td>{slips(x, l.id)}</td>
+                  <td>{slips(x, l.id)}{first && Number(x.vat) > 0 && !x.efd_receipt_no && <div><span className="badge badge-warning sb-approval" title="This sale carries VAT: add its EFD receipt number">EFD to fill</span></div>}</td>
                 </> : first && <>
                   {cols.map((a, i) => <td key={a.id} rowSpan={span} className={`num sb-merge${i === 0 ? ' sb-acc-start' : ''}`}>{paidTo(x, a.id) > 0 ? formatAmount(paidTo(x, a.id)) : ''}</td>)}
                   {hasOther && <td rowSpan={span} className={`num sb-merge${cols.length ? '' : ' sb-acc-start'}`}>{paidTo(x, 'other') > 0 ? formatAmount(paidTo(x, 'other')) : ''}</td>}
-                  <td rowSpan={span} className="sb-merge">{slips(x)}</td>
+                  <td rowSpan={span} className="sb-merge">{slips(x)}{Number(x.vat) > 0 && !x.efd_receipt_no && <div><span className="badge badge-warning sb-approval" title="This sale carries VAT: add its EFD receipt number">EFD to fill</span></div>}</td>
                 </>}
                 {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
                 {/* has it left the store? (065) — all, part (how much) or not yet */}
