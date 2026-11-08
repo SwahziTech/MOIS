@@ -124,6 +124,24 @@ export async function loadSlipSiblings(proof) {
   return data || [];
 }
 
+/* The proof/slip for several payments: the same box, posted when added */
+function SlipWindow({ amount, money, note, onClose, onDone }) {
+  const [file, setFile] = useState(null);
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  return (
+    <Modal title={`Proof of payment · ${money(amount)}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn btn-primary" onClick={() => { if (!file && !text.trim()) { setError('Add the photo or paste the SMS.'); return; } onDone({ file, text }); }}>Post proof</button></>}>
+      <div className="modal-form">
+        <p className="pl-help">{note}</p>
+        <ProofBox file={file} onFile={f => { if (f && f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; } setError(''); setFile(f); }} text={text} onText={setText} />
+      </div>
+    </Modal>
+  );
+}
+
 /* Add (or replace) the proof of one payment: a photo/PDF, the SMS text, or both — one step */
 export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSaved }) {
   // the file is named after its transaction (2026-11-06)
@@ -325,7 +343,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
 
 /*
  * Payments and their proof, one list for both sides: the branch adds proof (reminders first: late,
- * queried, then due); directors confirm what waits. Used on Sales › Receipts and Approvals › Payments.
+ * queried, then due); directors confirm what waits. Used on Sales › Slips and Approvals › Payments.
+ * On "Proof to add", one proof/slip can cover several payments: Add proof/slip, tick them, add it once (2026-11-08).
  */
 export function PaymentProofsList({ branchId, inBranch, directorView = false }) {
   const { organization, canAt } = useAuth();
@@ -337,6 +356,10 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
   const [show, setShow] = useState(directorView ? 'waiting' : 'todo');   // todo | waiting | confirmed | all
   const [adding, setAdding] = useState(null);
   const [reviewing, setReviewing] = useState(null);
+  const [choosing, setChoosing] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
+  const [slipOpen, setSlipOpen] = useState(false);
+  const [posting, setPosting] = useState(false);
   async function load() {
     const [p, pr, ac] = await Promise.all([
       supabase.from('sale_payments').select('id, sale_id, paid_on, amount, method, receipt_no, account_id, created_at, sale:sales!inner(id, sale_no, branch_id, stage, customer_id, walk_in_name, total, customer:customers(name))')
@@ -357,6 +380,18 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
     .sort((a, b) => (show === 'all' || show === 'confirmed' ? 0 : order[a.state] - order[b.state]) || b.paid_on.localeCompare(a.paid_on));
   const buyer = x => x.sale.customer?.name ?? x.sale.walk_in_name ?? 'Walk-in';
   const accName = x => accounts[x.account_id] ?? ({ cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' }[x.method]);
+  const canAddAny = show === 'todo' && shown.some(x => canAt('sales.create', x.sale.branch_id, null));
+  const selRows = here.filter(x => sel.has(x.id));
+  const selTotal = selRows.reduce((t, x) => t + Number(x.amount), 0);
+  async function postOne(slip) {
+    setSlipOpen(false); setPosting(true);
+    const names = [...new Set(selRows.map(buyer))];
+    const failed = await postSharedSlip(selRows.map(x => ({ id: x.id, amount: x.amount, paid_on: x.paid_on, sale: { sale_no: x.sale.sale_no, branch_id: x.sale.branch_id } })), slip,
+      { organizationId: organization.id, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
+    setPosting(false); setSel(new Set()); setChoosing(false);
+    if (failed) window.alert(`${failed} of the payments could not take the slip. Try again.`);
+    await load();
+  }
   return (
     <>
       <div className="mm-stats">
@@ -366,20 +401,31 @@ export function PaymentProofsList({ branchId, inBranch, directorView = false }) 
       </div>
       <div className="filter-chips" style={{ margin: '8px 0' }}>
         {[['todo', 'Proof to add'], ['waiting', 'Waiting'], ['confirmed', 'Confirmed'], ['all', 'All']].map(([k, l]) => (
-          <button key={k} type="button" className={`filter-chip${show === k ? ' is-on' : ''}`} onClick={() => setShow(k)}>{l} ({counts[k]})</button>))}
+          <button key={k} type="button" className={`filter-chip${show === k ? ' is-on' : ''}`} onClick={() => { setShow(k); setChoosing(false); setSel(new Set()); }}>{l} ({counts[k]})</button>))}
+        {canAddAny && !choosing && <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => { setSel(new Set()); setChoosing(true); }}><Receipt size={13} /> Add proof/slip for several</button>}
       </div>
+      {choosing && (
+        <div className="sl-sel-bar">
+          <span>{sel.size ? <><strong>{sel.size}</strong> ticked · {money(selTotal)}</> : 'Tick the payments this proof/slip is for.'}</span>
+          <button type="button" className={`btn btn-primary btn-sm${posting ? ' btn-loading' : ''}`} disabled={!sel.size || posting} onClick={() => setSlipOpen(true)}>Add the proof/slip</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSel(new Set()); setChoosing(false); }}>Cancel</button>
+        </div>
+      )}
+      {slipOpen && <SlipWindow amount={selTotal} money={money} note={`One slip for ${selRows.map(x => `#${x.sale.sale_no} ${buyer(x)}`).join(', ')}.`} onClose={() => setSlipOpen(false)} onDone={postOne} />}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>Sale</th><th>Account</th><th className="num">Amount (TZS)</th><th>Proof</th><th aria-label="Actions" /></tr></thead>
+          <thead><tr>{choosing && <th aria-label="Tick" style={{ width: 32 }} />}<th>Date</th><th>Sale</th><th>Account</th><th className="num">Amount (TZS)</th><th>Proof</th><th aria-label="Actions" /></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={6} className="text-muted">{show === 'todo' ? 'Every payment has its proof.' : show === 'waiting' ? 'Nothing waits for a director.' : 'Nothing here.'}</td></tr>
+            {rows === null ? <tr><td colSpan={choosing ? 7 : 6}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={choosing ? 7 : 6} className="text-muted">{show === 'todo' ? 'Every payment has its proof.' : show === 'waiting' ? 'Nothing waits for a director.' : 'Nothing here.'}</td></tr>
             : shown.map(x => {
               const pr = proofs[x.id];
               const canAdd = x.state !== 'confirmed' && canAt('sales.create', x.sale.branch_id, null);
               const canReview = !!pr && x.state !== 'confirmed' && canAt('sales.confirm_payments', x.sale.branch_id, null);
               return (
                 <tr key={x.id}>
+                  {choosing && <td>{canAdd && <input type="checkbox" aria-label={`Tick sale ${x.sale.sale_no}`} checked={sel.has(x.id)}
+                    onChange={e => setSel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} />}</td>}
                   <td>{tableDate(x.paid_on)}</td>
                   <td><Link to={`/sales?tab=book&sale=${x.sale.id}`}>#{x.sale.sale_no}</Link> · {buyer(x)}{x.receipt_no ? <div className="pl-help">receipt {x.receipt_no}</div> : null}</td>
                   <td>{accName(x)}</td>

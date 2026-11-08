@@ -156,7 +156,7 @@ export default function Sales() {
   // page order (locked): heading → summary cards → these tabs → search/filters → list
   // the sidebar shows this page twice (2026-10-30): Sales (book, deliveries, overview) and Invoices (the quotations & invoices list)
   const onInvoices = view === 'list';
-  const salesTabs = !onInvoices && <PageTabs tabs={[['book', 'Sales book'], ['receipts', 'Receipts'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
+  const salesTabs = !onInvoices && <PageTabs tabs={[['book', 'Sales book'], ['receipts', 'Slips'], ['deliveries', 'Deliveries'], ['overview', 'Overview']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title={onInvoices ? 'Invoices' : 'Sales'} subtitle="Sales"
@@ -471,7 +471,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       setBusy(true);
       const failed = await postSaleProofs(data, proofsFor(payload.payments), { organizationId: organization.id, buyer: buyerName(payload.customer_id) });
       setBusy(false);
-      if (failed) window.alert('The sale is saved, but a proof could not be posted. Add it in Sales › Receipts.');
+      if (failed) window.alert('The sale is saved, but a proof could not be posted. Add it in Sales › Slips.');
     }
     onSaved(data);
   }
@@ -540,7 +540,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     }
     setSlipGroups([]); setDaySel(new Set()); setChoosing(false);
     setBusy(false);
-    if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Receipts.`);
+    if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Slips.`);
     setDayFiles({});
     setDayList([]);
     onSaved(null);
@@ -1257,23 +1257,6 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
  * site. Click a row for the sale. Totals at the foot.
  */
 function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, proofs = {}, onOpen, canProof = () => false, organizationId, onChanged }) {
-  // one proof/slip for several sales (2026-11-08): tick them, add the slip once
-  const [sel, setSel] = useState(() => new Set());
-  const [choosing, setChoosing] = useState(false);   // tick boxes only while choosing a slip's sales
-  const [slipOpen, setSlipOpen] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const openPays = x => (x.payments || []).filter(pm => proofs[pm.id]?.status !== 'confirmed');
-  const selSales = sales.filter(x => sel.has(x.id));
-  const selPaid = selSales.reduce((t, x) => t + openPays(x).reduce((u, pm) => u + Number(pm.amount), 0), 0);
-  async function postSlip(slip) {
-    setSlipOpen(false); setPosting(true);
-    const pays = selSales.flatMap(x => openPays(x).map(pm => ({ id: pm.id, amount: pm.amount, paid_on: pm.paid_on, sale: { sale_no: x.sale_no, branch_id: x.branch_id } })));
-    const names = selSales.map(buyerOf);
-    const failed = await postSharedSlip(pays, slip, { organizationId, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
-    setPosting(false); setSel(new Set()); setChoosing(false);
-    if (failed) window.alert(`${failed} of the payments could not take the slip. Try again from Receipts.`);
-    onChanged?.();
-  }
   // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
   const cur = currency ? ` (${currency})` : '';
   // opened from a dashboard card: that card's period (?from=&to=&label=)
@@ -1353,18 +1336,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
       <div className="sb-under-bar">
-      {!choosing && sales.some(x => canProof(x.branch_id) && openPays(x).length > 0) && <button type="button" className="btn btn-outline btn-sm sb-proof-btn" onClick={() => { setSel(new Set()); setChoosing(true); }}><Plus size={13} /> Add proof/slip for several sales</button>}
       <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]}</p>
       </div>
-      {choosing && (
-        <div className="sl-sel-bar sb-sel-bar">
-          <span>{sel.size ? <><strong>{sel.size}</strong> sale{sel.size === 1 ? '' : 's'} ticked · {money(selPaid)} paid</> : 'Tick the sales this proof/slip is for.'}</span>
-          <button type="button" className={`btn btn-primary btn-sm${posting ? ' btn-loading' : ''}`} disabled={posting || !(selPaid > 0)} onClick={() => setSlipOpen(true)}>Add the proof/slip</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSel(new Set()); setChoosing(false); }}>Cancel</button>
-        </div>
-      )}
-      {slipOpen && <SaleProofWindow amount={selPaid} money={money} note={`One slip for ${selSales.map(x => `#${x.sale_no} ${buyerOf(x)}`).join(', ')}. It replaces any proof not yet confirmed.`}
-        onClose={() => setSlipOpen(false)} onDone={postSlip} />}
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
@@ -1379,8 +1352,6 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">
-                  {choosing && canProof(x.branch_id) && openPays(x).length > 0 && <input type="checkbox" className="sb-tick" aria-label={`Tick sale ${x.sale_no} for one slip`} checked={sel.has(x.id)} onClick={e => e.stopPropagation()}
-                    onChange={e => setSel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} />}
                   {buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
                   {/* only what needs doing shows: a proof to add, or waiting for a director (2026-11-08) */}
                   {(() => { const a = saleApproval(x, proofs, today); return ['proof', 'waiting'].includes(a.state) ? <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div> : null; })()}</td>}
