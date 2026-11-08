@@ -87,6 +87,43 @@ export async function postSaleProofs(saleId, proofs, { organizationId, buyer }) 
   return failed;
 }
 
+/*
+ * One slip for several sales (2026-11-08, the user): cash paid at the office and banked together.
+ * The file is uploaded once and every payment it covers points to it, so a slip is "shared" when
+ * its file (or, for an SMS, its text) is the same. payments: [{ id, amount, paid_on, sale: { sale_no, branch_id } }]
+ */
+export async function postSharedSlip(payments, slip, { organizationId, who }) {
+  const ps = (payments || []).filter(Boolean);
+  if (!ps.length || !(slip?.file || slip?.text?.trim())) return ps.length;
+  const total = ps.reduce((t, p) => t + Number(p.amount), 0);
+  const nos = [...new Set(ps.map(p => p.sale.sale_no))].sort((a, b) => a - b);
+  let path = null;
+  try {
+    if (slip.file) {
+      const ext = (slip.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+      path = `${organizationId}/${ps[0].sale.branch_id}/shared-${Date.now()}/${Date.now()}.${ext}`;
+      const up = await supabase.storage.from('payment-proofs').upload(path, slip.file, { contentType: slip.file.type || undefined, upsert: false });
+      if (up.error) throw up.error;
+    }
+  } catch (e) { console.error(e); return ps.length; }
+  const name = slip.file ? proofName({ kind: `Sales-${nos.join('-')}`, who, amount: total, date: ps[0].paid_on }, extOf(slip.file)) : null;
+  let failed = 0;
+  for (const p of ps) {
+    const { error } = await supabase.rpc('submit_payment_proof', { p: { payment_id: p.id, file_path: path, file_name: name, sms_text: slip.text?.trim() || null } });
+    if (error) { console.error(error); failed += 1; }
+  }
+  return failed;
+}
+
+/* The other payments a slip also covers (same file, or same SMS when there is no file) */
+export async function loadSlipSiblings(proof) {
+  if (!proof?.file_path && !proof?.sms_text) return [];
+  let q = supabase.from('sale_payment_proofs').select('id, payment_id, status, payment:sale_payments!inner(id, amount, paid_on, sale:sales!inner(id, sale_no, walk_in_name, customer:customers(name)))').neq('id', proof.id);
+  q = proof.file_path ? q.eq('file_path', proof.file_path) : q.is('file_path', null).eq('sms_text', proof.sms_text);
+  const { data } = await q;
+  return data || [];
+}
+
 /* Add (or replace) the proof of one payment: a photo/PDF, the SMS text, or both — one step */
 export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSaved }) {
   // the file is named after its transaction (2026-11-06)
@@ -184,6 +221,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
       .then(({ data }) => setStamp({ kind: proof.status === 'confirmed' ? 'confirm' : 'query', who: initialsOf(data), at: proof.reviewed_at ? stampTime(proof.reviewed_at) : '' }));
   }, [proof?.id, proof?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const [url, setUrl] = useState('');
+  const [siblings, setSiblings] = useState([]);   // other sales the same slip covers
+  useEffect(() => { loadSlipSiblings(proof).then(setSiblings); }, [proof?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saveUrl, setSaveUrl] = useState('');   // the same file, as a download (kept on the device)
   const [note, setNote] = useState('');
   const [asking, setAsking] = useState(false);
@@ -202,8 +241,14 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     if (isPhoto && !strokes.length) { setError('Draw your mark on the slip first.'); return; }
     if (action === 'query' && !note.trim()) { setError('Say what is wrong with the proof.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('review_payment_proof', { p_payment: payment.id, p_action: action, p_note: action === 'query' ? note.trim() : null,
-      p_mark: isPhoto ? { strokes } : null });
+    // a shared slip: the mark goes on every payment it covers
+    const ids = [payment.id, ...siblings.filter(x => x.status !== 'confirmed').map(x => x.payment_id)];
+    let err = null;
+    for (const id of ids) {
+      const r = await supabase.rpc('review_payment_proof', { p_payment: id, p_action: action, p_note: action === 'query' ? note.trim() : null,
+        p_mark: isPhoto ? { strokes } : null });
+      if (r.error) { err = r.error; break; }
+    }
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     // the stamp shows a moment before the window closes
@@ -246,6 +291,16 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy || (isPhoto && !strokes.length)} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
         <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
+        {siblings.length > 0 && (
+          <div className="pp-shared" role="note">
+            <strong>One slip for {siblings.length + 1} sales · {money(siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)))}</strong>
+            <ul>
+              <li>#{sale.sale_no} · {buyer} · {money(Number(payment.amount))}</li>
+              {siblings.map(x => <li key={x.id}>#{x.payment.sale.sale_no} · {x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in'} · {money(Number(x.payment.amount))}{x.status === 'confirmed' ? ' · confirmed' : ''}</li>)}
+            </ul>
+            <span className="pl-help">Your mark applies to all of them.</span>
+          </div>
+        )}
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
         <div className="pp-review">
           <div className="pp-review-slip">
@@ -407,7 +462,13 @@ export function WaitingSlips({ inBranch, onChanged }) {
       supabase.from('sale_payment_proofs').select('*, payment:sale_payments!inner(id, paid_on, amount, method, receipt_no, account_id, sale:sales!inner(id, sale_no, branch_id, walk_in_name, customer:customers(name)))').eq('status', 'waiting'),
       supabase.from('payment_accounts').select('id, name'),
     ]);
-    setRows((pr.data || []).filter(x => inBranch(x.branch_id)).sort((a, b) => b.payment.paid_on.localeCompare(a.payment.paid_on)));
+    // a shared slip shows once, for all the sales it covers
+    const groups = {};
+    for (const x of (pr.data || []).filter(y => inBranch(y.branch_id))) {
+      const k = x.file_path || `sms:${x.sms_text}`;
+      (groups[k] ||= []).push(x);
+    }
+    setRows(Object.values(groups).map(g => ({ ...g[0], group: g })).sort((a, b) => b.payment.paid_on.localeCompare(a.payment.paid_on)));
     setAccounts(Object.fromEntries((ac.data || []).map(a => [a.id, a.name])));
   }
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -421,8 +482,11 @@ export function WaitingSlips({ inBranch, onChanged }) {
         return (
           <button key={x.id} type="button" className="dd-slip" onClick={() => setReviewing(x)}>
             <SlipThumb proof={x} />
-            <span className="dd-slip-text"><strong>Sale #{x.payment.sale.sale_no} · {buyer(x)}</strong>
-              <span className="pl-help">{money(Number(x.payment.amount))} · {dateText(x.payment.paid_on)}{late ? <span className="text-warning"> · overdue</span> : null}</span></span>
+            {x.group.length > 1
+              ? <span className="dd-slip-text"><strong>Sales {x.group.map(g => `#${g.payment.sale.sale_no}`).join(', ')} · one slip</strong>
+                <span className="pl-help">{money(x.group.reduce((t, g) => t + Number(g.payment.amount), 0))} · {x.group.map(buyer).join(', ')} · {dateText(x.payment.paid_on)}{late ? <span className="text-warning"> · overdue</span> : null}</span></span>
+              : <span className="dd-slip-text"><strong>Sale #{x.payment.sale.sale_no} · {buyer(x)}</strong>
+                <span className="pl-help">{money(Number(x.payment.amount))} · {dateText(x.payment.paid_on)}{late ? <span className="text-warning"> · overdue</span> : null}</span></span>}
             <span className="btn btn-primary btn-sm">Check</span>
           </button>
         );

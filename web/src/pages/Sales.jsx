@@ -3,7 +3,7 @@ import { Receipt, Plus, Trash2, Printer, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
-import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs } from '../components/sales/PaymentProofs';
+import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs, postSharedSlip } from '../components/sales/PaymentProofs';
 import ProofBox from '../components/ProofBox';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
@@ -243,7 +243,7 @@ export default function Sales() {
  */
 /* The proof of a payment given while recording the sale (2026-11-08): the same box as Proof of payment;
    it is posted when the sale is saved */
-function SaleProofWindow({ amount, money, start, onClose, onDone }) {
+function SaleProofWindow({ amount, money, start, note = 'Posted with the sale when it is saved.', onClose, onDone }) {
   const [file, setFile] = useState(start?.file ?? null);
   const [text, setText] = useState(start?.text ?? '');
   const [error, setError] = useState('');
@@ -253,7 +253,7 @@ function SaleProofWindow({ amount, money, start, onClose, onDone }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className="btn btn-primary" onClick={() => onDone({ file, text })}>Add proof</button></>}>
       <div className="modal-form">
-        <p className="pl-help">Posted with the sale when it is saved.</p>
+        <p className="pl-help">{note}</p>
         <ProofBox file={file} onFile={f => { if (f && f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; } setError(''); setFile(f); }} text={text} onText={setText} />
       </div>
     </Modal>
@@ -304,6 +304,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
   const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
   const [dayErr, setDayErr] = useState('');
+  const [accSlips, setAccSlips] = useState({});   // account id ('' = cash) → one slip for all the list's payments into it
+  const [accSlipFor, setAccSlipFor] = useState(null);
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
   const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
@@ -519,6 +521,18 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       const pf = dayFiles[x.id];
       if (pf && ids?.[k]) failed += await postSaleProofs(ids[k], pf.proofs, { organizationId: organization.id, buyer: pf.buyer });
     }
+    // one slip per account: every saved payment into it that has no proof of its own
+    const slipKeys = Object.keys(accSlips).filter(k => accSlips[k]?.file || accSlips[k]?.text?.trim());
+    if (slipKeys.length && ids?.length) {
+      const { data: pays } = await supabase.from('sale_payments').select('id, amount, paid_on, account_id, sale:sales!inner(id, sale_no, branch_id)').in('sale_id', ids);
+      const { data: had } = await supabase.from('sale_payment_proofs').select('payment_id').in('payment_id', (pays || []).map(p => p.id));
+      const taken = new Set((had || []).map(x => x.payment_id));
+      for (const k of slipKeys) {
+        const covered = (pays || []).filter(p => (p.account_id || '') === k && !taken.has(p.id));
+        failed += await postSharedSlip(covered, accSlips[k], { organizationId: organization.id, who: dayByAcc[k]?.name ?? '' });
+      }
+    }
+    setAccSlips({});
     setBusy(false);
     if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Receipts.`);
     setDayFiles({});
@@ -526,8 +540,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     onSaved(null);
   }
   const dayTotal = r2(dayList.reduce((t, x) => t + x.view.total, 0));
-  const dayByAcc = {};
-  for (const x of dayList) for (const p of x.payload.payments || []) { const k = activeAccounts.find(a => a.id === p.account_id)?.name ?? 'Cash'; dayByAcc[k] = r2((dayByAcc[k] || 0) + Number(p.amount || 0)); }
+  const dayByAcc = {};   // account id ('' = cash) → { name, amount, sales }
+  for (const x of dayList) for (const p of x.payload.payments || []) {
+    const k = p.account_id || '';
+    const e = (dayByAcc[k] ||= { name: activeAccounts.find(a => a.id === k)?.name ?? 'Cash', amount: 0, sales: 0 });
+    e.amount = r2(e.amount + Number(p.amount || 0)); e.sales += 1;
+  }
   const dayUnpaid = r2(dayList.reduce((t, x) => t + Math.max(x.view.total - x.view.paid, 0), 0));
 
   return (
@@ -558,7 +576,14 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
               </tbody>
             </table>
             <div className="sl-day-accs">
-              {Object.entries(dayByAcc).map(([k, v]) => <span key={k} className="sl-day-acc"><span className="pl-help">{k}</span><strong>{formatAmount(v)}</strong></span>)}
+              {Object.entries(dayByAcc).map(([k, v]) => (
+                <span key={k} className="sl-day-acc"><span className="pl-help">{v.name}</span><strong>{formatAmount(v.amount)}</strong>
+                  {/* one slip for all the list's payments into this account (2026-11-08) */}
+                  {v.sales > 1 && (accSlips[k]
+                    ? <button type="button" className="btn btn-ghost btn-sm sl-acc-slip is-added" title="Change the slip" onClick={() => setAccSlipFor(k)}><Check size={13} /> One slip for {v.sales} sales</button>
+                    : <button type="button" className="btn btn-ghost btn-sm sl-acc-slip" onClick={() => setAccSlipFor(k)}><Plus size={13} /> One slip for all {v.sales}</button>)}
+                </span>
+              ))}
               {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
             </div>
             </div>
@@ -759,6 +784,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
       </div>
+      {accSlipFor != null && <SaleProofWindow amount={dayByAcc[accSlipFor]?.amount ?? 0} money={money} start={accSlips[accSlipFor]}
+        note={`One slip for the ${dayByAcc[accSlipFor]?.sales ?? 0} sales paid into ${dayByAcc[accSlipFor]?.name ?? ''}; a sale with its own proof keeps it.`}
+        onClose={() => setAccSlipFor(null)} onDone={v => { setAccSlips(m => ({ ...m, [accSlipFor]: v })); setAccSlipFor(null); }} />}
       {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
         onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
       {picking && (
