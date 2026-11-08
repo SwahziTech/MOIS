@@ -2678,3 +2678,8 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sl-acc-slip.is-added { color: var(--color-success); }
 .pp-shared { border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; background: var(--bg-soft); }
 .pp-shared ul { margin: 4px 0; padding-left: 18px; font-size: var(--text-sm); }
+/* tick sales for one slip (2026-11-08) */
+.sl-sel-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; margin: 8px 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-soft); font-size: var(--text-sm); }
+.sb-sel-bar { position: sticky; top: 0; z-index: 3; }
+.sb-tick { margin-right: 8px; vertical-align: middle; cursor: pointer; }
+.sl-shared-tag { color: var(--accent); }

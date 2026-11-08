@@ -174,7 +174,8 @@ export default function Sales() {
               {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={stopUpload}>Stop</button></div>
           )}
           {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
-            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} proofs={proofs} onOpen={id => setViewing(id)} />}
+            refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} proofs={proofs} onOpen={id => setViewing(id)}
+            canProof={id => canAt('sales.create', id, null)} organizationId={organization?.id} onChanged={load} />}
           {view === 'receipts' && <PaymentProofsList branchId={branchId} inBranch={inBranch} directorView={!canSell && canAt('sales.confirm_payments', branchId, null)} />}
           {view === 'deliveries' && <DeliveriesPanel branchId={branchId} inBranch={inBranch} canAct={!!canSell} today={today} search={search} />}
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} />}
@@ -304,8 +305,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
   const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
   const [dayErr, setDayErr] = useState('');
-  const [accSlips, setAccSlips] = useState({});   // account id ('' = cash) → one slip for all the list's payments into it
-  const [accSlipFor, setAccSlipFor] = useState(null);
+  // one slip for the sales ticked in the day's list (2026-11-08): groups of entry ids with their slip (in memory)
+  const [daySel, setDaySel] = useState(() => new Set());
+  const [slipGroups, setSlipGroups] = useState([]);   // [{ ids: [entry id], slip: { file, text } }]
+  const [groupSlipOpen, setGroupSlipOpen] = useState(false);
+  const groupOf = id => slipGroups.findIndex(g => g.ids.includes(id));
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
   const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
@@ -522,17 +526,18 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       if (pf && ids?.[k]) failed += await postSaleProofs(ids[k], pf.proofs, { organizationId: organization.id, buyer: pf.buyer });
     }
     // one slip per account: every saved payment into it that has no proof of its own
-    const slipKeys = Object.keys(accSlips).filter(k => accSlips[k]?.file || accSlips[k]?.text?.trim());
-    if (slipKeys.length && ids?.length) {
+    if (slipGroups.length && ids?.length) {
       const { data: pays } = await supabase.from('sale_payments').select('id, amount, paid_on, account_id, sale:sales!inner(id, sale_no, branch_id)').in('sale_id', ids);
       const { data: had } = await supabase.from('sale_payment_proofs').select('payment_id').in('payment_id', (pays || []).map(p => p.id));
       const taken = new Set((had || []).map(x => x.payment_id));
-      for (const k of slipKeys) {
-        const covered = (pays || []).filter(p => (p.account_id || '') === k && !taken.has(p.id));
-        failed += await postSharedSlip(covered, accSlips[k], { organizationId: organization.id, who: dayByAcc[k]?.name ?? '' });
+      for (const g of slipGroups) {
+        const saleIds = g.ids.map(id => ids[dayList.findIndex(x => x.id === id)]).filter(Boolean);
+        const covered = (pays || []).filter(p => saleIds.includes(p.sale.id) && !taken.has(p.id));
+        const names = g.ids.map(id => dayList.find(x => x.id === id)?.view.name).filter(Boolean);
+        failed += await postSharedSlip(covered, g.slip, { organizationId: organization.id, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
       }
     }
-    setAccSlips({});
+    setSlipGroups([]); setDaySel(new Set());
     setBusy(false);
     if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Receipts.`);
     setDayFiles({});
@@ -559,29 +564,36 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <div className="modal-body">
             <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
             <table className="rd-table sl-day-table">
-              <thead><tr><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
+              <thead><tr><th aria-label="Tick for one slip" style={{ width: 32 }} /><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
               <tbody>
                 {dayList.map((x, i) => x.view.rows.map((r, j) => (
                   <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
+                    {j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" aria-label={`Tick ${x.view.name} for one slip`} checked={daySel.has(x.id)} disabled={!(x.view.paid > 0)}
+                        onChange={e => setDaySel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} /></td>}
                     {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
                     <td>{r.product}</td>
                     <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
                     <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
                     {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}
+                      {groupOf(x.id) >= 0 && <div className="pl-help sl-shared-tag">+ shared slip {slipGroups.length > 1 ? groupOf(x.id) + 1 : ''}</div>}
                       {x.view.proofs > 0 && (dayFiles[x.id] ? <div className="pl-help">+ proof</div> : <div className="pl-help text-warning" title="Photos are not kept after a refresh">proof: add it again</div>)}</td>}
-                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); }}><Trash2 size={14} /></button></td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); setDaySel(sl => { const n = new Set(sl); n.delete(x.id); return n; }); setSlipGroups(gs => gs.map(g => ({ ...g, ids: g.ids.filter(id => id !== x.id) })).filter(g => g.ids.length)); }}><Trash2 size={14} /></button></td>}
                   </tr>
                 )))}
-                <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+                <tr className="sl-day-total"><td colSpan={4}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
               </tbody>
             </table>
+            {daySel.size > 0 && (
+              <div className="sl-sel-bar">
+                <span><strong>{daySel.size}</strong> ticked · {money(r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0)))} paid</span>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setGroupSlipOpen(true)}><Plus size={13} /> One proof/slip for these</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDaySel(new Set())}>Clear</button>
+              </div>
+            )}
             <div className="sl-day-accs">
               {Object.entries(dayByAcc).map(([k, v]) => (
                 <span key={k} className="sl-day-acc"><span className="pl-help">{v.name}</span><strong>{formatAmount(v.amount)}</strong>
-                  {/* one slip for all the list's payments into this account (2026-11-08) */}
-                  {v.sales > 1 && (accSlips[k]
-                    ? <button type="button" className="btn btn-ghost btn-sm sl-acc-slip is-added" title="Change the slip" onClick={() => setAccSlipFor(k)}><Check size={13} /> One slip for {v.sales} sales</button>
-                    : <button type="button" className="btn btn-ghost btn-sm sl-acc-slip" onClick={() => setAccSlipFor(k)}><Plus size={13} /> One slip for all {v.sales}</button>)}
                 </span>
               ))}
               {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
@@ -784,9 +796,10 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
       </div>
-      {accSlipFor != null && <SaleProofWindow amount={dayByAcc[accSlipFor]?.amount ?? 0} money={money} start={accSlips[accSlipFor]}
-        note={`One slip for the ${dayByAcc[accSlipFor]?.sales ?? 0} sales paid into ${dayByAcc[accSlipFor]?.name ?? ''}; a sale with its own proof keeps it.`}
-        onClose={() => setAccSlipFor(null)} onDone={v => { setAccSlips(m => ({ ...m, [accSlipFor]: v })); setAccSlipFor(null); }} />}
+      {groupSlipOpen && <SaleProofWindow amount={r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0))} money={money}
+        note={`One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${dayList.filter(x => daySel.has(x.id)).map(x => x.view.name).join(', ')}. A sale with its own proof keeps it.`}
+        onClose={() => setGroupSlipOpen(false)}
+        onDone={v => { setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids: [...daySel], slip: v }]); setDaySel(new Set()); setGroupSlipOpen(false); }} />}
       {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
         onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
       {picking && (
@@ -1239,7 +1252,23 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
  * under the account that received it (on the sale's first row); receipt no.;
  * site. Click a row for the sale. Totals at the foot.
  */
-function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, proofs = {}, onOpen }) {
+function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, proofs = {}, onOpen, canProof = () => false, organizationId, onChanged }) {
+  // one proof/slip for several sales (2026-11-08): tick them, add the slip once
+  const [sel, setSel] = useState(() => new Set());
+  const [slipOpen, setSlipOpen] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const openPays = x => (x.payments || []).filter(pm => proofs[pm.id]?.status !== 'confirmed');
+  const selSales = sales.filter(x => sel.has(x.id));
+  const selPaid = selSales.reduce((t, x) => t + openPays(x).reduce((u, pm) => u + Number(pm.amount), 0), 0);
+  async function postSlip(slip) {
+    setSlipOpen(false); setPosting(true);
+    const pays = selSales.flatMap(x => openPays(x).map(pm => ({ id: pm.id, amount: pm.amount, paid_on: pm.paid_on, sale: { sale_no: x.sale_no, branch_id: x.branch_id } })));
+    const names = selSales.map(buyerOf);
+    const failed = await postSharedSlip(pays, slip, { organizationId, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
+    setPosting(false); setSel(new Set());
+    if (failed) window.alert(`${failed} of the payments could not take the slip. Try again from Receipts.`);
+    onChanged?.();
+  }
   // rows show plain amounts; the currency is in the headers and on the totals (2026-10-26)
   const cur = currency ? ` (${currency})` : '';
   // opened from a dashboard card: that card's period (?from=&to=&label=)
@@ -1319,6 +1348,15 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
       <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]}</p>
+      {sel.size > 0 && (
+        <div className="sl-sel-bar sb-sel-bar">
+          <span><strong>{sel.size}</strong> sale{sel.size === 1 ? '' : 's'} ticked · {money(selPaid)} paid</span>
+          <button type="button" className={`btn btn-outline btn-sm${posting ? ' btn-loading' : ''}`} disabled={posting || !(selPaid > 0)} onClick={() => setSlipOpen(true)}><Plus size={13} /> One proof/slip for these</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSel(new Set())}>Clear</button>
+        </div>
+      )}
+      {slipOpen && <SaleProofWindow amount={selPaid} money={money} note={`One slip for ${selSales.map(x => `#${x.sale_no} ${buyerOf(x)}`).join(', ')}. It replaces any proof not yet confirmed.`}
+        onClose={() => setSlipOpen(false)} onDone={postSlip} />}
       <div className="card"><div className="table-container">
         <table className="sb-table">
           <thead>
@@ -1332,7 +1370,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
             : rows.map(({ x, l, first, last, span, perItem, band, multi, shade, showDate }) => (
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
-                {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
+                {first && <td rowSpan={span} className="sb-merge">
+                  {canProof(x.branch_id) && openPays(x).length > 0 && <input type="checkbox" className="sb-tick" aria-label={`Tick sale ${x.sale_no} for one slip`} checked={sel.has(x.id)} onClick={e => e.stopPropagation()}
+                    onChange={e => setSel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} />}
+                  {buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
                   {/* only what needs doing shows: a proof to add, or waiting for a director (2026-11-08) */}
                   {(() => { const a = saleApproval(x, proofs, today); return ['proof', 'waiting'].includes(a.state) ? <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div> : null; })()}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
