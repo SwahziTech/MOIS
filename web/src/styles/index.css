@@ -2627,3 +2627,12 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 /* the field a save error is about (2026-11-08) */
 .form-input.is-invalid { border-color: var(--color-error) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-error) 25%, transparent); }
 .sl-field-error { color: var(--color-error); font-size: var(--text-xs); margin-top: 4px; text-align: left; }
+/* the day's list in Record a sale (111, 2026-11-08) */
+.sl-day { border-top: 1px solid var(--border); padding-top: 12px; }
+.sl-day-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.sl-day-table td { vertical-align: top; }
+.sl-day-table tr.sl-day-first td { border-top: 1px solid var(--border); }
+.sl-day-table tr.sl-day-bad td { background: color-mix(in srgb, var(--color-error) 12%, transparent); }
+.sl-day-total td { border-top: 1px solid var(--border-strong); }
+.sl-day-accs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.sl-day-acc { display: flex; flex-direction: column; padding: 6px 10px; border-radius: var(--radius-md); background: var(--bg-soft); min-width: 110px; }

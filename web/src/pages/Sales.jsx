@@ -278,6 +278,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [bad, setBad] = useState(null);   // { key, msg }: the field the error is about
+  // the day's list (111): sales added one by one, listed below the form, saved at once; kept on this device until saved
+  const dayOn = book && !sale && !prefill;
+  const dayKey = `mois.daySales.${branchId}`;
+  const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
+  const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
+  useEffect(() => { if (!dayOn) return; try { if (dayList.length) localStorage.setItem(dayKey, JSON.stringify(dayList)); else localStorage.removeItem(dayKey); } catch { /* storage off */ } }, [dayList]); // eslint-disable-line react-hooks/exhaustive-deps
   const flag = (key, msg) => {
     setError(msg); setBad({ key, msg });
     setTimeout(() => { const el = document.querySelector(`[data-field="${key}"]`); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus?.({ preventScroll: true }); }, 0);
@@ -357,9 +363,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     .map(([k, q]) => { const [pid, cid] = k.split('|'); return { name: `${refs.items[`p:${pid}`]?.name ?? ''}${cid ? ` ${refs.colorById[cid]?.name ?? ''}` : ''}`, q, av: Math.max(availOf(k), 0), unit: per(pid) }; });
   const set = (i, patch) => setLines(ls => ls.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
-  async function save() {
+  async function save(toList = false) {
     setError(''); setBad(null);
     if (!lines.length) { setError('Add at least one product.'); return; }
+    if (toList && ((buyer === 'customer' && newCust) || (buyer === 'walkin' && promote))) {
+      setError('This buyer becomes a new customer: record this sale on its own (Record sale).'); return;
+    }
     const badOther = lines.find(l => l.other && (!l.name.trim() || !(num(l.price) > 0)));
     if (badOther) { setError('Write what each other item is, and its price.'); return; }
     let cust = buyer === 'customer' ? customerId : null;
@@ -413,6 +422,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       payload.site = site; payload.efd_receipt_no = efd;
       payload.payments = ps.map(x => ({ account_id: x.accountId || null, amount: x.value, receipt_no: x.receiptNo, ...(x.accountId ? {} : { method: 'cash' }) }));
     } else payload.site = site;
+    if (toList) { addToDay(payload, cust); return; }
     setBusy(true);
     const { data, error: err } = book
       ? await supabase.rpc('record_sale', { p: payload })
@@ -424,13 +434,62 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     onSaved(data);
   }
 
+  // the sale in the form goes to the day's list; the form clears for the next one (the date stays)
+  function addToDay(payload, cust) {
+    const accName = id => activeAccounts.find(a => a.id === id)?.name ?? 'Cash';
+    const view = {
+      name: cust ? customers.find(c => c.id === cust)?.name ?? '' : walkName.trim(),
+      date,
+      rows: lines.map(l => ({ product: l.other ? l.name.trim() : `${refs.items[`p:${l.productId}`]?.name ?? ''}${l.colorId ? ` ${refs.colorById[l.colorId]?.name ?? ''}` : ''}`,
+        qty: l.other ? null : num(l.quantity), unit: l.other ? '' : per(l.productId), amount: preview(l)?.total ?? 0 })),
+      acc: [...new Set((payload.payments || []).map(x => accName(x.account_id)))].join(', ') || 'Not paid',
+      paid: r2((payload.payments || []).reduce((t, x) => t + Number(x.amount || 0), 0)),
+      total: r2(totals.total),
+    };
+    const form = { buyer, customerId, walkName, walkPhone, date, notes, site, efd, pays, payMode, itemPays, lines };
+    setDayList(d => [...d, { payload, view, form }]);
+    setDayBad(null);
+    setLines([]); setWalkName(''); setWalkPhone(''); setCustomerId(''); setSite(''); setEfd(''); setNotes('');
+    setPays([{ accountId: '', amount: '', receiptNo: '', auto: true }]); setPayMode('order'); setItemPays({});
+  }
+  // a row clicked goes back into the form to fix
+  function editDay(i) {
+    if (lines.length) { setError('Add the sale in the form to the list first, or remove its items.'); return; }
+    const x = dayList[i].form;
+    setBuyer(x.buyer); setCustomerId(x.customerId); setWalkName(x.walkName); setWalkPhone(x.walkPhone); setDate(x.date); setNotes(x.notes);
+    setSite(x.site); setEfd(x.efd); setPays(x.pays); setPayMode(x.payMode); setItemPays(x.itemPays); setLines(x.lines);
+    setDayList(d => d.filter((_, j) => j !== i)); setDayBad(null); setError('');
+  }
+  async function saveDay() {
+    setError(''); setBad(null);
+    if (lines.length) { setError('The form still has a sale: add it to the list, or remove its items.'); return; }
+    setBusy(true);
+    const { error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
+    setBusy(false);
+    if (err) {
+      const m = /^Sale (\d+): /.exec(err.message || '');
+      if (m) setDayBad(Number(m[1]) - 1);
+      setError(dbErrorMessage(err, "We couldn't save the day's sales. Nothing was saved."));
+      return;
+    }
+    setDayList([]);
+    onSaved(null);
+  }
+  const dayTotal = r2(dayList.reduce((t, x) => t + x.view.total, 0));
+  const dayByAcc = {};
+  for (const x of dayList) for (const p of x.payload.payments || []) { const k = activeAccounts.find(a => a.id === p.account_id)?.name ?? 'Cash'; dayByAcc[k] = r2((dayByAcc[k] || 0) + Number(p.amount || 0)); }
+  const dayUnpaid = r2(dayList.reduce((t, x) => t + Math.max(x.view.total - x.view.paid, 0), 0));
+
   return (
     <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
         <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} onChange={e => setDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
-        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
+        <button type="button" className="btn btn-outline" onClick={onClose}>{dayList.length ? 'Close (list kept)' : 'Cancel'}</button>
+        {dayOn && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={13} /> Add to the day's list</button>}
+        {dayList.length > 0
+          ? <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
+          : <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>}
       </>}>
       <div className="modal-form">
         {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
@@ -607,6 +666,31 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <input className="form-input" value={efd} placeholder={hasVat ? 'Add it now or later' : ''} onChange={e => setEfd(e.target.value)} /></label>}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
+        {dayOn && dayList.length > 0 && (
+          <section className="sl-day">
+            <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
+            <table className="rd-table sl-day-table">
+              <thead><tr><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
+              <tbody>
+                {dayList.map((x, i) => x.view.rows.map((r, j) => (
+                  <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
+                    {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
+                    <td>{r.product}</td>
+                    <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
+                    {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}</td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); }}><Trash2 size={14} /></button></td>}
+                  </tr>
+                )))}
+                <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+              </tbody>
+            </table>
+            <div className="sl-day-accs">
+              {Object.entries(dayByAcc).map(([k, v]) => <span key={k} className="sl-day-acc"><span className="pl-help">{k}</span><strong>{formatAmount(v)}</strong></span>)}
+              {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
+            </div>
+          </section>
+        )}
       </div>
       {picking && (
         <ProductPicker title="Add a product" items={carried} cats={cats} usage={sold} usageLabel={['sale', 'sales']} onClose={() => setPicking(false)}
