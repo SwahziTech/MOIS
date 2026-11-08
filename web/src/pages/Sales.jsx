@@ -593,9 +593,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
               </div>
             )}
             <div className="sl-day-accs">
-              {/* a proof/slip for some of the list's sales: choose them, then add it; the count shows the slips added */}
-              {!choosing && <button type="button" className="btn btn-outline sl-day-proof" onClick={() => { setDaySel(new Set()); setChoosing(true); }}>
-                <Plus size={14} /> Add proof/slip{slipGroups.length > 0 && <span className="sl-count" title={`${slipGroups.length} proof/slip${slipGroups.length === 1 ? '' : 's'} added`}>{slipGroups.length}</span>}</button>}
               {Object.entries(dayByAcc).map(([k, v]) => (
                 <span key={k} className="sl-day-acc"><span className="pl-help">{v.name}</span><strong>{formatAmount(v.amount)}</strong>
                 </span>
@@ -605,6 +602,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             </div>
             <div className="modal-footer">
               {dayErr && <span className="modal-footer-error" role="alert">{dayErr}</span>}
+              {/* a proof/slip for some of the list's sales: choose them, then add it; the count shows the slips added */}
+              {!choosing && <button type="button" className="btn btn-outline sl-day-proof" onClick={() => { setDaySel(new Set()); setChoosing(true); }}>
+                <Plus size={14} /> Add proof/slip{slipGroups.length > 0 && <span className="sl-count" title={`${slipGroups.length} proof/slip${slipGroups.length === 1 ? '' : 's'} added`}>{slipGroups.length}</span>}</button>}
               <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
             </div>
           </section>

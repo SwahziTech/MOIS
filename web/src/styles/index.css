@@ -2687,3 +2687,4 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sl-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--bg-surface); font-size: 11px; font-weight: 700; margin-left: 4px; }
 .sb-under-bar { display: flex; align-items: center; gap: 12px; flex-direction: row-reverse; justify-content: space-between; }
 .sb-proof-btn { margin-bottom: 8px; }
+.sl-day-proof { align-self: auto; }
