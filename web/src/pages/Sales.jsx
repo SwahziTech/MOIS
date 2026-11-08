@@ -310,6 +310,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [slipGroups, setSlipGroups] = useState([]);   // [{ ids: [entry id], slip: { file, text } }]
   const [groupSlipOpen, setGroupSlipOpen] = useState(false);
   const groupOf = id => slipGroups.findIndex(g => g.ids.includes(id));
+  const [choosing, setChoosing] = useState(false);   // the tick boxes show while choosing a slip's sales
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
   const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
@@ -537,7 +538,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         failed += await postSharedSlip(covered, g.slip, { organizationId: organization.id, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
       }
     }
-    setSlipGroups([]); setDaySel(new Set());
+    setSlipGroups([]); setDaySel(new Set()); setChoosing(false);
     setBusy(false);
     if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Receipts.`);
     setDayFiles({});
@@ -564,11 +565,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <div className="modal-body">
             <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
             <table className="rd-table sl-day-table">
-              <thead><tr><th aria-label="Tick for one slip" style={{ width: 32 }} /><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
+              <thead><tr>{choosing && <th aria-label="Tick for the slip" style={{ width: 32 }} />}<th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
               <tbody>
                 {dayList.map((x, i) => x.view.rows.map((r, j) => (
                   <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
-                    {j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
+                    {choosing && j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
                       <input type="checkbox" aria-label={`Tick ${x.view.name} for one slip`} checked={daySel.has(x.id)} disabled={!(x.view.paid > 0)}
                         onChange={e => setDaySel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} /></td>}
                     {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
@@ -581,17 +582,20 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                     {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); setDaySel(sl => { const n = new Set(sl); n.delete(x.id); return n; }); setSlipGroups(gs => gs.map(g => ({ ...g, ids: g.ids.filter(id => id !== x.id) })).filter(g => g.ids.length)); }}><Trash2 size={14} /></button></td>}
                   </tr>
                 )))}
-                <tr className="sl-day-total"><td colSpan={4}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+                <tr className="sl-day-total"><td colSpan={choosing ? 4 : 3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
               </tbody>
             </table>
-            {daySel.size > 0 && (
+            {choosing && (
               <div className="sl-sel-bar">
-                <span><strong>{daySel.size}</strong> ticked · {money(r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0)))} paid</span>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setGroupSlipOpen(true)}><Plus size={13} /> One proof/slip for these</button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDaySel(new Set())}>Clear</button>
+                <span>{daySel.size ? <><strong>{daySel.size}</strong> ticked · {money(r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0)))} paid</> : 'Tick the sales this proof/slip is for.'}</span>
+                <button type="button" className="btn btn-primary btn-sm" disabled={!daySel.size} onClick={() => setGroupSlipOpen(true)}>Add the proof/slip</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDaySel(new Set()); setChoosing(false); }}>Cancel</button>
               </div>
             )}
             <div className="sl-day-accs">
+              {/* a proof/slip for some of the list's sales: choose them, then add it; the count shows the slips added */}
+              {!choosing && <button type="button" className="btn btn-outline sl-day-proof" onClick={() => { setDaySel(new Set()); setChoosing(true); }}>
+                <Plus size={14} /> Add proof/slip{slipGroups.length > 0 && <span className="sl-count" title={`${slipGroups.length} proof/slip${slipGroups.length === 1 ? '' : 's'} added`}>{slipGroups.length}</span>}</button>}
               {Object.entries(dayByAcc).map(([k, v]) => (
                 <span key={k} className="sl-day-acc"><span className="pl-help">{v.name}</span><strong>{formatAmount(v.amount)}</strong>
                 </span>
@@ -799,7 +803,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       {groupSlipOpen && <SaleProofWindow amount={r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0))} money={money}
         note={`One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${dayList.filter(x => daySel.has(x.id)).map(x => x.view.name).join(', ')}. A sale with its own proof keeps it.`}
         onClose={() => setGroupSlipOpen(false)}
-        onDone={v => { setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids: [...daySel], slip: v }]); setDaySel(new Set()); setGroupSlipOpen(false); }} />}
+        onDone={v => { setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids: [...daySel], slip: v }]); setDaySel(new Set()); setGroupSlipOpen(false); setChoosing(false); }} />}
       {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
         onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
       {picking && (
@@ -1255,6 +1259,7 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
 function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, proofs = {}, onOpen, canProof = () => false, organizationId, onChanged }) {
   // one proof/slip for several sales (2026-11-08): tick them, add the slip once
   const [sel, setSel] = useState(() => new Set());
+  const [choosing, setChoosing] = useState(false);   // tick boxes only while choosing a slip's sales
   const [slipOpen, setSlipOpen] = useState(false);
   const [posting, setPosting] = useState(false);
   const openPays = x => (x.payments || []).filter(pm => proofs[pm.id]?.status !== 'confirmed');
@@ -1265,7 +1270,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
     const pays = selSales.flatMap(x => openPays(x).map(pm => ({ id: pm.id, amount: pm.amount, paid_on: pm.paid_on, sale: { sale_no: x.sale_no, branch_id: x.branch_id } })));
     const names = selSales.map(buyerOf);
     const failed = await postSharedSlip(pays, slip, { organizationId, who: names.length > 2 ? `${names[0]}-and-${names.length - 1}-more` : names.join('-') });
-    setPosting(false); setSel(new Set());
+    setPosting(false); setSel(new Set()); setChoosing(false);
     if (failed) window.alert(`${failed} of the payments could not take the slip. Try again from Receipts.`);
     onChanged?.();
   }
@@ -1347,12 +1352,15 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
           { key: 'vat', label: 'VAT', value: vat, onChange: setVat,
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
+      <div className="sb-under-bar">
+      {!choosing && sales.some(x => canProof(x.branch_id) && openPays(x).length > 0) && <button type="button" className="btn btn-outline btn-sm sb-proof-btn" onClick={() => { setSel(new Set()); setChoosing(true); }}><Plus size={13} /> Add proof/slip for several sales</button>}
       <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]}</p>
-      {sel.size > 0 && (
+      </div>
+      {choosing && (
         <div className="sl-sel-bar sb-sel-bar">
-          <span><strong>{sel.size}</strong> sale{sel.size === 1 ? '' : 's'} ticked · {money(selPaid)} paid</span>
-          <button type="button" className={`btn btn-outline btn-sm${posting ? ' btn-loading' : ''}`} disabled={posting || !(selPaid > 0)} onClick={() => setSlipOpen(true)}><Plus size={13} /> One proof/slip for these</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSel(new Set())}>Clear</button>
+          <span>{sel.size ? <><strong>{sel.size}</strong> sale{sel.size === 1 ? '' : 's'} ticked · {money(selPaid)} paid</> : 'Tick the sales this proof/slip is for.'}</span>
+          <button type="button" className={`btn btn-primary btn-sm${posting ? ' btn-loading' : ''}`} disabled={posting || !(selPaid > 0)} onClick={() => setSlipOpen(true)}>Add the proof/slip</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSel(new Set()); setChoosing(false); }}>Cancel</button>
         </div>
       )}
       {slipOpen && <SaleProofWindow amount={selPaid} money={money} note={`One slip for ${selSales.map(x => `#${x.sale_no} ${buyerOf(x)}`).join(', ')}. It replaces any proof not yet confirmed.`}
@@ -1371,7 +1379,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">
-                  {canProof(x.branch_id) && openPays(x).length > 0 && <input type="checkbox" className="sb-tick" aria-label={`Tick sale ${x.sale_no} for one slip`} checked={sel.has(x.id)} onClick={e => e.stopPropagation()}
+                  {choosing && canProof(x.branch_id) && openPays(x).length > 0 && <input type="checkbox" className="sb-tick" aria-label={`Tick sale ${x.sale_no} for one slip`} checked={sel.has(x.id)} onClick={e => e.stopPropagation()}
                     onChange={e => setSel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} />}
                   {buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
                   {/* only what needs doing shows: a proof to add, or waiting for a director (2026-11-08) */}
