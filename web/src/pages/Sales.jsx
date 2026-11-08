@@ -694,7 +694,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <input className="form-input" value={efd} placeholder={hasVat ? 'Add it now or later' : ''} onChange={e => setEfd(e.target.value)} /></label>}
           {/* the proof of each payment, small, between the EFD and the notes (2026-11-08) */}
           {book && !(payMode === 'items' && lines.length > 1) && pays.map((x, i) => ((x.auto && pays.length === 1 ? totals.total : num(x.amount)) > 0 ? (
-            <div key={`proof-${i}`} className="pe-field"><span>Proof{pays.length > 1 ? ` · ${activeAccounts.find(a => a.id === x.accountId)?.name ?? `payment ${i + 1}`}` : ''} (optional)</span>
+            <div key={`proof-${i}`} className="pe-field"><span>Proof/Slip{pays.length > 1 ? ` · ${activeAccounts.find(a => a.id === x.accountId)?.name ?? `payment ${i + 1}`}` : ''}</span>
               <ProofBox compact file={payProofs[i]?.file ?? null} onFile={fl => setProof(i, { file: fl && fl.size > 10 * 1024 * 1024 ? payProofs[i]?.file ?? null : fl })} text={payProofs[i]?.text ?? ''} onText={t => setProof(i, { text: t })} /></div>
           ) : null))}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
