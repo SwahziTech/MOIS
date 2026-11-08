@@ -381,6 +381,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       if (err) { setError(dbErrorMessage(err)); return; }
       cust = data;
     }
+    if (buyer === 'walkin' && !promote && !walkName.trim()) { flag('walkname', "Enter the buyer's name."); return; }
     if (buyer === 'customer' && !cust) { flag('customer', 'Choose the customer, or sell to a walk-in buyer.'); return; }
     const noReason = lines.findIndex(l => !l.other && preview(l)?.off && preview(l)?.listInc != null && !l.reason.trim());
     if (noReason >= 0) { flag(`reason-${noReason}`, `${refs.items[`p:${lines[noReason].productId}`]?.name}: give the reason for the price change.`); return; }
@@ -439,7 +440,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         </div>
         {buyer === 'walkin' ? (
           <div className="form-row sl-buyer-row">
-            <label className="pe-field"><span>Name (optional)</span><input className="form-input" list="walkin-names" value={walkName} onChange={e => pickWalkIn(e.target.value, 'name')} /></label>
+            <label className="pe-field"><span>Name</span><input className={`form-input${badCls('walkname')}`} data-field="walkname" list="walkin-names" value={walkName} onChange={e => { pickWalkIn(e.target.value, 'name'); setBad(null); }} />{badMsg('walkname')}</label>
             <label className="pe-field"><span>Phone (optional)</span><input className="form-input" list="walkin-phones" inputMode="tel" value={walkPhone} onChange={e => pickWalkIn(e.target.value, 'phone')} /></label>
             <datalist id="walkin-names">{walkIns.filter(w => w.name).map(w => <option key={w.key} value={w.name}>{w.phone}</option>)}</datalist>
             <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
