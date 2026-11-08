@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
+import { Receipt, Plus, Trash2, Printer, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
@@ -241,6 +241,25 @@ export default function Sales() {
  * the money went (account, amount, receipt no.); saved as an invoice with its
  * payments in one go (record_sale, 067).
  */
+/* The proof of a payment given while recording the sale (2026-11-08): the same box as Proof of payment;
+   it is posted when the sale is saved */
+function SaleProofWindow({ amount, money, start, onClose, onDone }) {
+  const [file, setFile] = useState(start?.file ?? null);
+  const [text, setText] = useState(start?.text ?? '');
+  const [error, setError] = useState('');
+  return (
+    <Modal title={`Proof of payment${amount > 0 ? ` · ${money(amount)}` : ''}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn btn-primary" onClick={() => onDone({ file, text })}>Add proof</button></>}>
+      <div className="modal-form">
+        <p className="pl-help">Posted with the sale when it is saved.</p>
+        <ProofBox file={file} onFile={f => { if (f && f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; } setError(''); setFile(f); }} text={text} onText={setText} />
+      </div>
+    </Modal>
+  );
+}
+
 function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, canOther = false, onClose, onSaved }) {
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id || prefill?.customer_id ? 'customer' : 'walkin');
@@ -287,6 +306,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
   const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
+  const [proofFor, setProofFor] = useState(null);   // the payment row whose proof window is open
   const setProof = (i, patch) => setPayProofs(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
   const proofsFor = payments => (payments || []).map((p, i) => (payProofs[i] && (payProofs[i].file || payProofs[i].text?.trim()) && !p.line_no ? { accountId: p.account_id || '', amount: p.amount, ...payProofs[i] } : null)).filter(Boolean);
   const buyerName = cust => (cust ? customers.find(c => c.id === cust)?.name : walkName.trim()) || 'Walk-in';
@@ -696,7 +716,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           {/* the proof of each payment, small, between the EFD and the notes (2026-11-08) */}
           {book && !(payMode === 'items' && lines.length > 1) && pays.map((x, i) => (
             <div key={`proof-${i}`} className="pe-field"><span>Proof/Slip{pays.length > 1 ? ` · ${activeAccounts.find(a => a.id === x.accountId)?.name ?? `payment ${i + 1}`}` : ''}</span>
-              <ProofBox compact file={payProofs[i]?.file ?? null} onFile={fl => setProof(i, { file: fl && fl.size > 10 * 1024 * 1024 ? payProofs[i]?.file ?? null : fl })} text={payProofs[i]?.text ?? ''} onText={t => setProof(i, { text: t })} /></div>
+              {payProofs[i]?.file || payProofs[i]?.text?.trim()
+                ? <button type="button" className="btn btn-outline sl-proof-btn is-added" title="Change the proof/slip" onClick={() => setProofFor(i)}><Check size={14} /> Proof/slip added</button>
+                : <button type="button" className="btn btn-outline sl-proof-btn" onClick={() => setProofFor(i)}><Plus size={14} /> Add proof/slip</button>}</div>
           ))}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
@@ -727,6 +749,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           </section>
         )}
       </div>
+      {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
+        onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
       {picking && (
         <ProductPicker title="Add a product" items={carried} cats={cats} usage={sold} usageLabel={['sale', 'sales']} onClose={() => setPicking(false)}
           metaOf={i => {

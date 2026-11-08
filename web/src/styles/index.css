@@ -2643,3 +2643,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .proof-box-line { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--text-sm); }
 .sl-last-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .sl-last-row .pe-field { max-width: none; }
+.sl-proof-btn { height: 44px; justify-content: flex-start; gap: 6px; }
+.sl-proof-btn.is-added { color: var(--color-success); border-color: var(--color-success); }
