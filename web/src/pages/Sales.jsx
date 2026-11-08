@@ -277,6 +277,13 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [bad, setBad] = useState(null);   // { key, msg }: the field the error is about
+  const flag = (key, msg) => {
+    setError(msg); setBad({ key, msg });
+    setTimeout(() => { const el = document.querySelector(`[data-field="${key}"]`); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus?.({ preventScroll: true }); }, 0);
+  };
+  const badMsg = key => (bad?.key === key ? <div className="sl-field-error" role="alert">{bad.msg}</div> : null);
+  const badCls = key => (bad?.key === key ? ' is-invalid' : '');
 
   const cats = useMemo(() => categoryTools(refs.categoryRows || []), [refs]);
   const carried = useMemo(() => Object.values(refs.items)
@@ -351,7 +358,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const set = (i, patch) => setLines(ls => ls.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   async function save() {
-    setError('');
+    setError(''); setBad(null);
     if (!lines.length) { setError('Add at least one product.'); return; }
     const badOther = lines.find(l => l.other && (!l.name.trim() || !(num(l.price) > 0)));
     if (badOther) { setError('Write what each other item is, and its price.'); return; }
@@ -374,9 +381,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       if (err) { setError(dbErrorMessage(err)); return; }
       cust = data;
     }
-    if (buyer === 'customer' && !cust) { setError('Choose the customer, or sell to a walk-in buyer.'); return; }
-    const noReason = lines.find(l => preview(l)?.off && preview(l)?.listInc != null && !l.reason.trim());
-    if (noReason) { setError(`${refs.items[`p:${noReason.productId}`]?.name}: give the reason for the price change.`); return; }
+    if (buyer === 'customer' && !cust) { flag('customer', 'Choose the customer, or sell to a walk-in buyer.'); return; }
+    const noReason = lines.findIndex(l => !l.other && preview(l)?.off && preview(l)?.listInc != null && !l.reason.trim());
+    if (noReason >= 0) { flag(`reason-${noReason}`, `${refs.items[`p:${lines[noReason].productId}`]?.name}: give the reason for the price change.`); return; }
     const payload = {
       id: sale?.id, branch_id: branchId, sale_date: date, valid_until: validUntil || null, notes,
       ...(cust ? { customer_id: cust } : { walk_in_name: walkName, walk_in_phone: walkPhone }),
@@ -398,7 +405,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       payload.payments = ps.map(x => ({ line_no: x.line_no, account_id: x.accountId, amount: x.value, receipt_no: x.receiptNo }));
     } else if (book) {
       const ps = pays.map(x => ({ ...x, value: x.auto && pays.length === 1 ? r2(totals.total) : num(x.amount) })).filter(x => x.value > 0);
-      if (ps.some(x => !x.accountId) && activeAccounts.length) { setError('Choose the account each payment went into — it is required.'); return; }
+      const noAcc = ps.findIndex(x => !x.accountId);
+      if (noAcc >= 0 && activeAccounts.length) { flag(`account-${pays.findIndex((y, j) => !y.accountId && (y.auto && pays.length === 1 ? r2(totals.total) : num(y.amount)) > 0)}`, 'Choose the account this payment went into — it is required.'); return; }
       if (ps.length && !activeAccounts.length) { setError('Add the receiving accounts first (Sales ⚙) — a payment must name its account.'); return; }
       if (r2(ps.reduce((t, x) => t + x.value, 0)) > r2(totals.total) + 0.01) { setError('The payments are more than the total.'); return; }
       payload.site = site; payload.efd_receipt_no = efd;
@@ -465,10 +473,10 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         ) : (
           <div className="form-row">
             <label className="pe-field"><span>Customer</span>
-              <select className="form-input" value={customerId} onChange={e => setCustomerId(e.target.value)}>
+              <select className={`form-input${badCls('customer')}`} data-field="customer" value={customerId} onChange={e => { setCustomerId(e.target.value); setBad(null); }}>
                 <option value="">Choose…</option>
                 {customers.filter(c => c.status === 'active' || c.id === customerId).map(c => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
-              </select></label>
+              </select>{badMsg('customer')}</label>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewCust({ name: '', phone: '', tin: '' })}><Plus size={13} /> New customer</button>
             <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
           </div>
@@ -522,7 +530,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                         <div className="pl-help">{p.listInc != null ? `list ${money(p.listInc)} /${per(l.productId)}` : 'no list price'}</div>
                         {p.off && p.discount > 0 && <div className="sl-discount">discount {money(p.discount)}</div>}
                         {p.off && !(p.discount > 0) && <div className="pl-help">not the list price</div>}
-                        {changed && <input className="form-input" placeholder="Reason for the price (required)" value={l.reason} onChange={e => set(i, { reason: e.target.value })} />}
+                        {changed && <input className={`form-input${badCls(`reason-${i}`)}`} data-field={`reason-${i}`} placeholder="Reason for the price (required)" value={l.reason} onChange={e => { set(i, { reason: e.target.value }); setBad(null); }} />}
+                        {changed && badMsg(`reason-${i}`)}
                       </>) : (p.listInc != null
                         ? <><strong>{money(p.listInc)}</strong> <span className="pl-help">/{per(l.productId)}</span></>
                         : <span className="text-warning text-xs">No price — set it in Pricing</span>)}
@@ -575,10 +584,10 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             {pays.map((x, i) => (
               <div key={i} className="form-row" style={{ alignItems: 'flex-end' }}>
                 {activeAccounts.length > 0 && <label className="pe-field"><span>Into account (required)</span>
-                  <select className="form-input" value={x.accountId} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, accountId: e.target.value } : y)))}>
+                  <select className={`form-input${badCls(`account-${i}`)}`} data-field={`account-${i}`} value={x.accountId} onChange={e => { setPays(ps => ps.map((y, j) => (j === i ? { ...y, accountId: e.target.value } : y))); setBad(null); }}>
                     <option value="">Choose…</option>
                     {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select></label>}
+                  </select>{badMsg(`account-${i}`)}</label>}
                 <label className="pe-field"><span>Amount</span>
                   <NumberInput step="any" min="0" className="form-input" value={x.auto && pays.length === 1 ? String(r2(totals.total)) : x.amount}
                     onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value, auto: false } : y)))} /></label>
