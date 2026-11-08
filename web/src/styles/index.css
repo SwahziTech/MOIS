@@ -2649,9 +2649,13 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sl-day-add { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
 .sl-day-add::before, .sl-day-add::after { content: ""; flex: 1; border-top: 1px dashed var(--border-strong); }
 .sl-day { border: 1px solid var(--border-strong); border-top: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-soft); padding: 14px 16px; }
-/* the day's list stands apart from the sale being recorded (2026-11-08) */
-.sl-day { border: 2px solid var(--color-khaki); background: color-mix(in srgb, var(--color-khaki) 7%, var(--bg-surface)); margin-top: 6px; padding: 0 0 14px; overflow: hidden; }
-.sl-day > .sl-day-head { background: color-mix(in srgb, var(--color-khaki) 22%, var(--bg-surface)); padding: 10px 16px; margin: 0 0 8px; border-bottom: 1px solid var(--color-khaki); }
-.sl-day > .sl-day-head .modal-section-title { color: var(--color-khaki); margin: 0; }
-.sl-day > .sl-day-table, .sl-day > .sl-day-accs { margin-left: 16px; margin-right: 16px; width: calc(100% - 32px); }
-.sl-day-acc { background: var(--bg-surface); }
+/* the day's list as its own card below the sale's, the add button on the backdrop between (2026-11-08) */
+.modal-stack { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.modal-stack-xl > .modal { width: 96vw; max-width: 1040px; }
+.modal-solo { display: contents; }
+.modal-stack .sl-day-add { width: 96vw; max-width: 1040px; margin: 14px 0; }
+.modal-stack .sl-day-add::before, .modal-stack .sl-day-add::after { border-top-color: rgba(255,255,255,0.25); }
+.sl-day-card { border-top: 1px solid var(--border); padding: 0; background: var(--bg-surface); }
+.sl-day-card .sl-day-head { margin-bottom: 8px; }
+.modal-stack .sl-day-add .btn { background: var(--bg-surface); box-shadow: var(--shadow-lg); }
+.modal-stack .sl-day-add { max-width: 1040px; }

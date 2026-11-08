@@ -303,6 +303,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const dayKey = `mois.daySales.${branchId}`;
   const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
   const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
+  const [dayErr, setDayErr] = useState('');
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
   const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
@@ -501,14 +502,14 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     setDayList(d => d.filter((_, j) => j !== i)); setDayBad(null); setError('');
   }
   async function saveDay() {
-    setError(''); setBad(null);
-    if (lines.length) { setError('The form still has a sale: add it to the list, or remove its items.'); return; }
+    setError(''); setBad(null); setDayErr('');
+    if (lines.length) { setDayErr('The form above still has a sale: add it to the list, or remove its items.'); return; }
     setBusy(true);
     const { data: ids, error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
     if (err) {
       const m = /^Sale (\d+): /.exec(err.message || '');
       if (m) setDayBad(Number(m[1]) - 1);
-      setError(dbErrorMessage(err, "We couldn't save the day's sales. Nothing was saved."));
+      setDayErr(dbErrorMessage(err, "We couldn't save the day's sales. Nothing was saved."));
       setBusy(false);
       return;
     }
@@ -532,12 +533,46 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   return (
     <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
         <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} onChange={e => setDate(e.target.value)} /></span>} onClose={onClose} size="xl"
+      after={dayOn ? <>
+        {/* between the sale being recorded and the day's list (2026-11-08) */}
+        {dayOn && <div className="sl-day-add"><button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button></div>}
+        {dayOn && dayList.length > 0 && (
+          <section className="modal modal-xl sl-day-card" aria-label="Day's list">
+            <div className="modal-body">
+            <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
+            <table className="rd-table sl-day-table">
+              <thead><tr><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
+              <tbody>
+                {dayList.map((x, i) => x.view.rows.map((r, j) => (
+                  <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
+                    {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
+                    <td>{r.product}</td>
+                    <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
+                    {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}
+                      {x.view.proofs > 0 && (dayFiles[x.id] ? <div className="pl-help">+ proof</div> : <div className="pl-help text-warning" title="Photos are not kept after a refresh">proof: add it again</div>)}</td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); }}><Trash2 size={14} /></button></td>}
+                  </tr>
+                )))}
+                <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+              </tbody>
+            </table>
+            <div className="sl-day-accs">
+              {Object.entries(dayByAcc).map(([k, v]) => <span key={k} className="sl-day-acc"><span className="pl-help">{k}</span><strong>{formatAmount(v)}</strong></span>)}
+              {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
+            </div>
+            </div>
+            <div className="modal-footer">
+              {dayErr && <span className="modal-footer-error" role="alert">{dayErr}</span>}
+              <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
+            </div>
+          </section>
+        )}
+      </> : null}
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>{dayList.length ? 'Close (list kept)' : 'Cancel'}</button>
-        {dayList.length > 0
-          ? <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
-          : <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>}
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
       </>}>
       <div className="modal-form">
         {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
@@ -721,34 +756,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           ))}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
-        {/* between the sale being recorded and the day's list (2026-11-08) */}
-        {dayOn && <div className="sl-day-add"><button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button></div>}
-        {dayOn && dayList.length > 0 && (
-          <section className="sl-day">
-            <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
-            <table className="rd-table sl-day-table">
-              <thead><tr><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
-              <tbody>
-                {dayList.map((x, i) => x.view.rows.map((r, j) => (
-                  <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
-                    {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
-                    <td>{r.product}</td>
-                    <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
-                    {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}
-                      {x.view.proofs > 0 && (dayFiles[x.id] ? <div className="pl-help">+ proof</div> : <div className="pl-help text-warning" title="Photos are not kept after a refresh">proof: add it again</div>)}</td>}
-                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); }}><Trash2 size={14} /></button></td>}
-                  </tr>
-                )))}
-                <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
-              </tbody>
-            </table>
-            <div className="sl-day-accs">
-              {Object.entries(dayByAcc).map(([k, v]) => <span key={k} className="sl-day-acc"><span className="pl-help">{k}</span><strong>{formatAmount(v)}</strong></span>)}
-              {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
-            </div>
-          </section>
-        )}
       </div>
       {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
         onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
