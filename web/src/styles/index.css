@@ -2645,3 +2645,7 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sl-last-row .pe-field { max-width: none; }
 .sl-proof-btn { height: 44px; justify-content: flex-start; gap: 6px; }
 .sl-proof-btn.is-added { color: var(--color-success); border-color: var(--color-success); }
+/* the day's list as its own card, the add button between (2026-11-08) */
+.sl-day-add { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+.sl-day-add::before, .sl-day-add::after { content: ""; flex: 1; border-top: 1px dashed var(--border-strong); }
+.sl-day { border: 1px solid var(--border-strong); border-top: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-soft); padding: 14px 16px; }

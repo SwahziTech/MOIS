@@ -535,7 +535,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>{dayList.length ? 'Close (list kept)' : 'Cancel'}</button>
-        {dayOn && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={13} /> Add to the day's list</button>}
         {dayList.length > 0
           ? <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
           : <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>}
@@ -722,6 +721,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           ))}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
+        {/* between the sale being recorded and the day's list (2026-11-08) */}
+        {dayOn && <div className="sl-day-add"><button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button></div>}
         {dayOn && dayList.length > 0 && (
           <section className="sl-day">
             <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
