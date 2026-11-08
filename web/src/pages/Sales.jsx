@@ -1271,7 +1271,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
-                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}</td>}
+                  {/* only what needs doing shows: a proof to add, or waiting for a director (2026-11-08) */}
+                  {(() => { const a = saleApproval(x, proofs, today); return ['proof', 'waiting'].includes(a.state) ? <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div> : null; })()}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
                 <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
