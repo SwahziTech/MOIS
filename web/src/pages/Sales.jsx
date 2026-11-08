@@ -354,7 +354,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     const off = listInc == null || inc !== listInc;
     const vatOn = l.vat ?? (!off && pr.rate > 0);
     const rate = vatOn ? (pr.rate > 0 ? pr.rate : 18) : 0;
-    const total = r2(q * inc);
+    // 112: the price as typed to 3 decimals; the line total in whole shillings, as the database saves it
+    const total = Math.round(q * (Math.round(inc * 1000) / 1000));
     return { listInc, inc, total, ex: r2(total / (1 + rate / 100)), rate, off, vatOn, discount: listInc != null && inc < listInc ? r2((listInc - inc) * q) : 0 };
   };
   const hasVat = lines.some(l => preview(l)?.vatOn);
@@ -833,7 +834,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
               return (
                 <tr key={l.id}>
                   <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item'}</div>
-                    {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))} · {l.discount_reason}</div>}</td>
+                    {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))}{Number(l.vat_rate) === 0 ? ' before VAT' : ''} · {l.discount_reason}</div>}</td>
                   <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}</> : <span className="pl-help">—</span>}</td>
                   <td style={{ textAlign: 'right' }}>{money(inc)}</td>
                   <td style={{ textAlign: 'right' }}>{money(Number(l.amount))}</td>
