@@ -2669,3 +2669,7 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 /* the gap is a thin solid strip; the add button lives in the sale card (2026-11-08) */
 .modal-stack .sl-day-add { padding: 0; height: 10px; }
 .modal-stack .sl-day-add::before, .modal-stack .sl-day-add::after { display: none; }
+/* two whole cards: curved edges, nothing joining them (2026-11-08) */
+.modal-stack > .modal:first-child:not(:last-child) { border-radius: var(--radius-lg); }
+.modal-stack > .sl-day-card { border-radius: var(--radius-lg); border: 1px solid var(--border); }
+.modal-stack .sl-day-add { border: 0; background: transparent; height: 12px; }
