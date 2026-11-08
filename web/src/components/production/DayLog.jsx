@@ -484,7 +484,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           </label>
         )}
         <label className="pl-inline">Date
-          <input type="date" className="form-input" max={today} value={date} disabled={!canBackdate} title={canBackdate ? '' : 'An earlier date needs an admin'} onChange={e => setDate(e.target.value)} />
+          <input type="date" className="form-input" max={today} value={date} title={canBackdate ? '' : 'An earlier date goes to Approvals'} onChange={e => setDate(e.target.value)} />
         </label>
       </div>
 
