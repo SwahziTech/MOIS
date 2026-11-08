@@ -680,10 +680,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                   <NumberInput step="any" min="0" className="form-input" value={x.auto && pays.length === 1 ? String(r2(totals.total)) : x.amount}
                     onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value, auto: false } : y)))} /></label>
                 {pays.length > 1 && <button type="button" className="icon-btn" aria-label="Remove payment" onClick={() => { setPays(ps => ps.filter((_, j) => j !== i)); setPayProofs({}); }}><Trash2 size={14} /></button>}
-                {(x.auto && pays.length === 1 ? totals.total : num(x.amount)) > 0 && (
-                  <div className="sl-proof"><span className="pl-help">Proof of payment (optional, or later in Receipts)</span>
-                    <ProofBox file={payProofs[i]?.file ?? null} onFile={f => setProof(i, { file: f && f.size > 10 * 1024 * 1024 ? payProofs[i]?.file ?? null : f })} text={payProofs[i]?.text ?? ''} onText={t => setProof(i, { text: t })} /></div>
-                )}
               </div>
             ))}
             <div className="flex items-center gap-8">
@@ -696,6 +692,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         <div className="form-row sl-last-row">
           {book && <label className={`pe-field${hasVat && !efd.trim() ? ' sl-efd-due' : ''}`}><span>EFD receipt no. {hasVat ? <strong className={efd.trim() ? '' : 'text-warning'}>(required)</strong> : '(if any)'}</span>
             <input className="form-input" value={efd} placeholder={hasVat ? 'Add it now or later' : ''} onChange={e => setEfd(e.target.value)} /></label>}
+          {/* the proof of each payment, small, between the EFD and the notes (2026-11-08) */}
+          {book && !(payMode === 'items' && lines.length > 1) && pays.map((x, i) => ((x.auto && pays.length === 1 ? totals.total : num(x.amount)) > 0 ? (
+            <div key={`proof-${i}`} className="pe-field"><span>Proof{pays.length > 1 ? ` · ${activeAccounts.find(a => a.id === x.accountId)?.name ?? `payment ${i + 1}`}` : ''} (optional)</span>
+              <ProofBox compact file={payProofs[i]?.file ?? null} onFile={fl => setProof(i, { file: fl && fl.size > 10 * 1024 * 1024 ? payProofs[i]?.file ?? null : fl })} text={payProofs[i]?.text ?? ''} onText={t => setProof(i, { text: t })} /></div>
+          ) : null))}
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
         {dayOn && dayList.length > 0 && (

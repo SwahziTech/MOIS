@@ -9,7 +9,7 @@ import { useFileUrl } from './ProofPreview';
  * thumbnail in the box (click for the full photo, × to remove). Paste and drop
  * reach the hidden file input through lib/fileDrop.js, as on every upload.
  */
-export default function ProofBox({ file, onFile, text, onText, keptName = null, placeholder = 'Paste the SMS (muamala), or drop / paste a photo of the slip…' }) {
+export default function ProofBox({ file, onFile, text, onText, keptName = null, compact = false, placeholder = 'Paste the SMS (muamala), or drop / paste a photo of the slip…' }) {
   const url = useFileUrl(file);
   const [big, setBig] = useState(false);
   const isImage = file?.type?.startsWith('image/');
@@ -18,6 +18,24 @@ export default function ProofBox({ file, onFile, text, onText, keptName = null, 
     e.target.value = '';
     if (f) { setBig(false); onFile(f); }
   }
+  // compact (2026-11-08): one line the height of a field, for forms (Record a sale)
+  if (compact) return (
+    <div className="proof-box proof-box-compact">
+      <label className="proof-box-add" title="Add a photo or PDF from this device" aria-label="Add a photo or PDF">
+        <Plus size={15} />
+        <input type="file" accept="image/*,application/pdf" hidden onChange={pick} />
+      </label>
+      {file && (
+        <span className="proof-chip">
+          <button type="button" className="proof-chip-thumb" title={isImage ? 'Open the photo' : 'Open the PDF'} onClick={() => window.open(url, '_blank', 'noopener')}>
+            {isImage && url ? <img src={url} alt="" /> : <FileText size={15} aria-hidden="true" />}
+          </button>
+          <button type="button" className="proof-chip-x" aria-label="Remove the file" onClick={() => onFile(null)}><X size={13} /></button>
+        </span>
+      )}
+      <input className="proof-box-line" value={text} placeholder={file ? 'Photo added' : 'Paste SMS, or + / drop a photo'} aria-label="Proof: the SMS text" onChange={e => onText(e.target.value)} />
+    </div>
+  );
   return (
     <div className="proof-box">
       {(file || keptName) && (
