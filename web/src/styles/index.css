@@ -2615,3 +2615,12 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .slip-scroll { max-width: 100%; }
 .slip-scroll.is-zoomed { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .slip-canvas .pp-photo { max-height: 62vh; }
+/* record a sale (2026-11-08): date top right, VAT box per line, EFD + notes on one row */
+.sl-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sl-title .sl-date { width: 160px; height: 34px; font-size: var(--text-sm); font-weight: 400; margin-left: auto; }
+.modal-header .card-title:has(.sl-title) { flex: 1; margin-right: 12px; }
+.sl-vat { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-secondary); margin-top: 4px; cursor: pointer; justify-content: flex-end; width: 100%; }
+.sl-last-row .pe-field { flex: 1 1 220px; max-width: 360px; }
+.sl-efd-due .form-input { border-color: var(--color-warning, #d4a017); }
+.sl-buyer-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .sl-buyer-row { grid-template-columns: 1fr; } }

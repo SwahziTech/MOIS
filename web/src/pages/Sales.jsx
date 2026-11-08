@@ -330,12 +330,14 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     const inc = num(l.price) ?? listInc;
     const q = num(l.quantity) ?? 0;
     if (inc == null) return { listInc, inc: null, total: null };
-    // a price other than the list's is a discount, sold without VAT (069)
+    // a price other than the list's is a discount; the VAT box unticks itself for it unless the user ticks it (110)
     const off = listInc == null || inc !== listInc;
-    const rate = off ? 0 : pr.rate;
+    const vatOn = l.vat ?? (!off && pr.rate > 0);
+    const rate = vatOn ? (pr.rate > 0 ? pr.rate : 18) : 0;
     const total = r2(q * inc);
-    return { listInc, inc, total, ex: r2(total / (1 + rate / 100)), rate, off, discount: listInc != null && inc < listInc ? r2((listInc - inc) * q) : 0 };
+    return { listInc, inc, total, ex: r2(total / (1 + rate / 100)), rate, off, vatOn, discount: listInc != null && inc < listInc ? r2((listInc - inc) * q) : 0 };
   };
+  const hasVat = lines.some(l => preview(l)?.vatOn);
   const totals = lines.reduce((t, l) => { const p = preview(l); if (p?.total != null) { t.total += p.total; t.ex += p.ex; } return t; }, { total: 0, ex: 0 });
   // not enough stock (2026-10-26): what is available (finished goods less what open orders hold — this sale's own hold given back
   // when it is being edited) set against all its lines for the same product and colour. A warning only: goods may come out of curing first.
@@ -382,8 +384,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         if (l.other) return { item_name: l.name.trim(), price: num(l.price) };   // an other item (104)
         const pr = prices[key(l)];
         const inc = num(l.price);
-        return { product_id: l.productId, color_id: l.colorId || null, quantity: num(l.quantity),
-          ...(inc != null && pr ? { price: inc, discount_reason: l.reason } : {}) };   // the price charged a unit (069)
+        return { product_id: l.productId, color_id: l.colorId || null, quantity: num(l.quantity), vat: !!preview(l)?.vatOn,
+          ...(inc != null && pr ? { price: inc, discount_reason: l.reason } : {}) };   // the price charged a unit (069); the VAT box (110)
       }),
     };
     if (book && payMode === 'items' && lines.length > 1) {
@@ -414,7 +416,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   }
 
   return (
-    <Modal title={sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'} onClose={onClose} size="xl"
+    <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
+        <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} onChange={e => setDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
@@ -427,10 +430,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <button type="button" className={`filter-chip${buyer === 'customer' ? ' is-on' : ''}`} onClick={() => setBuyer('customer')}>Customer</button>
         </div>
         {buyer === 'walkin' ? (
-          <div className="form-row">
+          <div className="form-row sl-buyer-row">
             <label className="pe-field"><span>Name (optional)</span><input className="form-input" list="walkin-names" value={walkName} onChange={e => pickWalkIn(e.target.value, 'name')} /></label>
             <label className="pe-field"><span>Phone (optional)</span><input className="form-input" list="walkin-phones" inputMode="tel" value={walkPhone} onChange={e => pickWalkIn(e.target.value, 'phone')} /></label>
             <datalist id="walkin-names">{walkIns.filter(w => w.name).map(w => <option key={w.key} value={w.name}>{w.phone}</option>)}</datalist>
+            <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
             <datalist id="walkin-phones">{walkIns.filter(w => w.phone).map(w => <option key={w.key} value={w.phone}>{w.name}</option>)}</datalist>
           </div>
         ) : null}
@@ -456,6 +460,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <label className="pe-field"><span>Phone</span><input className="form-input" inputMode="tel" value={newCust.phone} onChange={e => setNewCust({ ...newCust, phone: e.target.value })} /></label>
             <label className="pe-field"><span>TIN (optional)</span><input className="form-input" value={newCust.tin} onChange={e => setNewCust({ ...newCust, tin: e.target.value })} /></label>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewCust(null)}>Pick existing</button>
+            <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
           </div>
         ) : (
           <div className="form-row">
@@ -465,13 +470,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                 {customers.filter(c => c.status === 'active' || c.id === customerId).map(c => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
               </select></label>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewCust({ name: '', phone: '', tin: '' })}><Plus size={13} /> New customer</button>
+            <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
           </div>
         )}
-        <div className="form-row">
-          <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value)} /></label>
-          <label className="pe-field"><span>Site (where the goods go)</span><input className="form-input" value={site} placeholder="e.g. the customer's site" onChange={e => setSite(e.target.value)} /></label>
-          {!book && (!sale || sale.stage === 'quotation') && <label className="pe-field"><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>}
-        </div>
+        {!book && (!sale || sale.stage === 'quotation') && <div className="form-row">
+          <label className="pe-field" style={{ maxWidth: 240 }}><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>
+        </div>}
 
         {short.length > 0 && (
           <div className="alert alert-warning" role="alert">
@@ -516,14 +520,16 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                       : canDiscount ? (<>
                         <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} placeholder={p.listInc != null ? String(p.listInc) : 'No price'} value={l.price} onChange={e => set(i, { price: e.target.value })} />
                         <div className="pl-help">{p.listInc != null ? `list ${money(p.listInc)} /${per(l.productId)}` : 'no list price'}</div>
-                        {p.off && p.discount > 0 && <div className="sl-discount">discount {money(p.discount)} · no VAT</div>}
-                        {p.off && !(p.discount > 0) && <div className="pl-help">not the list price · no VAT</div>}
+                        {p.off && p.discount > 0 && <div className="sl-discount">discount {money(p.discount)}</div>}
+                        {p.off && !(p.discount > 0) && <div className="pl-help">not the list price</div>}
                         {changed && <input className="form-input" placeholder="Reason for the price (required)" value={l.reason} onChange={e => set(i, { reason: e.target.value })} />}
                       </>) : (p.listInc != null
                         ? <><strong>{money(p.listInc)}</strong> <span className="pl-help">/{per(l.productId)}</span></>
                         : <span className="text-warning text-xs">No price — set it in Pricing</span>)}
                   </td>
-                  <td style={{ textAlign: 'right' }}>{p?.total != null ? <strong>{money(p.total)}</strong> : '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{p?.total != null ? <strong>{money(p.total)}</strong> : '—'}
+                    {p?.total != null && <label className="sl-vat" title={l.vat == null ? 'Unticks itself when the price is not the list price; tick it to charge VAT anyway' : 'Set by you'}>
+                      <input type="checkbox" checked={!!p.vatOn} onChange={e => set(i, { vat: e.target.checked })} /> VAT</label>}</td>
                   <td><button type="button" className="icon-btn" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={14} /></button></td>
                 </tr>
               );
@@ -540,7 +546,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         </div>
         {book && (
           <section>
-            <h3 className="modal-section-title">Paid</h3>
+            <h3 className="modal-section-title">Payments</h3>
             {lines.length > 1 && (
               <div className="flex items-center gap-8" role="group" aria-label="How it was paid">
                 <button type="button" className={`filter-chip${payMode === 'order' ? ' is-on' : ''}`} onClick={() => setPayMode('order')}>One payment for the whole order</button>
@@ -549,7 +555,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             )}
             {payMode === 'items' && lines.length > 1 ? (
               <table className="rd-table">
-                <thead><tr><th>Item</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into account (required)</th><th>Receipt no.</th></tr></thead>
+                <thead><tr><th>Item</th><th style={{ textAlign: 'right' }}>Amount</th><th>Into account (required)</th></tr></thead>
                 <tbody>{lines.map((l, i) => {
                   const x = itemPays[i] || {};
                   const setX = patch => setItemPays(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
@@ -560,7 +566,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                         value={x.amount === undefined ? String(preview(l)?.total ?? '') : x.amount} onChange={e => setX({ amount: e.target.value })} /></td>
                       <td><select className="form-input" value={x.accountId || ''} onChange={e => setX({ accountId: e.target.value })}>
                         <option value="">Choose…</option>{activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></td>
-                      <td><input className="form-input" style={{ width: 110 }} value={x.receiptNo || ''} onChange={e => setX({ receiptNo: e.target.value })} /></td>
                     </tr>
                   );
                 })}</tbody>
@@ -577,8 +582,6 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                 <label className="pe-field"><span>Amount</span>
                   <NumberInput step="any" min="0" className="form-input" value={x.auto && pays.length === 1 ? String(r2(totals.total)) : x.amount}
                     onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value, auto: false } : y)))} /></label>
-                <label className="pe-field"><span>Receipt no. (optional)</span>
-                  <input className="form-input" value={x.receiptNo} onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, receiptNo: e.target.value } : y)))} /></label>
                 {pays.length > 1 && <button type="button" className="icon-btn" aria-label="Remove payment" onClick={() => setPays(ps => ps.filter((_, j) => j !== i))}><Trash2 size={14} /></button>}
               </div>
             ))}
@@ -587,10 +590,13 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
               <span className="pl-help" style={{ marginLeft: 'auto' }}>Not paid yet? Amount 0.</span>
             </div>
             </>}
-            <label className="pe-field"><span>EFD receipt no. (optional)</span><input className="form-input" value={efd} onChange={e => setEfd(e.target.value)} /></label>
           </section>
         )}
-        <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
+        <div className="form-row sl-last-row">
+          {book && <label className={`pe-field${hasVat && !efd.trim() ? ' sl-efd-due' : ''}`}><span>EFD receipt no. {hasVat ? <strong className={efd.trim() ? '' : 'text-warning'}>(required)</strong> : '(if any)'}</span>
+            <input className="form-input" value={efd} placeholder={hasVat ? 'Add it now or later' : ''} onChange={e => setEfd(e.target.value)} /></label>}
+          <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
+        </div>
       </div>
       {picking && (
         <ProductPicker title="Add a product" items={carried} cats={cats} usage={sold} usageLabel={['sale', 'sales']} onClose={() => setPicking(false)}
@@ -763,7 +769,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
         )}
         {sale.stage === 'invoice' && canAt('invoices.create', br, null) && (
           <div className="flex items-center gap-8">
-            <span className="text-sm">EFD</span>
+            <span className="text-sm">EFD{Number(sale.vat) > 0 && !sale.efd_receipt_no ? <strong className="text-warning"> (required)</strong> : null}</span>
             <input className="form-input" style={{ maxWidth: 200 }} value={efd} onChange={e => setEfd(e.target.value)} placeholder="Number" />
             {efd !== (sale.efd_receipt_no ?? '') && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => toStage('efd', { efd_receipt_no: efd })}>Save</button>}
           </div>
@@ -1136,7 +1142,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
               <tr key={l.id} className={`clickable-row sb-band-${band}${showDate ? ' sb-day' : ''}${first ? ' sb-first' : ''}${last ? ' sb-last' : ''}${multi ? ' sb-multi' : ''}${shade ? ' sb-shade' : ''}`} onClick={() => onOpen(x.id)}>
                 <td>{showDate ? tableDate(x.sale_date) : ''}</td>
                 {first && <td rowSpan={span} className="sb-merge">{buyerOf(x)}{multi && <div className="sb-items">{span} items</div>}
-                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}</td>}
+                  {(() => { const a = saleApproval(x, proofs, today); return <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div>; })()}
+                  {Number(x.vat) > 0 && !x.efd_receipt_no && <div><span className="badge badge-warning sb-approval" title="This sale carries VAT: add its EFD receipt number">EFD to fill</span></div>}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
                 <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
