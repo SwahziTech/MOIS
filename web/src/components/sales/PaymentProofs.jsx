@@ -55,6 +55,38 @@ export async function loadProofs() {
   return error ? {} : Object.fromEntries((data || []).map(x => [x.payment_id, x]));
 }
 
+/*
+ * Proofs given while recording a sale (2026-11-08, the user): once the sale is saved, each
+ * payment that came with a photo or SMS gets it posted, matched by account and amount.
+ * proofs: [{ accountId, amount, file, text }]. Returns how many could not be posted.
+ */
+export async function postSaleProofs(saleId, proofs, { organizationId, buyer }) {
+  const want = (proofs || []).filter(x => x && (x.file || x.text?.trim()));
+  if (!want.length) return 0;
+  const { data: s } = await supabase.from('sales').select('id, sale_no, branch_id, payments:sale_payments(id, account_id, amount, paid_on)').eq('id', saleId).single();
+  if (!s) return want.length;
+  const free = [...(s.payments || [])];
+  let failed = 0;
+  for (const x of want) {
+    const i = free.findIndex(p => (p.account_id ?? '') === (x.accountId || '') && Math.abs(Number(p.amount) - Number(x.amount)) < 0.01);
+    if (i < 0) { failed += 1; continue; }
+    const pay = free.splice(i, 1)[0];
+    try {
+      let path = null;
+      if (x.file) {
+        const ext = (x.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+        path = `${organizationId}/${s.branch_id}/${pay.id}/${Date.now()}.${ext}`;
+        const up = await supabase.storage.from('payment-proofs').upload(path, x.file, { contentType: x.file.type || undefined, upsert: false });
+        if (up.error) throw up.error;
+      }
+      const name = x.file ? proofName({ kind: `Sale-${s.sale_no}`, who: buyer || 'Walk-in', amount: pay.amount, date: pay.paid_on }, extOf(x.file)) : null;
+      const { error } = await supabase.rpc('submit_payment_proof', { p: { payment_id: pay.id, file_path: path, file_name: name, sms_text: x.text?.trim() || null } });
+      if (error) throw error;
+    } catch (e) { console.error(e); failed += 1; }
+  }
+  return failed;
+}
+
 /* Add (or replace) the proof of one payment: a photo/PDF, the SMS text, or both — one step */
 export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSaved }) {
   // the file is named after its transaction (2026-11-06)

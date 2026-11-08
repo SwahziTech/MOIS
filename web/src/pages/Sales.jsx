@@ -3,7 +3,8 @@ import { Receipt, Plus, Trash2, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
-import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs } from '../components/sales/PaymentProofs';
+import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs } from '../components/sales/PaymentProofs';
+import ProofBox from '../components/ProofBox';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -283,6 +284,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const dayKey = `mois.daySales.${branchId}`;
   const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
   const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
+  // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
+  const [payProofs, setPayProofs] = useState({});
+  const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
+  const setProof = (i, patch) => setPayProofs(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
+  const proofsFor = payments => (payments || []).map((p, i) => (payProofs[i] && (payProofs[i].file || payProofs[i].text?.trim()) && !p.line_no ? { accountId: p.account_id || '', amount: p.amount, ...payProofs[i] } : null)).filter(Boolean);
+  const buyerName = cust => (cust ? customers.find(c => c.id === cust)?.name : walkName.trim()) || 'Walk-in';
   useEffect(() => { if (!dayOn) return; try { if (dayList.length) localStorage.setItem(dayKey, JSON.stringify(dayList)); else localStorage.removeItem(dayKey); } catch { /* storage off */ } }, [dayList]); // eslint-disable-line react-hooks/exhaustive-deps
   const flag = (key, msg) => {
     setError(msg); setBad({ key, msg });
@@ -431,6 +438,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     if (!err && !book && !sale?.id && site) await supabase.rpc('set_sale_site', { p_sale: data, p_site: site });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't save this sale. Please try again.")); return; }
+    if (book && data) {
+      setBusy(true);
+      const failed = await postSaleProofs(data, proofsFor(payload.payments), { organizationId: organization.id, buyer: buyerName(payload.customer_id) });
+      setBusy(false);
+      if (failed) window.alert('The sale is saved, but a proof could not be posted. Add it in Sales › Receipts.');
+    }
     onSaved(data);
   }
 
@@ -447,7 +460,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       total: r2(totals.total),
     };
     const form = { buyer, customerId, walkName, walkPhone, date, notes, site, efd, pays, payMode, itemPays, lines };
-    setDayList(d => [...d, { payload, view, form }]);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const proofs = proofsFor(payload.payments);
+    view.proofs = proofs.length;
+    if (proofs.length) setDayFiles(m => ({ ...m, [id]: { proofs, buyer: buyerName(cust), raw: payProofs } }));
+    setDayList(d => [...d, { id, payload, view, form }]);
+    setPayProofs({});
     setDayBad(null);
     setLines([]); setWalkName(''); setWalkPhone(''); setCustomerId(''); setSite(''); setEfd(''); setNotes('');
     setPays([{ accountId: '', amount: '', receiptNo: '', auto: true }]); setPayMode('order'); setItemPays({});
@@ -458,20 +476,30 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     const x = dayList[i].form;
     setBuyer(x.buyer); setCustomerId(x.customerId); setWalkName(x.walkName); setWalkPhone(x.walkPhone); setDate(x.date); setNotes(x.notes);
     setSite(x.site); setEfd(x.efd); setPays(x.pays); setPayMode(x.payMode); setItemPays(x.itemPays); setLines(x.lines);
+    setPayProofs(dayFiles[dayList[i].id]?.raw ?? {});
     setDayList(d => d.filter((_, j) => j !== i)); setDayBad(null); setError('');
   }
   async function saveDay() {
     setError(''); setBad(null);
     if (lines.length) { setError('The form still has a sale: add it to the list, or remove its items.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
-    setBusy(false);
+    const { data: ids, error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
     if (err) {
       const m = /^Sale (\d+): /.exec(err.message || '');
       if (m) setDayBad(Number(m[1]) - 1);
       setError(dbErrorMessage(err, "We couldn't save the day's sales. Nothing was saved."));
+      setBusy(false);
       return;
     }
+    // the sales are saved: now their proofs
+    let failed = 0;
+    for (const [k, x] of dayList.entries()) {
+      const pf = dayFiles[x.id];
+      if (pf && ids?.[k]) failed += await postSaleProofs(ids[k], pf.proofs, { organizationId: organization.id, buyer: pf.buyer });
+    }
+    setBusy(false);
+    if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Receipts.`);
+    setDayFiles({});
     setDayList([]);
     onSaved(null);
   }
@@ -651,7 +679,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                 <label className="pe-field"><span>Amount</span>
                   <NumberInput step="any" min="0" className="form-input" value={x.auto && pays.length === 1 ? String(r2(totals.total)) : x.amount}
                     onChange={e => setPays(ps => ps.map((y, j) => (j === i ? { ...y, amount: e.target.value, auto: false } : y)))} /></label>
-                {pays.length > 1 && <button type="button" className="icon-btn" aria-label="Remove payment" onClick={() => setPays(ps => ps.filter((_, j) => j !== i))}><Trash2 size={14} /></button>}
+                {pays.length > 1 && <button type="button" className="icon-btn" aria-label="Remove payment" onClick={() => { setPays(ps => ps.filter((_, j) => j !== i)); setPayProofs({}); }}><Trash2 size={14} /></button>}
+                {(x.auto && pays.length === 1 ? totals.total : num(x.amount)) > 0 && (
+                  <div className="sl-proof"><span className="pl-help">Proof of payment (optional, or later in Receipts)</span>
+                    <ProofBox file={payProofs[i]?.file ?? null} onFile={f => setProof(i, { file: f && f.size > 10 * 1024 * 1024 ? payProofs[i]?.file ?? null : f })} text={payProofs[i]?.text ?? ''} onText={t => setProof(i, { text: t })} /></div>
+                )}
               </div>
             ))}
             <div className="flex items-center gap-8">
@@ -678,7 +710,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                     <td>{r.product}</td>
                     <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
                     <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
-                    {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}</td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}
+                      {x.view.proofs > 0 && (dayFiles[x.id] ? <div className="pl-help">+ proof</div> : <div className="pl-help text-warning" title="Photos are not kept after a refresh">proof: add it again</div>)}</td>}
                     {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); }}><Trash2 size={14} /></button></td>}
                   </tr>
                 )))}
