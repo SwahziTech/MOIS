@@ -2663,6 +2663,9 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .modal-stack .sl-day-add { margin: 0; padding: 14px 20px; background: var(--bg-canvas); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 .modal-stack .sl-day-add::before, .modal-stack .sl-day-add::after { border-top-color: var(--border-strong); }
 .modal-stack .sl-day-add .btn { box-shadow: none; }
-.modal-stack > .modal:first-child { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.modal-stack > .modal:first-child:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .modal-stack > .sl-day-card { border-top-left-radius: 0; border-top-right-radius: 0; }
 .modal-stack .sl-day-add:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+/* the gap is a thin solid strip; the add button lives in the sale card (2026-11-08) */
+.modal-stack .sl-day-add { padding: 0; height: 10px; }
+.modal-stack .sl-day-add::before, .modal-stack .sl-day-add::after { display: none; }

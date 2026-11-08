@@ -535,7 +535,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} onChange={e => setDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       after={dayOn ? <>
         {/* between the sale being recorded and the day's list (2026-11-08) */}
-        {dayOn && <div className="sl-day-add"><button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button></div>}
+        {dayOn && dayList.length > 0 && <div className="sl-day-add" aria-hidden="true" />}
         {dayOn && dayList.length > 0 && (
           <section className="modal modal-xl sl-day-card" aria-label="Day's list">
             <div className="modal-body">
@@ -571,7 +571,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       </> : null}
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
-        <button type="button" className="btn btn-outline" onClick={onClose}>{dayList.length ? 'Close (list kept)' : 'Cancel'}</button>
+        {dayOn
+          ? <button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button>
+          : <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>}
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
       </>}>
       <div className="modal-form">
