@@ -120,3 +120,27 @@ export async function markedSlipBlob(url, mark, stampText) {
   }
   return new Promise(res => c.toBlob(res, 'image/png'));   // no quality lost
 }
+
+/* An SMS proof drawn as a picture (2026-11-09, the user): it is marked and saved like a photo slip */
+export function smsImage(text) {
+  const W = 720, PAD = 40, FS = 28, LH = 40;
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = `${FS}px sans-serif`;
+  const lines = [];
+  for (const para of String(text || '').split(/\r?\n/)) {
+    let line = '';
+    for (const word of para.split(/\s+/)) {
+      const tryLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(tryLine).width > W - PAD * 2 && line) { lines.push(line); line = word; } else line = tryLine;
+    }
+    lines.push(line);
+  }
+  c.width = W; c.height = PAD * 2 + 44 + lines.length * LH;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#6b7280'; g.font = '600 22px sans-serif'; g.fillText('SMS', PAD, PAD + 18);
+  g.fillStyle = '#111827'; g.font = `${FS}px sans-serif`;
+  lines.forEach((l, i) => g.fillText(l, PAD, PAD + 44 + (i + 1) * LH - 10));
+  return c.toDataURL('image/png');
+}

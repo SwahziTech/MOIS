@@ -9,7 +9,7 @@ import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
-import { SlipCanvas, markedSlipBlob, READY_MARK } from './SlipMark';
+import { SlipCanvas, markedSlipBlob, READY_MARK, smsImage } from './SlipMark';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -253,6 +253,9 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // an SMS proof is drawn as a picture, then marked and saved like a photo (2026-11-09)
+  const smsOnly = !proof?.file_path && !!proof?.sms_text;
+  useEffect(() => { if (smsOnly) { const u = smsImage(proof.sms_text); setUrl(u); setSaveUrl(u); } }, [smsOnly, proof?.sms_text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!proof?.file_path) return;
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
@@ -260,7 +263,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [proof?.file_path]);
   const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
-  const isPhoto = !!proof?.file_path && !isPdf;
+  const isPhoto = (!!proof?.file_path && !isPdf) || smsOnly;
   async function act(action) {
     setError('');
     if (isPhoto && !strokes.length) { setError('Draw your mark on the slip first.'); return; }
@@ -291,7 +294,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
       const blob = await markedSlipBlob(url, { color: markColor, strokes }, `${stamp.who} · ${stamp.at}`);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (proof.file_name || 'slip.jpg').replace(/\.[^.]+$/, '') + '_marked.png';
+      a.download = (proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'png')).replace(/\.[^.]+$/, '') + '_marked.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     } catch { window.location.href = saveUrl; }
@@ -309,7 +312,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   return (
     <Modal title={`Payment proof · ${money(siblings.length ? siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)) : Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
-        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download onClick={saveMarked}>Save to device</a>}
+        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download={smsOnly ? proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'png') : true} onClick={saveMarked}>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
         {pen && !stamp && strokes.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => { setStrokes([]); setReady(false); }}>Clear</button>}
         {pen === 'green' && !stamp && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !strokes.length} onClick={() => act('confirm')}>Sign as received</button>}
@@ -344,10 +347,10 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
         <div className="pp-review">
           <div className="pp-review-slip">
-            {proof?.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
+            {(proof?.file_path || smsOnly) && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>
               : url ? <SlipCanvas url={url} strokes={strokes} color={markColor} pen={open && isPhoto ? pen || 'ink' : null} onStrokes={v => { setStrokes(v); setReady(false); }} replaceOnDraw={ready} stamp={strokes.length ? stamp : null} /> : <span className="skeleton" />)}
             {open && isPhoto && <span className="pl-help">{!pen ? (strokes.length ? 'Now tick ✓ Received or ✗ Query: the box decides.' : 'Tick ✓ or ✗ in a box. You may also sign on the slip with your finger.') : ready ? 'Or draw over it with your finger to sign in your own hand.' : 'Clear to start again.'}</span>}
-            {proof?.sms_text && <pre className="pp-sms">{proof.sms_text}</pre>}
+            {proof?.sms_text && !smsOnly && <pre className="pp-sms">{proof.sms_text}</pre>}
           </div>
           {(canReview || stamp) && (
             <div className="pp-marks">
