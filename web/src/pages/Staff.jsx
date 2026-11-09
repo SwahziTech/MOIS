@@ -111,24 +111,16 @@ export default function Staff() {
   }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const [employeePeriod, setEmployeePeriod] = useSessionPeriod('staff-employees');
-  const [casualPeriod, setCasualPeriod] = useSessionPeriod('staff-casuals');   // this month first (2026-11-09)
   const isCasualTab = tab === 'casual';
-  const period = isCasualTab ? casualPeriod : employeePeriod;
-  const setPeriod = isCasualTab ? setCasualPeriod : setEmployeePeriod;
-  const periodOptions = isCasualTab ? CASUAL_PERIODS : PERIODS;
-  const [periodFrom, periodTo] = periodRange(period, today);
-  const periodLabel = periodOptions.find(p => p[0] === period)?.[1] ?? weekLabel(period, today) ?? '';
-  const periodWord = periodLabel.toLowerCase();
-  // the day boxes follow the period (2026-11-01). Employees: this week's days inside this month, never another month's.
-  // Casuals, paid by the week: the chosen week, Monday to Saturday, then the rest day. A longer period shows its total only.
-  const shownDays = isCasualTab
-    ? (period === 'week' ? week : period === 'lastweek' ? Array.from({ length: 7 }, (_, i) => addDays(periodFrom, i)) : [])
-    : (period === 'month'
-      // a month starting on the rest day: that day belongs to the week just ended, so show the coming work week
-      ? (today === periodFrom && isRest(today) ? Array.from({ length: 6 }, (_, i) => addDays(today, i + 1)) : week.filter(d => d >= periodFrom))
-      : []);
-  const attFrom = [monday, periodFrom].sort()[0];
+  // the period (2026-11-09, the user): Week | Month as on Attendance — employees this month, casuals this week
+  const empWM = useWeekMonth(today, 'month');
+  const casWM = useWeekMonth(today, 'week');
+  const wmNow = isCasualTab ? casWM : empWM;
+  const periodFrom = wmNow.from;
+  const periodTo = wmNow.to > today ? today : wmNow.to;
+  const periodLabel = wmNow.label;
+  const periodWord = periodLabel === 'Week' ? 'that week' : periodLabel.toLowerCase();
+  const attFrom = periodFrom;
   const canManage = !!branchId && canAt('staff.manage', branchId);
   const canRecord = !!branchId && canAt('payroll.record', branchId);
   const canApprove = !!branchId && canAt('payroll.approve', branchId);
@@ -144,27 +136,16 @@ export default function Staff() {
     // a year runs past one page of results, so read it page by page
     const rows = [];
     for (let at = 0; ; at += 1000) {
-      const { data } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction').gte('work_date', attFrom).lte('work_date', addDays(monday, 6))
+      const { data } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction').gte('work_date', attFrom).lte('work_date', periodTo)
         .order('work_date').order('staff_id').range(at, at + 999);
       rows.push(...(data || []));
       if ((data || []).length < 1000) break;
     }
     setAtt(Object.fromEntries(rows.map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
-    const ot = await supabase.from('staff_overtime').select('staff_id, work_date, amount').eq('status', 'recorded').gte('work_date', attFrom).lte('work_date', addDays(monday, 6));
+    const ot = await supabase.from('staff_overtime').select('staff_id, work_date, amount').eq('status', 'recorded').gte('work_date', attFrom).lte('work_date', periodTo);
     setOvertime(ot.error ? [] : ot.data || []);
   }
-  useEffect(() => { if (tab === 'employed' || tab === 'casual') loadAtt(); }, [tab, attFrom]); // eslint-disable-line react-hooks/exhaustive-deps
-  // a day on the card: ✓ full → ½ half → empty (as on Attendance)
-  async function markDay(e, sid, d) {
-    e.stopPropagation();
-    const k = `${sid}|${d}`; const v = att[k]; const fr = v === 1 ? 0.5 : v === 0.5 ? 0 : 1;
-    setAttBusy(k); setError('');
-    const { error: err } = await supabase.rpc('set_attendance', { p: { staff_id: sid, work_date: d, day_fraction: fr } });
-    setAttBusy('');
-    if (err) { setError(dbErrorMessage(err)); return; }
-    setAtt(m => { const n = { ...m }; if (fr) n[k] = fr; else delete n[k]; return n; });
-    if (isRest(d)) loadAtt();   // the rest day's overtime appeared or went
-  }
+  useEffect(() => { if (tab === 'employed' || tab === 'casual') loadAtt(); }, [tab, attFrom, periodTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const daysIn = (sid, from, to) => Object.entries(att).reduce((t, [k, v]) => { const [id, d] = k.split('|'); return id === sid && d >= from && d <= to && !isRest(d) ? t + v : t; }, 0);
   const overtimeIn = (sid, from, to) => overtime.reduce((t, o) => (o.staff_id === sid && o.work_date >= from && o.work_date <= to ? t + Number(o.amount) : t), 0);
 
@@ -223,10 +204,9 @@ export default function Staff() {
             </div>
           )}
           <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…" />
-          <PeriodBar value={period} onChange={setPeriod} today={today} range={periodRange(period, today)}
-            extra={periodOptions.filter(([k]) => !['month', 'lastmonth', 'week', 'lastweek'].includes(k))} />
+          {wmNow.bar}
           <section className="sk">
-            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{periodLabel} · {periodNote(period, today)}</span></div>
+            <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{periodLabel}</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
             : shown.length === 0 ? <div className="card"><EmptyState icon={HardHat} title={tab === 'employed' ? 'No employees yet' : 'No casual labourers yet'}
                 description={tab === 'employed' ? 'Add employed staff — monthly salary, paid every 2 weeks.' : 'Add casual labourers — a day rate, paid weekly. People added on a production batch appear here.'} /></div>
@@ -256,20 +236,9 @@ export default function Staff() {
                   {s.status !== 'active' && <span className="pl-help">left{s.left_on ? ` ${dateText(s.left_on)}` : ''}</span>}
                 </div>
                 <div className="st-att" onDoubleClick={e => e.stopPropagation()}>
-                  {shownDays.length > 0 && <div className="st-week">
-                    {shownDays.map(d => {
-                      const k = `${s.id}|${d}`; const v = att[k];
-                      return (
-                        <button key={d} type="button" style={{ gridColumnStart: ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1 }} className={`st-day at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}${d === today ? ' is-today' : ''}${isRest(d) ? ' is-rest' : ''}`}
-                          disabled={!canRecord || d > today || attBusy === k || s.status !== 'active'} title={`${dateText(d)}${isRest(d) ? ' — rest day: paid as overtime' : ''}${canRecord && d <= today ? ' — click: ✓ full, ½ half, empty' : ''}`}
-                          onClick={e => markDay(e, s.id, d)}>
-                          <span className="st-dname">{dayName(d)}</span>{v === 1 ? '✓' : v === 0.5 ? '½' : d > today ? '' : '·'}
-                        </button>
-                      );
-                    })}
-                  </div>}
-                  <span className="pl-help st-att-sum">{period === 'month' && !isCasualTab ? `${daysIn(s.id, [monday, periodFrom].sort()[1], today)} days this week · ` : ''}{daysIn(s.id, periodFrom, periodTo)} days {periodWord}</span>
-                  {shownDays.length === 0 && <Link className="btn btn-outline btn-sm st-att-link" onClick={e => e.stopPropagation()} to={`/staff?tab=${isCasualTab ? 'attcasual' : 'attendance'}&week=${mondayOf(periodTo)}&person=${s.id}`}>Attendance</Link>}
+                  <span className="pl-help st-att-sum">{daysIn(s.id, periodFrom, periodTo)} days {periodWord}</span>
+                  <Link className="btn btn-outline btn-sm st-att-link" onClick={e => e.stopPropagation()}
+                    to={`/staff?tab=${isCasualTab ? 'attcasual' : 'attendance'}&${wmNow.isWeek ? `week=${wmNow.monday}` : `month=${wmNow.monthStart}`}&person=${s.id}`}>Attendance</Link>
                 </div>
               </div>
             ))}
@@ -396,17 +365,50 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
 }
 
 /* A week of attendance: click a day to cycle — worked a full day, half a day, not there */
+/*
+ * Week | Month (2026-11-09, the user), on Attendance and Personnel: the standard bar's look — ‹ › arrows, the
+ * name and its dates, a button back to now, Week | Month on the right. Casuals open on this week, employees on this month.
+ */
+function useWeekMonth(today, defaultMode, start = null) {
+  const [mode, setMode] = useState(start?.mode ?? defaultMode);
+  const [monday, setMonday] = useState(start?.monday ?? mondayOf(today));
+  const [monthStart, setMonthStart] = useState(start?.monthStart ?? `${today.slice(0, 7)}-01`);
+  const isWeek = mode === 'week';
+  const monthEnd = (() => { const [y, m] = monthStart.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); })();
+  const from = isWeek ? monday : monthStart;
+  const to = isWeek ? addDays(monday, 6) : monthEnd;
+  const thisMon = mondayOf(today), thisMonth = `${today.slice(0, 7)}-01`;
+  const atNow = isWeek ? monday === thisMon : monthStart === thisMonth;
+  const label = isWeek ? (monday === thisMon ? 'This week' : monday === addDays(thisMon, -7) ? 'Last week' : 'Week')
+    : (monthStart === thisMonth ? 'This month' : new Date(`${monthStart}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+  const shiftMonth = k => { const [y, m] = monthStart.split('-').map(Number); setMonthStart(new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 10)); };
+  const bar = (
+    <div className="dd-period period-bar">
+      <button type="button" className="dd-step" aria-label="Earlier" onClick={() => (isWeek ? setMonday(addDays(monday, -7)) : shiftMonth(-1))}><ChevronLeft size={18} /></button>
+      <button type="button" className="dd-step" aria-label="Later" disabled={atNow} onClick={() => (isWeek ? setMonday(addDays(monday, 7)) : shiftMonth(1))}><ChevronRight size={18} /></button>
+      <span><strong>{label}</strong> · {dateText(from)} – {dateText(to)}</span>
+      {!atNow && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => (isWeek ? setMonday(thisMon) : setMonthStart(thisMonth))}>{isWeek ? 'This week' : 'This month'}</button>}
+      <div className="filter-chips" role="group" aria-label="Week or month">
+        <button type="button" className={`filter-chip${isWeek ? ' is-on' : ''}`} onClick={() => setMode('week')}>Week</button>
+        <button type="button" className={`filter-chip${!isWeek ? ' is-on' : ''}`} onClick={() => setMode('month')}>Month</button>
+      </div>
+    </div>
+  );
+  return { mode, isWeek, monday, monthStart, from, to, label, bar };
+}
+
 /* Week or month (2026-11-09, the user): casuals open on this week, employees on this month; the bar is the standard
    period bar's look — ‹ › arrows, the name and its dates, a button back to now, Week | Month on the right */
 function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMode = 'week' }) {
   // opened from a person's card: their week (?week=), only them (?person=)
   const [params] = useSearchParams();
   const asked = params.get('week');
-  const [monday, setMonday] = useState(() => (asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? mondayOf(asked) : mondayOf(today)));
-  const [mode, setMode] = useState(asked ? 'week' : defaultMode);
-  const [monthStart, setMonthStart] = useState(`${today.slice(0, 7)}-01`);
-  const monthDays = (() => { const [y, m] = monthStart.split('-').map(Number); const n = new Date(Date.UTC(y, m, 0)).getUTCDate(); return Array.from({ length: n }, (_, i) => addDays(monthStart, i)); })();
-  const shiftMonth = k => { const [y, m] = monthStart.split('-').map(Number); setMonthStart(new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 10)); };
+  // opened from a person's card: their week (?week=) or month (?month=)
+  const askedMonth = params.get('month');
+  const wm = useWeekMonth(today, defaultMode, asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? { mode: 'week', monday: mondayOf(asked) }
+    : askedMonth && /^\d{4}-\d{2}-01$/.test(askedMonth) ? { mode: 'month', monthStart: askedMonth } : null);
+  const { mode, monday } = wm;
+  const monthDays = Array.from({ length: Number(wm.to.slice(8)) }, (_, i) => addDays(wm.monthStart, i));
   const onePerson = staff.find(x => x.id === params.get('person'));
   const listed = onePerson ? [onePerson] : staff;
   const [marks, setMarks] = useState(null);       // `${staff_id}|${date}` → day_fraction
@@ -450,25 +452,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMod
   const totalOf = id => days.reduce((t, d) => t + (isRest(d) ? 0 : marks?.[`${id}|${d}`] || 0), 0);
   return (
     <>
-      {(() => {
-        const thisMon = mondayOf(today), thisMonth = `${today.slice(0, 7)}-01`;
-        const isWeek = mode === 'week';
-        const name = isWeek ? (monday === thisMon ? 'This week' : monday === addDays(thisMon, -7) ? 'Last week' : 'Week')
-          : (monthStart === thisMonth ? 'This month' : new Date(`${monthStart}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
-        const atNow = isWeek ? monday === thisMon : monthStart === thisMonth;
-        return (
-          <div className="dd-period period-bar">
-            <button type="button" className="dd-step" aria-label="Earlier" onClick={() => (isWeek ? setMonday(addDays(monday, -7)) : shiftMonth(-1))}><ChevronLeft size={18} /></button>
-            <button type="button" className="dd-step" aria-label="Later" disabled={atNow} onClick={() => (isWeek ? setMonday(addDays(monday, 7)) : shiftMonth(1))}><ChevronRight size={18} /></button>
-            <span><strong>{name}</strong> · {dateText(first)} – {dateText(last)}</span>
-            {!atNow && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => (isWeek ? setMonday(thisMon) : setMonthStart(thisMonth))}>{isWeek ? 'This week' : 'This month'}</button>}
-            <div className="filter-chips" role="group" aria-label="Week or month">
-              <button type="button" className={`filter-chip${isWeek ? ' is-on' : ''}`} onClick={() => setMode('week')}>Week</button>
-              <button type="button" className={`filter-chip${!isWeek ? ' is-on' : ''}`} onClick={() => setMode('month')}>Month</button>
-            </div>
-          </div>
-        );
-      })()}
+      {wm.bar}
       <p className="pl-help" style={{ margin: '0 0 8px' }}>{canRecord ? 'Click a day: ✓ full day → ½ half day → empty.' : branchId ? 'You can see attendance here.' : 'Choose a branch to mark attendance.'}</p>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {onePerson && <p className="pl-help" style={{ marginBottom: 8 }}>Only {onePerson.full_name}. <Link to={`/staff?tab=${params.get('tab')}`}>Show everyone</Link></p>}
