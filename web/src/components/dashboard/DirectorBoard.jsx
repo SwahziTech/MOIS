@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSessionPeriod } from '../../lib/sessionPeriod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -18,7 +19,7 @@ const DROPDOWN = [['Monthly', [['month', 'This month'], ['lastmonth', 'Last mont
   ['Quarterly', [['quarter', 'This quarter'], ['lastquarter', 'Last quarter']]], ['Yearly', [['year', 'This year'], ['lastyear', 'Last year']]]];
 const LAST_OF = { week: 'lastweek', month: 'lastmonth', quarter: 'lastquarter', year: 'lastyear' };
 
-/* Opens on this week (user, 2026-11-03). From it › goes to today and ‹ to last week; from today ‹ steps back a day at a
+/* Opens on this month (user, 2026-11-09; was this week). From it › goes to today and ‹ to last week; from today ‹ steps back a day at a
    time to Monday, then last week, then last month. Away from this week a small This week button brings it back.
    The dropdown: this week, its days (today, yesterday … Monday), last week, then months, quarters and years. */
 function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
@@ -32,14 +33,15 @@ function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
       <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
       <span><strong>{period.label}</strong> · {period.note}</span>
-      {periodKey !== 'week' && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => setPeriodKey('week')}>This week</button>}
+      {periodKey !== 'month' && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => setPeriodKey('month')}>This month</button>}
       <select className="form-input dd-select" aria-label="Period" value={periodKey} onChange={e => setPeriodKey(e.target.value)}>
+        {DROPDOWN.slice(0, 1).map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
         <optgroup label="Weekly">
           <option value="week">This week</option>
           {days.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
           <option value="lastweek">Last week</option>
         </optgroup>
-        {DROPDOWN.map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
+        {DROPDOWN.slice(1).map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
       </select>
     </div>
   );
@@ -91,7 +93,7 @@ export default function DirectorBoard() {
   const [d, setD] = useState(null);
   const [stock, setStock] = useState(undefined);   // undefined loading, null failed
   const [error, setError] = useState('');
-  const [periodKey, setPeriodKey] = useState('week');
+  const [periodKey, setPeriodKey] = useSessionPeriod('director-view');   // this month first (2026-11-09)
   const periods = useMemo(() => periodsFor(today), [today]);
   const period = periods.find(p => p.key === periodKey);
 

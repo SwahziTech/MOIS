@@ -4,6 +4,7 @@ import { Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { orgToday } from '../../lib/inventory';
+import { useSessionPeriod } from '../../lib/sessionPeriod';
 import { weekPeriods, periodRange } from '../../lib/periods';
 import { formatMoney, formatAmount, tableDate } from '../../lib/format';
 import { PageTabs } from '../ListControls';
@@ -25,7 +26,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
   const money = v => formatMoney(v, currency);
   const { organization } = useAuth();
   const today = orgToday(organization?.timezone);
-  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
+  const [period, setPeriod] = useSessionPeriod('costing-electricity');   // this month first (2026-11-09)
   const [view, setView] = useState('days');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');

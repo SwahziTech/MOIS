@@ -117,7 +117,7 @@ export default function WeeklyCash() {
             <div className="mm-stat"><span className="pl-label">With directors</span><strong className={here.some(r => r.status === 'with_directors') ? 'text-warning' : ''}>{here.filter(r => r.status === 'with_directors').length}</strong><span className="pl-help">waiting for approval</span></div>
             <div className="mm-stat"><span className="pl-label">Last week's balance</span><strong>{lastClosed ? money(lastClosed.closing) : '—'}</strong><span className="pl-help">{lastClosed ? `spent ${formatMoneyShort(lastClosed.spent, organization?.currency_code)}` : 'from the first request on'}</span></div>
           </div>
-          <div className="period-row"><PeriodSelect period={period} today={today} extra={[['month', 'This month'], ['lastmonth', 'Last month'], ['all', 'All time']]} /></div>
+          <div className="period-row"><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
           <div className="card"><div className="table-container">
             <table>
               <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>

@@ -245,7 +245,7 @@ export default function Purchases() {
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            {(tab === 'purchases' || tab === 'expenses') && <div className="card-body period-row" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['month', 'This month'], ['lastmonth', 'Last month'], ['all', 'All time']]} /></div>}
+            {(tab === 'purchases' || tab === 'expenses') && <div className="card-body period-row" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>}
             {tab === 'waiting' && (
               <table>
                 <thead><tr><th>Received</th><th>Store</th><th>Goods</th><th>Received by</th><th aria-label="Actions" /></tr></thead>

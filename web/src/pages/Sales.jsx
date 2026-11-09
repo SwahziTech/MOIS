@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Receipt, Plus, Trash2, Printer, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
+import { useSessionPeriod } from '../lib/sessionPeriod';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
 import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs, postSharedSlip } from '../components/sales/PaymentProofs';
 import ProofBox from '../components/ProofBox';
@@ -1170,7 +1171,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
  * product and by customer. Figures as saved; nothing re-priced here.
  */
 function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf }) {
-  const [period, setPeriod] = useState('week');   // this week first (2026-11-03)
+  const [period, setPeriod] = useSessionPeriod('sales-overview');   // this month first (2026-11-09)
   const [from, to] = periodRange(period, today);
   const inP = d => d >= from && d <= to;
   const live = sales.filter(x => x.stage === 'order' || x.stage === 'invoice');
@@ -1264,7 +1265,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
   const sentRange = params.get('from') && params.get('to') ? [params.get('from'), params.get('to')] : null;
   const known = sentRange && keyForRange(sentRange[0], sentRange[1], today);   // one of the usual choices opens on it
   const urlRange = known ? null : sentRange;
-  const [period, setPeriod] = useState(known || (urlRange ? 'range' : 'week'));   // this week first (2026-11-03)
+  const [savedPeriod, setSavedPeriod] = useSessionPeriod('sales-book');   // this month first (2026-11-09), remembered until the app closes
+  const [cardPeriod, setCardPeriod] = useState(known || (urlRange ? 'range' : null));   // a dashboard card's period, on arrival
+  const period = cardPeriod ?? savedPeriod;
+  const setPeriod = v => { setCardPeriod(null); setSavedPeriod(v); };
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');     // newest | oldest | amount
   const [delivery, setDelivery] = useState('');       // '' | not | part | done
@@ -1325,7 +1329,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
           { key: 'period', label: 'Period', value: period, onChange: setPeriod,
-            options: [...(urlRange ? [{ value: 'range', label: params.get('label') || 'Chosen period' }] : []), ...weekPeriods(today), { value: 'month', label: 'This month' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
+            options: [...(urlRange ? [{ value: 'range', label: params.get('label') || 'Chosen period' }] : []), ...weekPeriods(today), { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
           { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
             options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,

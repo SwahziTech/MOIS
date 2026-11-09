@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { qtyText, orgToday } from '../../lib/inventory';
 import { formatMoney, dateTimeText } from '../../lib/format';
 import { useAuth } from '../../hooks/useAuth';
+import { useSessionPeriod } from '../../lib/sessionPeriod';
 import { weekPeriods, periodRange } from '../../lib/periods';
 import Modal from '../Modal';
 
@@ -16,7 +17,7 @@ const LABEL = {
 const PRODUCTION = new Set(['production_use', 'production_output', 'curing_out', 'curing_in']);
 const groupOf = t => (t.buy ? 'purchase' : PRODUCTION.has(t.transaction_type) ? 'production' : 'movement');
 const GROUPS = [['all', 'All'], ['purchase', 'Purchases'], ['production', 'Production'], ['movement', 'Other']];
-const PERIODS = [['month', 'This month'], ['all', 'All time']];   // after the week periods (2026-11-03)
+const PERIODS = [['all', 'All time']];   // after the usual periods
 const r2 = n => Math.round(n * 100) / 100;
 
 /**
@@ -35,7 +36,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
   const money = v => formatMoney(v, organization?.currency_code);
   const [rows, setRows] = useState(null);
   const [group, setGroup] = useState(mode === 'purchases' ? 'purchase' : 'all');
-  const [period, setPeriod] = useState('week');
+  const [period, setPeriod] = useSessionPeriod('item-history');
   const [newestFirst, setNewestFirst] = useState(true);
   const [open, setOpen] = useState(null);
   const [people, setPeople] = useState({});

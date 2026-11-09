@@ -1,8 +1,8 @@
 /*
- * The periods every dated list and dashboard offers first (LOCKED, the user
- * 2026-11-03): open on This week; then each day of it — Today, Yesterday,
- * then the weekday names back to Monday — and Last week. Weeks start on
- * Monday. Longer periods (month, 30 days, …) are each page's own and follow.
+ * The periods every dated list and dashboard offers first: This month (the
+ * default, 2026-11-09, the user — was This week), Last month, This week, then
+ * each day of it — Today, Yesterday, the weekday names back to Monday — and
+ * Last week. Weeks start on Monday. Longer periods follow, each page's own.
  */
 const utc = d => new Date(`${d}T00:00:00Z`);
 const shift = (d, n) => new Date(utc(d).getTime() + n * 864e5).toISOString().slice(0, 10);
@@ -15,7 +15,7 @@ export function weekPeriods(today) {
     value: i === 0 ? 'today' : i === 1 ? 'yesterday' : `day:${d}`,
     label: i === 0 ? 'Today' : i === 1 ? 'Yesterday' : utc(d).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }),
   }));
-  return [{ value: 'week', label: 'This week' }, ...days, { value: 'lastweek', label: 'Last week' }];
+  return [{ value: 'month', label: 'This month' }, { value: 'lastmonth', label: 'Last month' }, { value: 'week', label: 'This week' }, ...days, { value: 'lastweek', label: 'Last week' }];
 }
 
 /** A week period's first and last day ([from, to]); null for any other key */
@@ -29,7 +29,7 @@ export function weekRange(key, today) {
   return null;
 }
 
-/** The label of a week period (undefined for another key) */
+/** The label of a usual period (undefined for another key) */
 export const weekLabel = (key, today) => weekPeriods(today).find(p => p.value === key)?.label;
 
 /** [from, to] for a period key: a week period, else n days back to today ('all' = everything) */
@@ -44,6 +44,6 @@ export function periodRange(key, today) {
 
 /** The period key whose dates are exactly [from, to] (a card's period sent in a link), or null */
 export function keyForRange(from, to, today) {
-  const keys = [...weekPeriods(today).map(p => p.value), 'month', 'lastmonth'];
+  const keys = weekPeriods(today).map(p => p.value);
   return keys.find(k => { const [a, b] = periodRange(k, today); return a === from && b === to; }) ?? null;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSessionPeriod } from '../lib/sessionPeriod';
 import { Link, useSearchParams } from 'react-router-dom';
 import { HardHat, Plus, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -41,7 +42,7 @@ const WORK_DAYS_DEFAULT = 26;
 // the period on the staff cards (2026-11-01): what each person earned by attendance
 const PERIODS = [['month', 'This month'], ['lastmonth', 'Last month'], ['lastquarter', 'Last quarter'], ['year', 'This year']];
 // casuals are paid by the week (Monday to Sunday), so their list opens on this week
-const CASUAL_PERIODS = [['week', 'This week'], ['lastweek', 'Last week'], ...PERIODS];
+const CASUAL_PERIODS = [PERIODS[0], PERIODS[1], ['week', 'This week'], ['lastweek', 'Last week'], ...PERIODS.slice(2)];
 function periodRange(key, today) {
   const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));   // m: 1–12
   const day = (yr, mo, d) => new Date(Date.UTC(yr, mo - 1, d)).toISOString().slice(0, 10);
@@ -107,8 +108,8 @@ export default function Staff() {
   }, [settings]);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const [employeePeriod, setEmployeePeriod] = useState('month');
-  const [casualPeriod, setCasualPeriod] = useState('week');
+  const [employeePeriod, setEmployeePeriod] = useSessionPeriod('staff-employees');
+  const [casualPeriod, setCasualPeriod] = useSessionPeriod('staff-casuals');   // this month first (2026-11-09)
   const isCasualTab = tab === 'casual';
   const period = isCasualTab ? casualPeriod : employeePeriod;
   const setPeriod = isCasualTab ? setCasualPeriod : setEmployeePeriod;

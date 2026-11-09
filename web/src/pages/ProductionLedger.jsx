@@ -12,6 +12,7 @@ import { SkeletonRow } from '../components/LoadingSpinner';
 import DaySummary from '../components/production/DaySummary';
 import { peopleOf, labourNorm } from '../components/production/BatchNotes';
 import { formatMoney, dateText, tableDate } from '../lib/format';
+import { useSessionPeriod } from '../lib/sessionPeriod';
 import { weekPeriods, weekRange, weekLabel } from '../lib/periods';
 
 const LOAD_ERROR = "We couldn't load the production ledger. Please try again.";
@@ -56,7 +57,7 @@ export default function ProductionLedger() {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [period, setPeriod] = useState('week');   // this week first (2026-11-03); its days, lastweek | month | lastmonth | quarter | year | 30 | 90 | all | custom
+  const [period, setPeriod] = useSessionPeriod('production-ledger');   // this month first (2026-11-09); its days, lastweek | month | lastmonth | quarter | year | 30 | 90 | all | custom
   const [from, setFrom] = useState(addDays(today, -30));
   const [to, setTo] = useState(today);
   const [stage, setStage] = useState('');
@@ -260,8 +261,6 @@ export default function ProductionLedger() {
         </div>}
         <select className="form-input" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
           {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          <option value="month">This month</option>
-          <option value="lastmonth">Last month</option>
           <option value="quarter">This quarter</option>
           <option value="year">This year</option>
           <option value="30">Last 30 days</option>
