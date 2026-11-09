@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRangePeriod } from '../lib/rangePeriod';
 import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,7 +53,8 @@ export default function CashFlow() {
   const [moves, setMoves] = useState(null);
   const [error, setError] = useState('');
   const [account, setAccount] = useState('');
-  const [range, setRange] = useState(() => [`${today.slice(0, 7)}-01`, today]);
+  const rp = useRangePeriod('cash-flow', today);   // the agreed period bar (2026-11-09)
+  const range = [rp.from, rp.to];
   const [by, setBy] = useState('month');
   const [settings, setSettings] = useState(false);
 
@@ -85,7 +87,7 @@ export default function CashFlow() {
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div>
       : accounts === null ? <div className="card"><span className="skeleton" /></div>
       : tab === 'accounts' ? (
-        <AccountsTab {...{ accs, mv, balanceOf, unassigned, unassignedNet, account, setAccount, range, setRange, today, money, short, cashNow, branchId }} />
+        <AccountsTab {...{ accs, mv, balanceOf, unassigned, unassignedNet, account, setAccount, range, rp, today, money, short, cashNow, branchId }} />
       ) : tab === 'monthly' ? (
         <MonthlyTab {...{ accs, mv, by, setBy, today, money, short }} />
       ) : (
@@ -96,7 +98,7 @@ export default function CashFlow() {
   );
 }
 
-function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, setAccount, range, setRange, today, money, short, cashNow, branchId }) {
+function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, setAccount, range, rp, today, money, short, cashNow, branchId }) {
   const [from, to] = range;
   const shown = mv.filter(x => x.day >= from && x.day <= to && (!account || (account === NO_ACCOUNT ? !x.account_id || !accs.some(a => a.id === x.account_id) : x.account_id === account)));
   const sel = accs.find(a => a.id === account);
@@ -138,14 +140,10 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
         {accs.length === 0 && <p className="pl-help">No payment accounts{branchId ? ' at this branch' : ''} — they're added under Sales ⚙.</p>}
       </div>
       <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="From" max={to} value={from} onChange={e => setRange([e.target.value || from, to])} />
-        <span className="pl-help">to</span>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="To" min={from} max={today} value={to} onChange={e => setRange([from, e.target.value || to])} />
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRange([`${today.slice(0, 7)}-01`, today])}>This month</button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRange(lastMonth(today))}>Last month</button>
         <span className="pl-help">{sel ? `${sel.name} · click again for all` : 'Click an account to filter'}</span>
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!shown.length} onClick={xl}><Download size={14} /> Excel</button>
       </div>
+      {rp.bar()}
       <div className="card"><div className="table-container">
         <table>
           <thead><tr><th>Date</th><th>Account</th><th>What</th><th>Reference</th><th className="num">In (TZS)</th><th className="num">Out (TZS)</th>{running && <th className="num">Balance (TZS)</th>}</tr></thead>

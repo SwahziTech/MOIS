@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { StepBar } from '../PeriodBar';
 import { Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatAmount, formatMoneyShort } from '../../lib/format';
@@ -78,9 +79,7 @@ export default function StatutoryReturns({ staff, today, currency, inBranch }) {
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ maxWidth: 200 }} aria-label="Month" value={month} onChange={e => setMonth(e.target.value)}>
-          {months.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
-        </select>
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
         <PageTabs nested tabs={[['paye', 'PAYE'], ['nssf', 'NSSF'], ['sdl', 'SDL & WCF']]} value={view} onChange={setView} />
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!people.length} onClick={exportExcel}><Download size={14} /> Excel</button>
         <span className="pl-help" title="From the pay sheets paid in the month. Check the figures before filing; the rates are the ones confirmed under ⚙.">Pay sheets paid in {monthName(month)}</span>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { StepBar } from '../PeriodBar';
 import { Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatAmount, formatMoneyShort, dateText } from '../../lib/format';
@@ -106,9 +107,7 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
       </div>
       <ListToolbar id="payroll-search" search={search} onSearch={setSearch} placeholder="Search name…" />
       <div className="flex items-center gap-8" style={{ margin: '0 0 12px', flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ maxWidth: 260 }} aria-label="Month" value={month} onChange={e => setMonth(e.target.value)}>
-          {months.map(m => <option key={m} value={m}>{monthName(m)}{m === today.slice(0, 7) ? ' (this month)' : ''}</option>)}
-        </select>
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
         <span style={{ marginLeft: 'auto' }} className="flex items-center gap-8" >
           {sheetsHere.map(s => (
             <button key={s.id} type="button" className="btn btn-outline btn-sm" title="Approve, pay or void this payment" onClick={() => setOpenId(s.id)}>

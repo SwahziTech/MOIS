@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useRangePeriod } from '../lib/rangePeriod';
 import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -37,8 +38,9 @@ export default function Reports() {
   // the tab and dates can come in the link (?tab=, ?from=&to=): a dashboard card opens its own report
   const [tab, setTab] = useUrlTab('production');
   const [nested, setNested] = useState('a');
-  const [range, setRange] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get('from') && q.get('to') ? [q.get('from'), q.get('to')] : [mondayOf(today), today]; });   // this week first (2026-11-03)
-  const [from, to] = range;
+  // the agreed period bar (2026-11-09); a dashboard card's dates open as Dates…
+  const rp = useRangePeriod('reports', today, { start: (() => { const q = new URLSearchParams(window.location.search); return q.get('from') && q.get('to') ? [q.get('from'), q.get('to')] : null; })() });
+  const { from, to } = rp;
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }: a tab's data, never shown under another tab
   const [error, setError] = useState('');
@@ -62,15 +64,6 @@ export default function Reports() {
 
   const where = branchId ? branchName : 'all branches';
   const title = `${TABS.find(t => t[0] === tab)[1]} — ${where}, ${from} to ${to}`;
-  const presets = [
-    ['This week', [mondayOf(today), today]],
-    ['Today', [today, today]],
-    ...(today !== mondayOf(today) ? [['Yesterday', [addDays(today, -1), addDays(today, -1)]]] : []),
-    ['Last week', [addDays(mondayOf(today), -7), addDays(mondayOf(today), -1)]],
-    ['This month', [`${today.slice(0, 7)}-01`, today]],
-    ['Last month', [prevMonthStart(today), monthEnd(prevMonthStart(today))]],
-    ['This year', [`${today.slice(0, 4)}-01-01`, today]],
-  ];
   const card = (label, figure, note, title2) => (
     <div className="mm-stat"><span className="pl-label">{label}</span><strong>{figure}</strong><span className="pl-help" title={title2}>{note}</span></div>
   );
@@ -171,12 +164,9 @@ export default function Reports() {
         <>
           <div className="mm-stats">{cards || <>{card('…', '…', '')}{card('…', '…', '')}{card('…', '…', '')}</>}</div>
           <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
-            <input type="date" className="form-input" style={{ width: 160 }} aria-label="From" max={to} value={from} onChange={e => setRange([e.target.value || from, to])} />
-            <span className="pl-help">to</span>
-            <input type="date" className="form-input" style={{ width: 160 }} aria-label="To" min={from} max={today} value={to} onChange={e => setRange([from, e.target.value || to])} />
-            {presets.map(([l, r]) => <button key={l} type="button" className={`btn btn-sm ${r[0] === from && r[1] === to ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setRange(r)}>{l}</button>)}
             <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!xl} onClick={() => xl?.()}><Download size={14} /> Excel</button>
           </div>
+          {rp.bar()}
           {nestedTabs && <div style={{ marginBottom: 8 }}><PageTabs nested tabs={nestedTabs} value={nested} onChange={setNested} /></div>}
           <div className="card"><div className="table-container">
             <table>

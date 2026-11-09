@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { StepBar } from '../components/PeriodBar';
 import { weekRange, weekLabel } from '../lib/periods';
 import PeriodBar from '../components/PeriodBar';
 import { useSessionPeriod } from '../lib/sessionPeriod';
@@ -548,10 +549,10 @@ function PayrollSheet({ kind, staff, today, money, currency, canRecord, canAppro
       </div>
       <ListToolbar id="payroll-search" search={search} onSearch={setSearch} placeholder="Search name…" />
       <div className="flex items-center gap-8" style={{ margin: '0 0 12px', flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ maxWidth: 320 }} aria-label="Pay period" value={sheet?.id ?? ''} onChange={e => setPicked(e.target.value)}>
-          {here.length === 0 && <option value="">No pay periods yet</option>}
-          {here.map(s => <option key={s.id} value={s.id}>{label(s)}</option>)}
-        </select>
+        {here.length === 0 ? <span className="pl-help">No pay periods yet</span> : (
+          <StepBar nowLabel="Latest" value={sheet?.id ?? ''} onChange={setPicked}
+            options={here.map(s => ({ value: s.id, label: s.period_start <= today && today <= s.period_end ? 'This week' : s.cycle === 'weekly' ? 'Week' : 'Pay period', note: `${dateText(s.period_start)} – ${dateText(s.period_end)} · ${STATUS[s.status]}` }))} />
+        )}
         {sheet && <span className={`badge ${STATUS_BADGE[sheet.status]}`}>{STATUS[sheet.status]}</span>}
         {sheet?.status === 'draft' && sheet.rates_unverified?.length > 0 && <span className="pl-help text-warning">rates to verify</span>}
         <span style={{ marginLeft: 'auto' }} className="flex items-center gap-8">

@@ -38,6 +38,8 @@ export function periodRange(key, today) {
   if (wk) return wk;
   if (key === 'all') return ['0000-01-01', '9999-12-31'];
   if (key === 'month') return [`${today.slice(0, 7)}-01`, today];
+  if (key === 'quarter') { const m = Number(today.slice(5, 7)); const q = Math.floor((m - 1) / 3) * 3 + 1; return [`${today.slice(0, 4)}-${String(q).padStart(2, '0')}-01`, today]; }
+  if (key === 'year') return [`${today.slice(0, 4)}-01-01`, today];
   if (key === 'lastmonth') { const first = `${today.slice(0, 7)}-01`; return [`${shift(first, -1).slice(0, 7)}-01`, shift(first, -1)]; }
   return [shift(today, -Number(key)), today];
 }

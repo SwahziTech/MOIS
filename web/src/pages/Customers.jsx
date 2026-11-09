@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRangePeriod } from '../lib/rangePeriod';
 import { Users, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
@@ -138,8 +139,8 @@ export default function Customers() {
 
 /* A customer: details, history (orders and invoices with what is paid), and their statement */
 function CustomerView({ customer, sales, stats, money, today, canEdit, onEdit, onClose }) {
-  const [from, setFrom] = useState(() => { const d = new Date(`${today}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 3); return d.toISOString().slice(0, 10); });
-  const [to, setTo] = useState(today);
+  const rp = useRangePeriod('customer-statement', today);   // the agreed period bar (2026-11-09)
+  const { from, to } = rp;
   const history = [...sales].sort((a, b) => (owedSince(a) < owedSince(b) ? 1 : -1));
   const st = statementLines(sales, null, today);
   const paidOf = s => (s.payments || []).reduce((t, p) => t + Number(p.amount), 0);
@@ -159,10 +160,9 @@ function CustomerView({ customer, sales, stats, money, today, canEdit, onEdit, o
 
       <h3 className="modal-section-title">Statement of account</h3>
       <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
-        <label className="pe-field"><span>From</span><input type="date" className="form-input" max={to} value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label className="pe-field"><span>To</span><input type="date" className="form-input" max={today} value={to} onChange={e => setTo(e.target.value)} /></label>
-        <button type="button" className="btn btn-outline btn-sm" style={{ alignSelf: 'flex-end' }} onClick={openStatement}><FileText size={14} /> Statement</button>
+        <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={openStatement}><FileText size={14} /> Statement</button>
       </div>
+      {rp.bar()}
 
       <h3 className="modal-section-title">History</h3>
       <div className="table-container">

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRangePeriod } from '../lib/rangePeriod';
 import { Printer, Boxes, DollarSign, CalendarCheck, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -22,20 +23,16 @@ export default function PrintLists() {
   const { can, organization } = useAuth();
   const { branchId, branchName } = useBranch();
   const today = orgToday(organization?.timezone);
-  const [range, setRange] = useState([`${today.slice(0, 7)}-01`, today]);
-  const [from, to] = range;
+  const rp = useRangePeriod('print-lists', today);   // the agreed period bar (2026-11-09)
+  const { from, to } = rp;
   const lists = LISTS.filter(l => can(l.perm));
   const open = l => window.open(`/print/list/${l.kind}?branch=${branchId}${l.dated ? `&from=${from}&to=${to}` : ''}`, '_blank', 'noopener');
 
   return (
     <PageShell title="Print lists" subtitle="Document Center"
       description={branchId ? branchName : 'Pick a branch in the sidebar'}>
-      <div className="flex items-center gap-8" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
-        <span className="pl-label">Period for dated lists</span>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="From" max={to} value={from} onChange={e => setRange([e.target.value || from, to])} />
-        <span className="pl-help">to</span>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="To" min={from} max={today} value={to} onChange={e => setRange([from, e.target.value || to])} />
-      </div>
+      <span className="pl-label">Period for dated lists</span>
+      {rp.bar()}
       <div className="pls-grid">
         {lists.map(l => (
           <div key={l.kind} className="card pls-card">

@@ -2712,3 +2712,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .pp-shared-table .num { text-align: right; }
 .pp-shared-table tfoot td { border-bottom: 0; }
 .wc-locked td { background: var(--bg-soft); }
+.period-custom { display: flex; align-items: center; gap: 8px; margin: -4px 0 10px; flex-wrap: wrap; }
+.period-custom .form-input { width: 160px; }

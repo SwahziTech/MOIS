@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { StepBar } from '../components/PeriodBar';
+import { useRangePeriod } from '../lib/rangePeriod';
 import { Download, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -89,9 +91,7 @@ function ProfitLoss({ today, money, short, inBranch, branchId, where }) {
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <select className="form-input" style={{ maxWidth: 200 }} aria-label="Month" value={month} onChange={e => setMonth(e.target.value)}>
-          {months.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
-        </select>
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!d} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       {error ? <div className="card"><ErrorState message={error} /></div> : !d ? <div className="card"><span className="skeleton" /></div> : (
@@ -165,7 +165,8 @@ function AccountStatement({ today, money, short, inBranch, where }) {
   const [moves, setMoves] = useState([]);
   const [error, setError] = useState('');
   const [account, setAccount] = useState('');
-  const [range, setRange] = useState([`${today.slice(0, 7)}-01`, today]);
+  const rp = useRangePeriod('statements-account', today);   // the agreed period bar (2026-11-09)
+  const range = [rp.from, rp.to];
   useEffect(() => {
     (async () => {
       const [a, m] = await Promise.all([
@@ -205,11 +206,9 @@ function AccountStatement({ today, money, short, inBranch, where }) {
         <select className="form-input" style={{ maxWidth: 220 }} aria-label="Account" value={sel.id} onChange={e => setAccount(e.target.value)}>
           {accs.map(a => <option key={a.id} value={a.id}>{a.name}{a.status !== 'active' ? ' (inactive)' : ''}</option>)}
         </select>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="From" max={to} value={from} onChange={e => setRange([e.target.value || from, to])} />
-        <span className="pl-help">to</span>
-        <input type="date" className="form-input" style={{ width: 160 }} aria-label="To" min={from} max={today} value={to} onChange={e => setRange([from, e.target.value || to])} />
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={xl}><Download size={14} /> Excel</button>
       </div>
+      {rp.bar()}
       <div className="card"><div className="table-container">
         <table>
           <thead><tr><th>Date</th><th>What</th><th>Reference</th><th className="num">In (TZS)</th><th className="num">Out (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
