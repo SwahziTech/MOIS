@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import PeriodBar from '../PeriodBar';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { qtyText, orgToday } from '../../lib/inventory';
@@ -82,10 +83,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
         {mode !== 'purchases' && GROUPS.map(([k, l]) => (
           counts[k] > 0 || k === 'all' ? <button key={k} type="button" className={`filter-chip${group === k ? ' is-on' : ''}`} onClick={() => setGroup(k)}>{l} {counts[k] ? `(${counts[k]})` : ''}</button> : null
         ))}
-        <select className="form-input ih-select" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          {PERIODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
+        <PeriodBar value={period} onChange={setPeriod} today={today} extra={PERIODS} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewestFirst(v => !v)}>{newestFirst ? 'Newest first' : 'Oldest first'} ⇅</button>
       </div>
       {rows === null ? <span className="skeleton" /> : ordered.length === 0 ? <p className="pl-help">Nothing in this view.</p> : (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import PeriodBar from '../components/PeriodBar';
 import { Receipt, Plus, Trash2, Printer, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
@@ -1210,11 +1211,7 @@ function SalesOverview({ sales, refs, customers, money, currency, today, buyerOf
           <span className="pl-help" title={delivered.est > 0.5 ? `${money(delivered.est)} of the cost is estimated (stock with no production cost)` : undefined}>margin {formatMoneyShort(delivered.ex - delivered.cost, currency)}{pct(delivered.ex - delivered.cost, delivered.ex)}{delivered.est > 0.5 ? ' · est.' : ''}</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
-        <select className="form-input" style={{ width: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option>
-        </select>
-        <span className="pl-help">By date of sale, payment and delivery.</span>
+        <PeriodBar value={period} onChange={setPeriod} today={today} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['all', 'All time']]} />
       </div>
       {queued.length > 0 && <p className="pl-help" style={{ margin: '0 0 8px' }}>{queued.length} quotation{queued.length === 1 ? '' : 's'} not ordered · {money(sum(queued, x => Number(x.total)))}</p>}
       <div className="so-grid">
@@ -1328,8 +1325,6 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
       <ListToolbar id="book-search" search={search} onSearch={setSearch} placeholder="Search customer, item, site, receipt no., account, phone or #…"
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
-          { key: 'period', label: 'Period', value: period, onChange: setPeriod,
-            options: [...(urlRange ? [{ value: 'range', label: params.get('label') || 'Chosen period' }] : []), ...weekPeriods(today), { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'all', label: 'All time' }] },
           { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
             options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
@@ -1340,7 +1335,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
             options: [{ value: '', label: 'All' }, { value: 'with', label: 'With VAT' }, { value: 'without', label: 'Without VAT' }] },
         ]} />
       <div className="sb-under-bar">
-      <p className="pl-help" style={{ margin: '0 0 8px' }}>{weekLabel(period, today) ?? (period === 'range' ? `${params.get('label') || 'Chosen period'} (${tableDate(from)}${to !== from ? ` – ${tableDate(to)}` : ''})` : null) ?? { month: 'This month', 30: 'Last 30 days', 90: 'Last 90 days', all: 'All time' }[period]}</p>
+      <PeriodBar value={period} onChange={setPeriod} today={today} range={[from, to]} sentLabel={params.get('label') || 'Chosen period'} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['all', 'All time']]} />
       </div>
       <div className="card"><div className="table-container">
         <table className="sb-table">

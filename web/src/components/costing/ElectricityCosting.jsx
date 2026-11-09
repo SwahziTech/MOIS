@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import PeriodBar from '../PeriodBar';
 import { Link } from 'react-router-dom';
 import { Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -99,10 +100,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
       {tabs}
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <PageTabs nested tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
-        <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
-        </select>
+        <PeriodBar value={period} onChange={setPeriod} today={today} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['365', 'Last 12 months']]} />
         <Link to="/purchases?tab=electricity" className="btn btn-ghost btn-sm">Readings & tokens ›</Link>
       </div>
       <div className="card"><div className="table-container">

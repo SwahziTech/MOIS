@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PeriodBar from './PeriodBar';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { useSessionPeriod } from '../lib/sessionPeriod';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
@@ -24,14 +25,9 @@ export function usePeriod(today, fallback = 'month') {
 }
 
 /** extra: [[key, label]] after the usual periods (keys periodRange knows: month, lastmonth, 30, 90, all) */
-export default function PeriodSelect({ period, today, extra = [], style }) {
-  return (
-    <select className="form-input period-select" aria-label="Period" style={style} value={period.key} onChange={e => period.setKey(e.target.value)}>
-      {period.url && <option value="range">{period.url.label}</option>}
-      {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-      {extra.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-    </select>
-  );
+export default function PeriodSelect({ period, today, extra = [] }) {
+  // the standard period bar (LOCKED 2026-11-09)
+  return <PeriodBar value={period.key} onChange={period.setKey} today={today} extra={extra} range={[period.from, period.to]} sentLabel={period.url?.label} />;
 }
 
 export const periodText = (period, today, extra = []) => weekLabel(period.key, today)

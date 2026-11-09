@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import PeriodBar from '../PeriodBar';
 import { Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -83,10 +84,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
         <div className="mm-stat"><span className="pl-label">In store at cost</span><strong>{money(r2(stockTotal))}</strong><span className="pl-help">oldest stock first</span></div>
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8 }}>
-        <select className="form-input" style={{ width: 150, marginLeft: 'auto' }} aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          <option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
-        </select>
+        <PeriodBar value={period} onChange={setPeriod} today={today} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['365', 'Last 12 months']]} />
       </div>
       {rows.length === 0 ? <div className="card"><EmptyState icon={Layers} title="Nothing used in this period" description="Materials taken by production batches show here, with their cost." /></div> : (
         <div className="card"><div className="table-container">

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { weekRange, weekLabel } from '../lib/periods';
+import PeriodBar from '../components/PeriodBar';
 import { useSessionPeriod } from '../lib/sessionPeriod';
 import { Link, useSearchParams } from 'react-router-dom';
 import { HardHat, Plus, Printer, RefreshCw } from 'lucide-react';
@@ -46,6 +48,7 @@ const CASUAL_PERIODS = [PERIODS[0], PERIODS[1], ['week', 'This week'], ['lastwee
 function periodRange(key, today) {
   const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));   // m: 1–12
   const day = (yr, mo, d) => new Date(Date.UTC(yr, mo - 1, d)).toISOString().slice(0, 10);
+  const wk = weekRange(key, today); if (wk) return wk;   // this week, its days, last week (2026-11-09)
   if (key === 'week') return [mondayOf(today), today];
   if (key === 'lastweek') { const mon = addDays(mondayOf(today), -7); return [mon, addDays(mon, 6)]; }
   if (key === 'lastmonth') return [day(y, m - 1, 1), day(y, m, 0)];
@@ -115,7 +118,7 @@ export default function Staff() {
   const setPeriod = isCasualTab ? setCasualPeriod : setEmployeePeriod;
   const periodOptions = isCasualTab ? CASUAL_PERIODS : PERIODS;
   const [periodFrom, periodTo] = periodRange(period, today);
-  const periodLabel = periodOptions.find(p => p[0] === period)[1];
+  const periodLabel = periodOptions.find(p => p[0] === period)?.[1] ?? weekLabel(period, today) ?? '';
   const periodWord = periodLabel.toLowerCase();
   // the day boxes follow the period (2026-11-01). Employees: this week's days inside this month, never another month's.
   // Casuals, paid by the week: the chosen week, Monday to Saturday, then the rest day. A longer period shows its total only.
@@ -219,11 +222,9 @@ export default function Staff() {
                 <span className="pl-help">{noPay ? 'double-click to set' : 'everyone has pay'}</span></div>
             </div>
           )}
-          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…">
-            <select className="form-input list-period" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-              {periodOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </ListToolbar>
+          <ListToolbar id="staff-search" search={search} onSearch={setSearch} placeholder="Search name, job or phone…" />
+          <PeriodBar value={period} onChange={setPeriod} today={today} range={periodRange(period, today)}
+            extra={periodOptions.filter(([k]) => !['month', 'lastmonth', 'week', 'lastweek'].includes(k))} />
           <section className="sk">
             <div className="sk-head"><span>{tab === 'employed' ? 'Employees' : 'Casual labourers'} ({working.length} working)</span><span className="pl-help">{periodLabel} · {periodNote(period, today)}</span></div>
             {staff === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)

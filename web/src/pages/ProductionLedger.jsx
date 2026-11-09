@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import PeriodBar from '../components/PeriodBar';
 import { BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -259,15 +260,8 @@ export default function ProductionLedger() {
           <button type="button" className={`filter-chip${view === 'days' ? ' is-on' : ''}`} onClick={() => setView('days')}>Days</button>
           <button type="button" className={`filter-chip${view === 'tracking' ? ' is-on' : ''}`} disabled={!track} title={track ? '' : 'Production tracking is not set up yet'} onClick={() => setView('tracking')}>Tracking</button>
         </div>}
-        <select className="form-input" aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)}>
-          {weekPeriods(today).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          <option value="quarter">This quarter</option>
-          <option value="year">This year</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="all">All time</option>
-          <option value="custom">Dates…</option>
-        </select>
+        <PeriodBar value={period} onChange={setPeriod} today={today} range={periodBounds(period, today, from, to).map(x => (x === '9999' ? today : x))}
+          extra={[['quarter', 'This quarter'], ['year', 'This year'], ['30', 'Last 30 days'], ['90', 'Last 90 days'], ['all', 'All time'], ['custom', 'Dates…']]} />
         {period === 'custom' && (
           <>
             <input type="date" className="form-input" aria-label="From" max={to} value={from} onChange={e => setFrom(e.target.value)} />

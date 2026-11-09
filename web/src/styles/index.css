@@ -2689,3 +2689,5 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .sb-proof-btn { margin-bottom: 8px; }
 .sl-day-proof { align-self: auto; }
 .db-section { font-size: var(--text-md, 1rem); font-weight: 600; margin: 22px 0 10px; color: var(--text-secondary); }
+/* the standard period bar on every page (LOCKED 2026-11-09) */
+.period-bar { flex: 1 1 100%; width: 100%; margin: 4px 0 10px; }
