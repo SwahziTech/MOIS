@@ -3,7 +3,7 @@ import { weekRange, weekLabel } from '../lib/periods';
 import PeriodBar from '../components/PeriodBar';
 import { useSessionPeriod } from '../lib/sessionPeriod';
 import { Link, useSearchParams } from 'react-router-dom';
-import { HardHat, Plus, Printer, RefreshCw } from 'lucide-react';
+import { HardHat, Plus, Printer, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
@@ -276,7 +276,7 @@ export default function Staff() {
           </section>
         </>
       ) : (
-        <AttendanceWeek restDay={restDay} staff={here.filter(s => s.status === 'active' && (tab === 'attendance' ? s.kind === 'employed' : s.kind !== 'employed'))} branchId={branchId} today={today} canRecord={canRecord} />
+        <AttendanceWeek key={tab} defaultMode={tab === 'attendance' ? 'month' : 'week'} restDay={restDay} staff={here.filter(s => s.status === 'active' && (tab === 'attendance' ? s.kind === 'employed' : s.kind !== 'employed'))} branchId={branchId} today={today} canRecord={canRecord} />
       )}
 
       {viewing && (
@@ -396,27 +396,35 @@ function StaffModal({ person, kind: newKind, organizationId, branchId, onClose, 
 }
 
 /* A week of attendance: click a day to cycle — worked a full day, half a day, not there */
-function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
+/* Week or month (2026-11-09, the user): casuals open on this week, employees on this month; the bar is the standard
+   period bar's look — ‹ › arrows, the name and its dates, a button back to now, Week | Month on the right */
+function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMode = 'week' }) {
   // opened from a person's card: their week (?week=), only them (?person=)
   const [params] = useSearchParams();
   const asked = params.get('week');
   const [monday, setMonday] = useState(() => (asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? mondayOf(asked) : mondayOf(today)));
+  const [mode, setMode] = useState(asked ? 'week' : defaultMode);
+  const [monthStart, setMonthStart] = useState(`${today.slice(0, 7)}-01`);
+  const monthDays = (() => { const [y, m] = monthStart.split('-').map(Number); const n = new Date(Date.UTC(y, m, 0)).getUTCDate(); return Array.from({ length: n }, (_, i) => addDays(monthStart, i)); })();
+  const shiftMonth = k => { const [y, m] = monthStart.split('-').map(Number); setMonthStart(new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 10)); };
   const onePerson = staff.find(x => x.id === params.get('person'));
   const listed = onePerson ? [onePerson] : staff;
   const [marks, setMarks] = useState(null);       // `${staff_id}|${date}` → day_fraction
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const sunday = days[6];
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const days = mode === 'month' ? monthDays : weekDays;
+  const sunday = weekDays[6];
+  const first = days[0], last = days[days.length - 1];
 
   async function load() {
     setError('');
     const { data, error: err } = await supabase.from('staff_attendance').select('staff_id, work_date, day_fraction')
-      .gte('work_date', monday).lte('work_date', sunday);
+      .gte('work_date', first).lte('work_date', last);
     if (err) { console.error(err); setError("We couldn't load attendance."); return; }
     setMarks(Object.fromEntries((data || []).map(a => [`${a.staff_id}|${a.work_date}`, Number(a.day_fraction)])));
   }
-  useEffect(() => { load(); }, [monday]);
+  useEffect(() => { load(); }, [first, last]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function mark(staffId, date, fraction) {
     setBusy(`${staffId}|${date}`); setError('');
@@ -442,30 +450,44 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay }) {
   const totalOf = id => days.reduce((t, d) => t + (isRest(d) ? 0 : marks?.[`${id}|${d}`] || 0), 0);
   return (
     <>
-      <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <button type="button" className="btn btn-outline btn-sm" onClick={() => setMonday(addDays(monday, -7))}>‹ Week before</button>
-        <strong>{monday} – {sunday}</strong>
-        <button type="button" className="btn btn-outline btn-sm" disabled={addDays(monday, 7) > today} onClick={() => setMonday(addDays(monday, 7))}>Week after ›</button>
-        <span className="pl-help" style={{ marginLeft: 'auto' }}>{canRecord ? 'Click a day: ✓ full day → ½ half day → empty.' : branchId ? 'You can see attendance here.' : 'Choose a branch to mark attendance.'}</span>
-      </div>
+      {(() => {
+        const thisMon = mondayOf(today), thisMonth = `${today.slice(0, 7)}-01`;
+        const isWeek = mode === 'week';
+        const name = isWeek ? (monday === thisMon ? 'This week' : monday === addDays(thisMon, -7) ? 'Last week' : 'Week')
+          : (monthStart === thisMonth ? 'This month' : new Date(`${monthStart}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+        const atNow = isWeek ? monday === thisMon : monthStart === thisMonth;
+        return (
+          <div className="dd-period period-bar">
+            <button type="button" className="dd-step" aria-label="Earlier" onClick={() => (isWeek ? setMonday(addDays(monday, -7)) : shiftMonth(-1))}><ChevronLeft size={18} /></button>
+            <button type="button" className="dd-step" aria-label="Later" disabled={atNow} onClick={() => (isWeek ? setMonday(addDays(monday, 7)) : shiftMonth(1))}><ChevronRight size={18} /></button>
+            <span><strong>{name}</strong> · {dateText(first)} – {dateText(last)}</span>
+            {!atNow && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => (isWeek ? setMonday(thisMon) : setMonthStart(thisMonth))}>{isWeek ? 'This week' : 'This month'}</button>}
+            <div className="filter-chips" role="group" aria-label="Week or month">
+              <button type="button" className={`filter-chip${isWeek ? ' is-on' : ''}`} onClick={() => setMode('week')}>Week</button>
+              <button type="button" className={`filter-chip${!isWeek ? ' is-on' : ''}`} onClick={() => setMode('month')}>Month</button>
+            </div>
+          </div>
+        );
+      })()}
+      <p className="pl-help" style={{ margin: '0 0 8px' }}>{canRecord ? 'Click a day: ✓ full day → ½ half day → empty.' : branchId ? 'You can see attendance here.' : 'Choose a branch to mark attendance.'}</p>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {onePerson && <p className="pl-help" style={{ marginBottom: 8 }}>Only {onePerson.full_name}. <Link to={`/staff?tab=${params.get('tab')}`}>Show everyone</Link></p>}
       <div className="card"><div className="table-container">
-        <table className="at-table">
+        <table className={`at-table${mode === 'month' ? ' at-month' : ''}`}>
           <thead><tr><th>Name</th>{days.map(d => (
-            <th key={d} className="at-day">{dayName(d)}
-              {isRest(d) && <span className="at-rest">overtime</span>}
-              {canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
+            <th key={d} className={`at-day${isRest(d) ? ' is-rest-col' : ''}`}>{mode === 'month' ? <>{Number(d.slice(8))}<span className="at-wd">{new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'narrow', timeZone: 'UTC' })}</span></> : dayName(d)}
+              {mode === 'week' && isRest(d) && <span className="at-rest">overtime</span>}
+              {mode === 'week' && canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
             </th>))}<th className="num">Days</th></tr></thead>
           <tbody>
-            {listed.length === 0 ? <tr><td colSpan={9} className="text-muted">No one here yet — add them under Personnel.</td></tr>
+            {listed.length === 0 ? <tr><td colSpan={days.length + 2} className="text-muted">No one here yet — add them under Personnel.</td></tr>
             : [...listed].sort((a, b) => (a.kind === b.kind ? a.full_name.localeCompare(b.full_name) : a.kind === 'casual' ? -1 : 1)).map(s => (
               <tr key={s.id}>
                 <td><strong>{s.full_name}</strong><div className="pl-help">{s.kind ? KIND[s.kind] : ''}{s.job_title ? ` · ${s.job_title}` : ''}</div></td>
                 {days.map(d => {
                   const v = marks?.[`${s.id}|${d}`]; const k = `${s.id}|${d}`;
                   return (
-                    <td key={d} className="at-cell">
+                    <td key={d} className={`at-cell${isRest(d) ? ' is-rest-col' : ''}`}>
                       <button type="button" className={`at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}`} disabled={!canRecord || d > today || busy === k || marks === null}
                         onClick={() => mark(s.id, d, next(v))} aria-label={`${s.full_name} ${d}`}>{v === 1 ? '✓' : v === 0.5 ? '½' : ''}</button>
                     </td>
