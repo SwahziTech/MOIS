@@ -80,7 +80,7 @@ async function loadNeeds({ inBranch, today }) {
   const [ch, cr, ps, pr, pp] = await Promise.all([
     supabase.from('pending_changes').select('branch_id').eq('status', 'pending'),
     supabase.from('cash_requests').select('branch_id').eq('status', 'with_directors'),
-    supabase.from('pay_sheets').select('branch_id, status, period_end').in('status', ['draft', 'approved']),
+    supabase.from('pay_sheets').select('branch_id, status, period_end, cycle').in('status', ['draft', 'approved']).neq('cycle', 'weekly'),   // casuals' sheets are the BM's (115)
     supabase.from('purchase_requests').select('branch_id').eq('status', 'waiting'),
     // proofs of payment waiting for a director (105)
     supabase.from('sale_payment_proofs').select('branch_id').eq('status', 'waiting'),

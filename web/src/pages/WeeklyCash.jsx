@@ -161,7 +161,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
   const [notes, setNotes] = useState(request?.notes ?? '');
   const [source, setSource] = useState(request?.source ?? 'app');
   const [lines, setLines] = useState(() => (request?.lines?.length
-    ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.amount)), approved: l.approved_amount != null ? String(Number(l.approved_amount)) : '', categoryId: l.category_id ?? '' }))
+    ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.amount)), approved: l.approved_amount != null ? String(Number(l.approved_amount)) : '', categoryId: l.category_id ?? '', locked: !!l.pay_sheet_id }))
     : [{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }]));
   const [pay, setPay] = useState({ paid_on: today, amount: '', reference: '' });
   const [note, setNote] = useState('');
@@ -182,8 +182,9 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
   };
   async function save() {
     setError('');
-    const ls = lines.filter(l => l.description.trim() || num(l.amount) != null);
-    if (!ls.length) { setError('Add what is needed.'); return; }
+    // the casual wages line comes from the approved pay sheet and stays as it is (115)
+    const ls = lines.filter(l => !l.locked && (l.description.trim() || num(l.amount) != null));
+    if (!ls.length && !lines.some(l => l.locked)) { setError('Add what is needed.'); return; }
     if (ls.some(l => !l.description.trim() || num(l.amount) == null)) { setError('Each line needs what it is for and an amount.'); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
@@ -203,7 +204,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
       if (s.total != null && Math.abs(s.total - s.lines.reduce((t, l) => t + l.amount, 0)) > 0.5) setError(`Read ${s.lines.length} lines — their sum differs from the sheet's TOTAL (${formatAmount(s.total)}). Check before saving.`);
     } catch (e) { setError(e.message || 'That file could not be read.'); }
   }
-  const copyLast = () => prevLive && setLines([...prevLive.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.approved_amount ?? l.amount)), categoryId: l.category_id ?? '' })));
+  const copyLast = () => prevLive && setLines(cur => [...cur.filter(l => l.locked), ...[...prevLive.lines].filter(l => !l.pay_sheet_id).sort((a, b) => a.line_no - b.line_no).map(l => ({ description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.approved_amount ?? l.amount)), categoryId: l.category_id ?? '' }))]);
   const exportFile = () => writeWeeklySheet({
     fileName: `Weekly cash ${branchName} ${week}.xlsx`,
     summaryTitle: `SUMMARY YA MATUMIZI YA LAST WEEK ${longDate(addDays(week, -7))}`,
@@ -266,17 +267,17 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
           <thead><tr><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Amount (TZS)</th>{!isNew && st !== 'draft' && <th className="num">Approved (TZS)</th>}<th>Category</th><th /></tr></thead>
           <tbody>
             {lines.map((l, i) => (
-              <tr key={i}>
-                <td><input className="form-input" disabled={!editable} value={l.description} onChange={e => set(i, { description: e.target.value })} /></td>
-                <td className="num"><NumberInput step="any" className="form-input" style={{ width: 80 }} disabled={!editable} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /></td>
-                <td><input className="form-input" style={{ width: 70 }} disabled={!editable} value={l.unit} onChange={e => set(i, { unit: e.target.value })} /></td>
-                <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} disabled={!editable} value={l.amount} onChange={e => set(i, { amount: e.target.value })} /></td>
+              <tr key={i} className={l.locked ? 'wc-locked' : ''} title={l.locked ? "From the casuals' approved pay sheet — it changes with the sheet" : undefined}>
+                <td><input className="form-input" disabled={!editable || l.locked} value={l.description} onChange={e => set(i, { description: e.target.value })} /></td>
+                <td className="num"><NumberInput step="any" className="form-input" style={{ width: 80 }} disabled={!editable || l.locked} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /></td>
+                <td><input className="form-input" style={{ width: 70 }} disabled={!editable || l.locked} value={l.unit} onChange={e => set(i, { unit: e.target.value })} /></td>
+                <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} disabled={!editable || l.locked} value={l.amount} onChange={e => set(i, { amount: e.target.value })} /></td>
                 {!isNew && st !== 'draft' && <td className="num">{st === 'with_directors' && canAt('cash.approve', branchId)
                   ? <NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} placeholder={l.amount} value={l.approved} onChange={e => set(i, { approved: e.target.value })} />
                   : formatAmount(num(l.approved) ?? num(l.amount))}</td>}
-                <td><select className="form-input" disabled={!editable} value={l.categoryId} onChange={e => set(i, { categoryId: e.target.value })}>
+                <td><select className="form-input" disabled={!editable || l.locked} value={l.categoryId} onChange={e => set(i, { categoryId: e.target.value })}>
                   <option value="">—</option>{data.cats.filter(c => c.status === 'active' || c.id === l.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
-                <td>{editable && lines.length > 1 && <button type="button" className="btn btn-ghost btn-sm" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={13} /></button>}</td>
+                <td>{editable && !l.locked && lines.length > 1 && <button type="button" className="btn btn-ghost btn-sm" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={13} /></button>}</td>
               </tr>
             ))}
           </tbody>

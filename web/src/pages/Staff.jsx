@@ -7,6 +7,7 @@ import { HardHat, Plus, Printer, RefreshCw, ChevronLeft, ChevronRight } from 'lu
 import { supabase } from '../lib/supabase';
 import { useUrlTab } from '../lib/urlTab';
 import { useAuth } from '../hooks/useAuth';
+import { primaryRole } from '../lib/menu';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney, formatAmount, formatMoneyShort, dateText } from '../lib/format';
 import { orgToday } from '../lib/inventory';
@@ -615,7 +616,8 @@ function PersonPay({ line: l, sheet, person, money, onClose }) {
   );
 }
 
-function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, onChanged }) {
+function SheetModal({ id, staff, money, today, canRecord: mayRecord, canApprove: mayApprove, onClose, onChanged }) {
+  const { userRoles } = useAuth();
   const [sheet, setSheet] = useState(null);
   const [lines, setLines] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -637,6 +639,10 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
   useEffect(() => { load(); }, [id]);
   const nameOf = sid => staff.find(s => s.id === sid)?.full_name ?? '';
   const draft = sheet?.status === 'draft';
+  // casuals' weekly sheets are the branch manager's: directors see them read-only (115, 2026-11-09)
+  const directorReadOnly = sheet?.cycle === 'weekly' && primaryRole(userRoles) === 'director';
+  const canRecord = mayRecord && !directorReadOnly;
+  const canApprove = mayApprove && !directorReadOnly;
   // a casuals' sheet: no allowance, overtime, NSSF, PAYE, first payment or advance columns (2026-11-04)
   const casual = lines.length ? lines.every(l => staff.find(p => p.id === l.staff_id)?.kind === 'casual') : sheet?.cycle === 'weekly';
   const run = async (fn, after) => {
@@ -677,6 +683,7 @@ function SheetModal({ id, staff, money, today, canRecord, canApprove, onClose, o
         {lines.length > 0 && <a className="btn btn-outline" href={`/print/payslips/${id}`} target="_blank" rel="noreferrer">Payslips</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
       <div className="modal-form">
+        {sheet.cycle === 'weekly' && sheet.status !== 'void' && <p className="pl-help">{directorReadOnly ? 'The branch manager handles this sheet.' : 'Approved, its total goes on the weekly cash request of ' + dateText(sheet.period_end) + '.'}</p>}
         <p className="text-sm">Status: <strong>{STATUS[sheet.status]}</strong>{sheet.paid_on ? ` on ${dateText(sheet.paid_on)} — net pay recorded as a Wages expense${sheet.statutory_expense_id ? ', PAYE/NSSF/WCF/SDL as a Statutory contributions expense (owed until remitted)' : ''}` : ''}{sheet.void_reason ? ` — ${sheet.void_reason}` : ''}</p>
         {draft && unverified.length > 0 && <div className="alert alert-warning">Rates to verify: {unverified.map(c => RATE_NAME[c]).join(', ')}. The Technical admin or a director checks them with TRA / NSSF / WCF and confirms them under ⚙ — then Refresh and approve.</div>}
         {missing.length > 0 && <div className="alert alert-warning">Pay not set for {missing.map(l => nameOf(l.staff_id)).join(', ')} — set it under Staff, then Refresh.</div>}
