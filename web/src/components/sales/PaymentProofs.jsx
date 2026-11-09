@@ -300,7 +300,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     setAsking(kind === 'query');
   };
   return (
-    <Modal title={`Payment proof · ${money(Number(payment.amount))}`} onClose={onClose}
+    <Modal title={`Payment proof · ${money(siblings.length ? siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)) : Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {saveUrl && <a href={saveUrl} className="btn btn-ghost" download onClick={saveMarked}>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
@@ -308,10 +308,10 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         {pen === 'green' && !stamp && <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !strokes.length} onClick={() => act('confirm')}>Sign as received</button>}
         {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy || (isPhoto && !strokes.length)} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
-        <p className="pl-help">Sale #{sale.sale_no} · {buyer} · paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
+        <p className="pl-help">{siblings.length ? '' : `Sale #${sale.sale_no} · ${buyer} · `}paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
         {siblings.length > 0 && (
           <div className="pp-shared" role="note">
-            <strong>One slip for {siblings.length + 1} sales · {money(siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)))}</strong>
+            <strong>One slip for {siblings.length + 1} sales</strong>
             <ul>
               <li>#{sale.sale_no} · {buyer} · {money(Number(payment.amount))}</li>
               {siblings.map(x => <li key={x.id}>#{x.payment.sale.sale_no} · {x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in'} · {money(Number(x.payment.amount))}{x.status === 'confirmed' ? ' · confirmed' : ''}</li>)}
