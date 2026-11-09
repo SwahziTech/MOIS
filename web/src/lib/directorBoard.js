@@ -91,7 +91,7 @@ async function loadNeeds({ inBranch, today }) {
     { key: 'cash', count: (cr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'weekly cash requests', to: '/weekly-cash' },
     { key: 'proofs', count: (pp.data || []).filter(x => inBranch(x.branch_id)).length, label: 'payments to confirm', to: '/approvals?tab=payments' },
     { key: 'approvals', count: (ch.data || []).filter(x => !x.branch_id || inBranch(x.branch_id)).length, label: 'approvals waiting', to: '/approvals' },
-    { key: 'pay-approve', count: pay.filter(x => x.status === 'draft' && x.period_end < today).length, label: 'pay sheets to approve', to: '/staff?tab=pay' },
+    // approving pay sheets is the branch's work, not the directors' (2026-11-09, the user)
     { key: 'pay-pay', count: pay.filter(x => x.status === 'approved').length, label: 'pay sheets to pay', to: '/staff?tab=pay' },
   ].filter(x => x.count > 0);
 }
