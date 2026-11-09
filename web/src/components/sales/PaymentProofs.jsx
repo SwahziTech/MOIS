@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
-import { formatMoney, dateText, tableDate } from '../../lib/format';
+import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
@@ -240,6 +240,13 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   }, [proof?.id, proof?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const [url, setUrl] = useState('');
   const [siblings, setSiblings] = useState([]);   // other sales the same slip covers
+  const [sharedLines, setSharedLines] = useState({});   // sale id → its items, for a shared slip
+  useEffect(() => {
+    if (!siblings.length) return;
+    const ids = [sale.id, ...siblings.map(x => x.payment.sale.id)].filter(Boolean);
+    supabase.from('sale_lines').select('sale_id, line_no, item_name, quantity, product:products(canonical_name)').in('sale_id', ids).order('line_no')
+      .then(({ data }) => { const m = {}; for (const l of data || []) (m[l.sale_id] ||= []).push(l); setSharedLines(m); });
+  }, [siblings]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadSlipSiblings(proof).then(setSiblings); }, [proof?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saveUrl, setSaveUrl] = useState('');   // the same file, as a download (kept on the device)
   const [note, setNote] = useState('');
@@ -312,10 +319,25 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         {siblings.length > 0 && (
           <div className="pp-shared" role="note">
             <strong>One slip for {siblings.length + 1} sales</strong>
-            <ul>
-              <li>#{sale.sale_no} · {buyer} · {money(Number(payment.amount))}</li>
-              {siblings.map(x => <li key={x.id}>#{x.payment.sale.sale_no} · {x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in'} · {money(Number(x.payment.amount))}{x.status === 'confirmed' ? ' · confirmed' : ''}</li>)}
-            </ul>
+            <table className="pp-shared-table">
+              <thead><tr><th>Name</th><th>Items</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></tr></thead>
+              <tbody>
+                {[{ key: 'me', no: sale.sale_no, id: sale.id, who: buyer, amount: Number(payment.amount), done: false },
+                  ...siblings.map(x => ({ key: x.id, no: x.payment.sale.sale_no, id: x.payment.sale.id, who: x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in', amount: Number(x.payment.amount), done: x.status === 'confirmed' }))]
+                  .sort((p, q) => p.no - q.no).map(r => {
+                    const ls = sharedLines[r.id] || [];
+                    return (
+                      <tr key={r.key}>
+                        <td><strong>{r.who}</strong><div className="pl-help">#{r.no}{r.done ? ' · confirmed' : ''}</div></td>
+                        <td>{ls.length ? ls.map(l => <div key={l.line_no}>{l.product?.canonical_name ?? l.item_name}</div>) : '…'}</td>
+                        <td className="num">{ls.map(l => <div key={l.line_no}>{l.product ? Number(l.quantity).toLocaleString('en-US') : '—'}</div>)}</td>
+                        <td className="num">{formatAmount(r.amount)}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+              <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{money(siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)))}</strong></td></tr></tfoot>
+            </table>
             <span className="pl-help">Your mark applies to all of them.</span>
           </div>
         )}

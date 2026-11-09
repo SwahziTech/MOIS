@@ -2706,3 +2706,8 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .ot-table .ot-edit td:first-child .form-input { width: 150px; }
 .ot-table .ot-edit .num .form-input { width: 120px; margin-left: auto; text-align: right; }
 .ot-table tr.ot-paid td:not(.ot-actions) { color: var(--text-secondary); }
+.pp-shared-table { width: 100%; margin: 6px 0; font-size: var(--text-sm); border-collapse: collapse; }
+.pp-shared-table th { text-align: left; font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.pp-shared-table td { padding: 5px 6px; vertical-align: top; border-bottom: 1px solid var(--border); }
+.pp-shared-table .num { text-align: right; }
+.pp-shared-table tfoot td { border-bottom: 0; }
