@@ -2697,3 +2697,12 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .at-month td.at-cell { padding: 3px 1px; }
 .at-month .at-mark { width: 24px; height: 24px; font-size: 12px; border-radius: 5px; }
 .at-month .is-rest-col { background: var(--bg-soft); }
+/* overtime, edited in place (2026-11-09) */
+.ot-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ot-table td { vertical-align: middle; }
+.ot-table .ot-actions { text-align: right; white-space: nowrap; }
+.ot-table .ot-actions > * { margin-left: 4px; vertical-align: middle; }
+.ot-table .ot-edit .form-input { height: 34px; min-width: 0; }
+.ot-table .ot-edit td:first-child .form-input { width: 150px; }
+.ot-table .ot-edit .num .form-input { width: 120px; margin-left: auto; text-align: right; }
+.ot-table tr.ot-paid td:not(.ot-actions) { color: var(--text-secondary); }
