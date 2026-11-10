@@ -172,8 +172,10 @@ export default function Sidebar() {
 
   // a top menu bar (2026-11-10, the user — a test, Technical admin only, kept on this device): sections across the top,
   // their pages dropping down on hover; phones keep their menu
-  const mayTop = can('system.manage');
-  const [mode, setModeRaw] = useState(() => { try { return localStorage.getItem('mois.menuMode') || 'side'; } catch { return 'side'; } });
+  // the top menu is everyone's standard on a computer (2026-11-10, the user: 'apply these view changes to all roles');
+  // anyone can still switch to the side menu on their device
+  const mayTop = true;
+  const [mode, setModeRaw] = useState(() => { try { return localStorage.getItem('mois.menuMode') || 'top'; } catch { return 'top'; } });
   const setMode = m => { setModeRaw(m); try { localStorage.setItem('mois.menuMode', m); } catch { /* storage off */ } };
   const top = mayTop && !phone && mode === 'top';
   useEffect(() => {

@@ -86,7 +86,8 @@ function RoleDashboard({ keys, role, arranged = false, isOwner, isSecretary = fa
   const sees = code => (canAnywhere ?? can)(code);
   // the tabs (2026-11-03 secretary, 11-09 branch manager, 11-10 Technical admin): each opens the real page, every
   // summary under Overview. The Technical admin can arrange any role's tabs (116); a tab shows only if its area can be seen.
-  const pagesTabs = isBM || isOwner || arranged;   // Overview carries all the summaries
+  const menuTopNow = document.body.classList.contains('menu-top');
+  const pagesTabs = isBM || isOwner || arranged || menuTopNow;   // Overview carries all the summaries (with the top menu, for everyone)
   // with the top menu the pages are one hover away: the dashboard keeps only its own views (2026-11-10, the user)
   const menuTop = useMenuTop();
   const tabs = useMemo(() => keys.filter(k => !menuTop || ['director', 'overview', 'setup'].includes(k)).map(k => DASHBOARD_TABS.find(t => t.key === k)).filter(Boolean)
