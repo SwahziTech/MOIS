@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -62,8 +62,28 @@ export default function PageShell({ title, subtitle, description, primaryAction,
     </nav>
   );
   const crumbsInBar = barEl && createPortal(path('tm-crumb'), barEl);
+  // the page's buttons sit on the same line as its tabs, on the right (2026-11-10, the user)
+  const mainRef = useRef(null);
+  useLayoutEffect(() => {
+    const main = mainRef.current; if (!main) return undefined;
+    let raf = 0;
+    const align = () => {
+      const hdr = main.querySelector(':scope > .page-header-row');
+      const tabs = main.querySelector('.page-tabs.is-page, .page-group');
+      if (!hdr || !tabs || hdr.contains(tabs) || getComputedStyle(hdr).display === 'none' || window.innerWidth < 760) { main.classList.remove('hdr-on-tabs'); if (tabs) tabs.style.paddingRight = ''; return; }
+      main.classList.add('hdr-on-tabs');
+      let top = 0; for (let el = tabs; el && el !== main; el = el.offsetParent) top += el.offsetTop;
+      hdr.style.top = `${Math.max(0, top + (tabs.offsetHeight - hdr.offsetHeight) / 2)}px`;
+      tabs.style.paddingRight = `${hdr.offsetWidth + 16}px`;
+    };
+    const later = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(align); };
+    later();
+    const mo = new MutationObserver(later); mo.observe(main, { childList: true, subtree: true });
+    window.addEventListener('resize', later);
+    return () => { mo.disconnect(); window.removeEventListener('resize', later); cancelAnimationFrame(raf); };
+  }, [loc.pathname, loc.search]);
   return (
-    <main className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
+    <main ref={mainRef} className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
       {crumbsInBar}
       {/* the date at the top right of every page (2026-11-10, the user); in the top menu it is in the bar */}
       {!barEl && <div className="page-top">{path('page-path')}<span className="page-date">{dateText(orgToday(organization?.timezone))}</span></div>}

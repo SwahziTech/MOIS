@@ -2789,3 +2789,8 @@ body.menu-top .modal thead th { top: 0; }
 .page-top { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
 .page-top .page-path { flex: 1; min-width: 0; margin: 0; }
 .page-date { margin-left: auto; white-space: nowrap; font-size: var(--text-sm); color: var(--text-secondary); }
+/* the page's buttons on the line of its tabs; tabs right under the menu (2026-11-10) */
+.page-content { position: relative; }
+.page-content.hdr-on-tabs > .page-header-row { position: absolute; right: 24px; margin: 0; z-index: 7; }
+.page-content.hdr-on-tabs > .page-header-row .page-header-text { display: contents; }
+.page-content.has-top-crumbs { padding-top: 10px; }
