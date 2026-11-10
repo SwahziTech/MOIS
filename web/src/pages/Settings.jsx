@@ -7,6 +7,7 @@ import { browserTimeZone } from '../lib/format';
 import { roleLabel } from '../lib/manageUsers';
 import PageShell from '../components/PageShell';
 import MenuLayoutCard from '../components/settings/MenuLayoutCard';
+import DashboardLayoutCard from '../components/settings/DashboardLayoutCard';
 import ThemeToggle from '../components/ThemeToggle';
 import NumberInput from '../components/NumberInput';
 import { BranchVatCard, ExpenseCategoriesCard } from '../components/settings/PurchaseSettings';
@@ -76,6 +77,7 @@ export default function Settings() {
       </div>
       {/* the sidebar per role (098) — Technical admin; full width, under the cards */}
       {can('system.manage') && <div style={{ marginTop: 16 }}><MenuLayoutCard /></div>}
+      {can('system.manage') && <div style={{ marginTop: 16 }}><DashboardLayoutCard /></div>}
     </PageShell>
   );
 }

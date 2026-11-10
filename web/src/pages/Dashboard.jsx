@@ -20,6 +20,7 @@ import MeterReadingsTask from '../components/dashboard/MeterReadingsTask';
 import { ProofReminder } from '../components/sales/PaymentProofs';
 import DirectorBoard from '../components/dashboard/DirectorBoard';
 import { primaryRole } from '../lib/menu';
+import { DASHBOARD_TABS, defaultTabsFor } from '../lib/dashboardTabs';
 
 /*
  * One card per master-data table, counted for the branch picked in the
@@ -58,48 +59,35 @@ const STAGE = { order: 'Order', invoice: 'Invoice' };
  */
 export default function Dashboard() {
   const { userRoles } = useAuth();
-  // directors get their own screen (2026-10-30); the Technical admin can see it as a tab
-  if (primaryRole(userRoles) === 'director') {
+  const role = primaryRole(userRoles);
+  // the role's tabs as the Technical admin arranged them (116), else its built-in set
+  const [layout, setLayout] = useState(undefined);   // undefined loading, null none
+  useEffect(() => {
+    if (!role) { setLayout(null); return; }
+    supabase.from('dashboard_layouts').select('tabs').eq('role_name', role).maybeSingle()
+      .then(({ data, error }) => setLayout(error || !data ? null : data.tabs));
+  }, [role]);
+  if (layout === undefined) return <PageShell title="Dashboard"><span className="skeleton" /></PageShell>;
+  const keys = layout ?? defaultTabsFor(role);
+  // directors get their own screen (2026-10-30) — unless their dashboard was given more tabs
+  if (keys.length === 1 && keys[0] === 'director') {
     return <PageShell title="Dashboard" subtitle="Overview"><DirectorBoard /></PageShell>;
   }
-  return <RoleDashboard isOwner={primaryRole(userRoles) === 'owner'} isSecretary={primaryRole(userRoles) === 'secretary'} isBM={primaryRole(userRoles) === 'branch_manager'} />;
+  return <RoleDashboard keys={keys} role={role} arranged={!!layout} isOwner={role === 'owner'} isSecretary={role === 'secretary'} isBM={role === 'branch_manager'} />;
 }
 
-function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
+function RoleDashboard({ keys, role, arranged = false, isOwner, isSecretary = false, isBM = false }) {
   const { organization, can, canAnywhere } = useAuth();
   const { branchId, branchName, inBranch, branches } = useBranch();
   const today = orgToday(organization?.timezone);
   const cur = organization?.currency_code;
   const short = v => formatMoneyShort(v, cur);
   const sees = code => (canAnywhere ?? can)(code);
-  // the secretary (2026-11-03): the pages used every day for entering data, in that order
-  // the branch manager (2026-11-09, the user): like the secretary, the tabs open the real pages; every summary is under Overview
-  // the Technical admin (2026-11-10, the user): the same, with Director view first and Setup last
-  const pagesTabs = isBM || isOwner;
-  const tabs = useMemo(() => (pagesTabs ? [
-    isOwner && ['director', 'Director view'],
-    ['overview', 'Overview'],
-    sees('staff.view') && ['attendance', 'Attendance'],
-    sees('sales.view') && ['sales', 'Sales'],
-    sees('production.view') && ['production', 'Production'],
-    (sees('procurement.view') || sees('procurement.receive')) && ['purchases', 'Purchases'],
-    sees('inventory.view') && ['inventory', 'Inventory'],
-    isOwner && ['setup', 'Setup'],
-  ] : isSecretary ? [
-    ['overview', 'Overview'],
-    sees('staff.view') && ['attendance', 'Attendance'],
-    sees('sales.view') && ['sales', 'Sales'],
-    sees('production.view') && ['production', 'Production'],
-    (sees('procurement.view') || sees('procurement.receive')) && ['purchases', 'Purchases'],
-    sees('inventory.view') && ['inventory', 'Inventory'],
-  ] : [
-    isOwner && ['director', 'Director view'],
-    sees('products.manage') && ['overview', 'Overview'],
-    sees('production.view') && ['production', 'Production'],
-    sees('inventory.view') && ['inventory', 'Inventory'],
-    sees('sales.view') && ['sales', 'Sales'],
-    ['setup', 'Setup'],
-  ]).filter(Boolean), [can, canAnywhere, isOwner, isSecretary, isBM]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the tabs (2026-11-03 secretary, 11-09 branch manager, 11-10 Technical admin): each opens the real page, every
+  // summary under Overview. The Technical admin can arrange any role's tabs (116); a tab shows only if its area can be seen.
+  const pagesTabs = isBM || isOwner || arranged;   // Overview carries all the summaries
+  const tabs = useMemo(() => keys.map(k => DASHBOARD_TABS.find(t => t.key === k)).filter(Boolean)
+    .filter(t => !t.perm || t.perm.some(sees)).map(t => [t.key, t.label]), [keys, can, canAnywhere]); // eslint-disable-line react-hooks/exhaustive-deps
   // the tab is in the address (?tab=), so Back returns to it; a Director view card report (?card=) is on that tab
   const [tabParam] = useUrlTab(null);
   // a new dashboard tab starts its page fresh: the previous page's own tab and period are dropped
@@ -107,8 +95,9 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
   const setTab = t => setParams(p => { const n = new URLSearchParams(p); n.set('tab', t); ['view', 'card', 'from', 'to', 'label', 'sale'].forEach(k => n.delete(k)); return n; });
   const tab = new URLSearchParams(window.location.search).get('card') ? 'director' : tabParam;
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
-  const realPage = (isSecretary && ['attendance', 'sales', 'production', 'purchases'].includes(shown))
-    || (pagesTabs && ['attendance', 'sales', 'production', 'purchases', 'inventory'].includes(shown));
+  // the real pages: everyone's Attendance, HR, Sales, Production, Purchases; Inventory too, except the secretary's summary (unchanged)
+  const realPage = ['attendance', 'hr', 'sales', 'production', 'purchases'].includes(shown) && (pagesTabs || isSecretary)
+    || (shown === 'inventory' && pagesTabs && !(isSecretary && !arranged));
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }
   const [error, setError] = useState('');
@@ -274,6 +263,8 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
       {realPage ? (
         // the real page, with its own buttons and tabs (its tab kept under ?view=)
         shown === 'attendance' ? <Embedded fallback="attendance"><Staff /></Embedded>
+        // HR (2026-11-10, the user): Personnel, Attendance and Payroll in one tab
+        : shown === 'hr' ? <HrTab />
         : shown === 'sales' ? <Embedded fallback="book"><Sales /></Embedded>
         : shown === 'production' ? <Embedded fallback="curing"><Production /></Embedded>
         : shown === 'inventory' ? <Embedded><Stock /></Embedded>
@@ -366,6 +357,20 @@ function SetupCounts({ branchId, branchName, inBranch }) {
           </Link>
         ))}
       </section>
+    </>
+  );
+}
+
+/* HR on the dashboard (2026-11-10): Personnel, Attendance, Payroll — each opens the real page */
+function HrTab() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') || 'employed';
+  const group = ['attendance', 'attcasual'].includes(view) ? 'attendance' : ['pay', 'paycasual', 'advances', 'returns'].includes(view) ? 'pay' : 'employed';
+  const go = g => setParams(p => { const n = new URLSearchParams(p); n.set('view', g); return n; });
+  return (
+    <>
+      <div style={{ marginBottom: 8 }}><PageTabs nested tabs={[['employed', 'Personnel'], ['attendance', 'Attendance'], ['pay', 'Payroll']]} value={group} onChange={go} /></div>
+      <Embedded fallback="employed"><Staff /></Embedded>
     </>
   );
 }
