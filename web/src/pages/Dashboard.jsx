@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMenuTop } from '../lib/menuMode';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -86,8 +87,10 @@ function RoleDashboard({ keys, role, arranged = false, isOwner, isSecretary = fa
   // the tabs (2026-11-03 secretary, 11-09 branch manager, 11-10 Technical admin): each opens the real page, every
   // summary under Overview. The Technical admin can arrange any role's tabs (116); a tab shows only if its area can be seen.
   const pagesTabs = isBM || isOwner || arranged;   // Overview carries all the summaries
-  const tabs = useMemo(() => keys.map(k => DASHBOARD_TABS.find(t => t.key === k)).filter(Boolean)
-    .filter(t => !t.perm || t.perm.some(sees)).map(t => [t.key, t.label]), [keys, can, canAnywhere]); // eslint-disable-line react-hooks/exhaustive-deps
+  // with the top menu the pages are one hover away: the dashboard keeps only its own views (2026-11-10, the user)
+  const menuTop = useMenuTop();
+  const tabs = useMemo(() => keys.filter(k => !menuTop || ['director', 'overview', 'setup'].includes(k)).map(k => DASHBOARD_TABS.find(t => t.key === k)).filter(Boolean)
+    .filter(t => !t.perm || t.perm.some(sees)).map(t => [t.key, t.label]), [keys, can, canAnywhere, menuTop]); // eslint-disable-line react-hooks/exhaustive-deps
   // the tab is in the address (?tab=), so Back returns to it; a Director view card report (?card=) is on that tab
   const [tabParam] = useUrlTab(null);
   // a new dashboard tab starts its page fresh: the previous page's own tab and period are dropped

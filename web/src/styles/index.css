@@ -2775,3 +2775,10 @@ body.menu-top .modal thead th { top: 0; }
 .page-header-row:not(:has(.page-primary-action)):not(:has(.page-settings)) { display: none; }
 .page-settings { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* the path: the page's name large, its tabs normal (2026-11-10) */
+.page-path strong, .page-path .crumb-here { font-size: 1.05rem; font-weight: 600; letter-spacing: 0; }
+.page-path .crumb-page { color: var(--text-primary); font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
+.page-path .crumb-here { color: var(--text-primary); }
+.tm-crumb strong, .tm-crumb .crumb-here { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+.tm-crumb .crumb-page { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); text-decoration: none; }
+.tm-date { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; margin-right: 4px; }

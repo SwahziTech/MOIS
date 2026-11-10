@@ -4,6 +4,8 @@ import {
   Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark, CalendarClock, CalendarCheck, Files, ScrollText, FolderOpen, Printer,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { dateText } from '../lib/format';
+import { orgToday } from '../lib/inventory';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -240,6 +242,7 @@ export default function Sidebar() {
         {/* where you are (the page puts its Back and breadcrumb here) */}
         <div id="tm-crumbs" className="tm-crumbs" />
         <span className="tm-right">
+          <span className="tm-date">{dateText(orgToday(organization?.timezone))}</span>
           <AlertsBell /><ThemeToggle />
           <button type="button" className="icon-btn" title="Side menu" aria-label="Back to the side menu" onClick={() => setMode('side')}><PanelLeft size={16} /></button>
           <div className={`tm-item tm-user${hover === 'user' ? ' is-open' : ''}`} onMouseEnter={() => setHover('user')} onMouseLeave={() => setHover(h => (h === 'user' ? null : h))}>

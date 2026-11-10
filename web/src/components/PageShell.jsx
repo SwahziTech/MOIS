@@ -44,15 +44,17 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   const openTabs = useOpenTabs();
   const steps = [];
   const sec = section?.section && section.section !== 'Home' ? section.section : subtitle && subtitle !== 'Overview' ? subtitle : null;
-  if (sec && sec !== title) steps.push({ label: sec, to: sectionItem ? hrefOf(sectionItem, can) : null });
-  if (title && title !== 'Dashboard') steps.push({ label: title, to: loc.pathname });
-  for (const t of openTabs) if (t && t !== steps[steps.length - 1]?.label) steps.push({ label: t });
+  if (sec && sec !== title) steps.push({ label: sec, to: sectionItem ? hrefOf(sectionItem, can) : null, kind: 'section' });
+  if (title && title !== 'Dashboard') steps.push({ label: title, to: loc.pathname, kind: 'page' });
+  for (const t of openTabs) if (t && t !== steps[steps.length - 1]?.label) steps.push({ label: t, kind: steps.some(x => x.kind === 'page') ? 'tab' : 'page' });
+  // the page's name is large; its tabs normal (2026-11-10, the user)
   const path = cls => (
     <nav className={cls} aria-label="You are here">
       <Link to="/">Home</Link>
       {steps.map((st, i) => (
         <span key={i} className="crumb-step"><ChevronRight size={14} />
-          {i === steps.length - 1 ? <strong>{st.label}</strong> : st.to ? <Link to={st.to}>{st.label}</Link> : <span>{st.label}</span>}
+          {st.kind === 'page' ? (i === steps.length - 1 || !st.to ? <strong className="crumb-page">{st.label}</strong> : <Link to={st.to} className="crumb-page">{st.label}</Link>)
+            : st.to && i < steps.length - 1 ? <Link to={st.to}>{st.label}</Link> : <span className={i === steps.length - 1 ? 'crumb-here' : ''}>{st.label}</span>}
         </span>
       ))}
     </nav>
