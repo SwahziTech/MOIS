@@ -74,13 +74,17 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
   const sees = code => (canAnywhere ?? can)(code);
   // the secretary (2026-11-03): the pages used every day for entering data, in that order
   // the branch manager (2026-11-09, the user): like the secretary, the tabs open the real pages; every summary is under Overview
-  const tabs = useMemo(() => (isBM ? [
+  // the Technical admin (2026-11-10, the user): the same, with Director view first and Setup last
+  const pagesTabs = isBM || isOwner;
+  const tabs = useMemo(() => (pagesTabs ? [
+    isOwner && ['director', 'Director view'],
     ['overview', 'Overview'],
     sees('staff.view') && ['attendance', 'Attendance'],
     sees('sales.view') && ['sales', 'Sales'],
     sees('production.view') && ['production', 'Production'],
     (sees('procurement.view') || sees('procurement.receive')) && ['purchases', 'Purchases'],
     sees('inventory.view') && ['inventory', 'Inventory'],
+    isOwner && ['setup', 'Setup'],
   ] : isSecretary ? [
     ['overview', 'Overview'],
     sees('staff.view') && ['attendance', 'Attendance'],
@@ -104,7 +108,7 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
   const tab = new URLSearchParams(window.location.search).get('card') ? 'director' : tabParam;
   const shown = tab && tabs.some(t => t[0] === tab) ? tab : tabs.find(t => t[0] !== 'director')[0];
   const realPage = (isSecretary && ['attendance', 'sales', 'production', 'purchases'].includes(shown))
-    || (isBM && ['attendance', 'sales', 'production', 'purchases', 'inventory'].includes(shown));
+    || (pagesTabs && ['attendance', 'sales', 'production', 'purchases', 'inventory'].includes(shown));
   const [refs, setRefs] = useState(null);
   const [loaded, setLoaded] = useState(null);   // { tab, value }
   const [error, setError] = useState('');
@@ -136,7 +140,7 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
         return { sales, recent };
       },
     };
-    const run = isBM && forTab === 'overview'
+    const run = pagesTabs && forTab === 'overview'
       ? () => Promise.all([jobs.overview(), loadMaterialUse(args).catch(() => []), loadRecentSales(args)]).then(([o, mats, recent]) => ({ ...o, mats, recent }))
       : jobs[forTab];
     run().then(value => { if (req === reqRef.current) setLoaded({ tab: forTab, value }); })
@@ -277,7 +281,7 @@ function RoleDashboard({ isOwner, isSecretary = false, isBM = false }) {
       )
       : shown === 'director' ? <DirectorBoard />
       : shown === 'setup' ? <SetupCounts branchId={branchId} branchName={branchName} inBranch={inBranch} />
-      : shown === 'overview' ? (isBM ? <>
+      : shown === 'overview' ? (pagesTabs ? <>
         {overviewEl()}
         <h2 className="db-section">Production</h2>{productionEl()}
         <h2 className="db-section">Inventory</h2>{inventoryEl()}
