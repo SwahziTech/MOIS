@@ -2744,3 +2744,12 @@ body.menu-top { --tm-h: 112px; }
 body.menu-top thead th, body.menu-top .page-tabs.is-page, body.menu-top .sk-tabs, body.menu-top .sb-sel-bar { top: var(--tm-h); }
 body.menu-top .page-content:has(.sk-tabs) .table-container thead th { top: calc(var(--tm-h) + var(--page-tabs-h, 40px)); }
 body.menu-top .modal thead th { top: 0; }
+/* the top menu always on one row (2026-11-10): sections share the width; long names shrink, then cut with … */
+.tm-nav { flex-wrap: nowrap; }
+.tm-item { flex: 1 1 0; min-width: 0; }
+.tm-btn { width: 100%; padding: 6px 4px 8px; font-size: clamp(11px, 0.85vw, 14px); }
+.tm-btn span { max-width: 100%; white-space: nowrap; overflow: hidden; }
+.tm-btn span > :not(svg) { overflow: hidden; text-overflow: ellipsis; }
+.tm-item:nth-last-child(-n+2) .tm-drop { left: auto; right: 0; border-radius: 8px 0 8px 8px; }
+.tm-lbl em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tm-lbl svg { flex: none; }

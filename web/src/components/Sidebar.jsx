@@ -246,8 +246,8 @@ export default function Sidebar() {
           const k = `${section.title}|${si}`;
           return (
             <div key={k} className={`tm-item${here ? ' is-here' : ''}${hover === k ? ' is-open' : ''}`} onMouseEnter={() => setHover(k)} onMouseLeave={() => setHover(h => (h === k ? null : h))}>
-              <button type="button" className="tm-btn" aria-haspopup="true" aria-expanded={hover === k} onClick={() => setHover(h => (h === k ? null : k))}>
-                {Icon && <Icon size={20} strokeWidth={1.7} />}<span>{name}{section.items.length > 1 && <ChevronDown size={11} />}</span>
+              <button type="button" className="tm-btn" title={name} aria-haspopup="true" aria-expanded={hover === k} onClick={() => setHover(h => (h === k ? null : k))}>
+                {Icon && <Icon size={20} strokeWidth={1.7} />}<span className="tm-lbl"><em>{name}</em>{section.items.length > 1 && <ChevronDown size={11} />}</span>
                 {section.items.some(i => i.badge === 'approvals') && pending > 0 && <b className="sidebar-badge">{pending > 99 ? '99+' : pending}</b>}
               </button>
               {hover === k && (
