@@ -2786,3 +2786,6 @@ body.menu-top .modal thead th { top: 0; }
 .sidebar-user { cursor: pointer; border-radius: 8px; }
 .sidebar-user:hover { background: var(--bg-sidebar-hover); }
 .sb-user-menu { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.page-top { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
+.page-top .page-path { flex: 1; min-width: 0; margin: 0; }
+.page-date { margin-left: auto; white-space: nowrap; font-size: var(--text-sm); color: var(--text-secondary); }

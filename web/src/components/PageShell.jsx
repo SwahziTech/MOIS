@@ -5,6 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useEmbedded } from '../lib/urlTab';
 import { groupOf, atEntry, NAV, navActive, hrefOf } from './Sidebar';
 import { useOpenTabs } from '../lib/crumbs';
+import { dateText } from '../lib/format';
+import { orgToday } from '../lib/inventory';
 import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
@@ -19,7 +21,7 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   const loc = useLocation();
   const navigate = useNavigate();
   const embedded = useEmbedded();
-  const { can } = useAuth();
+  const { can, organization } = useAuth();
   const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
   // the top menu (2026-11-10, the user): Back and "Home › section › this page" sit in its bar; each step can be clicked
@@ -63,7 +65,8 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   return (
     <main className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
       {crumbsInBar}
-      {!barEl && path('page-path')}
+      {/* the date at the top right of every page (2026-11-10, the user); in the top menu it is in the bar */}
+      {!barEl && <div className="page-top">{path('page-path')}<span className="page-date">{dateText(orgToday(organization?.timezone))}</span></div>}
       <div className="page-header page-header-row">
         <div className="page-header-text">
           {/* the page's name is in the path above; the heading stays for screen readers (2026-11-10) */}
