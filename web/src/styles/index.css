@@ -2794,3 +2794,8 @@ body.menu-top .modal thead th { top: 0; }
 .page-content.hdr-on-tabs > .page-header-row { position: absolute; right: 24px; margin: 0; z-index: 7; }
 .page-content.hdr-on-tabs > .page-header-row .page-header-text { display: contents; }
 .page-content.has-top-crumbs { padding-top: 10px; }
+/* the top menu hides while you work down the page (2026-11-10) */
+.tm-bar { transition: transform .18s ease; }
+body.menu-top-hidden .tm-bar { transform: translateY(-100%); }
+body.menu-top.menu-top-hidden { --tm-h: 0px; }
+body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }

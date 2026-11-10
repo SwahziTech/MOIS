@@ -185,6 +185,20 @@ export default function Sidebar() {
   const isOrg = sec => sec.items.some(i => i.to === '/settings' || i.to === '/users' || i.to === '/branches');
   const [hover, setHover] = useState(null);
   const [userOpen, setUserOpen] = useState(false);
+  // the top menu hides once you scroll into the work (frozen tabs and headers move up to the screen top) and comes
+  // back when the pointer touches the top edge or you scroll to the top (2026-11-10, the user — like the side menu)
+  const [barHidden, setBarHidden] = useState(false);
+  const [peek, setPeek] = useState(false);
+  useEffect(() => {
+    if (!top) { document.body.classList.remove('menu-top-hidden'); return undefined; }
+    const onScroll = () => setBarHidden(window.scrollY > 60);
+    const onMove = e => { if (e.clientY < 10) setPeek(true); };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('mousemove', onMove); };
+  }, [top]);
+  useEffect(() => { document.body.classList.toggle('menu-top-hidden', top && barHidden && !peek); }, [top, barHidden, peek]);
   useEffect(() => { setUserOpen(false); }, [location.pathname]);
   useEffect(() => { setHover(null); }, [location.pathname, location.search]);
 
@@ -231,7 +245,7 @@ export default function Sidebar() {
   }
 
   if (top) return (
-    <header className="tm-bar">
+    <header className="tm-bar" onMouseLeave={() => setPeek(false)}>
       <div className="tm-brand">
         <span className="sidebar-logo-mark" aria-hidden="true"><LayoutGrid size={15} strokeWidth={2.2} /></span>
         <span className="tm-org truncate" title={organization?.legal_name || organization?.name}>{organization?.name || 'Organization'}</span>
