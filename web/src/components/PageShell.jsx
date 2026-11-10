@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useEmbedded } from '../lib/urlTab';
 import { groupOf, atEntry, NAV, navActive, hrefOf } from './Sidebar';
+import { useOpenTabs } from '../lib/crumbs';
 import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
@@ -18,8 +19,6 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   const loc = useLocation();
   const navigate = useNavigate();
   const embedded = useEmbedded();
-  // Back (2026-11-03): one step back through the pages, tabs and reports opened in MOIS; hidden on the first page
-  const canGoBack = (window.history.state?.idx ?? 0) > 0;
   const { can } = useAuth();
   const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
@@ -40,32 +39,34 @@ export default function PageShell({ title, subtitle, description, primaryAction,
       {children}
     </div>
   );
-  const crumbsInBar = barEl && createPortal(
-    <nav className="tm-crumb" aria-label="Breadcrumb">
-      {canGoBack && <button type="button" className="page-back" title="Back to where you were" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Back</button>}
+  // the heading (2026-11-10, the user): the path from Home to where you are — section, page, open tab(s); each step but
+  // the last can be clicked. No Back button: the browser's own back arrow goes back.
+  const openTabs = useOpenTabs();
+  const steps = [];
+  const sec = section?.section && section.section !== 'Home' ? section.section : subtitle && subtitle !== 'Overview' ? subtitle : null;
+  if (sec && sec !== title) steps.push({ label: sec, to: sectionItem ? hrefOf(sectionItem, can) : null });
+  if (title && title !== 'Dashboard') steps.push({ label: title, to: loc.pathname });
+  for (const t of openTabs) if (t && t !== steps[steps.length - 1]?.label) steps.push({ label: t });
+  const path = cls => (
+    <nav className={cls} aria-label="You are here">
       <Link to="/">Home</Link>
-      {(section?.section || subtitle) && section?.section !== 'Home' && (section?.section ?? subtitle) !== title && <><ChevronRight size={12} />{sectionItem ? <Link to={hrefOf(sectionItem, can)}>{section.section}</Link> : <span>{subtitle}</span>}</>}
-      {title && <><ChevronRight size={12} /><strong className="truncate">{title}</strong></>}
-    </nav>, barEl);
+      {steps.map((st, i) => (
+        <span key={i} className="crumb-step"><ChevronRight size={14} />
+          {i === steps.length - 1 ? <strong>{st.label}</strong> : st.to ? <Link to={st.to}>{st.label}</Link> : <span>{st.label}</span>}
+        </span>
+      ))}
+    </nav>
+  );
+  const crumbsInBar = barEl && createPortal(path('tm-crumb'), barEl);
   return (
     <main className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
       {crumbsInBar}
-      <nav className="page-breadcrumb" aria-label="Breadcrumb">
-        {canGoBack && <button type="button" className="page-back" title="Back to where you were" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Back</button>}
-        <Link to="/">Home</Link>
-        {subtitle && (
-          <>
-            <ChevronRight size={12} />
-            <span>{subtitle}</span>
-          </>
-        )}
-      </nav>
+      {!barEl && path('page-path')}
       <div className="page-header page-header-row">
         <div className="page-header-text">
-          <h1 className="page-title">{title}{onSettings && (
-            <button type="button" className="page-settings" aria-label={`${title} settings`} title={`${title} settings`} onClick={onSettings}><SettingsIcon size={17} /></button>
-          )}</h1>
-          {description && <p className="page-description">{description}</p>}
+          {/* the page's name is in the path above; the heading stays for screen readers (2026-11-10) */}
+          <h1 className="sr-only">{title}</h1>
+          {onSettings && <button type="button" className="page-settings" aria-label={`${title} settings`} title={`${title} settings`} onClick={onSettings}><SettingsIcon size={17} /> Settings</button>}
         </div>
         {(primaryAction || actions) && (
           <div className="page-primary-action">{actions}{primaryAction}</div>

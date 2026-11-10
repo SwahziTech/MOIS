@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { reportTab } from '../lib/crumbs';
 import { Search, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 
 /*
@@ -134,6 +135,9 @@ export function PageTabs({ tabs, value, onChange, nested = false }) {
     ro.observe(ref.current);
     return () => { ro.disconnect(); root.style.removeProperty('--page-tabs-h'); };
   }, [nested]);
+  // the heading's path ends with the open tab (2026-11-10)
+  const openLabel = tabs.find(t => t[0] === value)?.[1];
+  useEffect(() => (nested ? undefined : reportTab(ref.current, openLabel)), [nested, openLabel]);
   return (
     <div ref={ref} className={`page-tabs${nested ? '' : ' is-page'}`} role="tablist">
       {tabs.map(([key, label]) => (
