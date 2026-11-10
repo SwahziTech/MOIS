@@ -12,7 +12,7 @@ import { roleLabel as labelOf } from '../lib/manageUsers';
 import ThemeToggle from './ThemeToggle';
 import AlertsBell from './AlertsBell';
 import { primaryRole, resolveMenu } from '../lib/menu';
-import { ChevronRight, Menu } from 'lucide-react';
+import { ChevronRight, Menu, ChevronDown, PanelLeft, PanelTop } from 'lucide-react';
 
 /*
  * The sidebar, 2026-10-30: 9 sections of up to 3 pages (the agreed layout).
@@ -168,6 +168,16 @@ export default function Sidebar() {
     return () => mq.removeEventListener('change', on);
   }, []);
 
+  // a top menu bar (2026-11-10, the user — a test, Technical admin only, kept on this device): sections across the top,
+  // their pages dropping down on hover; phones keep their menu
+  const mayTop = can('system.manage');
+  const [mode, setModeRaw] = useState(() => { try { return localStorage.getItem('mois.menuMode') || 'side'; } catch { return 'side'; } });
+  const setMode = m => { setModeRaw(m); try { localStorage.setItem('mois.menuMode', m); } catch { /* storage off */ } };
+  const top = mayTop && !phone && mode === 'top';
+  useEffect(() => { document.body.classList.toggle('menu-top', top); return () => document.body.classList.remove('menu-top'); }, [top]);
+  const [hover, setHover] = useState(null);
+  useEffect(() => { setHover(null); }, [location.pathname, location.search]);
+
   const fullName =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
     session?.user?.email?.split('@')[0] ||
@@ -209,6 +219,53 @@ export default function Sidebar() {
     await signOut();
     navigate('/login');
   }
+
+  if (top) return (
+    <header className="tm-bar">
+      <div className="tm-brand">
+        <span className="sidebar-logo-mark" aria-hidden="true"><LayoutGrid size={15} strokeWidth={2.2} /></span>
+        <span className="tm-org truncate" title={organization?.legal_name || organization?.name}>{organization?.name || 'Organization'}</span>
+        {branches.length > 0 && (
+          <select className="form-input tm-branch" aria-label="Branch" value={branchId} disabled={!allowAll && branches.length === 1} onChange={e => setBranchId(e.target.value)}>
+            {allowAll && <option value="">All branches</option>}
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
+        <span className="tm-right">
+          <AlertsBell /><ThemeToggle />
+          <button type="button" className="icon-btn" title="Side menu" aria-label="Back to the side menu" onClick={() => setMode('side')}><PanelLeft size={16} /></button>
+          <span className="sidebar-avatar" title={`${fullName}${roleLabel ? ` · ${roleLabel}` : ''}`}>{initials}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={handleSignOut}><LogOut size={13} /> Sign out</button>
+        </span>
+      </div>
+      <nav className="tm-nav" aria-label="Main navigation">
+        {sections.map((section, si) => {
+          const Icon = section.items[0]?.icon;
+          const name = section.title || section.items[0]?.label;
+          const here = section.items.some(i => navActive(i, location));
+          const k = `${section.title}|${si}`;
+          return (
+            <div key={k} className={`tm-item${here ? ' is-here' : ''}${hover === k ? ' is-open' : ''}`} onMouseEnter={() => setHover(k)} onMouseLeave={() => setHover(h => (h === k ? null : h))}>
+              <button type="button" className="tm-btn" aria-haspopup="true" aria-expanded={hover === k} onClick={() => setHover(h => (h === k ? null : k))}>
+                {Icon && <Icon size={20} strokeWidth={1.7} />}<span>{name}{section.items.length > 1 && <ChevronDown size={11} />}</span>
+                {section.items.some(i => i.badge === 'approvals') && pending > 0 && <b className="sidebar-badge">{pending > 99 ? '99+' : pending}</b>}
+              </button>
+              {hover === k && (
+                <div className="tm-drop" role="menu">
+                  {section.items.map(item => (
+                    <Link key={item.to} role="menuitem" to={hrefOf(item, can)} className={`tm-link${navActive(item, location) ? ' active' : ''}`}>
+                      <item.icon size={15} strokeWidth={1.8} /><span>{item.label}</span>
+                      {item.badge === 'approvals' && pending > 0 && <b className="sidebar-badge">{pending > 99 ? '99+' : pending}</b>}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    </header>
+  );
 
   return (
     <>
@@ -288,6 +345,7 @@ export default function Sidebar() {
             {roleLabel && <div className="sidebar-user-role truncate">{roleLabel}</div>}
           </div>
         </div>
+        {mayTop && !phone && <button type="button" className="sidebar-signout" title="Try the menu across the top (test)" onClick={() => setMode('top')}><PanelTop size={13} /><span>Top menu</span></button>}
         <button id="sidebar-signout" type="button" className="sidebar-signout" onClick={handleSignOut}>
           <LogOut size={13} />
           <span>Sign out</span>

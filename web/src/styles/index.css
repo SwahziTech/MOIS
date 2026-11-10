@@ -2719,3 +2719,28 @@ select.form-input[aria-label="Period"] { width: auto; flex: none; height: 32px; 
 .dl-list li:last-child { border-bottom: 0; }
 .dl-list li.is-off { opacity: .55; }
 .dl-list label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+/* the top menu bar (2026-11-10, a test for the Technical admin) */
+body.menu-top .main-wrapper { margin-left: 0; padding-top: 112px; }
+.tm-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 150; background: var(--bg-sidebar); border-bottom: 1px solid var(--border); padding: 6px 16px 0; }
+.tm-brand { display: flex; align-items: center; gap: 10px; height: 38px; }
+.tm-org { font-weight: 700; max-width: 260px; }
+.tm-branch { width: auto; height: 30px; padding: 2px 8px; font-size: var(--text-sm); }
+.tm-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.tm-nav { display: flex; gap: 2px; flex-wrap: wrap; }
+.tm-item { position: relative; }
+.tm-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 12px 8px; border: 0; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 8px 8px 0 0; position: relative; font-size: var(--text-sm); font-weight: 600; }
+.tm-btn span { display: inline-flex; align-items: center; gap: 3px; }
+.tm-btn svg:first-child { color: var(--text-primary); }
+.tm-item:hover .tm-btn, .tm-item.is-open .tm-btn { background: var(--bg-sidebar-hover); color: var(--text-primary); }
+.tm-item.is-here .tm-btn { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--accent); }
+.tm-btn .sidebar-badge { position: absolute; top: 2px; right: 4px; }
+.tm-drop { position: absolute; top: 100%; left: 0; min-width: 210px; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 0 8px 8px 8px; box-shadow: var(--shadow-lg); padding: 4px; z-index: 160; }
+.tm-link { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; color: var(--text-primary); text-decoration: none; font-size: var(--text-sm); white-space: nowrap; }
+.tm-link:hover { background: var(--bg-sidebar-hover); }
+.tm-link.active { background: var(--bg-sidebar-active); font-weight: 600; }
+@media print { .tm-bar { display: none; } body.menu-top .main-wrapper { padding-top: 0; } }
+/* with the top menu, things that stick to the top sit under its bar */
+body.menu-top { --tm-h: 112px; }
+body.menu-top thead th, body.menu-top .page-tabs.is-page, body.menu-top .sk-tabs, body.menu-top .sb-sel-bar { top: var(--tm-h); }
+body.menu-top .page-content:has(.sk-tabs) .table-container thead th { top: calc(var(--tm-h) + var(--page-tabs-h, 40px)); }
+body.menu-top .modal thead th { top: 0; }
