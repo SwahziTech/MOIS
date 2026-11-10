@@ -184,6 +184,8 @@ export default function Sidebar() {
   // the Organization pages live under the person's icon in the top menu (2026-11-10, the user)
   const isOrg = sec => sec.items.some(i => i.to === '/settings' || i.to === '/users' || i.to === '/branches');
   const [hover, setHover] = useState(null);
+  const [userOpen, setUserOpen] = useState(false);
+  useEffect(() => { setUserOpen(false); }, [location.pathname]);
   useEffect(() => { setHover(null); }, [location.pathname, location.search]);
 
   const fullName =
@@ -333,7 +335,8 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="sidebar-nav" aria-label="Main navigation">
-        {sections.map((section, si) => (
+        {/* Organization lives under the person (2026-11-10, the user) */}
+        {sections.filter(sec => !isOrg(sec)).map((section, si) => (
           <div key={`${section.title}|${si}`} className="sidebar-section">
             {section.title && (section.folded
               ? <button type="button" className="sidebar-section-label sidebar-fold" aria-expanded={isOpen(section)} onClick={() => setUnfolded(u => ({ ...u, [section.title]: !isOpen(section) }))}>
@@ -361,7 +364,16 @@ export default function Sidebar() {
 
       {/* User footer */}
       <div className="sidebar-footer">
-        <div className="sidebar-user">
+        {userOpen && sections.some(isOrg) && (
+          <div className="sb-user-menu" role="menu">
+            {sections.filter(isOrg).flatMap(sec => sec.items).map(item => (
+              <Link key={item.to} role="menuitem" to={hrefOf(item, can)} className={`sidebar-item${navActive(item, location) ? ' active' : ''}`}>
+                <item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+        <div className="sidebar-user" role="button" tabIndex={0} title="Organization" aria-expanded={userOpen} onClick={() => setUserOpen(o => !o)} onKeyDown={e => { if (e.key === 'Enter') setUserOpen(o => !o); }}>
           <div className="sidebar-avatar">{initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name truncate">{fullName}</div>

@@ -15,7 +15,8 @@ export const DASHBOARD_TABS = [
   { key: 'setup', label: 'Setup', note: 'master-data counts' },
 ];
 export const DEFAULT_DASHBOARD = {
-  owner: ['director', 'overview', 'hr', 'sales', 'production', 'purchases', 'inventory', 'setup'],
+  // the Technical admin (2026-11-10, the user): the dashboard's own views only; pages live in their menu groups
+  owner: ['director', 'overview', 'setup'],
   director: ['director'],
   branch_manager: ['overview', 'attendance', 'sales', 'production', 'purchases', 'inventory'],
   secretary: ['overview', 'attendance', 'sales', 'production', 'purchases', 'inventory'],

@@ -2782,3 +2782,7 @@ body.menu-top .modal thead th { top: 0; }
 .tm-crumb strong, .tm-crumb .crumb-here { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
 .tm-crumb .crumb-page { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); text-decoration: none; }
 .tm-date { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; margin-right: 4px; }
+/* Organization under the person in the side menu (2026-11-10) */
+.sidebar-user { cursor: pointer; border-radius: 8px; }
+.sidebar-user:hover { background: var(--bg-sidebar-hover); }
+.sb-user-menu { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
