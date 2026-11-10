@@ -174,7 +174,13 @@ export default function Sidebar() {
   const [mode, setModeRaw] = useState(() => { try { return localStorage.getItem('mois.menuMode') || 'side'; } catch { return 'side'; } });
   const setMode = m => { setModeRaw(m); try { localStorage.setItem('mois.menuMode', m); } catch { /* storage off */ } };
   const top = mayTop && !phone && mode === 'top';
-  useEffect(() => { document.body.classList.toggle('menu-top', top); return () => document.body.classList.remove('menu-top'); }, [top]);
+  useEffect(() => {
+    document.body.classList.toggle('menu-top', top);
+    window.dispatchEvent(new Event('mois:menu-mode'));
+    return () => { document.body.classList.remove('menu-top'); window.dispatchEvent(new Event('mois:menu-mode')); };
+  }, [top]);
+  // the Organization pages live under the person's icon in the top menu (2026-11-10, the user)
+  const isOrg = sec => sec.items.some(i => i.to === '/settings' || i.to === '/users' || i.to === '/branches');
   const [hover, setHover] = useState(null);
   useEffect(() => { setHover(null); }, [location.pathname, location.search]);
 
@@ -231,15 +237,29 @@ export default function Sidebar() {
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
+        {/* where you are (the page puts its Back and breadcrumb here) */}
+        <div id="tm-crumbs" className="tm-crumbs" />
         <span className="tm-right">
           <AlertsBell /><ThemeToggle />
           <button type="button" className="icon-btn" title="Side menu" aria-label="Back to the side menu" onClick={() => setMode('side')}><PanelLeft size={16} /></button>
-          <span className="sidebar-avatar" title={`${fullName}${roleLabel ? ` · ${roleLabel}` : ''}`}>{initials}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={handleSignOut}><LogOut size={13} /> Sign out</button>
+          <div className={`tm-item tm-user${hover === 'user' ? ' is-open' : ''}`} onMouseEnter={() => setHover('user')} onMouseLeave={() => setHover(h => (h === 'user' ? null : h))}>
+            <button type="button" className="sidebar-avatar tm-avatar" aria-haspopup="true" aria-expanded={hover === 'user'} title={fullName} onClick={() => setHover(h => (h === 'user' ? null : 'user'))}>{initials}</button>
+            {hover === 'user' && (
+              <div className="tm-drop" role="menu">
+                <div className="tm-who"><strong>{fullName}</strong>{roleLabel && <span className="pl-help">{roleLabel}</span>}</div>
+                {sections.filter(isOrg).flatMap(sec => sec.items).map(item => (
+                  <Link key={item.to} role="menuitem" to={hrefOf(item, can)} className={`tm-link${navActive(item, location) ? ' active' : ''}`}>
+                    <item.icon size={15} strokeWidth={1.8} /><span>{item.label}</span>
+                  </Link>
+                ))}
+                <button type="button" className="tm-link tm-signout" onClick={handleSignOut}><LogOut size={15} /><span>Sign out</span></button>
+              </div>
+            )}
+          </div>
         </span>
       </div>
       <nav className="tm-nav" aria-label="Main navigation">
-        {sections.map((section, si) => {
+        {sections.filter(sec => !isOrg(sec)).map((section, si) => {
           const Icon = section.items[0]?.icon;
           const name = section.title || section.items[0]?.label;
           const here = section.items.some(i => navActive(i, location));

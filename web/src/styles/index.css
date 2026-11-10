@@ -2753,3 +2753,15 @@ body.menu-top .modal thead th { top: 0; }
 .tm-item:nth-last-child(-n+2) .tm-drop { left: auto; right: 0; border-radius: 8px 0 8px 8px; }
 .tm-lbl em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .tm-lbl svg { flex: none; }
+/* top menu: Back and the breadcrumb in the bar; the person's menu (2026-11-10) */
+.tm-crumbs { flex: 1; min-width: 0; display: flex; align-items: center; }
+.tm-crumb { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.tm-crumb a { color: var(--text-secondary); text-decoration: none; white-space: nowrap; }
+.tm-crumb a:hover { color: var(--text-primary); text-decoration: underline; }
+.tm-crumb strong { color: var(--text-primary); font-size: var(--text-base, 15px); }
+.tm-crumb .page-back { margin-right: 4px; }
+.page-content.has-top-crumbs > .page-breadcrumb, .page-content.has-top-crumbs .page-description { display: none; }
+.tm-user .tm-drop { left: auto; right: 0; top: calc(100% + 6px); border-radius: 8px; }
+.tm-avatar { border: 0; cursor: pointer; }
+.tm-who { display: flex; flex-direction: column; padding: 8px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.tm-signout { width: 100%; border: 0; background: none; cursor: pointer; border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; margin-top: 4px; }

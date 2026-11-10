@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useEmbedded } from '../lib/urlTab';
-import { groupOf, atEntry } from './Sidebar';
+import { groupOf, atEntry, NAV, navActive, hrefOf } from './Sidebar';
 import { ArrowLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
 
 /**
@@ -21,6 +23,16 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   const { can } = useAuth();
   const group = groupOf(loc);
   const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
+  // the top menu (2026-11-10, the user): Back and "Home › section › this page" sit in its bar; each step can be clicked
+  const [barEl, setBarEl] = useState(() => (document.body.classList.contains('menu-top') ? document.getElementById('tm-crumbs') : null));
+  useEffect(() => {
+    const check = () => setBarEl(document.body.classList.contains('menu-top') ? document.getElementById('tm-crumbs') : null);
+    check();
+    window.addEventListener('mois:menu-mode', check);
+    return () => window.removeEventListener('mois:menu-mode', check);
+  }, []);
+  const section = NAV.find(sec => sec.items.some(i => navActive(i, loc)));
+  const sectionItem = section?.items.find(i => (!i.perm || can(i.perm)));
   // inside the secretary's dashboard (2026-11-03): no heading of its own — its buttons, then the page
   if (embedded) return (
     <div className="page-embedded">
@@ -28,8 +40,16 @@ export default function PageShell({ title, subtitle, description, primaryAction,
       {children}
     </div>
   );
+  const crumbsInBar = barEl && createPortal(
+    <nav className="tm-crumb" aria-label="Breadcrumb">
+      {canGoBack && <button type="button" className="page-back" title="Back to where you were" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Back</button>}
+      <Link to="/">Home</Link>
+      {(section?.section || subtitle) && section?.section !== 'Home' && (section?.section ?? subtitle) !== title && <><ChevronRight size={12} />{sectionItem ? <Link to={hrefOf(sectionItem, can)}>{section.section}</Link> : <span>{subtitle}</span>}</>}
+      {title && <><ChevronRight size={12} /><strong className="truncate">{title}</strong></>}
+    </nav>, barEl);
   return (
-    <main className="page-content animate-fadeIn">
+    <main className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
+      {crumbsInBar}
       <nav className="page-breadcrumb" aria-label="Breadcrumb">
         {canGoBack && <button type="button" className="page-back" title="Back to where you were" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Back</button>}
         <Link to="/">Home</Link>
