@@ -2822,3 +2822,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-have-sale { flex: 0 0 280px; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); }
 .sl-have-amt { font-size: 1.4rem; }
 @media (max-width: 760px) { .sl-have-sale { flex-basis: auto; } }
+/* suggestions under their box (2026-11-11) */
+.sg-pop { position: fixed; z-index: 1000; display: none; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 4px; max-height: 280px; overflow-y: auto; }
+.sg-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: var(--text-sm); color: var(--text-primary); }
+.sg-item:hover, .sg-item.is-on { background: var(--bg-sidebar-hover); }
+.sg-note { color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap; }
