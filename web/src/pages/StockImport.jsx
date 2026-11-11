@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { dbErrorMessage } from '../lib/masterData';
-import { warehouseLabel, qtyText, orgToday, productColorIds } from '../lib/inventory';
+import { warehouseLabel, qtyText, orgToday, productColorIds, stockKey } from '../lib/inventory';
 import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/stockImport';
 import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
@@ -38,6 +38,10 @@ export default function StockImport() {
   const [warehouseId, setWarehouseId] = useState('');
   const [date,     setDate]     = useState(today);
   const [tableChoice, setTableChoice] = useState({});   // table index → { categoryId, unitId }
+  // what the sheet records (2026-11-11, the user): 'count' — a stock take (MOIS records the differences),
+  // or 'opening' — a store's first stock. '' until chosen: a store that already has stock means a count.
+  const [kind, setKind] = useState('');
+  const [expected, setExpected] = useState(null);     // date → { stock key → quantity } in this store, for a count
   const [choices,  setChoices]  = useState({});         // line id → { productId, colorId, unitId, qty, date, skip, converted }
   const [step,     setStep]     = useState('upload');   // upload | resolve | preview | done
   const [busy,  setBusy]  = useState(false);
@@ -101,14 +105,23 @@ export default function StockImport() {
     setSaveState('saving');
     const t = setTimeout(async () => {
       const { error: err } = await supabase.from('stock_import_drafts').update({
-        table_choices: tableChoice, line_choices: choices, warehouse_id: warehouseId || null,
+        table_choices: { ...tableChoice, _kind: kind }, line_choices: choices, warehouse_id: warehouseId || null,
         as_of_date: date || null, file_name: fileName || null, updated_by: session?.user?.id ?? null,
       }).eq('id', draftId);
       setSaveState(err ? 'failed' : 'saved');
       if (err) console.error(err);
     }, 800);
     return () => clearTimeout(t);
-  }, [draftId, choices, tableChoice, warehouseId, date]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draftId, choices, tableChoice, warehouseId, date, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a store that already has stock: the sheet is a count, unless the person says otherwise
+  useEffect(() => {
+    if (kind || !warehouseId) return;
+    let live = true;
+    supabase.from('stock_balances').select('quantity').eq('warehouse_id', warehouseId).neq('quantity', 0).limit(1)
+      .then(({ data }) => { if (live) setKind(data?.length ? 'count' : 'opening'); });
+    return () => { live = false; };
+  }, [warehouseId, kind]);
 
   const prodById = useMemo(() => Object.fromEntries((catalog?.products || []).map(p => [p.id, p])), [catalog]);
   const catById  = useMemo(() => Object.fromEntries((catalog?.categories || []).map(c => [c.id, c])), [catalog]);
@@ -154,13 +167,14 @@ export default function StockImport() {
     setFileText(data.file_text);
     setWarehouseId(data.warehouse_id || '');
     setDate(data.as_of_date || today);
+    setKind(data.table_choices?._kind || '');
     analyse(data.file_text, catalog, { tables: data.table_choices, lines: data.line_choices }, data.warehouse_id || '');
     setSaveState('saved');
   }
 
   async function discard() {
     if (draftId) await supabase.from('stock_import_drafts').update({ status: 'discarded', updated_by: session?.user?.id ?? null }).eq('id', draftId);
-    setDraftId(null); setParsed(null); setMatched(null); setFileName(''); setFileText(''); setStep('upload'); setSaveState('');
+    setDraftId(null); setParsed(null); setMatched(null); setFileName(''); setFileText(''); setStep('upload'); setSaveState(''); setKind('');
     loadDrafts();
   }
 
@@ -325,9 +339,24 @@ export default function StockImport() {
     })));
   }
 
+  const countDates = [...new Set(combined.map(g => g.date))].sort().join(',');   // stable: the effect runs once per set of dates
+  useEffect(() => {
+    if (step !== 'preview' || kind !== 'count' || !warehouseId || !countDates) return;
+    let live = true;
+    const dates = countDates.split(',');
+    Promise.all(dates.map(d => (d < today
+      ? supabase.rpc('stock_balances_as_of', { p_date: d })
+      : supabase.from('stock_balances').select('warehouse_id, material_id, product_id, color_id, quantity'))
+      .then(({ data }) => [d, Object.fromEntries((data || []).filter(b => b.warehouse_id === warehouseId).map(b => [stockKey(b), Number(b.quantity)]))])))
+      .then(rows => { if (live) setExpected(Object.fromEntries(rows)); });
+    return () => { live = false; };
+  }, [step, kind, warehouseId, countDates, today]);
+  const expectedOf = g => (g.placeholder ? 0 : expected?.[g.date]?.[stockKey({ product_id: g.productId, color_id: g.colorId || null })] ?? 0);
+
   async function post() {
     setError('');
     if (!warehouseId) { setError('Choose the store.'); return; }
+    if (!kind) { setError('Say whether the sheet is a stock count or opening stock.'); return; }
     const byDate = {};
     const placeholders = {};
     for (const g of combined) {
@@ -344,7 +373,7 @@ export default function StockImport() {
     const conversions = ready.map(l => ({ l, e: effective(l) })).filter(x => x.e.converted)
       .map(({ l, e }) => `${l.typeText}${l.colourText ? ' ' + l.colourText : ''}: ${l.qty}${l.unitText} at ${e.converted.pcsPerSqm}/m² → ${e.qty} ${unitById[e.unitId]?.symbol}`);
     const movements = Object.entries(byDate).sort().map(([d, ls]) => ({
-      type: 'opening_balance', warehouse_id: warehouseId, movement_date: d, reference: fileName || null,
+      type: kind === 'count' ? 'count' : 'opening_balance', warehouse_id: warehouseId, movement_date: d, reference: fileName || null,
       notes: [conversions.length ? `Converted from pieces: ${conversions.join('; ')}` : '', merges.length ? `Sheet lines added together: ${merges.join('; ')}` : '']
         .filter(Boolean).join(' | ') || null,
       lines: ls,
@@ -387,7 +416,7 @@ export default function StockImport() {
       const { error: err } = await supabase.rpc('request_change', {
         p_kind: 'stock_import', p_branch_id: null,
         p_payload: { batch: { placeholders: Object.values(placeholders), movements, decisions }, draft_id: draftId || null },
-        p_summary: `Opening stock import${fileName ? ` "${fileName}"` : ''}: ${ready.length} lines at ${warehouseLabel(warehouses.find(w => w.id === warehouseId))}, dated ${dateText(date)}`,
+        p_summary: `${kind === 'count' ? 'Stock count' : 'Opening stock'} import${fileName ? ` "${fileName}"` : ''}: ${ready.length} lines at ${warehouseLabel(warehouses.find(w => w.id === warehouseId))}, dated ${dateText(date)}`,
       });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't send the import for approval. Nothing was recorded.")); return; }
@@ -456,6 +485,15 @@ export default function StockImport() {
                 <span className="form-hint">For every line unless changed below.</span>
               </div>
             </div>
+            {warehouseId && (
+              <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }} role="radiogroup" aria-label="What the sheet records">
+                <span className="text-sm" style={{ fontWeight: 600 }}>This sheet is</span>
+                <button type="button" role="radio" aria-checked={kind === 'count'} className={`filter-chip${kind === 'count' ? ' is-on' : ''}`} onClick={() => setKind('count')}
+                  title="What was counted in the store on that date. MOIS compares it with what it expected and records the differences.">A stock count</button>
+                <button type="button" role="radio" aria-checked={kind === 'opening'} className={`filter-chip${kind === 'opening' ? ' is-on' : ''}`} onClick={() => setKind('opening')}
+                  title="The store's very first stock in MOIS. Refused for items that already have stock here.">Opening stock</button>
+              </div>
+            )}
             {!matched && drafts.some(d => !d.warehouse_id || inBranch(catalog?.branchOfWarehouse?.[d.warehouse_id])) && (
               <div className="flex flex-col gap-4">
                 <span className="text-sm" style={{ fontWeight: 600 }}>Continue a saved import</span>
@@ -626,10 +664,12 @@ export default function StockImport() {
 
               {step === 'preview' ? (
                 <div className="card">
-                  <div className="card-header"><h2 className="card-title">Preview — {combined.length} opening balances from {ready.length} sheet lines</h2></div>
+                  <div className="card-header"><h2 className="card-title">Preview — {kind === 'count' ? `${combined.length} items counted` : `${combined.length} opening balances`} from {ready.length} sheet lines</h2></div>
                   <div className="table-container">
                     <table>
-                      <thead><tr><th>Product</th><th>Colour</th><th>Date</th><th>From the sheet</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Running total</th></tr></thead>
+                      <thead><tr><th>Product</th><th>Colour</th><th>Date</th><th>From the sheet</th>{kind === 'count'
+                        ? <><th style={{ textAlign: 'right' }}>Counted</th><th style={{ textAlign: 'right' }} title="What MOIS held on that date, from everything recorded">MOIS expected</th><th style={{ textAlign: 'right' }}>Difference</th></>
+                        : <><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Running total</th></>}</tr></thead>
                       <tbody>
                         {(() => {
                           const run = {};
@@ -647,7 +687,12 @@ export default function StockImport() {
                                     {g.lines.map(l => `${l.typeText} ${l.raw}${effective(l).converted ? ' (converted)' : ''}`).join(' + ')}
                                   </td>
                                   <td style={{ textAlign: 'right' }}>{qtyText(g.qty)} {u}</td>
-                                  <td style={{ textAlign: 'right' }} className="text-muted">{qtyText(run[u])} {u}</td>
+                                  {kind === 'count' ? (() => {
+                                    if (!expected) return <><td style={{ textAlign: 'right' }} className="text-muted">…</td><td /></>;
+                                    const ex = expectedOf(g); const d = Math.round((g.qty - ex) * 10000) / 10000;
+                                    return <><td style={{ textAlign: 'right' }} className="text-muted">{qtyText(ex)} {u}</td>
+                                      <td style={{ textAlign: 'right', fontWeight: 600 }} className={d < 0 ? 'text-error' : d > 0 ? 'text-success' : 'text-muted'}>{d === 0 ? '—' : `${d > 0 ? '+' : ''}${qtyText(d)} ${u}`}</td></>;
+                                  })() : <td style={{ textAlign: 'right' }} className="text-muted">{qtyText(run[u])} {u}</td>}
                                 </tr>
                               );
                             });
@@ -658,14 +703,16 @@ export default function StockImport() {
                   <div className="card-body flex flex-col gap-8">
                     {error && <div className="alert alert-error" role="alert">{error}</div>}
                     <p className="text-sm text-muted">
-                      Posts {combined.length} opening balances at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}
-                      {skipped.length ? `; ${skipped.length} skipped lines are not recorded` : ''}. All or nothing — and an item that already has stock here is refused.
+                      {kind === 'count'
+                        ? <>Records the count at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}: each item's stock on its date becomes what was counted, and the difference is recorded. Items not on the sheet keep their stock; anything recorded after that date stays on top.{expected ? ` ${combined.filter(g => Math.abs(g.qty - expectedOf(g)) > 1e-9).length} of ${combined.length} items differ.` : ''}</>
+                        : <>Posts {combined.length} opening balances at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}. An item that already has stock here is refused.</>}
+                      {skipped.length ? ` ${skipped.length} skipped lines are not recorded.` : ''} All or nothing.
                     </p>
                     <div className="si-actions">
                       <span />
                       <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm('Cancel this import? The draft is thrown away. Nothing has been recorded.')) discard(); }}>Cancel import</button>
                       <button type="button" className="btn btn-outline" onClick={() => setStep('resolve')}>Back to the sheet</button>
-                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>{canManage('inventory.adjust') ? `Post ${combined.length} opening balances` : `Submit ${combined.length} for approval`}</button>
+                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !kind} onClick={post}>{!canManage('inventory.adjust') ? `Submit ${combined.length} for approval` : kind === 'count' ? `Post the count (${combined.length} items)` : `Post ${combined.length} opening balances`}</button>
                     </div>
                   </div>
                 </div>
