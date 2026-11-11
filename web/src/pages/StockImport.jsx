@@ -638,9 +638,10 @@ export default function StockImport() {
                                         const ex = g ? expectedOf(g) : (expected[c.date || date]?.[stockKey({ product_id: e.productId, color_id: e.colorId || null })] ?? 0);
                                         const counted = g ? g.qty : Number(e.qty);
                                         const d = Math.round((counted - ex) * 10000) / 10000;
+                                        if (d === 0) return null;   // the same as MOIS: just the one number (2026-11-11, the user)
                                         return (
                                           <div className="si-mois" title={`MOIS held ${qtyText(ex)} on ${c.date || date}; counted ${qtyText(counted)}${g && g.lines.length > 1 ? ' (sheet lines added together)' : ''}`}>
-                                            MOIS {qtyText(ex)} · <span className={d < 0 ? 'text-error' : d > 0 ? 'text-success' : 'text-muted'}>{d === 0 ? 'same' : `${d > 0 ? '+' : ''}${qtyText(d)}`}</span>
+                                            MOIS {qtyText(ex)} · <span className={d < 0 ? 'text-error' : 'text-success'}>{`${d > 0 ? '+' : ''}${qtyText(d)}`}</span>
                                           </div>
                                         );
                                       })()}
