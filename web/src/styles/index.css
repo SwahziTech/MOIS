@@ -2816,3 +2816,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-have-name { font-weight: 600; }
 .sl-have-thumb { margin-left: auto; width: 64px; height: 64px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); overflow: hidden; padding: 0; background: var(--bg-surface); cursor: zoom-in; display: flex; align-items: center; justify-content: center; }
 .sl-have-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sl-have-pic { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sl-have-pic .sl-have-thumb { margin-left: 0; }
+.sl-have li .pl-help:not(.sl-have-pic .pl-help) { color: var(--text-primary); font-weight: 600; }
