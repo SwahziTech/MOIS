@@ -379,6 +379,14 @@ Needed for the month of real use before AI and Billing.
 5. Later, when a domain is chosen: the domain on Cloudflare (DNS, CDN, caching), public assets
    (logos, product images) cached at the CDN. Private files are never cached publicly.
 
+## Advanced costing (PRD Phase 2, brought forward)
+**Status: BUILT 2026-11-11, waiting for migration 118** (SwahziTech chose: cost breakdown + trend, standard vs actual, profit by product/customer with rejects; price guide dropped).
+
+- Costing tabs: Products (click: cost a unit in four parts, month by month, standard) · Standard vs actual · Cost inputs (Materials, Labour, Electricity, Other overheads).
+- Standard = the 3 months before: recipe × average material prices; the branch's labour, electricity, overheads a cement bag; the usual yield. Causes: material prices, materials used, labour, electricity, overheads, yield (they add up to the difference); rejects at full cost apart.
+- Statements › Financial › Profit by product: by product, customer, branch; gross margin; less rejects (product, branch).
+- 118 costing_outputs(): read only; parts reconcile to output_cost_per_unit (checked on 175 live outputs).
+
 ## 1g — Billing
 **Status: PENDING — after the AI step** (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.
 
