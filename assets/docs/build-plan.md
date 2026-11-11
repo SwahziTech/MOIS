@@ -350,7 +350,8 @@ drafts). Predict/Optimize/Act (PRD Phase 3) explicitly excluded.
 - **CRM:** leads and follow-ups (migration 095). Customers › Leads: prospects with the site, what they want and an estimated value; who follows up and the next date; follow-ups as calls, visits or WhatsApp. "Make quotation" turns the lead into a customer and opens a new quotation filled in from the lead. A lead whose quotation becomes an order or invoice shows as won; lost needs a reason. Due follow-ups appear on Home › Needs attention.
 
 ## Phase 1 completion — Deliveries & documents; Due dates & notifications
-**Status: CURRENT** (from 2026-10-30, on SwahziTech's instruction, after comparing the PRD with what is built)
+**Status: DONE** (built 2026-10-29 as 096–097, the GRN, the supplier statement and the alert bell; live 2026-11-01).
+Still open: a photo on the proof of delivery — it goes on R2 (PRD 6.38), in the Cloudflare step below.
 
 Needed for the month of real use before AI and Billing.
 
@@ -361,6 +362,22 @@ Needed for the month of real use before AI and Billing.
   - Already built: receipt, delivery note, proforma (an order's document), quotation, invoice, customer statement, PO.
 - **Due dates & notifications** (PRD 4.11, 4.16): payment terms and due dates on invoices; overdue invoices; an in-app alert bell for each role and branch.
 - **Not chosen now:** Quality extras (4.10) and the small fixes (account on LUKU tokens, transfers between accounts, carrying over an advance overpayment, the cross-tenant check).
+
+## Cloudflare — hosting, CDN, R2
+**Status: CURRENT** (from 2026-11-11, on SwahziTech's instruction). Brings in the PRD 10.1 / 10.9 stack before the month of real use.
+
+1. **Setup** — Wrangler (Cloudflare's CLI) in web/; `web/wrangler.toml`; `npm run deploy:cf`.
+   SwahziTech signs in (`npx wrangler login`); the agent never creates accounts or enters credentials.
+2. **Pages + CDN** — the app on Cloudflare Pages next to Netlify (a second address); the CDN comes
+   with Pages. `public/_headers`: service worker never cached; built files cached a year.
+   Netlify stays the live address until SwahziTech switches.
+3. **R2** — a private bucket for payment proofs, director slips, report photos and proof of delivery;
+   uploads and reads through short-lived signed links made on the server (a Supabase Edge Function
+   or a Worker checks the person's company and branch first, as the storage rules do today);
+   the existing files (13 on 2026-11-11) moved and their paths updated. Asked before building.
+4. **Proof of delivery photo** — on R2 (closes Phase 1 completion).
+5. Later, when a domain is chosen: the domain on Cloudflare (DNS, CDN, caching), public assets
+   (logos, product images) cached at the CDN. Private files are never cached publicly.
 
 ## 1g — Billing
 **Status: PENDING — after the AI step** (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.

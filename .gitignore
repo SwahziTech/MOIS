@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # Claude Code session state (local only)
 .claude/
+
+# Cloudflare Wrangler local state
+.wrangler/

@@ -26,7 +26,10 @@ the architecture.
 ## 2. Tech stack (current phase: web only)
 
 - Web: React + Supabase (Postgres, Auth, RLS, Realtime).
-- Do not introduce Flutter, Next.js, Cloudflare services, Firebase Cloud
+- Cloudflare is scoped in (SwahziTech, 2026-11-11; build-plan "Cloudflare"): Pages
+  hosting with its CDN, R2 for files (PRD 10.1, 10.9). Supabase Storage stays
+  until the R2 move is built; Netlify stays live until SwahziTech switches.
+- Do not introduce Flutter, Next.js, Firebase Cloud
   Messaging, or any billing provider unless a phase prompt explicitly scopes
   them in. Adding infrastructure "for later" without being asked is scope
   creep — flag it as a suggestion instead of building it.

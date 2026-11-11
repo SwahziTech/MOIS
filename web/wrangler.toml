@@ -1,0 +1,5 @@
+# Cloudflare (PRD 10.1 / 10.9, brought in 2026-11-11): the web app on Cloudflare Pages (with its CDN),
+# files on R2 later. Netlify stays the live address until the user switches.
+name = "mois"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"
