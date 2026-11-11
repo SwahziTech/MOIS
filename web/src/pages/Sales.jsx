@@ -1205,7 +1205,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           <label className="pe-field"><span>Why? (required)</span><input className="form-input" autoFocus value={reason} onChange={e => setReason(e.target.value)} /></label>
         </Modal>
       )}
-      {confirming && <ConfirmDelivery delivery={confirming} who={buyer} onClose={() => setConfirming(null)} onDone={async () => { setConfirming(null); await onChanged(); }} />}
+      {confirming && <ConfirmDelivery delivery={confirming} who={buyer} branchId={sale.branch_id} onClose={() => setConfirming(null)} onDone={async () => { setConfirming(null); await onChanged(); }} />}
     </Modal>
   );
 }

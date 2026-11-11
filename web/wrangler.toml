@@ -1,10 +1,23 @@
 # Cloudflare (PRD 10.1 / 10.9, brought in 2026-11-11): the web app as static assets on Cloudflare
-# (Pages now runs on Workers), served from Cloudflare's CDN. Netlify stays the live address until the
-# user switches. Files on R2 come later.
+# (Pages now runs on Workers), served from Cloudflare's CDN, plus the MOIS file service on R2
+# (worker/index.js, migration 117). Netlify stays the live address until the user switches.
 name = "mois"
+main = "worker/index.js"
 compatibility_date = "2026-11-01"
 
 [assets]
 directory = "./dist"
+binding = "ASSETS"
 # every app route (/sales, /staff…) gets index.html; React Router takes it from there
 not_found_handling = "single-page-application"
+# only the file service runs code; the app's pages and files never do (free, fastest)
+run_worker_first = ["/api/*"]
+
+# files: one private bucket; keys are '<bucket>/<org>/<branch>/…'
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "mois-files"
+
+[vars]
+SUPABASE_URL = "https://xffdyziurwoukikrhago.supabase.co"
+# secrets (wrangler secret put): SUPABASE_ANON_KEY, FILES_SECRET

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Printer, Truck } from 'lucide-react';
+import { Camera, Printer, Truck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { files } from '../../lib/files';
+import { shrinkImage } from '../../lib/shrinkImage';
+import { useAuth } from '../../hooks/useAuth';
+import ProofPreview from '../ProofPreview';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
@@ -95,6 +99,7 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
                   })()}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {canAct && r.status === 'on_the_way' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(r)}>Delivered…</button>}
+                    {r.pod_file_path && <PodPhoto row={r} />}
                     <button type="button" className="icon-btn" aria-label="Print the delivery note" title="Print the delivery note" onClick={() => window.open(`/print/sale/${r.sale.id}?doc=delivery&delivery=${r.id}`, '_blank', 'noopener')}><Printer size={15} /></button>
                   </td>
                 </tr>
@@ -108,14 +113,55 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
   );
 }
 
-/* Proof of delivery: who received the goods, when, a note */
-export function ConfirmDelivery({ delivery, who, onClose, onDone }) {
+/* The proof-of-delivery photo, opened from the list */
+function PodPhoto({ row }) {
+  const [url, setUrl] = useState('');
+  const [open, setOpen] = useState(false);
+  async function show() {
+    const { data } = await files('delivery-proofs').createSignedUrl(row.pod_file_path, 600);
+    if (!data?.signedUrl) return;
+    if (/\.pdf$/i.test(row.pod_file_path)) { window.open(data.signedUrl, '_blank', 'noopener'); return; }
+    setUrl(data.signedUrl); setOpen(true);
+  }
+  return (
+    <>
+      <button type="button" className="icon-btn" aria-label="Open the delivery photo" title="Delivery photo" onClick={show}><Camera size={15} /></button>
+      {open && url && (
+        <Modal title={`Delivered — DN-${row.delivery_no}`} onClose={() => setOpen(false)} size="lg"
+          footer={<button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>Close</button>}>
+          <img src={url} alt="Proof of delivery" className="pp-photo" />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/* Proof of delivery: who received the goods, when, a note, a photo */
+export function ConfirmDelivery({ delivery, who, branchId, onClose, onDone }) {
+  const { organization } = useAuth();
   const [f, setF] = useState({ received_by: delivery.received_by ?? '', at: localNow(), note: '' });
+  const [photo, setPhoto] = useState(null);   // the signed delivery note, or the goods at the site (117)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  async function pickPhoto(e) {
+    const x = e.target.files?.[0]; e.target.value = '';
+    if (!x) return;
+    const small = await shrinkImage(x);
+    if (small.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; }
+    setError(''); setPhoto(small);
+  }
   async function save() {
     setError(''); setBusy(true);
-    const { error: err } = await supabase.rpc('confirm_delivery', { p_delivery: delivery.id, p: { received_by: f.received_by, delivered_at: new Date(f.at).toISOString(), note: f.note } });
+    // the photo first, on R2, under this sale's branch
+    let pod = {};
+    if (photo) {
+      const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `${organization.id}/${branchId ?? delivery.sale?.branch_id}/${delivery.id}/${Date.now()}.${ext}`;
+      const up = await files('delivery-proofs').upload(path, photo);
+      if (up.error) { setBusy(false); setError(`The photo wasn't saved: ${up.error.message}`); return; }
+      pod = { pod_file_path: path, pod_file_name: `DN-${delivery.delivery_no}_${(who || 'customer').replace(/[^\w-]+/g, '-')}.${ext}` };
+    }
+    const { error: err } = await supabase.rpc('confirm_delivery', { p_delivery: delivery.id, p: { received_by: f.received_by, delivered_at: new Date(f.at).toISOString(), note: f.note, ...pod } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onDone();
@@ -132,6 +178,14 @@ export function ConfirmDelivery({ delivery, who, onClose, onDone }) {
           <label className="pe-field"><span>When</span><input type="datetime-local" className="form-input" value={f.at} onChange={e => setF({ ...f, at: e.target.value })} /></label>
         </div>
         <label className="pe-field"><span>Note (optional)</span><input className="form-input" placeholder="e.g. 3 pieces broken, left at the gate" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></label>
+        {/* proof of delivery photo (117): the signed delivery note, or the goods at the site */}
+        <div className="pe-field"><span>Photo (optional)</span>
+          <ProofPreview file={photo}>
+            <label className="btn btn-outline btn-sm">{photo ? 'Change photo' : 'Add photo'}
+              <input type="file" accept="image/*,application/pdf" hidden onChange={pickPhoto} /></label>
+            {photo && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPhoto(null)}>Remove</button>}
+          </ProofPreview>
+        </div>
       </div>
     </Modal>
   );

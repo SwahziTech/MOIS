@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Upload, FileImage, FileText, MessageSquare, Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { files } from '../../lib/files';
 import ShareButton from '../ShareButton';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -77,7 +78,7 @@ export async function postSaleProofs(saleId, proofs, { organizationId, buyer }) 
       if (x.file) {
         const ext = (x.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
         path = `${organizationId}/${s.branch_id}/${pay.id}/${Date.now()}.${ext}`;
-        const up = await supabase.storage.from('payment-proofs').upload(path, x.file, { contentType: x.file.type || undefined, upsert: false });
+        const up = await files('payment-proofs').upload(path, x.file, { contentType: x.file.type || undefined, upsert: false });
         if (up.error) throw up.error;
       }
       const name = x.file ? proofName({ kind: `Sale-${s.sale_no}`, who: buyer || 'Walk-in', amount: pay.amount, date: pay.paid_on }, extOf(x.file)) : null;
@@ -103,7 +104,7 @@ export async function postSharedSlip(payments, slip, { organizationId, who }) {
     if (slip.file) {
       const ext = (slip.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
       path = `${organizationId}/${ps[0].sale.branch_id}/shared-${Date.now()}/${Date.now()}.${ext}`;
-      const up = await supabase.storage.from('payment-proofs').upload(path, slip.file, { contentType: slip.file.type || undefined, upsert: false });
+      const up = await files('payment-proofs').upload(path, slip.file, { contentType: slip.file.type || undefined, upsert: false });
       if (up.error) throw up.error;
     }
   } catch (e) { console.error(e); return ps.length; }
@@ -169,7 +170,7 @@ export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSave
       if (file) {
         const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
         path = `${organization.id}/${sale.branch_id}/${payment.id}/${Date.now()}.${ext}`;
-        const up = await supabase.storage.from('payment-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
+        const up = await files('payment-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
         if (up.error) throw up.error;
       }
       const { error: err } = await supabase.rpc('submit_payment_proof', { p: { payment_id: payment.id, file_path: path, file_name: file ? nameOf(extOf(file)) : null, sms_text: text.trim() || null } });
@@ -249,9 +250,9 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   useEffect(() => { if (smsOnly) { const u = smsImage(proof.sms_text); setUrl(u); setSaveUrl(u); } }, [smsOnly, proof?.sms_text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!proof?.file_path) return;
-    supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+    files('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
     const name = proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'jpg');
-    supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
+    files('payment-proofs').createSignedUrl(proof.file_path, 600, { download: name }).then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [proof?.file_path]);
   const isPdf = /\.pdf$/i.test(proof?.file_path ?? '');
   const isPhoto = (!!proof?.file_path && !isPdf) || smsOnly;
@@ -510,7 +511,7 @@ function SlipThumb({ proof }) {
   const isPdf = /\.pdf$/i.test(proof.file_path ?? '');
   useEffect(() => {
     if (!proof.file_path || isPdf) return;
-    supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+    files('payment-proofs').createSignedUrl(proof.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
   }, [proof.file_path]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <span className="ru-thumb" aria-hidden="true">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Trash2, AlertTriangle, FileImage } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { files } from '../../lib/files';
 import { shrinkImage } from '../../lib/shrinkImage';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -89,7 +90,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
       const file = await shrinkImage(raw, { max: 2400 });   // smaller before upload (2026-11-11); sheets keep more detail
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
       const path = `${organization.id}/${branchId}/${date}/${at}-${i + 1}.${ext}`;
-      const up = await supabase.storage.from('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
+      const up = await files('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
       if (up.error) throw up.error;
       rows.push({ file_path: path, file_name: file.name });
     }
@@ -197,7 +198,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
     }
   }
   async function openKept(u) {
-    const { data } = await supabase.storage.from('report-photos').createSignedUrl(u.file_path, 300);
+    const { data } = await files('report-photos').createSignedUrl(u.file_path, 300);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener');
   }
 

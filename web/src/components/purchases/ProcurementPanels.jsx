@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Printer, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { files } from '../../lib/files';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -650,7 +651,7 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
         if (file) {
           const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
           path = `${organization.id}/${purchase.branch_id}/dp/${Date.now()}.${ext}`;
-          const up = await supabase.storage.from('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
+          const up = await files('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
           if (up.error) throw up.error;
         }
         const { error: e2 } = await supabase.rpc('post_director_payment', { p: { branch_id: purchase.branch_id, kind: 'supplier', ref_id: purchase.id, description: supplierName,

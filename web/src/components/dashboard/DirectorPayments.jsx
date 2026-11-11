@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Upload, FileImage, Banknote, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { files } from '../../lib/files';
 import ShareButton from '../ShareButton';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
@@ -116,7 +117,7 @@ export function PayModal({ onClose, onSaved }) {
         if (file) {
           const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
           path = `${organization.id}/${br}/dp/${Date.now()}.${ext}`;
-          const up = await supabase.storage.from('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
+          const up = await files('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
           if (up.error) throw up.error;
         }
         const { error: err } = await supabase.rpc('post_director_payment', { p: { branch_id: br, kind, ref_id: ref || null, description: desc.trim() || null,
@@ -242,8 +243,8 @@ export function ProofView({ row, onClose }) {
   const [saveUrl, setSaveUrl] = useState('');
   useEffect(() => {
     if (!row.file_path) return;
-    supabase.storage.from('director-proofs').createSignedUrl(row.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
-    supabase.storage.from('director-proofs').createSignedUrl(row.file_path, 600, { download: row.file_name || `Paid_${row.paid_on}.jpg` })
+    files('director-proofs').createSignedUrl(row.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+    files('director-proofs').createSignedUrl(row.file_path, 600, { download: row.file_name || `Paid_${row.paid_on}.jpg` })
       .then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [row.file_path]); // eslint-disable-line react-hooks/exhaustive-deps
   const isPdf = /\.pdf$/i.test(row.file_path ?? '');
