@@ -802,10 +802,26 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
       </div>
-      {groupSlipOpen && <SaleProofWindow amount={r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0))} money={money}
-        note={`One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${dayList.filter(x => daySel.has(x.id)).map(x => x.view.name).join(', ')}. A sale with its own proof keeps it.`}
-        onClose={() => setGroupSlipOpen(false)}
-        onDone={v => { setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids: [...daySel], slip: v }]); setDaySel(new Set()); setGroupSlipOpen(false); setChoosing(false); }} />}
+      {groupSlipOpen && (() => {
+        // the proof already given shows here, to keep or replace (2026-11-11, the user): one ticked sale's own proof,
+        // or the slip the ticked sales already share
+        const ids = [...daySel];
+        const own = ids.length === 1 ? dayFiles[ids[0]]?.proofs?.[0] : null;
+        const shared = slipGroups.find(g => ids.length && g.ids.length === ids.length && ids.every(id => g.ids.includes(id)));
+        const start = own ? { file: own.file ?? null, text: own.text ?? '' } : shared?.slip;
+        const names = dayList.filter(x => daySel.has(x.id)).map(x => x.view.name).join(', ');
+        return <SaleProofWindow amount={r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0))} money={money} start={start}
+          note={own ? 'The proof added with this sale: keep it or replace it.' : `One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${names}. A sale with its own proof keeps it.`}
+          onClose={() => setGroupSlipOpen(false)}
+          onDone={v => {
+            if (own) {   // the sale's own proof becomes this slip
+              setDayFiles(m => { const n = { ...m }; delete n[ids[0]]; return n; });
+              setDayList(d => d.map(x => (x.id === ids[0] ? { ...x, view: { ...x.view, proofs: 0 } } : x)));
+            }
+            setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids, slip: v }]);
+            setDaySel(new Set()); setGroupSlipOpen(false); setChoosing(false);
+          }} />;
+      })()}
       {proofFor != null && <SaleProofWindow amount={pays[proofFor]?.auto && pays.length === 1 ? totals.total : num(pays[proofFor]?.amount)} money={money} start={payProofs[proofFor]}
         onClose={() => setProofFor(null)} onDone={v => { setPayProofs(m => ({ ...m, [proofFor]: v })); setProofFor(null); }} />}
       {picking && (
