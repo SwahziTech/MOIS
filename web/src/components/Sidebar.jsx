@@ -193,8 +193,15 @@ export default function Sidebar() {
   const [peek, setPeek] = useState(false);
   useEffect(() => {
     if (!top) { document.body.classList.remove('menu-top-hidden'); return undefined; }
-    const onScroll = () => setBarHidden(window.scrollY > 60);
-    const onMove = e => { if (e.clientY < 10) setPeek(true); };
+    // scrolling on hides it again, and so does the pointer leaving the menu (2026-11-11, the user: it stayed out)
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setBarHidden(y > 60);
+      if (y > lastY + 4) setPeek(false);
+      lastY = y;
+    };
+    const onMove = e => { if (e.clientY < 10) setPeek(true); else if (e.clientY > 170) setPeek(false); };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('mousemove', onMove, { passive: true });
