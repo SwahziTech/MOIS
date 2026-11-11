@@ -2799,3 +2799,7 @@ body.menu-top .modal thead th { top: 0; }
 body.menu-top-hidden .tm-bar { transform: translateY(-100%); }
 body.menu-top.menu-top-hidden { --tm-h: 0px; }
 body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
+/* electricity: the day's readings on each meter (2026-11-11) */
+.el-slots { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: var(--text-sm); }
+.el-slots b { font-weight: 700; }
+.el-link { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; margin: 8px 0; }
