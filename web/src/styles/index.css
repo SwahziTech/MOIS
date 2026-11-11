@@ -2834,3 +2834,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-check-proofs .sl-have-thumb { width: 48px; height: 48px; margin-left: 0; }
 .sl-check-shared { display: inline-flex; flex-direction: column; gap: 2px; }
 .sl-check-proofs .sl-have-pic { margin-left: 0; }
+/* Share on an opened proof (2026-11-11) */
+.share-said { font-size: var(--text-sm); color: var(--success, #2e9e5b); margin-right: auto; }

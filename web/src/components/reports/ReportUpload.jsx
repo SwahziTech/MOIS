@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Trash2, AlertTriangle, FileImage } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { shrinkImage } from '../../lib/shrinkImage';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
 import { formatAmount, dateText, tableDate } from '../../lib/format';
@@ -84,7 +85,8 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
   async function keep(reportKind, reportText) {
     const at = Date.now();
     const rows = [];
-    for (const [i, { file }] of files.entries()) {
+    for (const [i, { file: raw }] of files.entries()) {
+      const file = await shrinkImage(raw, { max: 2400 });   // smaller before upload (2026-11-11); sheets keep more detail
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
       const path = `${organization.id}/${branchId}/${date}/${at}-${i + 1}.${ext}`;
       const up = await supabase.storage.from('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Upload, FileImage, Banknote, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import ShareButton from '../ShareButton';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -248,7 +249,10 @@ export function ProofView({ row, onClose }) {
   const isPdf = /\.pdf$/i.test(row.file_path ?? '');
   return (
     <Modal title={`${KIND_LABEL[row.kind]} · ${formatMoney(Number(row.amount), organization?.currency_code)}`} onClose={onClose}
-      footer={<>{saveUrl && <a href={saveUrl} className="btn btn-ghost" download>Save to device</a>}<button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
+      footer={<>{(url || row.sms_text) && <ShareButton deps={[url]} name={row.file_name || `Paid_${row.paid_on}`}
+          text={`${KIND_LABEL[row.kind]} · ${formatMoney(Number(row.amount), organization?.currency_code)} · paid ${dateText(row.paid_on)}${row.description ? ` · ${row.description}` : ''}${!row.file_path && row.sms_text ? `\n${row.sms_text}` : ''}`}
+          getBlob={async () => (url ? (await fetch(url)).blob() : new Blob([row.sms_text], { type: 'text/plain' }))} />}
+        {saveUrl && <a href={saveUrl} className="btn btn-ghost" download>Save to device</a>}<button type="button" className="btn btn-outline" onClick={onClose}>Close</button></>}>
       <div className="modal-form">
         <p className="pl-help">Paid {dateText(row.paid_on)}{row.description ? ` · ${row.description}` : ''}</p>
         {row.file_path && (isPdf ? <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">Open the PDF</a>

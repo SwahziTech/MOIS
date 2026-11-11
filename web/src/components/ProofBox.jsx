@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, X, FileText } from 'lucide-react';
 import { useFileUrl } from './ProofPreview';
+import { shrinkImage } from '../lib/shrinkImage';
 
 /*
  * The proof of a payment, entered like a message (2026-11-06, the user): one
@@ -13,10 +14,10 @@ export default function ProofBox({ file, onFile, text, onText, keptName = null, 
   const url = useFileUrl(file);
   const [big, setBig] = useState(false);
   const isImage = file?.type?.startsWith('image/');
-  function pick(e) {
+  async function pick(e) {
     const f = e.target.files?.[0];
     e.target.value = '';
-    if (f) { setBig(false); onFile(f); }
+    if (f) { setBig(false); onFile(await shrinkImage(f)); }   // photos made smaller before upload (2026-11-11)
   }
   // compact (2026-11-08): one line the height of a field, for forms (Record a sale)
   if (compact) return (

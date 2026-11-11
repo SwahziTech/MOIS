@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Upload, FileImage, FileText, MessageSquare, Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import ShareButton from '../ShareButton';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
 import { orgToday } from '../../lib/inventory';
@@ -173,17 +174,7 @@ export function ProofModal({ payment, sale, proof, buyer, money, onClose, onSave
       }
       const { error: err } = await supabase.rpc('submit_payment_proof', { p: { payment_id: payment.id, file_path: path, file_name: file ? nameOf(extOf(file)) : null, sms_text: text.trim() || null } });
       if (err) throw err;
-      // a copy kept on this device (2026-11-04, the user): the slip, else the SMS as text
-      try {
-        const blob = file ?? (text.trim() ? new Blob([text.trim()], { type: 'text/plain' }) : null);
-        if (blob) {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = nameOf(file ? extOf(file) : 'txt');
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        }
-      } catch { /* the proof is posted; the copy is a convenience */ }
+      // no copy is downloaded any more (2026-11-11, the user): the proof stays in MOIS, to open and Share later
       onSaved();
     } catch (e) {
       setError(dbErrorMessage(e, "We couldn't send the proof. Please try again."));
@@ -312,6 +303,13 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   return (
     <Modal title={`Payment proof · ${money(siblings.length ? siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)) : Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {(url || saveUrl) && <ShareButton deps={[url, stamp?.at, strokes.length]} name={(proof?.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'jpg')).replace(/\.[^.]+$/, '') + (stamp && strokes.length && isPhoto ? '_marked' : '')}
+          text={`Sale #${sale.sale_no} · ${buyer} · ${money(Number(payment.amount))} · paid ${dateText(payment.paid_on)} into ${account}`}
+          getBlob={async () => {
+            if (!url) return null;
+            if (stamp && strokes.length && isPhoto) return markedSlipBlob(url, { color: markColor, strokes }, `${stamp.who} · ${stamp.at}`);
+            return (await fetch(url)).blob();
+          }} />}
         {saveUrl && <a href={saveUrl} className="btn btn-ghost" download={smsOnly ? proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'png') : true} onClick={saveMarked}>Save to device</a>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
         {pen && !stamp && strokes.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => { setStrokes([]); setReady(false); }}>Clear</button>}
