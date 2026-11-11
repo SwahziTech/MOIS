@@ -1266,7 +1266,8 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     if (needEfd && !efdNo.trim()) { setError('This sale carries VAT — enter the EFD receipt number.'); return; }
     if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
     setBusy(true);
-    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: receivedBy, vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
+    // a delivery: who receives it is asked when it is confirmed delivered, not now
+    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
       lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
@@ -1277,11 +1278,11 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     <Modal title={`Goods leaving on #${sale.sale_no}`} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || tooMuch.length > 0 || inStore === null} onClick={save}>Record {value > 0 ? money(r2(value)) : ''}</button></>}>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || tooMuch.length > 0 || inStore === null} onClick={save} title={kind === 'delivery' ? 'The goods leave the store; confirm Delivered on the sale when they arrive' : 'The goods leave the store'}>Confirm</button></>}>
       <div className="modal-form">
         <div className="flex items-center gap-8" role="group" aria-label="How it leaves">
           <button type="button" className={`filter-chip${kind === 'collection' ? ' is-on' : ''}`} onClick={() => setKind('collection')}>Collected by the customer</button>
-          <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>Delivered</button>
+          <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>We deliver</button>
           <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
         </div>
         <table className="rd-table">
@@ -1315,9 +1316,10 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
               <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} /> The EFD receipt shows these amounts</label>
             </div>
           )}
-          <label className="pe-field"><span>Received by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>
+          {/* minimal (2026-11-11, the user): collected — who took it and the truck; delivered — the driver and the truck */}
+          {kind === 'collection' && <label className="pe-field"><span>Collected by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>}
           {kind === 'delivery' && <label className="pe-field"><span>Driver</span><input className="form-input" value={driver} onChange={e => setDriver(e.target.value)} /></label>}
-          {kind === 'delivery' && <label className="pe-field"><span>Vehicle</span><input className="form-input" placeholder="e.g. T 123 ABC" value={vehicle} onChange={e => setVehicle(e.target.value)} /></label>}
+          <label className="pe-field"><span>Truck plate no.</span><input className="form-input" placeholder="e.g. T 123 ABC" value={vehicle} data-no-caps onChange={e => setVehicle(e.target.value.toUpperCase())} /></label>
         </div>
       </div>
     </Modal>
@@ -1435,7 +1437,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
   // delivered so far, per line (065)
   const doneOf = (x, lineId) => (x.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(y => y.sale_line_id === lineId).reduce((u, y) => u + Number(y.quantity), 0), 0);
   const stateOf = (x, l) => { if (!l.product_id) return 'done';   // an other item: handed over with the sale (104)
-    const d = doneOf(x, l.id); return d <= 1e-9 ? 'not' : d + 1e-9 >= Number(l.quantity) ? 'done' : 'part'; };
+    const d = doneOf(x, l.id); if (d <= 1e-9) return 'not'; if (d + 1e-9 < Number(l.quantity)) return 'part';
+    // all of it has left the store: on the way until a delivery carrying it is confirmed (096)
+    return (x.deliveries || []).some(dv => dv.status === 'on_the_way' && (dv.lines || []).some(y => y.sale_line_id === l.id)) ? 'way' : 'done'; };
+  const byCustomer = (x, l) => (x.deliveries || []).filter(dv => (dv.lines || []).some(y => y.sale_line_id === l.id)).every(dv => dv.kind === 'collection');
   const paidOf = x => (x.payments || []).reduce((t, pm) => t + Number(pm.amount), 0);
   const nameOf = l => (l.product_id ? `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` : l.item_name ?? '');
   const accName = id => accounts.find(a => a.id === id)?.name ?? '';
@@ -1444,7 +1449,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
   const matches = x => !q || [`#${x.sale_no}`, String(x.sale_no), buyerOf(x), x.walk_in_phone, x.site, x.efd_receipt_no,
     ...(x.lines || []).map(nameOf), ...(x.payments || []).flatMap(pm => [pm.receipt_no, accName(pm.account_id)])]
     .filter(Boolean).some(t => String(t).toLowerCase().includes(q));
-  const lineOk = (x, l) => (!delivery || stateOf(x, l) === delivery) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
+  const lineOk = (x, l) => (!delivery || (delivery === 'out' ? ['way', 'done'].includes(stateOf(x, l)) : stateOf(x, l) === delivery)) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
   const inPeriod = sales.filter(x => x.sale_date >= from && x.sale_date <= to && matches(x)
       && (!payment || (payment === 'owed') === (Number(x.total) - paidOf(x) > 0.004))
       && (!account || (x.payments || []).some(pm => pm.account_id === account))
@@ -1484,8 +1489,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
       <ListToolbar id="book-search" search={search} onSearch={setSearch} placeholder="Search customer, item, site, receipt no., account, phone or #…"
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
-          { key: 'delivery', label: 'Delivered', value: delivery, onChange: setDelivery,
-            options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not delivered' }, { value: 'part', label: 'Part delivered' }, { value: 'done', label: 'Delivered' }] },
+          { key: 'delivery', label: 'Goods', value: delivery, onChange: setDelivery,
+            options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not collected' }, { value: 'part', label: 'Part collected' }, { value: 'out', label: 'Collected (all left the store)' }, { value: 'way', label: 'On the way' }, { value: 'done', label: 'Delivered / collected' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
             options: [{ value: '', label: 'All' }, { value: 'owed', label: 'Still owed' }, { value: 'paid', label: 'Paid in full' }] },
           ...(accounts.length ? [{ key: 'account', label: 'Account', value: account, onChange: setAccount,
@@ -1502,7 +1507,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
             <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate{cur}</th><th className="num">Amount{cur}</th>
               <th className="num">With VAT{cur}</th><th className="num">VAT{cur}</th><th className="num">Without VAT{cur}</th>
               {cols.map((a, i) => <th key={a.id} className={`num sb-acc${i === 0 ? ' sb-acc-start' : ''}`}>{a.name}</th>)}{hasOther && <th className={`num sb-acc${cols.length ? '' : ' sb-acc-start'}`}>Other</th>}
-              <th>Receipt no.</th><th>Site</th><th>Delivered</th></tr>
+              <th>Receipt no.</th><th>Site</th><th>Goods</th></tr>
           </thead>
           <tbody>
             {rows.length === 0 ? <tr><td colSpan={12 + cols.length + (hasOther ? 1 : 0)} className="text-muted">{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period. Record sale adds one.'}</td></tr>
@@ -1532,9 +1537,10 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
                 {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
                 {/* has it left the store? (065) — all, part (how much) or not yet */}
                 <td>{(() => { const st = stateOf(x, l); const d = doneOf(x, l.id);
-                  return st === 'done' ? <span className="sb-del is-done">Delivered</span>
+                  return st === 'done' ? <span className="sb-del is-done">{!l.product_id || !byCustomer(x, l) ? 'Delivered' : 'Collected'}</span>
+                    : st === 'way' ? <span className="sb-del is-part" title="Left the store; confirm Delivered on the sale when it arrives">On the way</span>
                     : st === 'part' ? <span className="sb-del is-part">Part — {qtyText(r2(d))} of {qtyText(Number(l.quantity))} {per(l.product_id)}</span>
-                    : <span className="sb-del is-not">Not delivered</span>; })()}</td>
+                    : <span className="sb-del is-not">Not collected</span>; })()}</td>
               </tr>
             ))}
           </tbody>
