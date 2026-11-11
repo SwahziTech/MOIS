@@ -246,17 +246,37 @@ export default function Sales() {
  */
 /* The proof of a payment given while recording the sale (2026-11-08): the same box as Proof of payment;
    it is posted when the sale is saved */
-function SaleProofWindow({ amount, money, start, note = 'Posted with the sale when it is saved.', onClose, onDone }) {
+function SaleProofWindow({ amount, money, start, note = 'Posted with the sale when it is saved.', existing = [], onClose, onDone }) {
   const [file, setFile] = useState(start?.file ?? null);
   const [text, setText] = useState(start?.text ?? '');
+  const [replace, setReplace] = useState(false);   // the ticked sales' own proofs: keep (default) or replace with this slip
   const [error, setError] = useState('');
   return (
     <Modal title={`Proof of payment${amount > 0 ? ` · ${money(amount)}` : ''}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn btn-primary" onClick={() => onDone({ file, text })}>Add proof</button></>}>
+        <button type="button" className="btn btn-primary" onClick={() => {
+          if (!file && !text.trim() && !(existing.length && !replace)) { setError('Add the photo or paste the SMS.'); return; }
+          onDone({ file, text }, replace);
+        }}>{existing.length && !replace && !file && !text.trim() ? 'Keep them' : 'Add proof'}</button></>}>
       <div className="modal-form">
         <p className="pl-help">{note}</p>
+        {/* proofs the ticked sales already have (2026-11-11, the user): shown, and the person chooses */}
+        {existing.length > 0 && (
+          <div className="sl-have">
+            <strong>Already have a proof</strong>
+            <ul>
+              {existing.map(x => (
+                <li key={x.name}><span>{x.name}</span>
+                  <span className="pl-help">{x.lost ? 'added earlier — the photo was lost when the page reloaded' : [x.file && `photo ${x.file.name}`, x.text?.trim() && `SMS "${x.text.trim().slice(0, 40)}${x.text.trim().length > 40 ? '…' : ''}"`].filter(Boolean).join(' + ')}</span></li>
+              ))}
+            </ul>
+            <div className="filter-chips" role="radiogroup" aria-label="Their own proofs">
+              <button type="button" role="radio" aria-checked={!replace} className={`filter-chip${!replace ? ' is-on' : ''}`} onClick={() => setReplace(false)}>Keep their own proofs</button>
+              <button type="button" role="radio" aria-checked={replace} className={`filter-chip${replace ? ' is-on' : ''}`} onClick={() => setReplace(true)}>Replace them with this slip</button>
+            </div>
+          </div>
+        )}
         <ProofBox file={file} onFile={f => { if (f && f.size > 10 * 1024 * 1024) { setError('That file is over 10 MB. Take the photo again at a smaller size.'); return; } setError(''); setFile(f); }} text={text} onText={setText} />
       </div>
     </Modal>
@@ -803,22 +823,27 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         </div>
       </div>
       {groupSlipOpen && (() => {
-        // the proof already given shows here, to keep or replace (2026-11-11, the user): one ticked sale's own proof,
-        // or the slip the ticked sales already share
+        // the proofs already given (2026-11-11, the user): one ticked sale's own proof opens in the box to keep or
+        // replace; with several, each sale's proof is listed and the person chooses to keep them or replace them
         const ids = [...daySel];
-        const own = ids.length === 1 ? dayFiles[ids[0]]?.proofs?.[0] : null;
+        const ticked = dayList.filter(x => daySel.has(x.id));
+        const ownOf = id => dayFiles[id]?.proofs?.[0];
+        const own = ids.length === 1 ? ownOf(ids[0]) : null;
         const shared = slipGroups.find(g => ids.length && g.ids.length === ids.length && ids.every(id => g.ids.includes(id)));
         const start = own ? { file: own.file ?? null, text: own.text ?? '' } : shared?.slip;
-        const names = dayList.filter(x => daySel.has(x.id)).map(x => x.view.name).join(', ');
-        return <SaleProofWindow amount={r2(dayList.filter(x => daySel.has(x.id)).reduce((t, x) => t + x.view.paid, 0))} money={money} start={start}
-          note={own ? 'The proof added with this sale: keep it or replace it.' : `One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${names}. A sale with its own proof keeps it.`}
+        const existing = ids.length > 1 ? ticked.filter(x => ownOf(x.id) || x.view.proofs > 0)
+          .map(x => ({ name: x.view.name, file: ownOf(x.id)?.file, text: ownOf(x.id)?.text, lost: !ownOf(x.id) })) : [];
+        const names = ticked.map(x => x.view.name).join(', ');
+        return <SaleProofWindow amount={r2(ticked.reduce((t, x) => t + x.view.paid, 0))} money={money} start={start} existing={existing}
+          note={own ? 'The proof added with this sale: keep it or replace it.' : `One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${names}.`}
           onClose={() => setGroupSlipOpen(false)}
-          onDone={v => {
-            if (own) {   // the sale's own proof becomes this slip
-              setDayFiles(m => { const n = { ...m }; delete n[ids[0]]; return n; });
-              setDayList(d => d.map(x => (x.id === ids[0] ? { ...x, view: { ...x.view, proofs: 0 } } : x)));
+          onDone={(v, replace) => {
+            const gone = own ? [ids[0]] : replace ? ticked.filter(x => ownOf(x.id) || x.view.proofs > 0).map(x => x.id) : [];
+            if (gone.length) {   // their own proofs give way to this slip
+              setDayFiles(m => { const n = { ...m }; for (const id of gone) delete n[id]; return n; });
+              setDayList(d => d.map(x => (gone.includes(x.id) ? { ...x, view: { ...x.view, proofs: 0 } } : x)));
             }
-            setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids, slip: v }]);
+            if (v.file || v.text?.trim()) setSlipGroups(gs => [...gs.map(g => ({ ...g, ids: g.ids.filter(id => !daySel.has(id)) })).filter(g => g.ids.length), { ids, slip: v }]);
             setDaySel(new Set()); setGroupSlipOpen(false); setChoosing(false);
           }} />;
       })()}
