@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
-import { dateText, tableDateTime } from '../../lib/format';
+import { tableDate, tableDateTime } from '../../lib/format';
 
 const STATUS = { on_the_way: 'On the way', delivered: 'Delivered' };
 const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
@@ -67,14 +67,14 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
       {!tracked && rows?.length > 0 && <div className="alert alert-warning">Delivery tracking isn't set up on this system yet.</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Delivery note</th><th>Customer</th><th>Site</th><th>Driver · truck</th><th>Status</th><th>Received by</th><th /></tr></thead>
+          <thead><tr><th>Date</th><th>Delivery note</th><th>Customer</th><th>Site</th><th>Driver · truck</th><th>Status</th><th>Received by</th><th /></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={7}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
+            {rows === null ? <tr><td colSpan={8}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={8}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
             : days.map(d => [
-              <tr key={`d-${d.day}`} className="dl-day"><td colSpan={7}><strong>{dateText(d.day)}</strong> <span className="pl-help">· {d.rows.length} delivery note{d.rows.length === 1 ? '' : 's'}</span></td></tr>,
-              ...d.rows.map(r => (
-                <tr key={r.id}>
+              ...d.rows.map((r, i) => (
+                <tr key={r.id} className={i === 0 ? 'dl-first' : ''}>
+                  <td>{i === 0 ? <>{tableDate(d.day)}<div className="pl-help">{d.rows.length} note{d.rows.length === 1 ? '' : 's'}</div></> : ''}</td>
                   <td>DN-{r.delivery_no}<div className="pl-help">sale #{r.sale.sale_no}{r.dispatched_at ? ` · ${new Date(r.dispatched_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}</div></td>
                   <td>{who(r)}</td>
                   <td>{r.sale.site || ''}</td>
