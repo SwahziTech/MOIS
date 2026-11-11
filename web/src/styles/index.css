@@ -2819,3 +2819,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-have-pic { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .sl-have-pic .sl-have-thumb { margin-left: 0; }
 .sl-have li .pl-help:not(.sl-have-pic .pl-help) { color: var(--text-primary); font-weight: 600; }
+.sl-have-sale { flex: 0 0 280px; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); }
+.sl-have-amt { font-size: 1.4rem; }
+@media (max-width: 760px) { .sl-have-sale { flex-basis: auto; } }

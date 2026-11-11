@@ -249,7 +249,7 @@ export default function Sales() {
 /* The proof of a payment given while recording the sale (2026-11-08): the same box as Proof of payment;
    it is posted when the sale is saved */
 /* A proof a sale already has, beside its name: a thumbnail that opens the photo to zoom (a PDF opens in a new tab) */
-function HaveThumb({ file, name }) {
+function HaveThumb({ file, name, amount, view, money }) {
   const url = useFileUrl(file);
   const [open, setOpen] = useState(false);
   const isImage = file?.type?.startsWith('image/');
@@ -260,9 +260,24 @@ function HaveThumb({ file, name }) {
         {isImage && url ? <img src={url} alt="" /> : <span className="pl-help">PDF</span>}
       </button></span>
       {open && url && (
-        <Modal title={`Proof · ${name}`} onClose={() => setOpen(false)} size="lg"
+        <Modal title={`Proof · ${name} · ${money(amount)}`} onClose={() => setOpen(false)} size="lg"
           footer={<button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>Close</button>}>
-          <SlipCanvas url={url} strokes={[]} color="green" pen={null} onStrokes={() => {}} />
+          {/* the slip beside the sale it pays for (2026-11-11, the user) */}
+          <div className="pp-review">
+            <div className="pp-review-slip"><SlipCanvas url={url} strokes={[]} color="green" pen={null} onStrokes={() => {}} /></div>
+            {view && (
+              <div className="sl-have-sale">
+                <div className="pl-label">Amount on this proof</div>
+                <strong className="sl-have-amt">{money(amount)}</strong>
+                <div className="pl-label" style={{ marginTop: 10 }}>Sale</div>
+                <div><strong>{view.name}</strong>{view.date ? <span className="pl-help"> · {dateText(view.date)}</span> : null}</div>
+                <table className="pp-shared-table"><tbody>
+                  {(view.rows || []).map((r, i) => <tr key={i}><td>{r.product}</td><td className="num">{r.qty != null ? `${qtyText(r.qty)} ${r.unit}` : '—'}</td><td className="num">{formatAmount(r.amount)}</td></tr>)}
+                </tbody><tfoot><tr><td colSpan={2}><strong>Total</strong></td><td className="num"><strong>{money(view.total)}</strong></td></tr></tfoot></table>
+                <div className="pl-help">Paid {money(view.paid)} into {view.acc}{view.total - view.paid > 0.01 ? ` · ${money(view.total - view.paid)} not paid` : ''}</div>
+              </div>
+            )}
+          </div>
         </Modal>
       )}
     </>
@@ -292,7 +307,7 @@ function SaleProofWindow({ amount, money, start, note = 'Posted with the sale wh
               {existing.map(x => (
                 <li key={x.name}><span className="sl-have-name">{x.name}</span>
                   <span className="pl-help">{x.lost ? 'added earlier — the photo was lost when the page reloaded' : [money(x.amount), x.text?.trim() && `SMS "${x.text.trim().slice(0, 40)}${x.text.trim().length > 40 ? '…' : ''}"`].filter(Boolean).join(' + ')}</span>
-                  {x.file && <HaveThumb file={x.file} name={x.name} />}</li>
+                  {x.file && <HaveThumb file={x.file} name={x.name} amount={x.amount} view={x.view} money={money} />}</li>
               ))}
             </ul>
             <div className="filter-chips" role="radiogroup" aria-label="Their own proofs">
@@ -856,7 +871,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         const shared = slipGroups.find(g => ids.length && g.ids.length === ids.length && ids.every(id => g.ids.includes(id)));
         const start = own ? { file: own.file ?? null, text: own.text ?? '' } : shared?.slip;
         const existing = ids.length > 1 ? ticked.filter(x => ownOf(x.id) || x.view.proofs > 0)
-          .map(x => ({ name: x.view.name, file: ownOf(x.id)?.file, text: ownOf(x.id)?.text, lost: !ownOf(x.id), amount: Number(ownOf(x.id)?.amount ?? x.view.paid) })) : [];
+          .map(x => ({ name: x.view.name, file: ownOf(x.id)?.file, text: ownOf(x.id)?.text, lost: !ownOf(x.id), amount: Number(ownOf(x.id)?.amount ?? x.view.paid), view: x.view })) : [];
         const names = ticked.map(x => x.view.name).join(', ');
         return <SaleProofWindow amount={r2(ticked.reduce((t, x) => t + x.view.paid, 0))} money={money} start={start} existing={existing}
           note={own ? 'The proof added with this sale: keep it or replace it.' : `One slip for ${daySel.size} sale${daySel.size === 1 ? '' : 's'}: ${names}.`}
