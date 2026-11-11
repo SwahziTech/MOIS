@@ -1119,8 +1119,8 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
               {deliveries.map(d => (
                 <tr key={d.id}>
                   <td>{tableDate(d.delivered_on)}</td>
-                  <td>{d.kind === 'collection' ? 'Collected' : d.status === 'on_the_way' ? 'On the way' : 'Delivered'} #{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
-                    {d.status === 'on_the_way' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>awaiting proof</span>}
+                  <td>{d.kind === 'collection' || d.status === 'on_the_way' ? 'Collected' : 'Delivered'} DN-{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
+                    {d.status === 'on_the_way' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>to confirm delivered</span>}
                     {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <div className="pl-help">Received by {d.pod_received_by || d.received_by}{d.delivered_at ? ` · ${tableDateTime(d.delivered_at)}` : ''}{d.pod_note ? ` · ${d.pod_note}` : ''}</div>}
                     <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
@@ -1439,7 +1439,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
   const stateOf = (x, l) => { if (!l.product_id) return 'done';   // an other item: handed over with the sale (104)
     const d = doneOf(x, l.id); if (d <= 1e-9) return 'not'; if (d + 1e-9 < Number(l.quantity)) return 'part';
     // all of it has left the store: on the way until a delivery carrying it is confirmed (096)
-    return (x.deliveries || []).some(dv => dv.status === 'on_the_way' && (dv.lines || []).some(y => y.sale_line_id === l.id)) ? 'way' : 'done'; };
+    // collected until a delivery carrying it is confirmed delivered (2026-11-11, the user); a customer's own collection stays collected
+    return (x.deliveries || []).some(dv => dv.status === 'on_the_way' && (dv.lines || []).some(y => y.sale_line_id === l.id)) || byCustomer(x, l) ? 'collected' : 'done'; };
   const byCustomer = (x, l) => (x.deliveries || []).filter(dv => (dv.lines || []).some(y => y.sale_line_id === l.id)).every(dv => dv.kind === 'collection');
   const paidOf = x => (x.payments || []).reduce((t, pm) => t + Number(pm.amount), 0);
   const nameOf = l => (l.product_id ? `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` : l.item_name ?? '');
@@ -1449,7 +1450,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
   const matches = x => !q || [`#${x.sale_no}`, String(x.sale_no), buyerOf(x), x.walk_in_phone, x.site, x.efd_receipt_no,
     ...(x.lines || []).map(nameOf), ...(x.payments || []).flatMap(pm => [pm.receipt_no, accName(pm.account_id)])]
     .filter(Boolean).some(t => String(t).toLowerCase().includes(q));
-  const lineOk = (x, l) => (!delivery || (delivery === 'out' ? ['way', 'done'].includes(stateOf(x, l)) : stateOf(x, l) === delivery)) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
+  const lineOk = (x, l) => (!delivery || stateOf(x, l) === delivery) && (!vat || (vat === 'with') === (Number(l.vat_rate) > 0));
   const inPeriod = sales.filter(x => x.sale_date >= from && x.sale_date <= to && matches(x)
       && (!payment || (payment === 'owed') === (Number(x.total) - paidOf(x) > 0.004))
       && (!account || (x.payments || []).some(pm => pm.account_id === account))
@@ -1490,7 +1491,7 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
         sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'amount', label: 'Largest sale first' }] }}
         filters={[
           { key: 'delivery', label: 'Goods', value: delivery, onChange: setDelivery,
-            options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not collected' }, { value: 'part', label: 'Part collected' }, { value: 'out', label: 'Collected (all left the store)' }, { value: 'way', label: 'On the way' }, { value: 'done', label: 'Delivered / collected' }] },
+            options: [{ value: '', label: 'All' }, { value: 'not', label: 'Not collected' }, { value: 'part', label: 'Part collected' }, { value: 'collected', label: 'Collected' }, { value: 'done', label: 'Delivered' }] },
           { key: 'payment', label: 'Paid', value: payment, onChange: setPayment,
             options: [{ value: '', label: 'All' }, { value: 'owed', label: 'Still owed' }, { value: 'paid', label: 'Paid in full' }] },
           ...(accounts.length ? [{ key: 'account', label: 'Account', value: account, onChange: setAccount,
@@ -1537,8 +1538,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
                 {first && <td rowSpan={span} className="sb-merge">{x.site ?? ''}</td>}
                 {/* has it left the store? (065) — all, part (how much) or not yet */}
                 <td>{(() => { const st = stateOf(x, l); const d = doneOf(x, l.id);
-                  return st === 'done' ? <span className="sb-del is-done">{!l.product_id || !byCustomer(x, l) ? 'Delivered' : 'Collected'}</span>
-                    : st === 'way' ? <span className="sb-del is-part" title="Left the store; confirm Delivered on the sale when it arrives">On the way</span>
+                  return st === 'done' ? <span className="sb-del is-done">Delivered</span>
+                    : st === 'collected' ? <span className="sb-del is-done" title="Left the store">Collected</span>
                     : st === 'part' ? <span className="sb-del is-part">Part — {qtyText(r2(d))} of {qtyText(Number(l.quantity))} {per(l.product_id)}</span>
                     : <span className="sb-del is-not">Not collected</span>; })()}</td>
               </tr>

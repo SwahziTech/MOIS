@@ -2836,3 +2836,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-check-proofs .sl-have-pic { margin-left: 0; }
 /* Share on an opened proof (2026-11-11) */
 .share-said { font-size: var(--text-sm); color: var(--success, #2e9e5b); margin-right: auto; }
+/* Deliveries: delivery notes by the day the goods left (2026-11-11) */
+.dl-day td { background: var(--bg-soft); padding-top: 10px; padding-bottom: 6px; }

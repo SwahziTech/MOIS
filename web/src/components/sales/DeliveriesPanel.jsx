@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { dbErrorMessage } from '../../lib/masterData';
 import EmptyState from '../EmptyState';
 import Modal from '../Modal';
-import { tableDate, tableDateTime } from '../../lib/format';
+import { dateText, tableDateTime } from '../../lib/format';
 
 const STATUS = { on_the_way: 'On the way', delivered: 'Delivered' };
 const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
@@ -18,7 +18,9 @@ const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.g
 export default function DeliveriesPanel({ branchId, inBranch, canAct, today, search }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('on_the_way');
+  // two lists (2026-11-11, the user): Collected — the goods have left the store (a delivery not yet confirmed
+  // arrived, or a customer's own collection); Delivered — a delivery confirmed arrived
+  const [filter, setFilter] = useState('collected');
   const [confirming, setConfirming] = useState(null);
   async function load() {
     setError('');
@@ -32,23 +34,32 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
   const tracked = (rows || []).some(r => r.status);   // 096 applied
   const here = useMemo(() => (rows || []).filter(r => inBranch(r.sale.branch_id)), [rows, inBranch]);
   const who = r => r.sale.customer?.name ?? r.sale.walk_in_name ?? 'Walk-in';
+  const stateOf = r => (r.kind === 'delivery' && (r.status ?? 'delivered') === 'delivered' ? 'delivered' : 'collected');
   const q = (search || '').trim().toLowerCase();
-  const shown = here.filter(r => (filter === 'all' || (filter === 'collection' ? r.kind === 'collection' : r.kind === 'delivery' && (r.status ?? 'delivered') === filter))
-    && (!q || `${who(r)} ${r.sale.site ?? ''} ${r.driver ?? ''} ${r.vehicle ?? ''} ${r.sale.sale_no}`.toLowerCase().includes(q)));
-  const onWay = here.filter(r => r.status === 'on_the_way');
+  const shown = here.filter(r => (filter === 'all' || stateOf(r) === filter)
+    && (!q || `${who(r)} ${r.sale.site ?? ''} ${r.driver ?? ''} ${r.vehicle ?? ''} ${r.sale.sale_no} DN-${r.delivery_no}`.toLowerCase().includes(q)));
+  // the delivery notes by the day the goods left the store, newest day first
+  const days = [];
+  for (const r of [...shown].sort((x, y) => (y.delivered_on || '').localeCompare(x.delivered_on || '') || (y.created_at || '').localeCompare(x.created_at || ''))) {
+    const last = days[days.length - 1];
+    if (last && last.day === r.delivered_on) last.rows.push(r); else days.push({ day: r.delivered_on, rows: [r] });
+  }
+  const toConfirm = here.filter(r => r.status === 'on_the_way');
+  const leftToday = here.filter(r => r.delivered_on === today);
   const month = today.slice(0, 7);
+  const count = k => here.filter(r => stateOf(r) === k).length;
 
   return (
     <>
       {rows !== null && (
         <div className="mm-stats">
-          <div className="mm-stat"><span className="pl-label">On the way</span><strong className={onWay.length ? 'text-warning' : ''}>{onWay.length}</strong><span className="pl-help">{onWay.length ? 'awaiting proof' : 'none out'}</span></div>
-          <div className="mm-stat"><span className="pl-label">Delivered today</span><strong>{here.filter(r => r.kind === 'delivery' && (r.delivered_at || '').slice(0, 10) === today).length}</strong><span className="pl-help">{here.filter(r => r.kind === 'collection' && r.delivered_on === today).length} collected</span></div>
-          <div className="mm-stat"><span className="pl-label">This month</span><strong>{here.filter(r => (r.delivered_on || '').startsWith(month)).length}</strong><span className="pl-help">deliveries & collections</span></div>
+          <div className="mm-stat"><span className="pl-label">To confirm delivered</span><strong className={toConfirm.length ? 'text-warning' : ''}>{toConfirm.length}</strong><span className="pl-help">{toConfirm.length ? 'collected, not yet confirmed' : 'none waiting'}</span></div>
+          <div className="mm-stat"><span className="pl-label">Left the store today</span><strong>{leftToday.length}</strong><span className="pl-help">delivery note{leftToday.length === 1 ? '' : 's'}</span></div>
+          <div className="mm-stat"><span className="pl-label">This month</span><strong>{here.filter(r => (r.delivered_on || '').startsWith(month)).length}</strong><span className="pl-help">delivery notes</span></div>
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
-        {[['on_the_way', `On the way (${onWay.length})`], ['delivered', 'Delivered'], ['collection', 'Collected'], ['all', 'All']].map(([k, l]) => (
+        {[['collected', `Collected (${count('collected')})`], ['delivered', `Delivered (${count('delivered')})`], ['all', 'All']].map(([k, l]) => (
           <button key={k} type="button" className={`btn btn-sm ${filter === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter(k)}>{l}</button>
         ))}
       </div>
@@ -56,28 +67,30 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
       {!tracked && rows?.length > 0 && <div className="alert alert-warning">Delivery tracking isn't set up on this system yet.</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Left</th><th>No.</th><th>Customer</th><th>Site</th><th>Driver · vehicle</th><th>Status</th><th>Proof of delivery</th><th /></tr></thead>
+          <thead><tr><th>Delivery note</th><th>Customer</th><th>Site</th><th>Driver · truck</th><th>Status</th><th>Received by</th><th /></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={8}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={8}><EmptyState icon={Truck} title="Nothing here" description={filter === 'on_the_way' ? 'No deliveries on the way.' : 'No deliveries in this list.'} /></td></tr>
-            : shown.map(r => (
-              <tr key={r.id}>
-                <td>{tableDate(r.delivered_on)}{r.dispatched_at ? <div className="pl-help">{new Date(r.dispatched_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div> : null}</td>
-                <td>DN-{r.delivery_no}<div className="pl-help">#{r.sale.sale_no}</div></td>
-                <td>{who(r)}</td>
-                <td>{r.sale.site || ''}</td>
-                <td>{r.kind === 'collection' ? <span className="pl-help">collected by the customer</span> : [r.driver, r.vehicle].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>
-                <td>{r.kind === 'collection' ? <span className="badge badge-neutral">Collected</span>
-                  : <span className={`badge ${r.status === 'on_the_way' ? 'badge-warning' : 'badge-success'}`}>{STATUS[r.status ?? 'delivered']}</span>}</td>
-                <td>{r.status === 'delivered' || r.kind === 'collection'
-                  ? <>{r.pod_received_by || r.received_by || '—'}{r.delivered_at ? <div className="pl-help">{tableDateTime(r.delivered_at)}{r.pod_note ? ` · ${r.pod_note}` : ''}</div> : null}</>
-                  : ''}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {canAct && r.status === 'on_the_way' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(r)}>Delivered…</button>}
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => window.open(`/print/sale/${r.sale.id}?doc=delivery&delivery=${r.id}`, '_blank', 'noopener')}><Printer size={13} /> Note</button>
-                </td>
-              </tr>
-            ))}
+            {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={7}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
+            : days.map(d => [
+              <tr key={`d-${d.day}`} className="dl-day"><td colSpan={7}><strong>{dateText(d.day)}</strong> <span className="pl-help">· {d.rows.length} delivery note{d.rows.length === 1 ? '' : 's'}</span></td></tr>,
+              ...d.rows.map(r => (
+                <tr key={r.id}>
+                  <td>DN-{r.delivery_no}<div className="pl-help">sale #{r.sale.sale_no}{r.dispatched_at ? ` · ${new Date(r.dispatched_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}</div></td>
+                  <td>{who(r)}</td>
+                  <td>{r.sale.site || ''}</td>
+                  <td>{r.kind === 'collection' ? <>{r.vehicle || <span className="pl-help">the customer's own</span>}</> : [r.driver, r.vehicle].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>
+                  <td>{stateOf(r) === 'delivered' ? <span className="badge badge-success">Delivered</span>
+                    : <span className={`badge ${r.status === 'on_the_way' ? 'badge-warning' : 'badge-neutral'}`} title={r.status === 'on_the_way' ? 'Left with our driver: confirm Delivered when it arrives' : 'Collected by the customer'}>Collected</span>}</td>
+                  <td>{r.status === 'delivered' || r.kind === 'collection'
+                    ? <>{r.pod_received_by || r.received_by || '—'}{r.kind === 'delivery' && r.delivered_at ? <div className="pl-help">{tableDateTime(r.delivered_at)}{r.pod_note ? ` · ${r.pod_note}` : ''}</div> : null}</>
+                    : ''}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {canAct && r.status === 'on_the_way' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(r)}>Delivered…</button>}
+                    <button type="button" className="icon-btn" aria-label="Print the delivery note" title="Print the delivery note" onClick={() => window.open(`/print/sale/${r.sale.id}?doc=delivery&delivery=${r.id}`, '_blank', 'noopener')}><Printer size={15} /></button>
+                  </td>
+                </tr>
+              )),
+            ])}
           </tbody>
         </table>
       </div></div>
