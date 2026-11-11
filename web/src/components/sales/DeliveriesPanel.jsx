@@ -72,7 +72,7 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
       {!tracked && rows?.length > 0 && <div className="alert alert-warning">Delivery tracking isn't set up on this system yet.</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>Delivery note</th><th>Customer</th><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th><th>Driver · truck</th><th>Site</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>Date</th><th>Delivery note</th><th>Customer</th><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th><th>Site</th><th>Driver · truck</th><th>Status</th><th /></tr></thead>
           <tbody>
             {rows === null ? <tr><td colSpan={9}><span className="skeleton" /></td></tr>
             : shown.length === 0 ? <tr><td colSpan={9}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
@@ -84,8 +84,8 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
                   <td>{who(r)}</td>
                   <td>{items(r).map((x, k) => <div key={k}>{x.name}</div>)}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{items(r).map((x, k) => <div key={k}>{qtyText(x.qty)} <span className="pl-help">{x.unit}</span></div>)}</td>
-                  <td>{r.kind === 'collection' ? <>{r.vehicle || <span className="pl-help">the customer's own</span>}</> : [r.driver, r.vehicle].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>
                   <td>{r.sale.site || ''}</td>
+                  <td>{r.kind === 'collection' ? <>{r.vehicle || <span className="pl-help">the customer's own</span>}</> : [r.driver, r.vehicle].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>
                   <td>{(() => {
                     const got = r.pod_received_by || r.received_by;
                     const when = r.kind === 'delivery' && r.delivered_at ? ` · ${tableDateTime(r.delivered_at)}` : '';
