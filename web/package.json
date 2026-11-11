@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy:cf": "vite build && wrangler pages deploy dist --project-name mois --branch main",
-    "deploy:cf:preview": "vite build && wrangler pages deploy dist --project-name mois --branch preview"
+    "deploy:cf": "vite build && wrangler deploy",
+    "deploy:cf:preview": "vite build && wrangler versions upload"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

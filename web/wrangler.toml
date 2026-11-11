@@ -1,5 +1,10 @@
-# Cloudflare (PRD 10.1 / 10.9, brought in 2026-11-11): the web app on Cloudflare Pages (with its CDN),
-# files on R2 later. Netlify stays the live address until the user switches.
+# Cloudflare (PRD 10.1 / 10.9, brought in 2026-11-11): the web app as static assets on Cloudflare
+# (Pages now runs on Workers), served from Cloudflare's CDN. Netlify stays the live address until the
+# user switches. Files on R2 come later.
 name = "mois"
-pages_build_output_dir = "dist"
 compatibility_date = "2026-11-01"
+
+[assets]
+directory = "./dist"
+# every app route (/sales, /staff…) gets index.html; React Router takes it from there
+not_found_handling = "single-page-application"

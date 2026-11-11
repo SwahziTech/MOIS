@@ -368,7 +368,7 @@ Needed for the month of real use before AI and Billing.
 
 1. **Setup** — Wrangler (Cloudflare's CLI) in web/; `web/wrangler.toml`; `npm run deploy:cf`.
    SwahziTech signs in (`npx wrangler login`); the agent never creates accounts or enters credentials.
-2. **Pages + CDN** — the app on Cloudflare Pages next to Netlify (a second address); the CDN comes
+2. **Hosting + CDN** — the app as static assets on Cloudflare (Wrangler 4.160: Pages now runs on Workers; `wrangler deploy`, SPA routing in wrangler.toml) next to Netlify (a second address, mois.<subdomain>.workers.dev); the CDN comes
    with Pages. `public/_headers`: service worker never cached; built files cached a year.
    Netlify stays the live address until SwahziTech switches.
 3. **R2** — a private bucket for payment proofs, director slips, report photos and proof of delivery;
