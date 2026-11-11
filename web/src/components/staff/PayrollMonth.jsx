@@ -107,7 +107,7 @@ export default function PayrollMonth({ staff, today, money, currency, canRecord,
       </div>
       <ListToolbar id="payroll-search" search={search} onSearch={setSearch} placeholder="Search name…" />
       <div className="flex items-center gap-8" style={{ margin: '0 0 12px', flexWrap: 'wrap' }}>
-        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m).slice(0, 3) : '' }))} value={month} onChange={setMonth} />
         <span style={{ marginLeft: 'auto' }} className="flex items-center gap-8" >
           {sheetsHere.map(s => (
             <button key={s.id} type="button" className="btn btn-outline btn-sm" title="Approve, pay or void this payment" onClick={() => setOpenId(s.id)}>

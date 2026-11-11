@@ -49,3 +49,20 @@ export function keyForRange(from, to, today) {
   const keys = weekPeriods(today).map(p => p.value);
   return keys.find(k => { const [a, b] = periodRange(k, today); return a === from && b === to; }) ?? null;
 }
+
+/*
+ * The dates beside a period's name, short (2026-11-10, the user): a whole month is just its
+ * month ("Nov"); a stretch of days "Nov 2 – Nov 7" (the year only when it isn't this year);
+ * one day "Nov 11".
+ */
+const MON = d => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).replace('Sept', 'Sep');
+const lastOfMonth = d => { const x = new Date(`${d.slice(0, 7)}-01T00:00:00Z`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return x.toISOString().slice(0, 10); };
+export function shortRange(from, to, today) {
+  if (!from || !to || from === '0000-01-01') return '';
+  const yr = d => (d.slice(0, 4) !== String(today).slice(0, 4) ? ` ${d.slice(0, 4)}` : '');
+  const day = d => `${MON(d)} ${Number(d.slice(8))}${yr(d)}`;
+  if (from === to) return day(from);
+  // a whole month (or this month so far)
+  if (from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && (to === lastOfMonth(to) || to === today)) return `${MON(from)}${yr(from)}`;
+  return `${day(from)} – ${day(to)}`;
+}

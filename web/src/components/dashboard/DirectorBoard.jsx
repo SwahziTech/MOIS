@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { shortRange } from '../../lib/periods';
 import { useSessionPeriod } from '../../lib/sessionPeriod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
@@ -32,7 +33,7 @@ function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
     <div className="dd-period">
       <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
-      <span><strong>{period.label}</strong> · {period.note}</span>
+      <span><strong>{period.label}</strong> · {shortRange(period.from, period.to, today)}</span>
       {periodKey !== 'month' && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => setPeriodKey('month')}>This month</button>}
       <select className="form-input dd-select" aria-label="Period" value={periodKey} onChange={e => setPeriodKey(e.target.value)}>
         {DROPDOWN.slice(0, 1).map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}

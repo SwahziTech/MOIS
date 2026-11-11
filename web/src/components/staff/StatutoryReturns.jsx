@@ -79,7 +79,7 @@ export default function StatutoryReturns({ staff, today, currency, inBranch }) {
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0', flexWrap: 'wrap' }}>
-        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m).slice(0, 3) : '' }))} value={month} onChange={setMonth} />
         <PageTabs nested tabs={[['paye', 'PAYE'], ['nssf', 'NSSF'], ['sdl', 'SDL & WCF']]} value={view} onChange={setView} />
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!people.length} onClick={exportExcel}><Download size={14} /> Excel</button>
         <span className="pl-help" title="From the pay sheets paid in the month. Check the figures before filing; the rates are the ones confirmed under ⚙.">Pay sheets paid in {monthName(month)}</span>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { shortRange } from '../lib/periods';
 import { StepBar } from '../components/PeriodBar';
 import { weekRange, weekLabel } from '../lib/periods';
 import PeriodBar from '../components/PeriodBar';
@@ -388,7 +389,7 @@ function useWeekMonth(today, defaultMode, start = null) {
     <div className="dd-period period-bar">
       <button type="button" className="dd-step" aria-label="Earlier" onClick={() => (isWeek ? setMonday(addDays(monday, -7)) : shiftMonth(-1))}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={atNow} onClick={() => (isWeek ? setMonday(addDays(monday, 7)) : shiftMonth(1))}><ChevronRight size={18} /></button>
-      <span><strong>{label}</strong> · {dateText(from)} – {dateText(to)}</span>
+      <span><strong>{label}</strong> · {shortRange(from, to > today ? today : to, today)}</span>
       {!atNow && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => (isWeek ? setMonday(thisMon) : setMonthStart(thisMonth))}>{isWeek ? 'This week' : 'This month'}</button>}
       <div className="filter-chips" role="group" aria-label="Week or month">
         <button type="button" className={`filter-chip${isWeek ? ' is-on' : ''}`} onClick={() => setMode('week')}>Week</button>

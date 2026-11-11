@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { weekPeriods, weekLabel, periodRange } from '../lib/periods';
+import { weekPeriods, weekLabel, periodRange, shortRange } from '../lib/periods';
 import { dateText } from '../lib/format';
 
 /*
@@ -27,7 +27,7 @@ export default function PeriodBar({ value, onChange, today, extra = [], range = 
   const later = at >= 0 ? (at === 0 ? null : steps[at - 1]) : Object.keys(LAST_OF).find(k => LAST_OF[k] === value) ?? (value === 'week' || value === 'month' ? 'today' : null);
   const label = value === 'range' ? sentLabel : weekLabel(value, today) ?? extra.find(x => x[0] === value)?.[1] ?? '';
   const [from, to] = range ?? (value === 'range' ? [null, null] : periodRange(value, today));
-  const note = !from || from === '0000-01-01' ? '' : from === to ? dateText(from) : `${dateText(from)} – ${dateText(to)}`;
+  const note = shortRange(from, to, today);
   const usual = weekPeriods(today);
   return (
     <div className={`dd-period period-bar ${className}`}>
@@ -72,7 +72,7 @@ export function monthOptions(today, count = 12) {
   for (let i = 0; i < count; i++) {
     const v = `${y}-${String(m).padStart(2, '0')}`;
     const name = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    out.push({ value: v, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : name, note: i < 2 ? name : '' });
+    out.push({ value: v, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : name, note: i < 2 ? name.split(' ')[0].slice(0, 3) : '' });
     m -= 1; if (m === 0) { m = 12; y -= 1; }
   }
   return out;

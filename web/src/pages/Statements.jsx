@@ -91,7 +91,7 @@ function ProfitLoss({ today, money, short, inBranch, branchId, where }) {
         </div>
       )}
       <div className="flex items-center gap-8" style={{ margin: '12px 0' }}>
-        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m) : '' }))} value={month} onChange={setMonth} />
+        <StepBar options={months.map((m, i) => ({ value: m, label: i === 0 ? 'This month' : i === 1 ? 'Last month' : monthName(m), note: i < 2 ? monthName(m).slice(0, 3) : '' }))} value={month} onChange={setMonth} />
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} disabled={!d} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       {error ? <div className="card"><ErrorState message={error} /></div> : !d ? <div className="card"><span className="skeleton" /></div> : (
