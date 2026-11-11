@@ -72,10 +72,10 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
       {!tracked && rows?.length > 0 && <div className="alert alert-warning">Delivery tracking isn't set up on this system yet.</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>Delivery note</th><th>Customer</th><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th><th>Driver · truck</th><th>Status</th><th>Received by</th><th>Site</th><th /></tr></thead>
+          <thead><tr><th>Date</th><th>Delivery note</th><th>Customer</th><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th><th>Driver · truck</th><th>Site</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={10}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={10}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
+            {rows === null ? <tr><td colSpan={9}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={9}><EmptyState icon={Truck} title="Nothing here" description={filter === 'collected' ? 'No goods collected.' : filter === 'delivered' ? 'No deliveries confirmed.' : 'No delivery notes.'} /></td></tr>
             : days.map(d => [
               ...d.rows.map((r, i) => (
                 <tr key={r.id} className={i === 0 ? 'dl-first' : ''}>
@@ -85,12 +85,14 @@ export default function DeliveriesPanel({ branchId, inBranch, canAct, today, sea
                   <td>{items(r).map((x, k) => <div key={k}>{x.name}</div>)}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{items(r).map((x, k) => <div key={k}>{qtyText(x.qty)} <span className="pl-help">{x.unit}</span></div>)}</td>
                   <td>{r.kind === 'collection' ? <>{r.vehicle || <span className="pl-help">the customer's own</span>}</> : [r.driver, r.vehicle].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>
-                  <td>{stateOf(r) === 'delivered' ? <span className="badge badge-success">Delivered</span>
-                    : <span className={`badge ${r.status === 'on_the_way' ? 'badge-warning' : 'badge-neutral'}`} title={r.status === 'on_the_way' ? 'Left with our driver: confirm Delivered when it arrives' : 'Collected by the customer'}>Collected</span>}</td>
-                  <td>{r.status === 'delivered' || r.kind === 'collection'
-                    ? <>{r.pod_received_by || r.received_by || '—'}{r.kind === 'delivery' && r.delivered_at ? <div className="pl-help">{tableDateTime(r.delivered_at)}{r.pod_note ? ` · ${r.pod_note}` : ''}</div> : null}</>
-                    : ''}</td>
                   <td>{r.sale.site || ''}</td>
+                  <td>{(() => {
+                    const got = r.pod_received_by || r.received_by;
+                    const when = r.kind === 'delivery' && r.delivered_at ? ` · ${tableDateTime(r.delivered_at)}` : '';
+                    return stateOf(r) === 'delivered'
+                      ? <span className="badge badge-success" title={`Received by ${got || '—'}${when}${r.pod_note ? ` · ${r.pod_note}` : ''}`}>Delivered</span>
+                      : <span className={`badge ${r.status === 'on_the_way' ? 'badge-warning' : 'badge-neutral'}`} title={r.status === 'on_the_way' ? 'Left with our driver: confirm Delivered when it arrives' : `Collected by ${got || 'the customer'}`}>Collected</span>;
+                  })()}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {canAct && r.status === 'on_the_way' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(r)}>Delivered…</button>}
                     <button type="button" className="icon-btn" aria-label="Print the delivery note" title="Print the delivery note" onClick={() => window.open(`/print/sale/${r.sale.id}?doc=delivery&delivery=${r.id}`, '_blank', 'noopener')}><Printer size={15} /></button>
