@@ -2811,3 +2811,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-have { border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; background: var(--bg-soft); display: flex; flex-direction: column; gap: 6px; }
 .sl-have ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: var(--text-sm); }
 .sl-have li { display: flex; gap: 8px; flex-wrap: wrap; }
+/* the proof a sale already has, beside it (2026-11-11) */
+.sl-have li { align-items: center; }
+.sl-have-name { font-weight: 600; }
+.sl-have-thumb { margin-left: auto; width: 64px; height: 64px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); overflow: hidden; padding: 0; background: var(--bg-surface); cursor: zoom-in; display: flex; align-items: center; justify-content: center; }
+.sl-have-thumb img { width: 100%; height: 100%; object-fit: cover; }

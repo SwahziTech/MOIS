@@ -7,6 +7,8 @@ import { useSessionPeriod } from '../lib/sessionPeriod';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
 import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs, postSharedSlip } from '../components/sales/PaymentProofs';
 import ProofBox from '../components/ProofBox';
+import { useFileUrl } from '../components/ProofPreview';
+import { SlipCanvas } from '../components/sales/SlipMark';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -246,6 +248,26 @@ export default function Sales() {
  */
 /* The proof of a payment given while recording the sale (2026-11-08): the same box as Proof of payment;
    it is posted when the sale is saved */
+/* A proof a sale already has, beside its name: a thumbnail that opens the photo to zoom (a PDF opens in a new tab) */
+function HaveThumb({ file, name }) {
+  const url = useFileUrl(file);
+  const [open, setOpen] = useState(false);
+  const isImage = file?.type?.startsWith('image/');
+  return (
+    <>
+      <button type="button" className="sl-have-thumb" title={isImage ? 'Open the photo' : 'Open the PDF'} onClick={() => (isImage ? setOpen(true) : window.open(url, '_blank', 'noopener'))}>
+        {isImage && url ? <img src={url} alt="" /> : <span className="pl-help">PDF</span>}
+      </button>
+      {open && url && (
+        <Modal title={`Proof · ${name}`} onClose={() => setOpen(false)} size="lg"
+          footer={<button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>Close</button>}>
+          <SlipCanvas url={url} strokes={[]} color="green" pen={null} onStrokes={() => {}} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
 function SaleProofWindow({ amount, money, start, note = 'Posted with the sale when it is saved.', existing = [], onClose, onDone }) {
   const [file, setFile] = useState(start?.file ?? null);
   const [text, setText] = useState(start?.text ?? '');
@@ -267,8 +289,9 @@ function SaleProofWindow({ amount, money, start, note = 'Posted with the sale wh
             <strong>Already have a proof</strong>
             <ul>
               {existing.map(x => (
-                <li key={x.name}><span>{x.name}</span>
-                  <span className="pl-help">{x.lost ? 'added earlier — the photo was lost when the page reloaded' : [x.file && `photo ${x.file.name}`, x.text?.trim() && `SMS "${x.text.trim().slice(0, 40)}${x.text.trim().length > 40 ? '…' : ''}"`].filter(Boolean).join(' + ')}</span></li>
+                <li key={x.name}><span className="sl-have-name">{x.name}</span>
+                  <span className="pl-help">{x.lost ? 'added earlier — the photo was lost when the page reloaded' : [x.file && 'photo', x.text?.trim() && `SMS "${x.text.trim().slice(0, 40)}${x.text.trim().length > 40 ? '…' : ''}"`].filter(Boolean).join(' + ')}</span>
+                  {x.file && <HaveThumb file={x.file} name={x.name} />}</li>
               ))}
             </ul>
             <div className="filter-chips" role="radiogroup" aria-label="Their own proofs">
