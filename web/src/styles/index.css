@@ -2799,3 +2799,11 @@ body.menu-top .modal thead th { top: 0; }
 body.menu-top-hidden .tm-bar { transform: translateY(-100%); }
 body.menu-top.menu-top-hidden { --tm-h: 0px; }
 body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
+/* a meter card opens its settings (2026-11-11) */
+.el-meter { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.el-meter:hover { border-color: var(--border-strong); }
+.el-machines { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.el-machines li { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.el-machines li:last-child { border-bottom: 0; }
+.el-machines li.is-taken { opacity: .6; }
+.el-machines label { display: flex; align-items: center; gap: 8px; cursor: pointer; }

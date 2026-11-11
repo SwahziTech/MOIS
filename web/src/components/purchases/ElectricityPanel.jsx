@@ -36,6 +36,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
   const [reading, setReading] = useState(false);
   const [asking, setAsking] = useState(false);     // a LUKU top-up for a meter (081)
   const [buying, setBuying] = useState(null);      // a top-up the directors are recording
+  const [meterOpen, setMeterOpen] = useState(null);   // a meter's settings (2026-11-11)
   const [deciding, setDeciding] = useState(null);  // { q, decision }
   const [voiding, setVoiding] = useState(null);
   const canRecord = !!branchId && (canAt('procurement.receive', branchId) || canAt('production.create', branchId));
@@ -86,12 +87,12 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
       {/* each meter a summary card, side by side: units a cement bag, its working and idle days, nights */}
       <div className="mm-stats">
         {learnt.map(x => (
-          <div key={x.m.id} className="mm-stat">
+          <button key={x.m.id} type="button" className="mm-stat el-meter" title="Meter settings: number, machines it feeds" onClick={() => setMeterOpen(x.m)}>
             <span className="pl-label">{x.m.name}</span>
             <strong>{x.last ? `${units(Number(x.last.reading))} units left` : 'no reading yet'}</strong>
             <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.workDay != null ? ` · ${units(x.workDay)} a working day` : ''}${x.idleDay != null ? ` · ${units(x.idleDay)} an idle day` : ''}${x.night != null ? ` · ${units(x.night)} a night` : ''}`}>
               {x.last ? `${dateText(x.last.read_on)} ${x.last.slot === 'morning' ? 'morning' : 'evening'}` : ''}{x.loadedSince > 0 ? ` · +${units(x.loadedSince)} token since` : ''}{x.perBag != null ? ` · ${units(x.perBag)} units/bag` : ''}</span>
-          </div>
+          </button>
         ))}
       </div>
       {tabs}
@@ -196,6 +197,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
       {reading && <ReadingsModal meters={data.meters.filter(m => m.status === 'active')} readings={data.readings} today={today}
         onClose={() => setReading(false)} onSaved={async () => { setReading(false); await load(); }} />}
       {asking && <TopupModal meters={data.meters.filter(m => m.status === 'active')} onClose={() => setAsking(false)} onSaved={async () => { setAsking(false); setTab('topups'); await load(); }} />}
+      {meterOpen && <MeterSettings meter={meterOpen} branchId={branchId} onClose={() => setMeterOpen(null)} onChanged={load} />}
       {buying && <BuyModal q={buying} meterName={meterName(buying.lines[0].meter_id)} today={today} money={money} onClose={() => setBuying(null)} onSaved={async () => { setBuying(null); await load(); }} />}
       {deciding && <TopupDecision {...deciding} onClose={() => setDeciding(null)} onDone={async () => { setDeciding(null); await load(); }} />}
       {voiding && <VoidModal row={voiding} onClose={() => setVoiding(null)} onDone={async () => { setVoiding(null); await load(); }} />}
@@ -378,6 +380,81 @@ export function BuyModal({ q, meterName, today, money, onClose, onSaved }) {
           <label className="pe-field"><span>Bought on</span><input type="date" className="form-input" max={today} value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
           <label className="pe-field"><span>At</span><input type="time" className="form-input" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></label>
           <label className="pe-field"><span>Receipt / transaction ref.</span><input className="form-input" value={f.ref} onChange={e => setF({ ...f, ref: e.target.value })} /></label>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/*
+ * A meter's settings, opened from its card (2026-11-11, the user): its name, LUKU number, retire or bring
+ * back, and the machines it feeds — tick them. A meter can feed several machines; a machine is on one
+ * meter only (taken ones show which meter has them). Batches and cement bags follow these machines.
+ */
+function MeterSettings({ meter, branchId, onClose, onChanged }) {
+  const { organization, canAt } = useAuth();
+  const canEdit = canAt('procurement.receive', branchId, null) || canAt('production.create', branchId, null) || canAt('products.manage', branchId, null);
+  const [m, setM] = useState(meter);
+  const [name, setName] = useState(meter.name);
+  const [no, setNo] = useState(meter.meter_no ?? '');
+  const [links, setLinks] = useState(null);
+  const [machines, setMachines] = useState([]);
+  const [meters, setMeters] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function load() {
+    const [mm, x, ms, me] = await Promise.all([
+      supabase.from('power_meter_machines').select('meter_id, machine_id'),
+      supabase.from('machines').select('id, name, status').eq('branch_id', branchId).order('name'),
+      supabase.from('power_meters').select('id, name').eq('branch_id', branchId),
+      supabase.from('power_meters').select('*').eq('id', meter.id).single(),
+    ]);
+    setLinks(mm.data || []); setMachines(x.data || []); setMeters(ms.data || []); if (me.data) setM(me.data);
+  }
+  useEffect(() => { load(); }, [meter.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function run(q) {
+    setError(''); setBusy(true);
+    const { error: err } = await q;
+    setBusy(false);
+    if (err) { setError(err.code === '23505' ? 'That name is already used, or the machine is already on another meter.' : dbErrorMessage(err)); return false; }
+    await load(); onChanged?.();
+    return true;
+  }
+  const onThis = id => links?.some(l => l.meter_id === m.id && l.machine_id === id);
+  const elsewhere = id => { const l = links?.find(k => k.machine_id === id && k.meter_id !== m.id); return l ? meters.find(x => x.id === l.meter_id)?.name ?? 'another meter' : null; };
+  const toggle = (id, on) => run(on
+    ? supabase.from('power_meter_machines').insert({ meter_id: m.id, machine_id: id, organization_id: organization?.id })
+    : supabase.from('power_meter_machines').delete().eq('meter_id', m.id).eq('machine_id', id));
+  const saveDetails = () => run(supabase.from('power_meters').update({ name: name.trim(), meter_no: no.trim() || null }).eq('id', m.id));
+  const changed = name.trim() !== m.name || (no.trim() || null) !== (m.meter_no ?? null);
+  return (
+    <Modal title={`Meter · ${m.name}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {canEdit && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run(supabase.from('power_meters').update({ status: m.status === 'active' ? 'inactive' : 'active' }).eq('id', m.id))}>{m.status === 'active' ? 'Retire' : 'Bring back'}</button>}
+        {canEdit && changed && <button type="button" className="btn btn-outline" disabled={busy || !name.trim()} onClick={saveDetails}>Save</button>}
+        <button type="button" className="btn btn-primary" onClick={onClose}>Done</button></>}>
+      <div className="modal-form">
+        <div className="form-row">
+          <label className="pe-field"><span>Name</span><input className="form-input" disabled={!canEdit} value={name} onChange={e => setName(e.target.value)} /></label>
+          <label className="pe-field"><span>LUKU meter number</span><input className="form-input" disabled={!canEdit} value={no} placeholder="—" onChange={e => setNo(e.target.value)} /></label>
+        </div>
+        {m.status !== 'active' && <p className="pl-help text-warning">Retired — not read any more.</p>}
+        <div>
+          <h3 className="modal-section-title">Machines it feeds</h3>
+          <p className="pl-help" style={{ marginTop: 0 }}>Its day use is charged to that day's batches on these machines. A machine can be on one meter only.</p>
+          {links === null ? <span className="skeleton" /> : machines.length === 0 ? <p className="pl-help">No machines at this branch yet (Production ⚙).</p> : (
+            <ul className="el-machines">
+              {machines.filter(x => x.status === 'active' || onThis(x.id)).map(x => {
+                const other = elsewhere(x.id);
+                return (
+                  <li key={x.id} className={other ? 'is-taken' : ''}>
+                    <label><input type="checkbox" checked={!!onThis(x.id)} disabled={!canEdit || busy || !!other || m.status !== 'active'} onChange={e => toggle(x.id, e.target.checked)} /> {x.name}</label>
+                    {other && <span className="pl-help">on {other}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
     </Modal>
