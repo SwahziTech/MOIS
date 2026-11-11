@@ -2847,3 +2847,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .btn-link-sm { background: none; border: 0; padding: 0 0 0 4px; color: var(--accent, #c8a96a); font-size: var(--text-xs); cursor: pointer; text-decoration: underline; }
 .si-grid select[aria-label="Product"] { min-width: 170px; max-width: 230px; }
 .si-grid th:first-child, .si-grid td:first-child { max-width: 160px; }
+/* stock import: grid hugs its columns; actions always in reach (2026-11-11) */
+.table-container table.si-grid { width: auto; min-width: 0; }
+.si-actions { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.si-actions > span:first-child { margin-right: auto; }

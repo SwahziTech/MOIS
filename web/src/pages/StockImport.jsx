@@ -522,7 +522,7 @@ export default function StockImport() {
                     {/* the sheet's own grid (2026-11-11, the user): one row per type, colours as columns, to follow and confirm */}
                     <div className="table-container">
                       <table className="si-grid">
-                        <thead><tr><th>On the sheet</th><th>Product</th>
+                        <thead><tr><th>Product</th><th>On the sheet</th>
                           {(t.columns.length ? t.columns : ['Qty']).map((cn, k) => <th key={k} style={{ textAlign: 'right' }}>{t.isColoured ? cn : 'Qty'}</th>)}
                           <th>Date</th><th>Status</th></tr></thead>
                         <tbody>
@@ -540,10 +540,6 @@ export default function StockImport() {
                             const setRow = patch => r.lines.forEach(l => setChoice(l.id, typeof patch === 'function' ? patch(l) : patch));
                             return (
                               <tr key={r.key} className={allSkip ? 'row-muted' : ''}>
-                                <td className="text-sm">
-                                  <div style={{ fontWeight: 500 }}>{r.typeText}</div>
-                                  <div className="text-xs text-muted">line {r.lineNo}</div>
-                                </td>
                                 <td>
                                   <select className="form-input" aria-label="Product" value={productId} disabled={allSkip}
                                     onChange={ev => setRow(l => ({ productId: ev.target.value, colorId: l.colour?.id ?? '' }))}>
@@ -555,8 +551,13 @@ export default function StockImport() {
                                     <optgroup label="Other categories">{opts.rest.map(p => <option key={p.id} value={p.id}>{p.name} — {catById[p.categoryId]?.name}</option>)}</optgroup>
                                   </select>
                                   {first.product.status === 'exact' && productId === first.product.id && (
-                                    <div className="text-xs text-muted">{first.product.via === 'same name' ? 'same name as on the sheet' : first.product.via.replace(/^decided: /, 'decided earlier by ')}</div>
+                                    <div className="text-xs text-muted" title={first.product.via === 'same name' ? 'The same name as on the sheet' : first.product.via.replace(/^decided: /, 'Decided earlier by ')}>
+                                      {first.product.via === 'same name' ? 'same name' : 'decided before'}</div>
                                   )}
+                                </td>
+                                <td className="text-sm">
+                                  <div style={{ fontWeight: 500 }}>{r.typeText}</div>
+                                  <div className="text-xs text-muted">line {r.lineNo}</div>
                                 </td>
                                 {(t.columns.length ? t.columns : ['Qty']).map((cn, k) => {
                                   const l = r.lines.find(x => x.col === k);
@@ -660,22 +661,30 @@ export default function StockImport() {
                       Posts {combined.length} opening balances at {warehouseLabel(warehouses.find(w => w.id === warehouseId))}
                       {skipped.length ? `; ${skipped.length} skipped lines are not recorded` : ''}. All or nothing — and an item that already has stock here is refused.
                     </p>
-                    <div className="flex gap-8">
-                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>{canManage('inventory.adjust') ? `Post ${combined.length} opening balances` : `Submit ${combined.length} opening balances for approval`}</button>
-                      <button type="button" className="btn btn-ghost" onClick={() => setStep('resolve')}>Back</button>
+                    <div className="si-actions">
+                      <span />
+                      <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm('Cancel this import? The draft is thrown away. Nothing has been recorded.')) discard(); }}>Cancel import</button>
+                      <button type="button" className="btn btn-outline" onClick={() => setStep('resolve')}>Back to the sheet</button>
+                      <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={post}>{canManage('inventory.adjust') ? `Post ${combined.length} opening balances` : `Submit ${combined.length} for approval`}</button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-8">
+                <>
                   {error && <div className="alert alert-error" role="alert">{error}</div>}
-                  <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}
-                    disabled={!ready.length || open.length > 0 || !warehouseId}
-                    onClick={() => setStep('preview')}>
-                    {open.length ? `Resolve or skip ${open.length} line${open.length === 1 ? '' : 's'} first` : !warehouseId ? 'Choose the store first' : `Preview ${ready.length} lines`}
-                  </button>
                   <p className="text-xs text-muted">Need a product that doesn't exist yet? Add it under <Link to="/products">Products</Link>, then choose the file again.</p>
-                </div>
+                  {/* the actions, always in reach (2026-11-11, the user) */}
+                  <div className="si-actions">
+                    <span className="text-xs text-muted">{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Draft saved' : saveState === 'failed' ? <span className="text-error">Draft not saved</span> : ''}</span>
+                    <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm('Cancel this import? The draft is thrown away. Nothing has been recorded.')) discard(); }}>Cancel import</button>
+                    <button type="button" className="btn btn-outline" title="The draft keeps every choice; continue it later from this page" onClick={() => navigate('/stock')}>Save and close</button>
+                    <button type="button" className="btn btn-primary"
+                      disabled={!ready.length || open.length > 0 || !warehouseId}
+                      onClick={() => { setStep('preview'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+                      {open.length ? `Fix or skip ${open.length} first` : !warehouseId ? 'Choose the store first' : `Preview ${ready.length} lines`}
+                    </button>
+                  </div>
+                </>
               )}
             </>
           )}
