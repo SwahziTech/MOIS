@@ -349,9 +349,10 @@ export default function StockImport() {
     })));
   }
 
-  const countDates = [...new Set(combined.map(g => g.date))].sort().join(',');   // stable: the effect runs once per set of dates
+  const countDates = [...new Set([date, ...combined.map(g => g.date)].filter(Boolean))].sort().join(',');   // stable: the effect runs once per set of dates
   useEffect(() => {
-    if (step !== 'preview' || kind !== 'count' || !warehouseId || !countDates) return;
+    // on the sheet itself (2026-11-11, the user): what MOIS holds shows under each counted quantity
+    if (!matched || kind !== 'count' || !warehouseId || !countDates) return;
     let live = true;
     const dates = countDates.split(',');
     Promise.all(dates.map(d => (d < today
@@ -360,7 +361,7 @@ export default function StockImport() {
       .then(({ data }) => [d, Object.fromEntries((data || []).filter(b => b.warehouse_id === warehouseId).map(b => [stockKey(b), Number(b.quantity)]))])))
       .then(rows => { if (live) setExpected(Object.fromEntries(rows)); });
     return () => { live = false; };
-  }, [step, kind, warehouseId, countDates, today]);
+  }, [!!matched, kind, warehouseId, countDates, today]); // eslint-disable-line react-hooks/exhaustive-deps
   const expectedOf = g => (g.placeholder ? 0 : expected?.[g.date]?.[stockKey({ product_id: g.productId, color_id: g.colorId || null })] ?? 0);
 
   async function post() {
@@ -631,6 +632,18 @@ export default function StockImport() {
                                   return (
                                     <td key={k} className={`si-cell${probs.length ? ' si-bad' : ''}`} title={probs.length ? probs.join('; ') : `${l.raw} · line ${l.lineNo}`}>
                                       <div className="si-qty">{qtyText(e.qty)} <span className="pl-help">{unitById[e.unitId]?.symbol ?? l.unitText ?? ''}</span></div>
+                                      {/* a stock count: what MOIS holds, and the difference (2026-11-11, the user) */}
+                                      {kind === 'count' && expected && e.productId && !c.skip && (() => {
+                                        const g = combined.find(x => x.lines.includes(l));
+                                        const ex = g ? expectedOf(g) : (expected[c.date || date]?.[stockKey({ product_id: e.productId, color_id: e.colorId || null })] ?? 0);
+                                        const counted = g ? g.qty : Number(e.qty);
+                                        const d = Math.round((counted - ex) * 10000) / 10000;
+                                        return (
+                                          <div className="si-mois" title={`MOIS held ${qtyText(ex)} on ${c.date || date}; counted ${qtyText(counted)}${g && g.lines.length > 1 ? ' (sheet lines added together)' : ''}`}>
+                                            MOIS {qtyText(ex)} · <span className={d < 0 ? 'text-error' : d > 0 ? 'text-success' : 'text-muted'}>{d === 0 ? 'same' : `${d > 0 ? '+' : ''}${qtyText(d)}`}</span>
+                                          </div>
+                                        );
+                                      })()}
                                       {otherColour && <div className="text-xs">{l.colourText.charAt(0) + l.colourText.slice(1).toLowerCase()}</div>}
                                       {e.converted && <div className="text-xs text-muted">from {l.qty} {l.unitText}
                                         {!c.skip && <button type="button" className="btn-link-sm" onClick={() => setChoice(l.id, { noConvert: true })}>keep</button>}</div>}

@@ -2856,3 +2856,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .si-grid th:first-child, .si-grid td:first-child { max-width: none; min-width: 210px; }
 .si-grid td:first-child select { width: 100%; }
 .si-grid th:nth-child(2), .si-grid td:nth-child(2) { max-width: 170px; }
+.si-grid .si-mois { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
+.si-grid .si-mois span { font-weight: 700; }
