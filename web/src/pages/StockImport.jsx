@@ -9,6 +9,7 @@ import { warehouseLabel, qtyText, orgToday, productColorIds, stockKey } from '..
 import { parseStockSheet, matchSheet, lineProblems, normalize } from '../lib/stockImport';
 import { categoryTools } from '../lib/categories';
 import PageShell from '../components/PageShell';
+import Modal from '../components/Modal';
 import ErrorState from '../components/ErrorState';
 import { dateText, dateTimeText, tableDate } from '../lib/format';
 
@@ -41,6 +42,15 @@ export default function StockImport() {
   // what the sheet records (2026-11-11, the user): 'count' — a stock take (MOIS records the differences),
   // or 'opening' — a store's first stock. '' until chosen: a store that already has stock means a count.
   const [kind, setKind] = useState('');
+  // confirmations inside MOIS (2026-11-11): the browser's own confirm box is answered "no" in the app's browser
+  const [askDraft, setAskDraft] = useState(null);       // draft id asking "discard?"
+  const [askCancel, setAskCancel] = useState(false);
+  async function discardDraft(id) {
+    const { error: err } = await supabase.from('stock_import_drafts').update({ status: 'discarded', updated_by: session?.user?.id ?? null }).eq('id', id);
+    if (err) { setError(dbErrorMessage(err, "We couldn't discard that draft.")); return; }
+    setAskDraft(null);
+    loadDrafts();
+  }
   const [expected, setExpected] = useState(null);     // date → { stock key → quantity } in this store, for a count
   const [choices,  setChoices]  = useState({});         // line id → { productId, colorId, unitId, qty, date, skip, converted }
   const [step,     setStep]     = useState('upload');   // upload | resolve | preview | done
@@ -503,14 +513,18 @@ export default function StockImport() {
                     <span className="text-muted">
                       {Object.keys(d.line_choices || {}).length} lines · saved {dateTimeText(d.updated_at, organization?.timezone)}
                     </span>
-                    <button type="button" className="btn btn-outline btn-sm" disabled={!catalog} onClick={() => resume(d)}>Continue</button>
-                    {/* throw a saved import away (2026-11-11, the user) */}
-                    <button type="button" className="icon-btn" aria-label={`Discard the draft saved ${dateTimeText(d.updated_at, organization?.timezone)}`} title="Discard this draft (nothing was recorded from it)"
-                      onClick={async () => {
-                        if (!window.confirm(`Discard the draft of ${d.file_name || 'this sheet'} saved ${dateTimeText(d.updated_at, organization?.timezone)}? Nothing was recorded from it.`)) return;
-                        await supabase.from('stock_import_drafts').update({ status: 'discarded', updated_by: session?.user?.id ?? null }).eq('id', d.id);
-                        loadDrafts();
-                      }}><X size={15} /></button>
+                    {askDraft === d.id ? (
+                      <span className="flex items-center gap-8" role="group" aria-label="Discard this draft?">
+                        <span className="text-error">Discard? Nothing was recorded from it.</span>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => discardDraft(d.id)}>Yes, discard</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAskDraft(null)}>Keep</button>
+                      </span>
+                    ) : <>
+                      <button type="button" className="btn btn-outline btn-sm" disabled={!catalog} onClick={() => resume(d)}>Continue</button>
+                      {/* throw a saved import away (2026-11-11, the user) */}
+                      <button type="button" className="icon-btn" aria-label={`Discard the draft saved ${dateTimeText(d.updated_at, organization?.timezone)}`} title="Discard this draft"
+                        onClick={() => setAskDraft(d.id)}><X size={15} /></button>
+                    </>}
                   </div>
                 ))}
               </div>
@@ -717,7 +731,7 @@ export default function StockImport() {
                     </p>
                     <div className="si-actions">
                       <span />
-                      <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm('Cancel this import? The draft is thrown away. Nothing has been recorded.')) discard(); }}>Cancel import</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setAskCancel(true)}>Cancel import</button>
                       <button type="button" className="btn btn-outline" onClick={() => setStep('resolve')}>Back to the sheet</button>
                       <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || !kind} onClick={post}>{!canManage('inventory.adjust') ? `Submit ${combined.length} for approval` : kind === 'count' ? `Post the count (${combined.length} items)` : `Post ${combined.length} opening balances`}</button>
                     </div>
@@ -730,7 +744,7 @@ export default function StockImport() {
                   {/* the actions, always in reach (2026-11-11, the user) */}
                   <div className="si-actions">
                     <span className="text-xs text-muted">{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Draft saved' : saveState === 'failed' ? <span className="text-error">Draft not saved</span> : ''}</span>
-                    <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm('Cancel this import? The draft is thrown away. Nothing has been recorded.')) discard(); }}>Cancel import</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setAskCancel(true)}>Cancel import</button>
                     <button type="button" className="btn btn-outline" title="The draft keeps every choice; continue it later from this page" onClick={() => navigate('/stock')}>Save and close</button>
                     <button type="button" className="btn btn-primary"
                       disabled={!ready.length || open.length > 0 || !warehouseId}
@@ -743,6 +757,14 @@ export default function StockImport() {
             </>
           )}
         </div>
+      )}
+      {askCancel && (
+        <Modal title="Cancel this import?" onClose={() => setAskCancel(false)}
+          footer={<>
+            <button type="button" className="btn btn-outline" onClick={() => setAskCancel(false)}>Keep working</button>
+            <button type="button" className="btn btn-danger" onClick={() => { setAskCancel(false); discard(); }}>Yes, cancel it</button></>}>
+          <p>The draft is thrown away. Nothing has been recorded from it.</p>
+        </Modal>
       )}
     </PageShell>
   );
