@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Upload, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Upload, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -504,6 +504,13 @@ export default function StockImport() {
                       {Object.keys(d.line_choices || {}).length} lines · saved {dateTimeText(d.updated_at, organization?.timezone)}
                     </span>
                     <button type="button" className="btn btn-outline btn-sm" disabled={!catalog} onClick={() => resume(d)}>Continue</button>
+                    {/* throw a saved import away (2026-11-11, the user) */}
+                    <button type="button" className="icon-btn" aria-label={`Discard the draft saved ${dateTimeText(d.updated_at, organization?.timezone)}`} title="Discard this draft (nothing was recorded from it)"
+                      onClick={async () => {
+                        if (!window.confirm(`Discard the draft of ${d.file_name || 'this sheet'} saved ${dateTimeText(d.updated_at, organization?.timezone)}? Nothing was recorded from it.`)) return;
+                        await supabase.from('stock_import_drafts').update({ status: 'discarded', updated_by: session?.user?.id ?? null }).eq('id', d.id);
+                        loadDrafts();
+                      }}><X size={15} /></button>
                   </div>
                 ))}
               </div>
