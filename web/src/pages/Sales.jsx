@@ -365,6 +365,13 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const dayOn = book && !sale && !prefill;
   const dayKey = `mois.daySales.${branchId}`;
   const [dayList, setDayList] = useState(() => { if (!dayOn) return []; try { return JSON.parse(localStorage.getItem(dayKey) || '[]'); } catch { return []; } });
+  // one sheet = one date (2026-11-11, the user): a kept list brings its date back after a reload,
+  // and changing the date moves every sale in the list to it
+  useEffect(() => { if (dayOn && dayList.length && dayList[0].payload?.sale_date) setDate(dayList[0].payload.sale_date); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function changeDate(v) {
+    setDate(v);
+    if (dayOn && v) setDayList(d => d.map(x => ({ ...x, payload: { ...x.payload, sale_date: v }, view: { ...x.view, date: v }, form: { ...x.form, date: v } })));
+  }
   const [dayBad, setDayBad] = useState(null);   // index of the sale the save stopped on
   const [dayErr, setDayErr] = useState('');
   // one slip for the sales ticked in the day's list (2026-11-08): groups of entry ids with their slip (in memory)
@@ -639,7 +646,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
 
   return (
     <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
-        <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} onChange={e => setDate(e.target.value)} /></span>} onClose={onClose} size="xl"
+        <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} title={dayOn && dayList.length ? 'The date of every sale in the list' : undefined} onChange={e => changeDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       after={dayOn ? <>
         {/* between the sale being recorded and the day's list (2026-11-08) */}
         {dayOn && dayList.length > 0 && <div className="sl-day-add" aria-hidden="true" />}
@@ -655,7 +662,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                     {choosing && j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
                       <input type="checkbox" aria-label={`Tick ${x.view.name} for one slip`} checked={daySel.has(x.id)} disabled={!(x.view.paid > 0)}
                         onChange={e => setDaySel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} /></td>}
-                    {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong>{x.view.date !== date && <div className="pl-help">{tableDate(x.view.date)}</div>}</td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong></td>}
                     <td>{r.product}</td>
                     <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
                     <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
