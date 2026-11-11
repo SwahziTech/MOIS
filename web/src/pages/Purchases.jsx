@@ -242,7 +242,7 @@ export default function Purchases() {
           onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })}
           onRecordExpense={prefill => { setExpensePrefill(prefill); setEditingExpense('new'); }}
           onRecordToken={q => setTokenFor(q)} />
-      : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} onSettings={() => setExpSettings(true)} /> : <div className="card">
+      : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             {(tab === 'purchases' || tab === 'expenses') && <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>}

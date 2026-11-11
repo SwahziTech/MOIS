@@ -26,7 +26,7 @@ const TOPUP = { waiting: ['Waiting for the branch manager', 'badge-warning'], ap
  * idle days, nights, and units per cement bag on its machines. Costing
  * charges day use to the batches on the meter's machines (073).
  */
-export default function ElectricityPanel({ branchId, tabs, onOrder, onSettings }) {
+export default function ElectricityPanel({ branchId, tabs, onOrder }) {
   const { organization, canAt } = useAuth();
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
@@ -43,16 +43,15 @@ export default function ElectricityPanel({ branchId, tabs, onOrder, onSettings }
   async function load() {
     setError('');
     if (!branchId) { setData(null); return; }
-    const [m, d, r, t, up, mm] = await Promise.all([
+    const [m, d, r, t, up] = await Promise.all([
       supabase.from('power_meters').select('*').eq('branch_id', branchId).order('name'),
       supabase.from('power_daily').select('*').eq('branch_id', branchId).order('day', { ascending: false }).limit(400),
       supabase.from('power_readings').select('*').eq('branch_id', branchId).order('read_at', { ascending: false }).limit(400),
       supabase.from('power_tokens').select('*').eq('branch_id', branchId).order('loaded_at', { ascending: false }).limit(200),
       supabase.from('purchase_requests').select('*, lines:purchase_request_lines!inner(*)').eq('branch_id', branchId).not('lines.meter_id', 'is', null).order('requested_on', { ascending: false }).limit(100),
-      supabase.from('power_meter_machines').select('meter_id, machine_id'),
     ]);
     if (m.error) { console.error(m.error); setError("We couldn't load electricity. Please try again."); return; }
-    setData({ meters: m.data || [], days: d.data || [], readings: r.data || [], tokens: t.data || [], topups: up.error ? [] : up.data || [], links: mm.error ? [] : mm.data || [] });
+    setData({ meters: m.data || [], days: d.data || [], readings: r.data || [], tokens: t.data || [], topups: up.error ? [] : up.data || [] });
   }
   useEffect(() => { load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,27 +91,9 @@ export default function ElectricityPanel({ branchId, tabs, onOrder, onSettings }
             <strong>{x.last ? `${units(Number(x.last.reading))} units left` : 'no reading yet'}</strong>
             <span className="pl-help" title={`Last 60 days: ${x.workN} working, ${x.idleN} idle days${x.workDay != null ? ` · ${units(x.workDay)} a working day` : ''}${x.idleDay != null ? ` · ${units(x.idleDay)} an idle day` : ''}${x.night != null ? ` · ${units(x.night)} a night` : ''}`}>
               {x.last ? `${dateText(x.last.read_on)} ${x.last.slot === 'morning' ? 'morning' : 'evening'}` : ''}{x.loadedSince > 0 ? ` · +${units(x.loadedSince)} token since` : ''}{x.perBag != null ? ` · ${units(x.perBag)} units/bag` : ''}</span>
-            {/* that day's morning and evening readings (2026-11-11, the user) */}
-            {x.last && (() => {
-              const of = slot => data.readings.find(r => r.meter_id === x.m.id && r.read_on === x.last.read_on && r.slot === slot && r.status === 'recorded');
-              const mo = of('morning'), ev = of('evening');
-              return (
-                <span className="el-slots">
-                  <span><span className="pl-help">Morning</span> <b>{mo ? units(Number(mo.reading)) : '—'}</b></span>
-                  <span><span className="pl-help">Evening</span> <b>{ev ? units(Number(ev.reading)) : '—'}</b></span>
-                </span>
-              );
-            })()}
-            {!data.links.some(l => l.meter_id === x.m.id) && <span className="pl-help text-warning" title="Batches and cement bags come from the machines each meter feeds">Feeds no machine yet</span>}
           </div>
         ))}
       </div>
-      {data.meters.some(m => !data.links.some(l => l.meter_id === m.id)) && (
-        <div className="alert alert-warning el-link" role="note">
-          <span>Batches and cement bags come from production, through the machines each meter feeds. Link them: {data.meters.filter(m => !data.links.some(l => l.meter_id === m.id)).map(m => m.name).join(', ')}.</span>
-          {onSettings && <button type="button" className="btn btn-outline btn-sm" onClick={onSettings}>Link machines</button>}
-        </div>
-      )}
       {tabs}
       <div className="flex items-center gap-8" style={{ margin: '4px 0 12px', flexWrap: 'wrap' }}>
         {canRecord && <button type="button" className="btn btn-primary btn-sm" onClick={() => setReading(true)}>Record readings</button>}
