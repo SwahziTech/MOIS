@@ -131,14 +131,16 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
           </table>
         ) : tab === 'days' ? (
           <table>
-            <thead><tr><th>Day</th><th>Meter</th><th className="num">Day use</th><th className="num">Day (TZS)</th><th className="num">Night use</th><th className="num">Night (TZS)</th><th className="num">Batches</th><th className="num">Cement bags</th><th className="num">Units a bag</th></tr></thead>
+            <thead><tr><th>Day</th><th>Meter</th><th className="num" title="Units left in the morning (asubuhi)">Morning</th><th className="num" title="Units left in the evening (jioni)">Evening</th><th className="num">Day use</th><th className="num">Day (TZS)</th><th className="num">Night use</th><th className="num">Night (TZS)</th><th className="num">Batches</th><th className="num">Cement bags</th><th className="num">Units a bag</th></tr></thead>
             <tbody>
-              {data.days.length === 0 ? <tr><td colSpan={9} className="text-muted">Days show once a meter has two readings.</td></tr>
+              {data.days.length === 0 ? <tr><td colSpan={11} className="text-muted">Days show once a meter has two readings.</td></tr>
               : data.days.map(d => (
                 <tr key={`${d.meter_id}|${d.day}`}>
                   <td>{tableDate(d.day)}{d.gap_units != null && <div className="pl-help text-warning">a reading missing: {units(Number(d.gap_units))} units not split</div>}
                     {d.token_missing && <div className="pl-help text-warning">the meter went up — a token not recorded yet</div>}</td>
                   <td>{d.meter_name}</td>
+                  {/* the day's readings (2026-11-11, the user) */}
+                  {['morning', 'evening'].map(slot => { const r = data.readings.find(x => x.meter_id === d.meter_id && x.read_on === d.day && x.slot === slot && x.status === 'recorded'); return <td key={slot} className="num">{r ? units(Number(r.reading)) : ''}</td>; })}
                   <td className="num"><strong>{d.day_units != null ? units(Number(d.day_units)) : ''}</strong></td>
                   <td className="num">{d.day_cost != null ? formatAmount(Number(d.day_cost)) : ''}</td>
                   <td className="num">{d.night_units != null ? units(Number(d.night_units)) : ''}</td>
@@ -150,7 +152,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
               ))}
             </tbody>
             {data.days.length > 0 && (
-              <tfoot><tr><td colSpan={2}><strong>Total</strong></td>
+              <tfoot><tr><td colSpan={4}><strong>Total</strong></td>
                 <td className="num"><strong>{units(data.days.reduce((t, d) => t + Number(d.day_units || 0), 0))}</strong></td>
                 <td className="num"><strong>{money(data.days.reduce((t, d) => t + Number(d.day_cost || 0), 0))}</strong></td>
                 <td className="num"><strong>{units(data.days.reduce((t, d) => t + Number(d.night_units || 0), 0))}</strong></td>
