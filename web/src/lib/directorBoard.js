@@ -21,9 +21,9 @@ const utc = s => new Date(`${s}T00:00:00Z`);
 export const dayShift = (d, k) => { const x = utc(d); x.setUTCDate(x.getUTCDate() + k); return iso(x); };
 const monthsBack = (m, k) => { const d = utc(`${m}-01`); d.setUTCMonth(d.getUTCMonth() - k); return iso(d).slice(0, 7); };
 const lastDay = m => { const x = utc(`${m}-01`); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return iso(x); };
-// the work week: Monday to Saturday; a Sunday worked counts with the week just ended
-const weekStartOf = d => dayShift(d, -((utc(d).getUTCDay() + 6) % 7));
-const daysSinceMonday = d => (utc(d).getUTCDay() + 6) % 7;
+// the work week: Monday to Saturday; a Sunday (emergencies) opens the week, as on the casuals' pay (115, 2026-11-11)
+const weekStartOf = d => dayShift(d, -utc(d).getUTCDay());
+const daysSinceMonday = d => { const w = utc(d).getUTCDay(); return w === 0 ? 0 : w - 1; };
 const shortDay = d => dateText(d);
 export const monthShort = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).replace('Sept', 'Sep');
 const monthLong = m => utc(`${m}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });

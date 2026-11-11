@@ -7,10 +7,14 @@
 const utc = d => new Date(`${d}T00:00:00Z`);
 const shift = (d, n) => new Date(utc(d).getTime() + n * 864e5).toISOString().slice(0, 10);
 export const mondayOf = d => shift(d, -((utc(d).getUTCDay() + 6) % 7));
+// the work week (2026-11-11, the user): Monday to Saturday is work; a Sunday (emergencies) opens the week, as on the
+// casuals' pay sheets (115) — so a week runs Sunday to Saturday, and Saturday is its last working day
+export const sundayOf = d => shift(d, -utc(d).getUTCDay());
 
 /** This week, its days back to Monday, last week → [{ value, label }] */
 export function weekPeriods(today) {
-  const n = (utc(today).getUTCDay() + 6) % 7;   // days since Monday
+  const dow = utc(today).getUTCDay();
+  const n = dow === 0 ? 0 : dow - 1;   // the week's days so far, back to Monday (a Sunday is its own first day)
   const days = Array.from({ length: n + 1 }, (_, i) => shift(today, -i)).map((d, i) => ({
     value: i === 0 ? 'today' : i === 1 ? 'yesterday' : `day:${d}`,
     label: i === 0 ? 'Today' : i === 1 ? 'Yesterday' : utc(d).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }),
@@ -20,11 +24,11 @@ export function weekPeriods(today) {
 
 /** A week period's first and last day ([from, to]); null for any other key */
 export function weekRange(key, today) {
-  const mon = mondayOf(today);
-  if (key === 'week') return [mon, today];
+  const sun = sundayOf(today);
+  if (key === 'week') return [sun, today];
   if (key === 'today') return [today, today];
   if (key === 'yesterday') { const y = shift(today, -1); return [y, y]; }
-  if (key === 'lastweek') return [shift(mon, -7), shift(mon, -1)];
+  if (key === 'lastweek') return [shift(sun, -7), shift(sun, -1)];
   if (String(key).startsWith('day:')) { const d = key.slice(4); return [d, d]; }
   return null;
 }
@@ -61,6 +65,9 @@ export function shortRange(from, to, today) {
   if (!from || !to || from === '0000-01-01') return '';
   const yr = d => (d.slice(0, 4) !== String(today).slice(0, 4) ? ` ${d.slice(0, 4)}` : '');
   const day = d => `${MON(d)} ${Number(d.slice(8))}${yr(d)}`;
+  if (from === to) return day(from);
+  // a week opens on Sunday; its label shows the working days, Monday to Saturday
+  if (utc(from).getUTCDay() === 0 && shift(from, 1) <= to) from = shift(from, 1);
   if (from === to) return day(from);
   // a whole month (or this month so far)
   if (from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && (to === lastOfMonth(to) || to === today)) return `${MON(from)}${yr(from)}`;
