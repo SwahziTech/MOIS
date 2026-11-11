@@ -593,14 +593,15 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     setPayProofs(dayFiles[dayList[i].id]?.raw ?? {});
     setDayList(d => d.filter((_, j) => j !== i)); setDayBad(null); setError('');
   }
-  async function saveDay() {
+  // Save all shows every sale first — date, items, payments, proofs — and saves only on Confirm (2026-11-11, the user)
+  const [checkDay, setCheckDay] = useState(false);
+  function askSaveDay() {
     setError(''); setBad(null); setDayErr('');
     if (lines.length) { setDayErr('The form above still has a sale: add it to the list, or remove its items.'); return; }
-    // a sale whose proof photo is no longer here is never saved quietly without it (2026-11-11)
-    const lost = dayList.filter(x => x.view.proofs > 0 && !dayFiles[x.id]);
-    if (lost.length && !window.confirm(`The proof of ${lost.map(x => x.view.name).join(', ')} is no longer here. Save without ${lost.length === 1 ? 'it' : 'them'}? (You can add ${lost.length === 1 ? 'it' : 'them'} later in Sales › Slips.)`)) {
-      setDayErr(`Add the proof of ${lost.map(x => x.view.name).join(', ')} again: click the sale, then its proof.`); return;
-    }
+    setCheckDay(true);
+  }
+  async function saveDay() {
+    setCheckDay(false);
     setBusy(true);
     const { data: ids, error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
     if (err) {
@@ -695,7 +696,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
               {/* a proof/slip for some of the list's sales: choose them, then add it; the count shows the slips added */}
               {!choosing && <button type="button" className="btn btn-outline sl-day-proof" onClick={() => { setDaySel(new Set()); setChoosing(true); }}>
                 <Plus size={14} /> Add proof/slip{slipGroups.length > 0 && <span className="sl-count" title={`${slipGroups.length} proof/slip${slipGroups.length === 1 ? '' : 's'} added`}>{slipGroups.length}</span>}</button>}
-              <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={saveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
+              <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={askSaveDay}>Save all · {dayList.length} sale{dayList.length === 1 ? '' : 's'}</button>
             </div>
           </section>
         )}
@@ -890,6 +891,55 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
       </div>
+      {checkDay && (() => {
+        const lost = dayList.filter(x => x.view.proofs > 0 && !dayFiles[x.id]);
+        const n = dayList.length;
+        return (
+          <Modal title={<>Save {n} sale{n === 1 ? '' : 's'} · {dateText(date)}</>} onClose={() => setCheckDay(false)} size="xl"
+            footer={<>
+              <button type="button" className="btn btn-outline" onClick={() => setCheckDay(false)}>Back to the list</button>
+              <button type="button" className="btn btn-primary" onClick={saveDay}>Confirm and save</button></>}>
+            <div className="modal-form">
+              <p className="pl-help">Check each sale. Nothing is saved until you confirm.</p>
+              {lost.length > 0 && <div className="sl-check-warn" role="alert">The proof of {lost.map(x => x.view.name).join(', ')} is no longer here. Go back and add it again, or save and add it later in Slips.</div>}
+              <table className="rd-table sl-check-table">
+                <thead><tr><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Paid into</th><th>Proof</th></tr></thead>
+                <tbody>
+                  {dayList.map((x, i) => x.view.rows.map((r, j) => {
+                    const own = dayFiles[x.id]?.proofs || [];
+                    const g = groupOf(x.id);
+                    return (
+                      <tr key={`${i}-${j}`} className={j === 0 ? 'sl-day-first' : ''}>
+                        {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong></td>}
+                        <td>{r.product}</td>
+                        <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td>
+                        {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.paid > 0 ? <>{x.view.acc}<div className="pl-help">{formatAmount(x.view.paid)}</div></> : <span className="text-warning">Not paid</span>}
+                          {x.view.paid > 0 && x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}</td>}
+                        {j === 0 && <td rowSpan={x.view.rows.length}>
+                          <div className="sl-check-proofs">
+                            {own.map((p, k) => p.file ? <HaveThumb key={k} file={p.file} name={x.view.name} amount={Number(p.amount)} view={x.view} money={money} />
+                              : <span key={k} className="pl-help" title={p.text}>SMS</span>)}
+                            {g >= 0 && (slipGroups[g].slip.file
+                              ? <span className="sl-check-shared"><span className="pl-help">shared slip{slipGroups.length > 1 ? ` ${g + 1}` : ''}</span><HaveThumb file={slipGroups[g].slip.file} name={x.view.name} amount={r2(dayList.filter(y => slipGroups[g].ids.includes(y.id)).reduce((t, y) => t + y.view.paid, 0))} view={x.view} money={money} /></span>
+                              : <span className="pl-help" title={slipGroups[g].slip.text}>shared SMS{slipGroups.length > 1 ? ` ${g + 1}` : ''}</span>)}
+                            {x.view.proofs > 0 && !dayFiles[x.id] && <span className="text-warning">Lost — add again</span>}
+                            {!own.length && g < 0 && !(x.view.proofs > 0) && x.view.paid > 0 && <span className="text-warning">No proof</span>}
+                          </div></td>}
+                      </tr>
+                    );
+                  }))}
+                  <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{n} sale{n === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+                </tbody>
+              </table>
+              <div className="sl-day-accs">
+                {Object.entries(dayByAcc).map(([k, v]) => <span key={k} className="sl-day-acc"><span className="pl-help">{v.name}</span><strong>{formatAmount(v.amount)}</strong></span>)}
+                {dayUnpaid > 0 && <span className="sl-day-acc"><span className="pl-help">Not paid</span><strong className="text-warning">{formatAmount(dayUnpaid)}</strong></span>}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
       {groupSlipOpen && (() => {
         // the proofs already given (2026-11-11, the user): one ticked sale's own proof opens in the box to keep or
         // replace; with several, each sale's proof is listed and the person chooses to keep them or replace them

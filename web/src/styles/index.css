@@ -2827,3 +2827,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sg-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: var(--text-sm); color: var(--text-primary); }
 .sg-item:hover, .sg-item.is-on { background: var(--bg-sidebar-hover); }
 .sg-note { color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap; }
+/* Save all: the check window (2026-11-11) */
+.sl-check-warn { border: 1px solid var(--warning, #c77c1a); color: var(--warning, #c77c1a); border-radius: var(--radius-md); padding: 8px 12px; font-size: var(--text-sm); }
+.sl-check-table td { vertical-align: middle; }
+.sl-check-proofs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sl-check-proofs .sl-have-thumb { width: 48px; height: 48px; margin-left: 0; }
+.sl-check-shared { display: inline-flex; flex-direction: column; gap: 2px; }
+.sl-check-proofs .sl-have-pic { margin-left: 0; }
