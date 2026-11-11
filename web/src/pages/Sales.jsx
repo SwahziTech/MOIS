@@ -7,6 +7,7 @@ import { useSessionPeriod } from '../lib/sessionPeriod';
 import { weekPeriods, weekLabel, periodRange, keyForRange } from '../lib/periods';
 import { PaymentProofsList, ProofModal, ReviewModal, ProofBadge, proofState, saleApproval, loadProofs, postSaleProofs, postSharedSlip } from '../components/sales/PaymentProofs';
 import ProofBox from '../components/ProofBox';
+import { getFiles, putFiles, dropFiles } from '../lib/fileStore';
 import { useFileUrl } from '../components/ProofPreview';
 import { SlipCanvas } from '../components/sales/SlipMark';
 import DeliveriesPanel, { ConfirmDelivery } from '../components/sales/DeliveriesPanel';
@@ -374,7 +375,23 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [choosing, setChoosing] = useState(false);   // the tick boxes show while choosing a slip's sales
   // the proof of each payment (2026-11-08): payment row → { file, text }; files live in memory only
   const [payProofs, setPayProofs] = useState({});
-  const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs (lost on a refresh)
+  const [dayFiles, setDayFiles] = useState({});   // day's list entry id → its proofs
+  // the proofs and shared slips of the day's list stay on this device with the list (2026-11-11, the user: a reload lost them)
+  const [filesReady, setFilesReady] = useState(!dayOn);
+  useEffect(() => {
+    if (!dayOn) return;
+    let live = true;
+    getFiles(dayKey).then(v => {
+      if (!live) return;
+      if (v) { setDayFiles(f => ({ ...(v.files || {}), ...f })); setSlipGroups(g => (g.length ? g : v.groups || [])); }
+      setFilesReady(true);
+    });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!dayOn || !filesReady) return;
+    if (Object.keys(dayFiles).length || slipGroups.length) putFiles(dayKey, { files: dayFiles, groups: slipGroups }); else dropFiles(dayKey);
+  }, [dayFiles, slipGroups, filesReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const [proofFor, setProofFor] = useState(null);   // the payment row whose proof window is open
   const setProof = (i, patch) => setPayProofs(m => ({ ...m, [i]: { ...(m[i] || {}), ...patch } }));
   const proofsFor = payments => (payments || []).map((p, i) => (payProofs[i] && (payProofs[i].file || payProofs[i].text?.trim()) && !p.line_no ? { accountId: p.account_id || '', amount: p.amount, ...payProofs[i] } : null)).filter(Boolean);
@@ -572,6 +589,11 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   async function saveDay() {
     setError(''); setBad(null); setDayErr('');
     if (lines.length) { setDayErr('The form above still has a sale: add it to the list, or remove its items.'); return; }
+    // a sale whose proof photo is no longer here is never saved quietly without it (2026-11-11)
+    const lost = dayList.filter(x => x.view.proofs > 0 && !dayFiles[x.id]);
+    if (lost.length && !window.confirm(`The proof of ${lost.map(x => x.view.name).join(', ')} is no longer here. Save without ${lost.length === 1 ? 'it' : 'them'}? (You can add ${lost.length === 1 ? 'it' : 'them'} later in Sales › Slips.)`)) {
+      setDayErr(`Add the proof of ${lost.map(x => x.view.name).join(', ')} again: click the sale, then its proof.`); return;
+    }
     setBusy(true);
     const { data: ids, error: err } = await supabase.rpc('record_sales_day', { p_sales: dayList.map(x => x.payload) });
     if (err) {

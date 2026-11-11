@@ -44,7 +44,7 @@ export function saleApproval(sale, proofs, today) {
   const toAdd = states.filter(s => s === 'none' || s === 'late' || s === 'queried').length;
   const waiting = states.filter(s => s === 'waiting' || s === 'overdue').length;
   if (pays.length && !toAdd && !waiting && paid + 0.01 >= Number(sale.total)) return { state: 'approved', label: '100% approved', badge: 'badge-success' };
-  if (toAdd) return { state: 'proof', label: `${toAdd} proof${toAdd === 1 ? '' : 's'} to add`, badge: states.some(s => s === 'late' || s === 'queried') ? 'badge-error' : 'badge-warning' };
+  if (toAdd) return { state: 'proof', label: toAdd === 1 ? 'No proof' : `${toAdd} without proof`, badge: states.some(s => s === 'late' || s === 'queried') ? 'badge-error' : 'badge-warning' };
   if (waiting) return { state: 'waiting', label: 'Waiting for a director', badge: states.includes('overdue') ? 'badge-error' : 'badge-warning' };
   return { state: 'owed', label: pays.length ? 'Part paid' : 'Not paid', badge: 'badge-neutral' };
 }
