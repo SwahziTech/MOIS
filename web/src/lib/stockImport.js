@@ -70,6 +70,8 @@ export function parseCell(raw) {
  */
 export function parseStockSheet(text) {
   const rows = String(text).replace(/^﻿/, '').split(/\r?\n/);
+  // the branch's own stock-taking sheet (NO., ITEM, TYPE, colours…) is read as it is (2026-11-11)
+  if (!rows.some(r => HEADING.test(splitCsvLine(r)[0] ?? '')) && rows.some(r => isTakingHeader(splitCsvLine(r)))) return parseStockTaking(rows);
   const tables = [];
   const lines = [];
   const issues = [];
@@ -132,6 +134,128 @@ export function parseStockSheet(text) {
     });
   });
   return { tables, lines, issues };
+}
+
+// ---------------------------------------------------------------------------
+// The branch's own stock-taking sheet (2026-11-11, the user: "here is the csv, but it's rejected")
+//
+//   ,,DODOMA STOCK TAKING 31st OCT 2026,,,,
+//   NO.,ITEM,TYPE,WHITE,RED,GREY,BLACK
+//   1,FLOOR TILES,40 COMBO,SQMT 197,SQMT 188,SQMT 34,
+//   ,,40 PLAIN,SQMT 39,SQMT 70,SQMT 6,SQMT 31
+//   ,,,,,,MAROON                      ← the cell above is maroon, not black
+//   ,,SQ.GAMBA,SQMT 12,SQMT 2,SQMT 1,SQMT 4 MAROON
+//   4,CUBSTONES,TYPE,QTY,,,           ← this section has one quantity column
+//   ,,80 CM PRESS,1518,,,
+//   8,MATOFALI,TYPE,QTY / ,,4'' DUST," 3,138 "
+//
+// - A number in NO. starts a section; ITEM is its category (it may be blank).
+// - The header row's colour columns hold for every section until one says TYPE, QTY.
+// - "SQMT 197", "SQM T 171", "4 PCS", "PCS 10": the unit before or after the number;
+//   a bare number is counted in the product's own unit.
+// - A colour word in a cell ("SQMT 4 MAROON"), or alone on the row below, is that quantity's colour.
+// ---------------------------------------------------------------------------
+
+const isTakingHeader = cells => {
+  const u = cells.map(c => c.toUpperCase());
+  return u.includes('ITEM') && u.includes('TYPE');
+};
+const UNIT_WORDS = { SQMT: 'SQM', SQM: 'SQM', M2: 'SQM', 'M²': 'SQM', PCS: 'PCS', PC: 'PCS', PIECES: 'PCS', PIECE: 'PCS' };
+const MONTHS = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
+
+/** "SQMT 197" → {qty:197, unit:'SQM'}; "4 PCS" → {qty:4, unit:'PCS'}; " 3,138 " → {qty:3138};
+ *  "SQMT 4 MAROON" → {qty:4, unit:'SQM', colour:'MAROON'}; "MAROON" → {colourOnly:'MAROON'} */
+export function parseTakingCell(raw) {
+  let s = String(raw ?? '').trim().toUpperCase().replace(/SQM\s+T\b/g, 'SQMT');
+  if (!s) return null;
+  const nums = s.match(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g) || [];
+  const words = (s.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g, ' ').match(/[A-Z²]+/g) || []);
+  const units = words.filter(w => UNIT_WORDS[w]);
+  const other = words.filter(w => !UNIT_WORDS[w]);
+  if (!nums.length) return other.length && !units.length ? { colourOnly: other.join(' ') } : { error: `"${String(raw).trim()}" isn't a number` };
+  if (nums.length > 1 || units.length > 1) return { error: `"${String(raw).trim()}" has more than one number or unit` };
+  return { qty: Number(nums[0].replace(/,/g, '')), unit: units.length ? UNIT_WORDS[units[0]] : null, colour: other.length ? other.join(' ') : null };
+}
+
+function takingDate(cells) {
+  const m = cells.join(' ').toUpperCase().match(/(\d{1,2})(?:ST|ND|RD|TH)?\s+([A-Z]{3})[A-Z]*\.?\s+(\d{4})/);
+  if (!m || !MONTHS[m[2]]) return null;
+  return `${m[3]}-${String(MONTHS[m[2]]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+function parseStockTaking(rows) {
+  const tables = [];
+  const lines = [];
+  const issues = [];
+  let dateHint = null;
+  let header = null;          // { no, item, type, cols: [{ at, name }] }
+  let cols = null;            // the colour / QTY columns in force
+  let table = null;
+  let prev = null;            // the last product row: { lineNo, typeText, byCol: { at: line } }
+
+  const startTable = (category, lineNo) => {
+    table = { index: tables.length, heading: category || `Section ${tables.length + 1}`, category: category || '', defaultUnit: null,
+              columns: cols.map(c => c.name), isColoured: !(cols.length === 1 && /^(QTY|QUANTITY|IDADI)$/i.test(cols[0].name)), firstLine: lineNo };
+    tables.push(table);
+    if (!category) issues.push({ lineNo, table: table.index, kind: 'no_category', message: 'This section has no ITEM (category) name — choose its category.' });
+  };
+
+  rows.forEach((rawLine, i) => {
+    const lineNo = i + 1;
+    const cells = splitCsvLine(rawLine);
+    if (cells.every(c => c === '')) return;
+    if (!header) {
+      if (isTakingHeader(cells)) {
+        const u = cells.map(c => c.toUpperCase());
+        const type = u.indexOf('TYPE');
+        header = { no: u.findIndex(c => /^NO\.?$/.test(c)), item: u.indexOf('ITEM'), type };
+        cols = cells.map((name, at) => ({ at, name })).filter(c => c.at > type && c.name);
+      } else dateHint ||= takingDate(cells);
+      return;
+    }
+    const at = k => (k >= 0 ? cells[k] ?? '' : '');
+    const no = at(header.no), item = at(header.item), type = at(header.type);
+
+    // a section header inside the sheet: "4,CUBSTONES,TYPE,QTY"
+    if (type.toUpperCase() === 'TYPE') {
+      cols = cells.map((name, k) => ({ at: k, name })).filter(c => c.at > header.type && c.name);
+      startTable(item, lineNo);
+      prev = null;
+      return;
+    }
+    if (/^\d+$/.test(no) || (item && !type)) startTable(item, lineNo);
+    if (!table) { issues.push({ lineNo, kind: 'outside_table', message: 'Row before the first numbered section — ignored.' }); return; }
+
+    if (!type) {
+      // a row of colour words under the row above: "MAROON" re-colours that cell
+      cols.forEach(c => {
+        const p = parseTakingCell(cells[c.at]);
+        if (!p) return;
+        if (p.colourOnly && prev?.byCol[c.at]) prev.byCol[c.at].colourText = p.colourOnly;
+        else if (p.colourOnly) issues.push({ lineNo, table: table.index, kind: 'bad_cell', message: `"${p.colourOnly}" with no quantity above it — ignored.` });
+        else issues.push({ lineNo, table: table.index, kind: 'no_type', message: `A quantity (${cells[c.at]}) on a row without a TYPE — ignored.` });
+      });
+      return;
+    }
+    prev = { lineNo, typeText: type, byCol: {} };
+    cols.forEach(c => {
+      const raw = cells[c.at] ?? '';
+      const p = parseTakingCell(raw);
+      if (!p) return;
+      if (p.error || p.colourOnly) { issues.push({ lineNo, table: table.index, kind: 'bad_cell', message: `${type} / ${c.name}: ${p.error || `"${raw.trim()}" isn't a number`}` }); return; }
+      const line = {
+        id: `${lineNo}:${c.at}`, table: table.index, typeText: type,
+        colourText: table.isColoured ? (p.colour || c.name) : null,
+        qty: p.qty, unitText: p.unit, unitExplicit: !!p.unit,
+        unitFromProduct: !p.unit,   // a bare number is in the product's own unit
+        lineNo, raw,
+      };
+      lines.push(line);
+      prev.byCol[c.at] = line;
+    });
+  });
+  if (!header) issues.push({ lineNo: 1, kind: 'outside_table', message: 'No header row with ITEM and TYPE was found.' });
+  return { tables, lines, issues, dateHint, layout: 'stock-taking' };
 }
 
 // ---------------------------------------------------------------------------

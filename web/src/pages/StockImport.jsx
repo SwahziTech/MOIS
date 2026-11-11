@@ -123,6 +123,7 @@ export default function StockImport() {
 
   function analyse(text, cat = catalog, saved = null, whId = warehouseId) {
     const p = parseStockSheet(text);
+    if (!saved && p.dateHint && p.dateHint <= today) setDate(p.dateHint);   // the date in the sheet's title
     cat = forStore(cat, whId);
     const first = matchSheet(p, cat);
     const tables = Object.fromEntries(first.tables.map(t => [t.index, saved?.tables?.[t.index] ?? {
@@ -225,7 +226,8 @@ export default function StockImport() {
   // A table's own unit stands in for lines whose heading had none
   const effective = l => {
     const c = choices[l.id] || {};
-    const unitId = c.unitId || (!l.unitExplicit ? tableChoice[l.table]?.unitId : '') || '';
+    // a bare number on the branch's stock-taking sheet is in the product's own unit (2026-11-11)
+    const unitId = c.unitId || (!l.unitExplicit ? tableChoice[l.table]?.unitId : '') || (l.unitFromProduct ? prodById[c.productId]?.unitId : '') || '';
     const conv = conversionFor(c, unitId);
     return conv ? { ...c, qty: conv.qty, unitId: conv.unitId, converted: conv } : { ...c, unitId };
   };
