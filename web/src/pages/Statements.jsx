@@ -14,6 +14,7 @@ import { useUrlTab } from '../lib/urlTab';
 import PageShell from '../components/PageShell';
 import { PageTabs } from '../components/ListControls';
 import ErrorState from '../components/ErrorState';
+import ProfitBy from '../components/statements/ProfitBy';
 
 const amt = v => formatAmount(Math.round(Number(v || 0)));
 const monthName = m => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -39,7 +40,7 @@ export default function Statements() {
   const short = v => formatMoneyShort(v, cur);
   const [tab, setTab] = useUrlTab('financial');
   const where = branchId ? branchName : 'all branches';
-  const props = { today, money, short, inBranch, branchId, where, branchIds: branchId ? [branchId] : branches.map(b => b.id) };
+  const props = { today, money, short, inBranch, branchId, where, branchIds: branchId ? [branchId] : branches.map(b => b.id), cur, branches };
 
   return (
     <PageShell title="Statements" subtitle="Finance & Accounting"
@@ -50,13 +51,13 @@ export default function Statements() {
   );
 }
 
-/* ---------- Financial: profit & loss, balance sheet ---------- */
+/* ---------- Financial: profit & loss, profit by product / customer / branch (2026-11-11), balance sheet ---------- */
 function Financial(p) {
   const [view, setView] = useState('pl');
   return (
     <>
-      <div style={{ marginBottom: 8 }}><PageTabs nested tabs={[['pl', 'Profit & loss'], ['bs', 'Balance sheet']]} value={view} onChange={setView} /></div>
-      {view === 'pl' ? <ProfitLoss {...p} /> : <BalanceSheet {...p} />}
+      <div style={{ marginBottom: 8 }}><PageTabs nested tabs={[['pl', 'Profit & loss'], ['by', 'Profit by product'], ['bs', 'Balance sheet']]} value={view} onChange={setView} /></div>
+      {view === 'pl' ? <ProfitLoss {...p} /> : view === 'by' ? <ProfitBy {...p} /> : <BalanceSheet {...p} />}
     </>
   );
 }

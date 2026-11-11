@@ -2858,3 +2858,22 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .si-grid th:nth-child(2), .si-grid td:nth-child(2) { max-width: 170px; }
 .si-grid .si-mois { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
 .si-grid .si-mois span { font-weight: 700; }
+/* advanced costing (2026-11-11) */
+.sva-table td.num, .sva-table th.num { text-align: right; white-space: nowrap; }
+.sva-why td { background: var(--bg-soft); }
+.sva-causes { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 4px 0 6px; }
+.sva-cause { display: flex; flex-direction: column; min-width: 110px; }
+.sva-total { border-left: 1px solid var(--border-strong); padding-left: 14px; }
+.pcd { display: flex; flex-direction: column; gap: 14px; }
+.pcd-total strong { font-size: var(--text-xl, 1.25rem); }
+.pcd-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--bg-soft); margin: 6px 0; }
+.pcd-seg { display: block; height: 100%; }
+.pcd-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--text-sm); }
+.pcd-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+.pcd-material { background: #c8a96a; } .pcd-labour { background: #5b8def; } .pcd-power { background: #e0a030; } .pcd-overhead { background: #8a7fd0; }
+.pcd table td.num, .pcd table th.num { text-align: right; white-space: nowrap; }
+.pcd-mini { display: block; height: 8px; border-radius: 4px; background: var(--accent, #c8a96a); }
+.pcd-mini-std { background: var(--text-secondary); opacity: .6; }
+.pcd-std td { border-top: 2px solid var(--border-strong); color: var(--text-secondary); }
+.pb-table td.num, .pb-table th.num { text-align: right; white-space: nowrap; }
+.pb-table tfoot td { border-top: 2px solid var(--border-strong); }

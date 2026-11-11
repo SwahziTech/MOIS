@@ -7,6 +7,8 @@ import { loadInventoryRefs, qtyText } from '../lib/inventory';
 import { formatMoney, formatMoneyShort, dateText, tableDate } from '../lib/format';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
+import StandardVsActual from '../components/costing/StandardVsActual';
+import ProductCostDetail from '../components/costing/ProductCostDetail';
 import { ListToolbar, ChipRow, categoryChipItems, PageTabs } from '../components/ListControls';
 import ElectricityCosting from '../components/costing/ElectricityCosting';
 import OverheadsCosting from '../components/costing/OverheadsCosting';
@@ -46,8 +48,9 @@ export default function Costing() {
   const [bench, setBench] = useState({ target: null, perBag: {} });   // Technical admin only
   const [benchEdit, setBenchEdit] = useState(false);
   const [belowOnly, setBelowOnly] = useState(false);   // the target card shows only the products below it
-  const [ohView, setOhView] = useState('electricity');   // Overheads: electricity | other
-  const [view, setView] = useState('products');        // products | materials | overheads (electricity, other — pulled from Purchases and Production)
+  // tabs (2026-11-11, advanced costing): Products · Standard vs actual · Cost inputs (materials, labour, electricity, other overheads)
+  const [inView, setInView] = useState('materials');   // Cost inputs: materials | labour | electricity | other
+  const [view, setView] = useState('products');        // products | standard | inputs
   const money = v => formatMoney(v, organization?.currency_code);
 
   async function load() {
@@ -109,7 +112,7 @@ export default function Costing() {
   }, [items]);
 
   // page order (locked, 2026-10-27): heading → tabs → the tab's summary → search → categories → list
-  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['materials', 'Materials'], ['labour', 'Labour'], ['overheads', 'Overheads']]} value={view} onChange={setView} />;
+  const pageTabs = <PageTabs tabs={[['products', 'Products'], ['standard', 'Standard vs actual'], ['inputs', 'Cost inputs']]} value={view} onChange={setView} />;
 
   return (
     <PageShell title="Costing" subtitle="Sales & Costing"
@@ -120,11 +123,12 @@ export default function Costing() {
         <>
           {pageTabs}
           {/* overheads (2026-10-27): electricity — metered, by day and machine — then the other production overheads */}
-          {view === 'labour' ? <LabourCosting branchId={branchId} currency={organization?.currency_code} />
-          : view === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
-          : view === 'overheads' ? <>
-            <PageTabs nested tabs={[['electricity', 'Electricity'], ['other', 'Other overheads']]} value={ohView} onChange={setOhView} />
-            {ohView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
+          {view === 'standard' ? <StandardVsActual branchId={branchId} refs={refs} />
+          : view === 'inputs' ? <>
+            <PageTabs nested tabs={[['materials', 'Materials'], ['labour', 'Labour'], ['electricity', 'Electricity'], ['other', 'Other overheads']]} value={inView} onChange={setInView} />
+            {inView === 'labour' ? <LabourCosting branchId={branchId} currency={organization?.currency_code} />
+              : inView === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+              : inView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
               : <OverheadsCosting branchId={branchId} currency={organization?.currency_code} />}
           </>
           : error ? <><div className="card"><ErrorState message={error} onRetry={load} /></div></> : <>
@@ -152,7 +156,7 @@ export default function Costing() {
             : shown.map(x => {
               const pct = x.margin != null && x.price > 0 ? Math.round((x.margin / x.price) * 100) : null;
               return (
-                <div key={`${x.product_id}|${x.color_id ?? ''}`} className="sk-card lk-card" title="Open its stock at cost" onClick={() => setOpen(x)}>
+                <div key={`${x.product_id}|${x.color_id ?? ''}`} className="sk-card lk-card" title="Open its cost: the parts, month by month, and its stock at cost" onClick={() => setOpen(x)}>
                   <div className="sk-name">{/* products: name on top, category below (locked) */}
                     <strong>{x.it.name}{x.colour ? ` ${x.colour}` : ''}</strong>
                     <span className="pl-help">{x.it.category}</span>
@@ -185,8 +189,11 @@ export default function Costing() {
       {benchEdit && <BenchModal target={bench.target} organizationId={organization?.id} money={money}
         onClose={() => setBenchEdit(false)} onSaved={async () => { setBenchEdit(false); await load(); }} />}
       {open && (
-        <Modal title={`${open.it.name}${open.colour ? ` ${open.colour}` : ''} — stock at cost`} onClose={() => setOpen(null)}
+        <Modal title={`${open.it.name}${open.colour ? ` ${open.colour}` : ''} — cost`} onClose={() => setOpen(null)} size="lg"
           footer={<button type="button" className="btn btn-outline" onClick={() => setOpen(null)}>Close</button>}>
+          {/* the cost in its parts and month by month (2026-11-11), then the stock at cost */}
+          <ProductCostDetail branchId={branchId} row={open} unit={per(open.it)} money={money} />
+          <h3 className="modal-section-title" style={{ marginTop: 16 }}>Stock at cost</h3>
           <LayerList branchId={branchId} row={open} unit={unitOf(open.it)} money={money} />
         </Modal>
       )}
