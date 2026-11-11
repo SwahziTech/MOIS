@@ -100,8 +100,8 @@ export function SlipCanvas({ url, strokes, color, pen, onStrokes, stamp, replace
 export async function markedSlipBlob(url, mark, stampText) {
   const im = new Image();
   im.crossOrigin = 'anonymous';
-  im.src = url;
-  await im.decode();
+  // wait for the photo to load (decode() can hang on photos served from the R2 file service)
+  await new Promise((res, rej) => { im.onload = res; im.onerror = () => rej(new Error('The photo did not load.')); im.src = url; });
   const w = im.naturalWidth, h = im.naturalHeight;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d');

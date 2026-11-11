@@ -99,6 +99,8 @@ async function object(req, env, url) {
     obj.writeHttpMetadata(h);
     h.set('ETag', obj.httpEtag);
     h.set('Cache-Control', 'private, max-age=600');   // never cached for others at the CDN
+    // the same photo is shown (no Origin) and drawn on / shared (with Origin): cached apart, or the drawing is blocked
+    h.set('Vary', 'Origin');
     if (dl) h.set('Content-Disposition', `attachment; filename="${dl}"`);
     return new Response(req.method === 'HEAD' ? null : obj.body, { headers: h });
   }

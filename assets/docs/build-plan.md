@@ -371,11 +371,11 @@ Needed for the month of real use before AI and Billing.
 2. **Hosting + CDN** — the app as static assets on Cloudflare (Wrangler 4.160: Pages now runs on Workers; `wrangler deploy`, SPA routing in wrangler.toml) next to Netlify (a second address, mois.<subdomain>.workers.dev); the CDN comes
    with Pages. `public/_headers`: service worker never cached; built files cached a year.
    Netlify stays the live address until SwahziTech switches.
-3. **R2** — a private bucket for payment proofs, director slips, report photos and proof of delivery;
+3. **R2** — DONE 2026-11-11 (117 live; 13 files copied; Supabase copies kept until SwahziTech agrees to remove them) — a private bucket for payment proofs, director slips, report photos and proof of delivery;
    uploads and reads through short-lived signed links made on the server (a Supabase Edge Function
    or a Worker checks the person's company and branch first, as the storage rules do today);
    the existing files (13 on 2026-11-11) moved and their paths updated. Asked before building.
-4. **Proof of delivery photo** — on R2 (closes Phase 1 completion).
+4. **Proof of delivery photo** — DONE 2026-11-11: optional photo in Delivered…, opened from the Deliveries list (closes Phase 1 completion).
 5. Later, when a domain is chosen: the domain on Cloudflare (DNS, CDN, caching), public assets
    (logos, product images) cached at the CDN. Private files are never cached publicly.
 
