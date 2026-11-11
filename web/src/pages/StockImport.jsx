@@ -223,9 +223,13 @@ export default function StockImport() {
     return { qty: Math.round((Number(c.qty) / Number(prod.pcsPerSqm)) * 10000) / 10000, unitId: prod.unitId, pcsPerSqm: Number(prod.pcsPerSqm) };
   };
 
+  // the product's own colours when an admin set them, else its category's (046) — as lineProblems
+  const prodColours = id => { const p = prodById[id]; return p ? (p.colorIds ?? catById[p.categoryId]?.colorIds ?? []) : []; };
   // A table's own unit stands in for lines whose heading had none
   const effective = l => {
-    const c = choices[l.id] || {};
+    let c = choices[l.id] || {};
+    // a product with no colours: the sheet's colour column means nothing for it (2026-11-11)
+    if (c.colorId && prodColours(c.productId).length === 0 && prodById[c.productId]) c = { ...c, colorId: '' };
     // a bare number on the branch's stock-taking sheet is in the product's own unit (2026-11-11)
     const unitId = c.unitId || (!l.unitExplicit ? tableChoice[l.table]?.unitId : '') || (l.unitFromProduct ? prodById[c.productId]?.unitId : '') || '';
     const conv = conversionFor(c, unitId);
@@ -249,6 +253,16 @@ export default function StockImport() {
       : tableCat || (sugCats.length === 1 ? sugCats[0] : '') || '';
     return { key: `${categoryId}|${normalize(l.typeText)}`, name: l.typeText, categoryId, context: t.category, group: groupKids ? tableCat : null,
              candidates: sug.filter(x => prodById[x.id]?.categoryId === categoryId).map(x => x.id) };
+  };
+  // the sheet's rows: every cell of one sheet row together (the review grid)
+  const sheetRows = tl => {
+    const out = [];
+    for (const l of tl) {
+      const last = out[out.length - 1];
+      if (last && last.lineNo === l.lineNo) last.lines.push(l);
+      else out.push({ key: `${l.table}:${l.lineNo}`, lineNo: l.lineNo, typeText: l.typeText, lines: [l] });
+    }
+    return out;
   };
   const problemsOf = l => {
     if (!catalog) return [];
@@ -505,92 +519,98 @@ export default function StockImport() {
                         </select>
                       </div>
                     </div>
+                    {/* the sheet's own grid (2026-11-11, the user): one row per type, colours as columns, to follow and confirm */}
                     <div className="table-container">
-                      <table>
-                        <thead><tr><th>On the sheet</th><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th>Date</th><th>Status</th></tr></thead>
+                      <table className="si-grid">
+                        <thead><tr><th>On the sheet</th><th>Product</th>
+                          {(t.columns.length ? t.columns : ['Qty']).map((cn, k) => <th key={k} style={{ textAlign: 'right' }}>{t.isColoured ? cn : 'Qty'}</th>)}
+                          <th>Date</th><th>Status</th></tr></thead>
                         <tbody>
-                          {tl.map(l => {
-                            const c = choices[l.id] || {};
-                            const e = effective(l);
-                            const prod = prodById[c.productId];
-                            const pcat = prod && catById[prod.categoryId];
-                            const pcols = prod?.colorIds ?? [];
-                            const problems = c.skip ? [] : problemsOf(l);
-                            const opts = productOptions(l);
-                            const undone = c.noConvert && conversionFor({ ...c, noConvert: false }, c.unitId || '');
+                          {sheetRows(tl).map(r => {
+                            const first = r.lines[0];
+                            const cs = r.lines.map(l => choices[l.id] || {});
+                            const allSkip = cs.every(c => c.skip);
+                            const ids = [...new Set(cs.map(c => c.productId || ''))];
+                            const productId = ids.length === 1 ? ids[0] : '';
+                            const prod = prodById[productId];
+                            const opts = productOptions(first);
+                            const rowProblems = allSkip ? [] : r.lines.filter(l => !choices[l.id]?.skip).flatMap(l => problemsOf(l).map(p => ({ l, p })));
+                            const ph = placeholderFor(first);
+                            const rowDates = [...new Set(cs.map(c => c.date || ''))];
+                            const setRow = patch => r.lines.forEach(l => setChoice(l.id, typeof patch === 'function' ? patch(l) : patch));
                             return (
-                              <tr key={l.id} className={c.skip ? 'row-muted' : ''}>
+                              <tr key={r.key} className={allSkip ? 'row-muted' : ''}>
                                 <td className="text-sm">
-                                  <div style={{ fontWeight: 500 }}>{l.typeText}</div>
-                                  <div className="text-xs text-muted">{l.colourText ? `${l.colourText} · ` : ''}{l.raw}{!l.unitExplicit && l.unitText ? ` ${l.unitText}` : ''} · line {l.lineNo}</div>
+                                  <div style={{ fontWeight: 500 }}>{r.typeText}</div>
+                                  <div className="text-xs text-muted">line {r.lineNo}</div>
                                 </td>
                                 <td>
-                                  <select className="form-input" aria-label="Product" value={c.productId} disabled={c.skip}
-                                    onChange={ev => setChoice(l.id, { productId: ev.target.value, colorId: l.colour?.id ?? '' })}>
-                                    <option value="">{l.product.status === 'none' ? 'No match — choose…' : 'Choose…'}</option>
+                                  <select className="form-input" aria-label="Product" value={productId} disabled={allSkip}
+                                    onChange={ev => setRow(l => ({ productId: ev.target.value, colorId: l.colour?.id ?? '' }))}>
+                                    <option value="">{ids.length > 1 ? 'Different products — choose one…' : first.product.status === 'none' ? 'No match — choose…' : 'Choose…'}</option>
                                     {opts.sug.length > 0 && <optgroup label="Suggested">
-                                      {opts.sug.map(s => <option key={s.id} value={s.id}>{prodById[s.id]?.name}{s.otherCategory ? ` — ${catById[prodById[s.id]?.categoryId]?.name}` : ''}{s.strong ? ' (good match)' : ''}{s.notCarried ? " (not in this branch's list yet)" : ''}</option>)}
+                                      {opts.sug.map(x => <option key={x.id} value={x.id}>{prodById[x.id]?.name}{x.otherCategory ? ` — ${catById[prodById[x.id]?.categoryId]?.name}` : ''}{x.strong ? ' (good match)' : ''}{x.notCarried ? " (not in this branch's list yet)" : ''}</option>)}
                                     </optgroup>}
                                     <optgroup label="This category">{opts.inCat.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
                                     <optgroup label="Other categories">{opts.rest.map(p => <option key={p.id} value={p.id}>{p.name} — {catById[p.categoryId]?.name}</option>)}</optgroup>
                                   </select>
-                                  {l.product.status === 'exact' && c.productId === l.product.id && (
-                                    <div className="text-xs text-muted">{l.product.via === 'same name' ? 'same name as on the sheet' : l.product.via.replace(/^decided: /, 'decided earlier by ')}</div>
+                                  {first.product.status === 'exact' && productId === first.product.id && (
+                                    <div className="text-xs text-muted">{first.product.via === 'same name' ? 'same name as on the sheet' : first.product.via.replace(/^decided: /, 'decided earlier by ')}</div>
                                   )}
                                 </td>
-                                <td>
-                                  {pcols.length ? (
-                                    <>
-                                      <select className="form-input" aria-label="Colour" value={c.colorId} disabled={c.skip} onChange={ev => setChoice(l.id, { colorId: ev.target.value })}>
-                                        <option value="">{l.colourText ? `"${l.colourText}" — choose…` : 'Choose…'}</option>
-                                        {pcols.map(id => <option key={id} value={id}>{colById[id]?.name}{colById[id]?.isActive === false ? ' (discontinued)' : ''}</option>)}
-                                      </select>
-                                      {l.colourText && !c.colorId && canCreate && !prod.ownColors && !catalog.colors.some(x => normalize(x.name) === normalize(l.colourText) && pcols.includes(x.id)) && (
-                                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => createColour(l)}>
-                                          Add {l.colourText.toLowerCase()} to {pcat.name}
-                                        </button>
+                                {(t.columns.length ? t.columns : ['Qty']).map((cn, k) => {
+                                  const l = r.lines.find(x => x.col === k);
+                                  if (!l) return <td key={k} />;
+                                  const c = choices[l.id] || {};
+                                  const e = effective(l);
+                                  const probs = c.skip ? [] : problemsOf(l);
+                                  const pcols = prodColours(productId);
+                                  const colourProblem = probs.some(p => /colour/i.test(p));
+                                  const undone = c.noConvert && conversionFor({ ...c, noConvert: false }, c.unitId || '');
+                                  const otherColour = t.isColoured && l.colourText && normalize(l.colourText) !== normalize(cn);
+                                  return (
+                                    <td key={k} className={`si-cell${probs.length ? ' si-bad' : ''}`} title={probs.length ? probs.join('; ') : `${l.raw} · line ${l.lineNo}`}>
+                                      <div className="si-qty">{qtyText(e.qty)} <span className="pl-help">{unitById[e.unitId]?.symbol ?? l.unitText ?? ''}</span></div>
+                                      {otherColour && <div className="text-xs">{l.colourText.charAt(0) + l.colourText.slice(1).toLowerCase()}</div>}
+                                      {e.converted && <div className="text-xs text-muted">from {l.qty} {l.unitText}
+                                        {!c.skip && <button type="button" className="btn-link-sm" onClick={() => setChoice(l.id, { noConvert: true })}>keep</button>}</div>}
+                                      {undone && !c.skip && <button type="button" className="btn-link-sm" onClick={() => setChoice(l.id, { noConvert: false })}>to {unitById[prod?.unitId]?.symbol ?? 'its unit'}</button>}
+                                      {colourProblem && pcols.length > 0 && (
+                                        <select className="form-input si-colour" aria-label={`Colour for ${r.typeText} ${cn}`} value={c.colorId || ''} onChange={ev => setChoice(l.id, { colorId: ev.target.value })}>
+                                          <option value="">{l.colourText ? `"${l.colourText}"?` : 'Colour?'}</option>
+                                          {pcols.map(id => <option key={id} value={id}>{colById[id]?.name}{colById[id]?.isActive === false ? ' (discontinued)' : ''}</option>)}
+                                        </select>
                                       )}
-                                    </>
-                                  ) : <span className="text-muted">—</span>}
-                                </td>
-                                <td style={{ textAlign: 'right' }}>
-                                  {qtyText(e.qty)} {unitById[e.unitId]?.symbol ?? l.unitText ?? ''}
-                                  {e.converted && (
-                                    <div className="text-xs text-muted">
-                                      from {l.qty}{l.unitText} at {e.converted.pcsPerSqm} pcs/m²
-                                      {!c.skip && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChoice(l.id, { noConvert: true })}>don't convert</button>}
-                                    </div>
-                                  )}
-                                  {undone && !c.skip && (
-                                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChoice(l.id, { noConvert: false })}>
-                                      Convert at {undone.pcsPerSqm} pcs/m²
-                                    </button>
-                                  )}
-                                </td>
+                                      {colourProblem && l.colourText && !c.colorId && canCreate && prod && !prod.ownColors && !catalog.colors.some(x => normalize(x.name) === normalize(l.colourText) && pcols.includes(x.id)) && (
+                                        <button type="button" className="btn-link-sm" disabled={busy} onClick={() => createColour(l)}>add {l.colourText.toLowerCase()}</button>
+                                      )}
+                                      {probs.length > 0 && !colourProblem && <div className="text-xs text-error"><AlertTriangle size={11} /> {probs[0]}</div>}
+                                    </td>
+                                  );
+                                })}
                                 <td>
-                                  <input type="date" className="form-input" style={{ width: 150 }} max={today} aria-label="Line date"
-                                    value={c.date || date} disabled={c.skip} onChange={ev => setChoice(l.id, { date: ev.target.value === date ? '' : ev.target.value })} />
+                                  <input type="date" className="form-input" style={{ width: 150 }} max={today} aria-label="Row date"
+                                    value={(rowDates.length === 1 && rowDates[0]) || date} disabled={allSkip}
+                                    onChange={ev => setRow({ date: ev.target.value === date ? '' : ev.target.value })} />
                                 </td>
                                 <td className="text-xs">
-                                  {c.skip ? <span className="text-muted">skipped</span>
-                                    : problems.length ? <>
-                                        <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {problems.join('; ')}</span>
-                                        {placeholderFor(l)?.group && (
+                                  {allSkip ? <span className="text-muted">skipped</span>
+                                    : rowProblems.length ? <>
+                                        <span className="text-error flex items-center gap-4"><AlertTriangle size={12} /> {rowProblems.length === 1 ? rowProblems[0].p : `${rowProblems.length} cells to fix`}</span>
+                                        {ph?.group && (
                                           <select className="form-input mt-4" style={{ width: 'auto' }} aria-label="Category for the new product"
-                                            value={c.categoryId || ''} onChange={ev => setChoice(l.id, { categoryId: ev.target.value })}>
+                                            value={cs[0].categoryId || ''} onChange={ev => setRow({ categoryId: ev.target.value })}>
                                             <option value="">Category…</option>
-                                            {catTools.childrenOf(placeholderFor(l).group).map(x => <option key={x.id} value={x.id}>{catTools.label(x)}</option>)}
+                                            {catTools.childrenOf(ph.group).map(x => <option key={x.id} value={x.id}>{catTools.label(x)}</option>)}
                                           </select>
                                         )}
                                       </>
-                                    : placeholderFor(l) ? <span className="text-warning">
-                                        New product "{l.typeText}" will be added to {catTools.label(placeholderFor(l).categoryId)} and flagged in the Review queue
-                                        {placeholderFor(l).candidates.length ? ` — it may be ${placeholderFor(l).candidates.map(id => prodById[id]?.name).join(' or ')}` : ''}
+                                    : ph ? <span className="text-warning" title={ph.candidates.length ? `It may be ${ph.candidates.map(id => prodById[id]?.name).join(' or ')}` : undefined}>
+                                        New product, added to {catTools.label(ph.categoryId)} and flagged for review
                                       </span>
-                                    : dupes.has(l.id) ? <span className="text-success">ready · added to the other {prodById[e.productId]?.name}{e.colorId ? ' ' + colById[e.colorId]?.name : ''} line</span>
-                                    : <span className="text-success">ready</span>}
+                                    : <span className="text-success">ready{r.lines.some(l => dupes.has(l.id)) ? ' · added to another line' : ''}</span>}
                                   <label className="flex items-center gap-4 mt-8">
-                                    <input type="checkbox" checked={!!c.skip} onChange={ev => setChoice(l.id, { skip: ev.target.checked })} /> skip
+                                    <input type="checkbox" checked={allSkip} onChange={ev => setRow({ skip: ev.target.checked })} /> skip
                                   </label>
                                 </td>
                               </tr>

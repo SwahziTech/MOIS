@@ -122,6 +122,7 @@ export function parseStockSheet(text) {
       }
       lines.push({
         id: `${lineNo}:${c}`,
+        col: c,   // which column of the table (the review shows the sheet's own grid)
         table: table.index,
         typeText,
         colourText: table.isColoured ? col : null,
@@ -244,7 +245,7 @@ function parseStockTaking(rows) {
       if (!p) return;
       if (p.error || p.colourOnly) { issues.push({ lineNo, table: table.index, kind: 'bad_cell', message: `${type} / ${c.name}: ${p.error || `"${raw.trim()}" isn't a number`}` }); return; }
       const line = {
-        id: `${lineNo}:${c.at}`, table: table.index, typeText: type,
+        id: `${lineNo}:${c.at}`, col: cols.indexOf(c), table: table.index, typeText: type,
         colourText: table.isColoured ? (p.colour || c.name) : null,
         qty: p.qty, unitText: p.unit, unitExplicit: !!p.unit,
         unitFromProduct: !p.unit,   // a bare number is in the product's own unit

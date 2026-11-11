@@ -2839,3 +2839,11 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 /* Deliveries: delivery notes by the day the goods left (2026-11-11) */
 .dl-day td { background: var(--bg-soft); padding-top: 10px; padding-bottom: 6px; }
 .dl-first td { border-top: 2px solid var(--border-strong); }
+/* stock import: the sheet's own grid (2026-11-11) */
+.si-grid td.si-cell { text-align: right; vertical-align: top; white-space: nowrap; }
+.si-grid td.si-bad { background: color-mix(in srgb, var(--error, #d64545) 10%, transparent); }
+.si-grid .si-qty { font-weight: 600; }
+.si-grid .si-colour { width: auto; min-width: 90px; margin-top: 4px; padding: 2px 6px; font-size: var(--text-xs); height: auto; }
+.btn-link-sm { background: none; border: 0; padding: 0 0 0 4px; color: var(--accent, #c8a96a); font-size: var(--text-xs); cursor: pointer; text-decoration: underline; }
+.si-grid select[aria-label="Product"] { min-width: 170px; max-width: 230px; }
+.si-grid th:first-child, .si-grid td:first-child { max-width: 160px; }
