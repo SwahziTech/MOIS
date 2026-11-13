@@ -698,8 +698,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         ) : (
           // a table like the sales one (2026-11-13, the user): each product a row; bags, yield, team and machine per batch
           <table className="rd-table sl-day-table dl-prod-table">
-            {/* the product block takes 60% of the width, team · machine · yield and the icons 40% (2026-11-13, the user) */}
-            <colgroup><col style={{ width: '4%' }} /><col style={{ width: '26%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} /><col style={{ width: '7%' }} /><col style={{ width: '9%' }} /></colgroup>
+            {/* half the width for the product block (Qty, Bags, Avg close to the products), half for team · machine · yield and the icons (2026-11-13, the user) */}
+            <colgroup><col style={{ width: '4%' }} /><col style={{ width: '18%' }} /><col style={{ width: '9%' }} /><col style={{ width: '7%' }} /><col style={{ width: '12%' }} /><col style={{ width: '16%' }} /><col style={{ width: '14%' }} /><col style={{ width: '9%' }} /><col style={{ width: '11%' }} /></colgroup>
             <thead><tr><th>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th className="dl-avg" title="Pieces a cement bag — residuals counted in the main product's pieces by each one's wastani">Avg <span className="th-unit">(pcs/bag)</span></th><th className="dl-split">Team</th><th>Machine</th><th>Yield</th><th aria-label="Actions" /></tr></thead>
             <tbody>
               {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
