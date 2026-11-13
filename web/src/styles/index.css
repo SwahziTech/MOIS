@@ -2890,3 +2890,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .day-list-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
 .day-list-totals { margin-right: auto; }
 .pl-batch-notes { margin-top: 14px; }
+/* a unit beside a column name or a figure: very small and faint (2026-11-13) */
+.th-unit, .td-unit { font-size: 0.7em; font-weight: 400; opacity: .55; text-transform: none; letter-spacing: 0; }

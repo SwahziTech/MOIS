@@ -698,7 +698,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         ) : (
           // a table like the sales one (2026-11-13, the user): each product a row; bags, yield, team and machine per batch
           <table className="rd-table sl-day-table">
-            <thead><tr><th style={{ width: 36 }}>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }} title="Pieces a cement bag — residuals counted in the main product's pieces by each one's wastani">Avg</th><th>Team · machine</th><th>Yield</th><th aria-label="Actions" /></tr></thead>
+            <thead><tr><th style={{ width: 36 }}>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }} title="Pieces a cement bag — residuals counted in the main product's pieces by each one's wastani">Avg <span className="th-unit">(pcs/bag)</span></th><th>Team</th><th>Machine</th><th>Yield</th><th aria-label="Actions" /></tr></thead>
             <tbody>
               {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
               {staged.map((st, i) => [st, i]).reverse().map(([st, i]) => {
@@ -715,8 +715,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                     <td className={o.residual ? 'pl-staged-res' : ''}>{o.residual ? '+ ' : ''}{o.name}{o.order ? <span className="pl-help"> · order {o.order}</span> : ''}</td>
                     <td style={{ textAlign: 'right' }}>{o.pieces != null ? <>{qtyText(o.pieces)} <span className="pl-help">pcs</span></> : '—'}</td>
                     {k === 0 && <td rowSpan={span} style={{ textAlign: 'right' }}>{qtyText(st.bags)}</td>}
-                    {k === 0 && <td rowSpan={span} style={{ textAlign: 'right' }}>{avg != null ? <>{qtyText(avg)} <span className="pl-help">pcs/bag</span></> : '—'}</td>}
-                    {k === 0 && <td rowSpan={span} className="text-sm">{[st.team, st.machine].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>}
+                    {k === 0 && <td rowSpan={span} style={{ textAlign: 'right' }}>{avg != null ? <>{qtyText(avg)} <span className="td-unit">(pcs)</span></> : '—'}</td>}
+                    {k === 0 && <td rowSpan={span} className="text-sm">{st.team || <span className="pl-help">—</span>}</td>}
+                    {k === 0 && <td rowSpan={span} className="text-sm">{st.machine || <span className="pl-help">—</span>}</td>}
                     {k === 0 && <td rowSpan={span}>{st.factor == null ? <span className="pl-help">no check</span> : <span className={`pl-badge${st.outOfBand ? ' is-out' : ''}`}>{Math.round(st.factor * 1000) / 10}%</span>}</td>}
                     {k === 0 && <td rowSpan={span} className="sl-day-acts" onClick={e => e.stopPropagation()}>
                       <button type="button" className="icon-btn" aria-label="Look at the batch" title="Look at it" onClick={() => setPreviewing(st)}><Eye size={14} /></button>
@@ -727,7 +728,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                 ));
               })}
               <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{staged.length} batch{staged.length === 1 ? '' : 'es'}</span></td>
-                <td style={{ textAlign: 'right' }}><strong>{qtyText(stagedBags)}</strong></td><td colSpan={4} /></tr>
+                <td style={{ textAlign: 'right' }}><strong>{qtyText(stagedBags)}</strong></td><td colSpan={5} /></tr>
             </tbody>
           </table>
         )}
