@@ -672,11 +672,13 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             )}
           </div>
         )}
+        {/* team, who worked, machine and note belong to the batch: inside its card (2026-11-13, the user) */}
+        <div className="pl-batch-notes">
+          <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} date={date} lists={lists} reload={reloadLists}
+            value={{ teamId: form.teamId ?? '', workerIds: form.workerIds ?? null, machineId: form.machineId ?? '', notes: form.notes }}
+            onChange={v => set(v)} />
+        </div>
       </section>
-
-      <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} date={date} lists={lists} reload={reloadLists}
-        value={{ teamId: form.teamId ?? '', workerIds: form.workerIds ?? null, machineId: form.machineId ?? '', notes: form.notes }}
-        onChange={v => set(v)} />
       <div className="pl-actions">
         <button type="button" className="btn btn-primary pl-wide" disabled={shortLines.length > 0} onClick={addToList}>
           {editingId ? <><Pencil size={15} /> Update batch {staged.findIndex(x => x.id === editingId) + 1}</> : <><Plus size={15} /> Add batch to daily productions</>}
@@ -688,7 +690,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       {/* 3 · the day's list — the same look as Sales' (2026-11-13, the user): a coloured edge sets it apart from the form */}
       <section className="pl-card day-list">
         <div className="day-list-head">
-          <h3 className="day-list-title">Day's list</h3>
+          <h3 className="day-list-title">Day's list</h3><span className="day-list-sub">Daily Production Ledger</span>
           <span className="day-list-chip">{staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</span>
         </div>
         {staged.length === 0 ? (
