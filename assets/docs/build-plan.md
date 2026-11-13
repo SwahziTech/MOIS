@@ -321,6 +321,7 @@ reworked here.
 - Ask MOIS (AI v1), basic analysis and AI-assisted drafts.
 - Reading `review_flags.admin_explanation`.
 - Before building, ask SwahziTech three things: the AI provider, what tenant data may be sent to it, and who may use it.
+- **Decided 2026-11-13:** names and phone numbers of customers, staff and suppliers go to the AI as code names ("Customer C17"), the real names put back on screen; figures, products and dates as they are. Provider: PENDING — SwahziTech researching (shortlist: Claude Haiku 5.5 / Sonnet 5.5, Gemini Flash-Lite / Flash, OpenAI GPT-6 Luna; DeepSeek ruled out — China jurisdiction). Agent actions: NOT to be built yet. Wanted later: the whole PRD AI (Ask, drafts, analysis, recommendations, predict, agents acting through Approvals).
 
 PRD sections: 4.15 (Dashboards & Reports), 7 (AI Features — V1 slice only:
 Ask MOIS, basic authorized queries, basic analysis, AI-assisted document
@@ -388,7 +389,7 @@ Needed for the month of real use before AI and Billing.
 - 118 costing_outputs(): read only; parts reconcile to output_cost_per_unit (checked on 175 live outputs).
 
 ## 1g — Billing
-**Status: PENDING — after the AI step** (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.
+**Status: MOVED TO THE LAST PHASE** (SwahziTech, 2026-11-13: after everything else, PRD Phases 2–3 included). Earlier: PENDING — after the AI step (SwahziTech, 2026-10-30). Not started until the app works 100% and has been tested in real use for a month.
 
 PRD section: 4.18 (Subscription & Billing), Snippe.sh integration.
 
