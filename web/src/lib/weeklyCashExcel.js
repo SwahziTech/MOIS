@@ -63,7 +63,14 @@ export async function readWeeklySheet(file) {
       if (amount == null) continue;
       lines.push({ description: desc, ...(cQ >= 0 ? splitQty(rows[k].raw[cQ]) : { quantity: null, unit: '' }), amount });
     }
-    if (lines.length) return { weekEnding, lines, total };
+    // last week's summary (CASH IN / CASH OUT / BALANCE), above the needs: its last balance is what was carried
+    let carried = null;
+    const si = rows.findIndex((r, k) => k < hi && r.cells.some(c => /cashs*out/i.test(c)) && r.cells.some(c => /balance/i.test(c)));
+    if (si >= 0) {
+      const cB = rows[si].cells.findIndex(c => /balance/i.test(c));
+      for (let k = si + 1; k < hi; k++) { const b = numberOf(rows[k].raw[cB]); if (b != null) carried = b; }
+    }
+    if (lines.length) return { weekEnding, lines, total, carried };
   }
   throw new Error('No table with DESCRIPTION, QTY and AMOUNT was found in this file.');
 }

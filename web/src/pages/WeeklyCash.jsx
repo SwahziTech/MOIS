@@ -144,13 +144,13 @@ export default function WeeklyCash() {
           <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
         </>
       )}
-      {open && <RequestModal request={open.new ? null : open} branchId={branchId} branchName={branchName} data={data} ledger={ledger} today={today} money={money}
+      {open && <RequestModal request={open.new ? null : open} branchId={branchId} branchName={branchName} data={data} ledger={ledger} spentIn={spentIn} today={today} money={money}
         organization={organization} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />}
     </PageShell>
   );
 }
 
-function RequestModal({ request, branchId, branchName, data, ledger, today, money, organization, onClose, onSaved }) {
+function RequestModal({ request, branchId, branchName, data, ledger, spentIn = () => [], today, money, organization, onClose, onSaved }) {
   const { canAt } = useAuth();
   const isNew = !request;
   const editable = isNew || request.status === 'draft';
@@ -201,6 +201,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
       const s = await readWeeklySheet(f);
       setLines(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })));
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
+      if (firstEver && s.carried != null) setOpening(String(s.carried));   // the sheet's last balance, carried into this week
       setSource('excel');
       if (s.total != null && Math.abs(s.total - s.lines.reduce((t, l) => t + l.amount, 0)) > 0.5) setError(`Read ${s.lines.length} lines — their sum differs from the sheet's TOTAL (${formatAmount(s.total)}). Check before saving.`);
     } catch (e) { setError(e.message || 'That file could not be read.'); }
@@ -237,19 +238,37 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
         {!isNew && <p className="text-sm"><span className={`badge ${STATUS[st][1]}`}>{STATUS[st][0]}</span>
           {request.decision_note ? ` · ${request.decision_note}` : ''}{st === 'paid' ? ` · ${money(Number(request.paid_amount))} sent on ${dateText(request.paid_on)}${request.paid_reference ? ` (${request.paid_reference})` : ''}` : ''}</p>}
 
-        <h3 className="modal-section-title">Last week — week ending {addDays(week, -7)}</h3>
-        {lastWeek ? (
-          <table className="rd-table">
-            <thead><tr><th>Date</th><th>Description</th><th>Qty</th><th className="num">Cash in (TZS)</th><th className="num">Cash out (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
-            <tbody>
-              <tr><td /><td>Balance brought forward</td><td /><td className="num">{formatAmount(lastWeek.opening)}</td><td /><td /></tr>
-              <tr><td /><td>Cash sent</td><td /><td className="num">{formatAmount(lastWeek.sent)}</td><td /><td className="num"><strong>{formatAmount(lastWeek.opening + lastWeek.sent)}</strong></td></tr>
-              {(() => { let b = lastWeek.opening + lastWeek.sent; return lastWeek.lines.map((l, i) => { b = r2(b - l.amount); return (
-                <tr key={i}><td>{tableDate(l.date)}</td><td>{l.description}</td><td className="pl-help">{l.qty}</td><td /><td className="num">{formatAmount(l.amount)}</td><td className="num">{formatAmount(b)}</td></tr>); }); })()}
-            </tbody>
-            <tfoot><tr><td /><td><strong>Spent · balance</strong></td><td /><td /><td className="num"><strong>{money(lastWeek.spent)}</strong></td><td className="num"><strong>{money(lastWeek.closing)}</strong></td></tr></tfoot>
-          </table>
-        ) : <p className="pl-help">{firstEver ? 'First week: type the balance brought forward.' : 'No week before this one yet.'}</p>}
+        {/* part 1, as on the branch's sheet (2026-11-13, the user): SUMMARY YA MATUMIZI YA LAST WEEK */}
+        <h3 className="modal-section-title">Last week's spending · week ending {dateText(addDays(week, -7))}</h3>
+        {(() => {
+          const cols = [
+            { key: 'date', label: 'Date', width: 110, show: l => (l.date ? tableDate(l.date) : '') },
+            { key: 'description', label: 'Description', show: l => (l.strong ? <strong>{l.description}</strong> : l.description) },
+            { key: 'qty', label: 'Qty', width: 120, show: l => <span className="pl-help">{l.qty || ''}</span> },
+            { key: 'in', label: 'Cash in (TZS)', width: 140, align: 'right', show: l => (l.in != null ? formatAmount(l.in) : '') },
+            { key: 'out', label: 'Cash out (TZS)', width: 140, align: 'right', show: l => (l.out != null ? formatAmount(l.out) : '') },
+            { key: 'bal', label: 'Balance (TZS)', width: 140, align: 'right', show: l => (l.bal != null ? (l.strong ? <strong>{formatAmount(l.bal)}</strong> : formatAmount(l.bal)) : '') },
+          ];
+          if (lastWeek) {
+            let b = lastWeek.opening + lastWeek.sent;
+            const rowsLW = [
+              { description: 'Balance brought forward', in: lastWeek.opening },
+              { description: 'Cash sent', in: lastWeek.sent, bal: lastWeek.opening + lastWeek.sent, strong: true },
+              ...lastWeek.lines.map(l => { b = r2(b - l.amount); return { date: l.date, description: l.description, qty: l.qty, out: l.amount, bal: b }; }),
+            ];
+            return <SheetGrid label="Last week's spending" readOnly columns={cols} rows={rowsLW} totalLabel="Spent · balance carried"
+              totals={{ out: money(lastWeek.spent), bal: money(lastWeek.closing) }} />;
+          }
+          // the first week in MOIS: what was spent last week, as recorded; the balance carried is typed below (or read from the sheet)
+          const rec = spentIn(addDays(week, -7));
+          const spentLW = r2(rec.reduce((t, l) => t + l.amount, 0));
+          return <>
+            <SheetGrid label="Last week's spending" readOnly columns={cols}
+              rows={rec.length ? rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, out: l.amount })) : [{ description: 'Nothing recorded as spent last week' }]}
+              totalLabel={firstEver ? 'Spent · balance carried (type it below)' : 'Spent'} totals={{ out: money(spentLW), ...(firstEver && num(opening) != null ? { bal: money(num(opening)) } : {}) }} />
+            {firstEver && <p className="pl-help">First week in MOIS: last week's spending as recorded here. Type the balance carried into this week below, or import the branch's sheet and it is read from its summary. From next week, this part fills itself.</p>}
+          </>;
+        })()}
 
         <h3 className="modal-section-title">This week's needs</h3>
         <div className="form-row">
