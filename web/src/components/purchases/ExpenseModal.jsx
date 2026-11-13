@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { PaidFrom, saveWeeklyCash } from './PaidFrom';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
 import { formatMoney } from '../../lib/format';
@@ -46,6 +47,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
   const [paid,     setPaid]     = useState(expense ? String(expense.amount_paid) : '');
   const [method,   setMethod]   = useState(expense?.payment_method ?? '');
   const [accountId, setAccountId] = useState(expense?.account_id ?? '');   // paid from (094)
+  const [weekly, setWeekly] = useState(expense ? (expense.from_weekly_cash ?? null) : null);   // money from the weekly cash? (121)
   const [accounts, setAccounts] = useState([]);
   const [paidOn,   setPaidOn]   = useState(expense?.paid_on ?? expense?.expense_date ?? today);
   const [paidOnSet, setPaidOnSet] = useState(!!expense?.paid_on);
@@ -133,6 +135,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
     if (num(qty) != null && !(num(qty) > 0)) { setError('Quantity must be above zero, or leave it blank.'); return; }
     if (total == null || !(total >= 0)) { setError('Enter the amount, or the quantity and price.'); return; }
     if ((num(paid) ?? 0) > total) { setError('Paid is more than the amount.'); return; }
+    if (num(paid) > 0 && weekly == null) { setError('Say where the money came from: the weekly cash, or the directors · bank.'); return; }
     if (supplierId === '__new' && !newSupplier.trim()) { setError("Type the new supplier's name, or choose none."); return; }
     const p = {
       branch_id: branch, expense_date: date, category_id: category, description: what.trim(),
@@ -152,6 +155,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
       const r2 = await supabase.rpc('set_expense_machine', { p_id: isNew ? res.data : expense.id, p_machine: isOverhead ? machineId || null : null });
       if (r2.error) res.error = r2.error;
     }
+    if (!res.error && num(paid) > 0) await saveWeeklyCash('expense', isNew ? res.data : expense.id, weekly);
     setBusy(false);
     if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save this expense. Please try again.")); return; }
     onSaved();
@@ -320,6 +324,7 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
             </div>
           )}
         </div>
+        {num(paid) > 0 && <PaidFrom value={weekly} onChange={setWeekly} />}
         <div className="form-group">
           <label className="form-label" htmlFor="ex-notes">{isElectricity ? 'Token number (optional)' : 'Notes (optional)'}</label>
           <input id="ex-notes" className="form-input" value={notes} onChange={e => setNotes(e.target.value)} />

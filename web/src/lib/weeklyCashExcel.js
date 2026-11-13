@@ -80,13 +80,35 @@ export async function readWeeklySheet(file, sheetName = null) {
       lines.push({ description: desc, ...(cQ >= 0 ? splitQty(rows[k].raw[cQ]) : { quantity: null, unit: '' }), amount });
     }
     // last week's summary (CASH IN / CASH OUT / BALANCE), above the needs: its last balance is what was carried
+    // and the summary itself, row by row, kept exactly as on the sheet (121)
     let carried = null;
+    const summaryRows = [];
     const si = rows.findIndex((r, k) => k < hi && r.cells.some(c => /cash\s*out/i.test(c)) && r.cells.some(c => /balance/i.test(c)));
     if (si >= 0) {
-      const cB = rows[si].cells.findIndex(c => /balance/i.test(c));
-      for (let k = si + 1; k < hi; k++) { const b = numberOf(rows[k].raw[cB]); if (b != null) carried = b; }
+      const sh = rows[si].cells;
+      const sc = re => sh.findIndex(c => re.test(c));
+      const cDt = sc(/^\s*date\s*$/i), cDs = sc(/description/i), cQt = sc(/^\s*(qty|quantity)/i), cIn = sc(/cash\s*in/i), cOut = sc(/cash\s*out/i), cB = sc(/balance/i);
+      const dateOf = v => (v instanceof Date ? v.toISOString().slice(0, 10) : dateIn(text(v)) || text(v).trim());
+      for (let k = si + 1; k < hi; k++) {
+        const r = rows[k];
+        if (/mahitaji|wiki\s*hii|this\s*week/i.test(r.cells.join(' '))) break;
+        const b = cB >= 0 ? numberOf(r.raw[cB]) : null;
+        if (b != null) carried = b;
+        const row = {
+          date: cDt >= 0 && text(r.raw[cDt]).trim() ? dateOf(r.raw[cDt]) : '',
+          description: cDs >= 0 ? (r.cells[cDs] ?? '').trim() : '',
+          qty: cQt >= 0 ? (r.cells[cQt] ?? '').trim() : '',
+          cash_in: cIn >= 0 ? numberOf(r.raw[cIn]) : null,
+          cash_out: cOut >= 0 ? numberOf(r.raw[cOut]) : null,
+          balance: b,
+        };
+        if (row.description || row.cash_in != null || row.cash_out != null || row.balance != null) summaryRows.push(row);
+      }
+      // a closing BALANCE row written in the cash-in column is the balance carried
+      const last = summaryRows[summaryRows.length - 1];
+      if (last && /^\s*balance\s*$/i.test(last.description) && last.balance == null && last.cash_in != null) carried = last.cash_in;
     }
-    if (lines.length) return { weekEnding, lines, total, carried };
+    if (lines.length) return { weekEnding, lines, total, carried, summaryRows };
   }
   throw new Error('No table with DESCRIPTION, QTY and AMOUNT was found in this file.');
 }
@@ -106,7 +128,12 @@ export async function writeWeeklySheet({ fileName, summaryTitle, summary, needsT
     vals.forEach((v, k) => { const c = ws.getCell(r, k + 1); c.value = v; box(c); if (typeof v === 'number') c.numFmt = money; if (opts.bold) c.font = { bold: true }; if (k === 1) c.alignment = { horizontal: 'center' }; });
     r += 1;
   };
-  if (summary) {
+  if (summary?.rows) {   // the rows exactly as shown on screen (121)
+    title(summaryTitle, 6);
+    row(['DATE', 'DESCRIPTION', 'QTY', 'CASH IN', 'CASH OUT', 'BALANCE'], { bold: true });
+    for (const x of summary.rows) row([x.date ?? '', x.description ?? '', x.qty ?? '', x.cash_in ?? '', x.cash_out ?? '', x.balance ?? ''], { bold: !!x.bold });
+    r += 1;
+  } else if (summary) {
     title(summaryTitle, 6);
     row(['DATE', 'DESCRIPTION', 'QTY', 'CASH IN', 'CASH OUT', 'BALANCE'], { bold: true });
     row([summary.date, 'BALANCE', '', summary.opening, '', '']);

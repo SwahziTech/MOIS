@@ -20,7 +20,7 @@ import NumberInput from './NumberInput';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
 
-export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = {}, totalLabel = 'Total', label = 'Sheet' }) {
+export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet' }) {
   const box = useRef(null);
   const canEdit = (col, row) => (col.editable ?? !readOnly) && (col.ignoreLock || !isLocked(row));
   const editableCols = columns.map((c, i) => ({ c, i })).filter(x => x.c.editable ?? !readOnly);
@@ -117,9 +117,9 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
             </tr>
           ))}
         </tbody>
-        <tfoot>
+        {totals && Object.keys(totals).length > 0 && <tfoot>
           <tr><td className="xs-rn" />{columns.map((c, i) => <td key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{i === 0 ? <strong>{totalLabel}</strong> : totals[c.key] != null ? <strong>{totals[c.key]}</strong> : null}</td>)}{!readOnly && <td />}</tr>
-        </tfoot>
+        </tfoot>}
       </table>
     </div>
   );

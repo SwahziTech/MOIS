@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Printer, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { PaidFrom, saveWeeklyCash } from './PaidFrom';
 import { files } from '../../lib/files';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
@@ -629,6 +630,7 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
   const [f, setF] = useState({ amount: owedAtStart > 0 ? String(owedAtStart) : '', paid_on: today, account_id: '', method: 'cash', reference: '' });
   // a director's payment carries its proof (106): the slip or the SMS, kept with Paid by directors
   const withProof = canAt('finance.pay', purchase.branch_id, null);
+  const [weekly, setWeekly] = useState(withProof ? false : null);   // a director pays from the directors; others say (121)
   const [file, setFile] = useState(null);
   const [sms, setSms] = useState('');
   const [busy, setBusy] = useState(false);
@@ -642,9 +644,11 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
     setError('');
     if (!(num(f.amount) > 0)) { setError('Enter the amount paid.'); return; }
     if (withProof && !file && !sms.trim()) { setError('Add the proof: a photo or the SMS.'); return; }
+    if (weekly == null) { setError('Say where the money came from: the weekly cash, or the directors · bank.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_purchase_payment', { p_purchase: purchase.id, p: { amount: num(f.amount), paid_on: f.paid_on, account_id: f.account_id || null, method: f.account_id ? null : f.method, reference: f.reference } });
+    const { data: payId, error: err } = await supabase.rpc('record_purchase_payment', { p_purchase: purchase.id, p: { amount: num(f.amount), paid_on: f.paid_on, account_id: f.account_id || null, method: f.account_id ? null : f.method, reference: f.reference } });
     if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    await saveWeeklyCash('purchase_payment', payId, weekly);
     if (withProof) {
       try {
         let path = null;
@@ -686,6 +690,7 @@ export function PayPurchaseModal({ purchase, total, supplierName, accounts, curr
               <option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile money</option>
             </select></label>}
           <label className="pe-field"><span>Reference (optional)</span><input className="form-input" value={f.reference} onChange={e => setF({ ...f, reference: e.target.value })} /></label>
+          {!withProof && <PaidFrom value={weekly} onChange={setWeekly} />}
         </div>
         {withProof && <>
           <ProofBox file={file} onFile={f => setFile(f && f.size > 10 * 1024 * 1024 ? file : f)} text={sms} onText={setSms} />

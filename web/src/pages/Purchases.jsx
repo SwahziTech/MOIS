@@ -9,6 +9,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
+import { PaidFrom, saveWeeklyCash } from '../components/purchases/PaidFrom';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
 import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
@@ -560,6 +561,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   const [date,      setDate]      = useState(today);
   // the goods: arrived now (into stock with the purchase, as before) or coming later (120) — the person says which
   const [arrival,   setArrival]   = useState('');   // '' | now | later
+  const [weekly,    setWeekly]    = useState(null); // the money: weekly cash (true) or directors · bank (false) (121)
   const later = isNew && arrival === 'later';
   const itemMode = mode === 'edit' && purchase?.items?.length > 0;   // a purchase coming later, opened
   const [submitted, setSubmitted] = useState(false);
@@ -618,6 +620,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
       if (new Set(newLines.map(l => l.materialId)).size !== newLines.length) { setError('A material appears twice — combine the lines.'); return; }
     }
     if (num(paid) != null && num(paid) > round2(total)) { setError('Amount paid is more than the total.'); return; }
+    if (mode !== 'edit' && num(paid) > 0 && weekly == null) { setError('Say where the money came from: the weekly cash, or the directors · bank.'); return; }
     if (isNew && (!date || date > today)) { setError('Choose a date up to today.'); return; }
     const header = {
       ...(supplierId ? { supplier_id: supplierId } : { new_supplier_name: newSupplier.trim() }),
@@ -661,6 +664,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
       const pid = mode === 'edit' ? purchase.id : res.data;
       if (pid) { const r2 = await supabase.rpc('set_purchase_order', { p_purchase: pid, p_order: orderId || null }); if (r2.error) res = r2; }
     }
+    if (!res.error && mode !== 'edit' && num(paid) > 0 && res.data) await saveWeeklyCash('purchase', res.data, weekly);
     setBusy(false);
     if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save the purchase. Nothing was recorded.")); return; }
     onSaved();
@@ -885,6 +889,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
               </div>
             )}
           </div>
+          {mode !== 'edit' && num(paid) > 0 && <PaidFrom value={weekly} onChange={setWeekly} />}
         </section>
 
         <div className="form-group">

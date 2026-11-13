@@ -51,8 +51,9 @@ export default function WeeklyCash() {
     const since = addDays(today, -400);
     const [rq, ex, pp, cats, refs] = await Promise.all([
       supabase.from('cash_requests').select('*, lines:cash_request_lines(*)').eq('branch_id', branchId).order('week_ending', { ascending: false }),
-      supabase.from('expenses').select('id, paid_on, expense_date, amount_paid, description, quantity, unit_price, category_id, status').eq('branch_id', branchId).eq('status', 'recorded').gt('amount_paid', 0).gte('paid_on', since),
-      supabase.from('purchase_payments').select('id, paid_on, amount, purchase:purchases!inner(branch_id, supplier_id, status, movement_id)').eq('purchase.branch_id', branchId).eq('purchase.status', 'recorded').gte('paid_on', since),
+      // '*' so from_weekly_cash (121) comes along once it exists
+      supabase.from('expenses').select('*').eq('branch_id', branchId).eq('status', 'recorded').gt('amount_paid', 0).gte('paid_on', since),
+      supabase.from('purchase_payments').select('*, purchase:purchases!inner(branch_id, supplier_id, status, movement_id)').eq('purchase.branch_id', branchId).eq('purchase.status', 'recorded').gte('paid_on', since),
       supabase.from('expense_categories').select('id, name, status').order('display_order').order('name'),
       loadInventoryRefs(),
     ]);
@@ -64,9 +65,11 @@ export default function WeeklyCash() {
   }
   useEffect(() => { setData(null); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // money spent in a week (Sunday–Saturday): expenses paid and payments to suppliers
-  const spentIn = useMemo(() => (weekEnding) => {
+  // money spent in a week (Sunday–Saturday) from the weekly cash: expenses paid and payments to
+  // suppliers marked "Weekly cash (branch)" (121); others = paid by the directors · bank, to tick in
+  const spentIn = useMemo(() => (weekEnding, which = 'weekly') => {
     if (!data) return [];
+    const pick = r => (which === 'others' ? r.from_weekly_cash === false : r.from_weekly_cash !== false);
     const from = addDays(weekEnding, -6);
     const inWeek = d => d && d >= from && d <= weekEnding;
     const supplier = id => data.refs.suppliers.find(s => s.id === id)?.name ?? '';
@@ -75,8 +78,8 @@ export default function WeeklyCash() {
     const qtyOfMove = mid => data.tx.filter(t => t.movement_id === mid && t.material_id)
       .map(t => `${qtyText(Number(t.entered_quantity))} ${data.refs.unitById[t.entered_unit_id]?.symbol ?? ''}`).join(', ');
     return [
-      ...data.expenses.filter(e => inWeek(e.paid_on)).map(e => ({ date: e.paid_on, description: e.description, qty: e.quantity ? qtyText(Number(e.quantity)) : '', amount: Number(e.amount_paid) })),
-      ...data.payments.filter(p => inWeek(p.paid_on)).map(p => ({ date: p.paid_on, description: `${goods(p.purchase.movement_id) || 'Purchase'}${supplier(p.purchase.supplier_id) ? ` — ${supplier(p.purchase.supplier_id)}` : ''}`, qty: qtyOfMove(p.purchase.movement_id), amount: Number(p.amount) })),
+      ...data.expenses.filter(e => inWeek(e.paid_on) && pick(e)).map(e => ({ kind: 'expense', id: e.id, date: e.paid_on, description: e.description, qty: e.quantity ? qtyText(Number(e.quantity)) : '', amount: Number(e.amount_paid) })),
+      ...data.payments.filter(p => inWeek(p.paid_on) && pick(p)).map(p => ({ kind: 'purchase_payment', id: p.id, date: p.paid_on, description: `${goods(p.purchase.movement_id) || 'Purchase'}${supplier(p.purchase.supplier_id) ? ` — ${supplier(p.purchase.supplier_id)}` : ''}`, qty: qtyOfMove(p.purchase.movement_id), amount: Number(p.amount) })),
     ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }, [data]);
 
@@ -145,12 +148,12 @@ export default function WeeklyCash() {
         </>
       )}
       {open && <RequestModal request={open.new ? null : open} branchId={branchId} branchName={branchName} data={data} ledger={ledger} spentIn={spentIn} today={today} money={money}
-        organization={organization} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />}
+        organization={organization} onRefresh={load} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />}
     </PageShell>
   );
 }
 
-function RequestModal({ request, branchId, branchName, data, ledger, spentIn = () => [], today, money, organization, onClose, onSaved }) {
+function RequestModal({ request, branchId, branchName, data, ledger, spentIn = () => [], today, money, organization, onRefresh, onClose, onSaved }) {
   const { canAt } = useAuth();
   const isNew = !request;
   const editable = isNew || request.status === 'draft';
@@ -174,6 +177,43 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
   const total = lines.reduce((t, l) => t + (num(l.amount) ?? 0), 0);
   const approvedTotal = lines.reduce((t, l) => t + (num(l.approved) ?? num(l.amount) ?? 0), 0);
   const lastWeek = ledger[addDays(week, -7)];
+  // the first week in MOIS: last week's summary exactly as on the branch's sheet (121)
+  const [sheetLW, setSheetLW] = useState(request?.last_week?.rows ?? null);
+  const prevWeek = addDays(week, -7);
+  // part 1 rows, as the sheet lays them out: BALANCE, CASH SENT, TOTAL CASH, what was spent, TOTAL CASH, BALANCE
+  const lwRows = useMemo(() => {
+    if (lastWeek) {
+      let b = r2(lastWeek.opening + lastWeek.sent);
+      return [
+        { date: prevWeek, description: 'BALANCE', cash_in: lastWeek.opening },
+        { description: 'CASH SENT', cash_in: lastWeek.sent },
+        { description: 'TOTAL CASH', cash_in: b, bold: true },
+        ...lastWeek.lines.map(l => { b = r2(b - l.amount); return { date: l.date, description: l.description, qty: l.qty, cash_out: l.amount, balance: b }; }),
+        { description: 'TOTAL CASH', cash_out: lastWeek.spent, bold: true },
+        { description: 'BALANCE', cash_in: lastWeek.closing, bold: true },
+      ];
+    }
+    if (firstEver && sheetLW?.length) return sheetLW.map(x => ({ ...x, bold: /^\s*(total|balance)/i.test(x.description || '') && !x.date }));
+    const rec = spentIn(prevWeek);
+    const spent = r2(rec.reduce((t, l) => t + l.amount, 0));
+    return [
+      ...rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount })),
+      { description: 'TOTAL CASH', cash_out: spent, bold: true },
+      ...(firstEver && num(opening) != null ? [{ description: 'BALANCE', cash_in: num(opening), bold: true }] : []),
+    ];
+  }, [lastWeek, firstEver, sheetLW, spentIn, prevWeek, opening]);
+  // last week's payments: which came from the weekly cash (tick in / out, 121)
+  const lwAll = useMemo(() => [...spentIn(prevWeek).map(l => ({ ...l, on: true })), ...spentIn(prevWeek, 'others').map(l => ({ ...l, on: false }))]
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), [spentIn, prevWeek]);
+  const showTick = canAt('cash.request', branchId) && !(firstEver && sheetLW?.length) && lwAll.length > 0;
+  const [ticking, setTicking] = useState('');
+  async function tick(l) {
+    setTicking(l.id); setError('');
+    const { error: err } = await supabase.rpc('set_weekly_cash', { p_kind: l.kind, p_id: l.id, p_on: !l.on });
+    if (err) setError(/set_weekly_cash/.test(err.message || '') ? 'This needs the latest database update (121).' : dbErrorMessage(err));
+    else await onRefresh?.();
+    setTicking('');
+  }
   const step = async (name, p = {}) => {
     setError(''); setBusy(true);
     const { error: err } = await supabase.rpc('cash_request_step', { p_id: request.id, p_step: name, p });
@@ -190,6 +230,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
     setBusy(true);
     const { error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
       opening_balance: firstEver ? num(opening) : null, notes, source,
+      ...(firstEver ? { last_week: sheetLW?.length ? { rows: sheetLW } : null } : {}),
       lines: ls.map(l => ({ description: l.description, quantity: num(l.quantity), unit: l.unit, amount: num(l.amount), category_id: l.categoryId || null })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
@@ -218,6 +259,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
       setLines(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })));
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
       if (firstEver && s.carried != null) setOpening(String(s.carried));   // the sheet's last balance, carried into this week
+      if (firstEver && s.summaryRows?.length) setSheetLW(s.summaryRows.map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date, description, qty, cash_in, cash_out, balance })));
       setSource('excel');
       if (s.total != null && Math.abs(s.total - s.lines.reduce((t, l) => t + l.amount, 0)) > 0.5) setError(`Read ${s.lines.length} lines — their sum differs from the sheet's TOTAL (${formatAmount(s.total)}). Check before saving.`);
     } catch (e) { setError(e.message || 'That file could not be read.'); }
@@ -226,8 +268,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
   const exportFile = () => writeWeeklySheet({
     fileName: `Weekly cash ${branchName} ${week}.xlsx`,
     summaryTitle: `SUMMARY YA MATUMIZI YA LAST WEEK ${longDate(addDays(week, -7))}`,
-    summary: lastWeek ? { date: addDays(week, -7), opening: lastWeek.opening, sent: lastWeek.sent, spent: lastWeek.spent, closing: lastWeek.closing,
-      lines: (() => { let b = lastWeek.opening + lastWeek.sent; return lastWeek.lines.map(l => { b = r2(b - l.amount); return { ...l, balance: b }; }); })() } : null,
+    summary: { rows: lwRows.map(x => ({ ...x, date: /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') ? tableDate(x.date) : x.date })) },
     needsTitle: `MAHITAJI YA WIKI HII (${longDate(week)})`,
     needs: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(request && ['approved', 'paid'].includes(request.status) ? (l.approved || l.amount) : l.amount) ?? 0 })),
     account: payTo.bank || payTo.no || payTo.name ? { bank: payTo.bank, number: payTo.no, holder: payTo.name } : null,
@@ -274,37 +315,34 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
         {!isNew && <p className="text-sm"><span className={`badge ${STATUS[st][1]}`}>{STATUS[st][0]}</span>
           {request.decision_note ? ` · ${request.decision_note}` : ''}{st === 'paid' ? ` · ${money(Number(request.paid_amount))} sent on ${dateText(request.paid_on)}${request.paid_reference ? ` (${request.paid_reference})` : ''}` : ''}</p>}
 
-        {/* part 1, as on the branch's sheet (2026-11-13, the user): SUMMARY YA MATUMIZI YA LAST WEEK */}
-        <h3 className="modal-section-title">Last week's spending · week ending {dateText(addDays(week, -7))}</h3>
-        {(() => {
-          const cols = [
-            { key: 'date', label: 'Date', width: 110, show: l => (l.date ? tableDate(l.date) : '') },
-            { key: 'description', label: 'Description', show: l => (l.strong ? <strong>{l.description}</strong> : l.description) },
+        {/* part 1, exactly as on the branch's sheet (2026-11-13, the user): SUMMARY YA MATUMIZI YA LAST WEEK —
+            only what was paid from the weekly cash; cement, sand… paid by the directors stay off it (121) */}
+        <h3 className="modal-section-title">Last week's spending · week ending {dateText(prevWeek)}</h3>
+        <SheetGrid label="Last week's spending" readOnly rows={lwRows.length ? lwRows : [{ description: 'Nothing paid from the weekly cash last week' }]}
+          columns={[
+            { key: 'date', label: 'Date', width: 110, show: l => (/^\d{4}-\d{2}-\d{2}$/.test(l.date || '') ? tableDate(l.date) : l.date || '') },
+            { key: 'description', label: 'Description', show: l => (l.bold ? <strong>{l.description}</strong> : l.description) },
             { key: 'qty', label: 'Qty', width: 120, show: l => <span className="pl-help">{l.qty || ''}</span> },
-            { key: 'in', label: 'Cash in (TZS)', width: 140, align: 'right', show: l => (l.in != null ? formatAmount(l.in) : '') },
-            { key: 'out', label: 'Cash out (TZS)', width: 140, align: 'right', show: l => (l.out != null ? formatAmount(l.out) : '') },
-            { key: 'bal', label: 'Balance (TZS)', width: 140, align: 'right', show: l => (l.bal != null ? (l.strong ? <strong>{formatAmount(l.bal)}</strong> : formatAmount(l.bal)) : '') },
-          ];
-          if (lastWeek) {
-            let b = lastWeek.opening + lastWeek.sent;
-            const rowsLW = [
-              { description: 'Balance brought forward', in: lastWeek.opening },
-              { description: 'Cash sent', in: lastWeek.sent, bal: lastWeek.opening + lastWeek.sent, strong: true },
-              ...lastWeek.lines.map(l => { b = r2(b - l.amount); return { date: l.date, description: l.description, qty: l.qty, out: l.amount, bal: b }; }),
-            ];
-            return <SheetGrid label="Last week's spending" readOnly columns={cols} rows={rowsLW} totalLabel="Spent"
-              totals={{ out: money(lastWeek.spent), bal: money(lastWeek.closing) }} />;
-          }
-          // the first week in MOIS: what was spent last week, as recorded; the balance carried is typed below (or read from the sheet)
-          const rec = spentIn(addDays(week, -7));
-          const spentLW = r2(rec.reduce((t, l) => t + l.amount, 0));
-          return <>
-            <SheetGrid label="Last week's spending" readOnly columns={cols}
-              rows={rec.length ? rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, out: l.amount })) : [{ description: 'Nothing recorded as spent last week' }]}
-              totalLabel="Spent" totals={{ out: money(spentLW), ...(firstEver && num(opening) != null ? { bal: money(num(opening)) } : {}) }} />
-            {firstEver && <p className="pl-help">First week in MOIS: last week's spending as recorded here. Type the balance carried into this week below, or import the branch's sheet and it is read from its summary. From next week, this part fills itself.</p>}
-          </>;
-        })()}
+            ...['cash_in', 'cash_out', 'balance'].map((k, i) => ({ key: k, label: `${['Cash in', 'Cash out', 'Balance'][i]} (TZS)`, width: 140, align: 'right',
+              show: l => (l[k] != null && l[k] !== '' ? (l.bold ? <strong>{formatAmount(Number(l[k]))}</strong> : formatAmount(Number(l[k]))) : '') })),
+          ]} />
+        {firstEver && !lastWeek && <p className="pl-help">{sheetLW?.length ? 'First week in MOIS: as on the imported sheet. From next week, MOIS fills this part itself.' : 'First week in MOIS: import the branch\'s sheet to show its summary here, or type the balance carried below. From next week, this part fills itself.'}</p>}
+        {showTick && (
+          <details className="wc-tick">
+            <summary className="pl-help" title="Only payments made from the weekly cash go on this sheet. Payments by the directors or a bank (cement, sand…) stay off it.">Which of last week's payments came from the weekly cash?</summary>
+            <ul>
+              {lwAll.map(l => (
+                <li key={l.kind + l.id}>
+                  <label className="flex items-center gap-8">
+                    <input type="checkbox" checked={l.on} disabled={!!ticking} onChange={() => tick(l)} />
+                    <span>{tableDate(l.date)} · {l.description} · {formatAmount(l.amount)}</span>
+                    <span className="pl-help">{l.on ? 'weekly cash' : 'directors · bank'}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         <h3 className="modal-section-title">This week's needs</h3>
         <div className="form-row">
