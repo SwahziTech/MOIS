@@ -203,7 +203,9 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
       const sheets = await listWeeklySheets(f);
       if (sheets.length > 1) {
         const likely = [...sheets].filter(x => x.hasNeeds).sort((a, b) => String(b.week ?? '').localeCompare(String(a.week ?? '')))[0] ?? sheets[0];
-        setSheetPick({ file: f, sheets, name: likely.name });
+        // newest week on top, oldest below; sheets without a needs table last (2026-11-13, the user)
+        const ordered = [...sheets].sort((a, b) => (b.hasNeeds - a.hasNeeds) || String(b.week ?? '').localeCompare(String(a.week ?? '')));
+        setSheetPick({ file: f, sheets: ordered, name: likely.name });
         return;
       }
       await importFile(f, sheets[0]?.name ?? null);
@@ -290,7 +292,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
               { description: 'Cash sent', in: lastWeek.sent, bal: lastWeek.opening + lastWeek.sent, strong: true },
               ...lastWeek.lines.map(l => { b = r2(b - l.amount); return { date: l.date, description: l.description, qty: l.qty, out: l.amount, bal: b }; }),
             ];
-            return <SheetGrid label="Last week's spending" readOnly columns={cols} rows={rowsLW} totalLabel="Spent · balance carried"
+            return <SheetGrid label="Last week's spending" readOnly columns={cols} rows={rowsLW} totalLabel="Spent"
               totals={{ out: money(lastWeek.spent), bal: money(lastWeek.closing) }} />;
           }
           // the first week in MOIS: what was spent last week, as recorded; the balance carried is typed below (or read from the sheet)
@@ -299,7 +301,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
           return <>
             <SheetGrid label="Last week's spending" readOnly columns={cols}
               rows={rec.length ? rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, out: l.amount })) : [{ description: 'Nothing recorded as spent last week' }]}
-              totalLabel={firstEver ? 'Spent · balance carried (type it below)' : 'Spent'} totals={{ out: money(spentLW), ...(firstEver && num(opening) != null ? { bal: money(num(opening)) } : {}) }} />
+              totalLabel="Spent" totals={{ out: money(spentLW), ...(firstEver && num(opening) != null ? { bal: money(num(opening)) } : {}) }} />
             {firstEver && <p className="pl-help">First week in MOIS: last week's spending as recorded here. Type the balance carried into this week below, or import the branch's sheet and it is read from its summary. From next week, this part fills itself.</p>}
           </>;
         })()}
