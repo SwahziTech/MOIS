@@ -685,11 +685,11 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       </div>
       {addError && <p className="text-sm text-error">{addError}</p>}
 
-      {/* 3 · Daily ledger verification preview */}
-      <section className="pl-card">
-        <div className="pl-subhead">
-          <h3 className="pl-title">Daily ledger verification preview</h3>
-          <span className="pl-badge is-plain">{staged.length} batch{staged.length === 1 ? '' : 'es'} staged</span>
+      {/* 3 · the day's list — the same look as Sales' (2026-11-13, the user): a coloured edge sets it apart from the form */}
+      <section className="pl-card day-list">
+        <div className="day-list-head">
+          <h3 className="day-list-title">Day's list</h3>
+          <span className="day-list-chip">{staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</span>
         </div>
         {staged.length === 0 ? (
           <div className="pl-empty">No batches staged yet.</div>
@@ -715,16 +715,17 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
             ))}
           </div>
         )}
-        <div className="pl-totals"><span>Batches: <strong>{staged.length}</strong></span><span>Total cement: <strong>{qtyText(stagedBags)} bags</strong></span></div>
+        <div className="day-list-foot">
+          <span className="day-list-totals"><strong>Total</strong> <span className="pl-help">{staged.length} batch{staged.length === 1 ? '' : 'es'}</span> · <strong>{qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</strong> cement</span>
+          {error && <span className="text-sm text-error" role="alert">{error}</span>}
+          {sentNote && <span className="text-sm text-success" role="status">{sentNote}</span>}
+          {viaApproval && staged.length > 0 && <span className="pl-help">An earlier date needs an admin's approval.</span>}
+          {editingId && <span className="pl-help">Finish or cancel the edit to save.</span>}
+          <button type="button" className="btn btn-primary" disabled={busy || staged.length === 0 || !!editingId} onClick={openConfirm}>
+            {viaApproval ? 'Submit for approval' : 'Save all'} · {staged.length} batch{staged.length === 1 ? '' : 'es'}
+          </button>
+        </div>
       </section>
-
-      {error && <p className="text-sm text-error" role="alert">{error}</p>}
-      {sentNote && <p className="text-sm text-success" role="status">{sentNote}</p>}
-      {viaApproval && staged.length > 0 && <p className="pl-help">An earlier date needs an admin's approval.</p>}
-      <button type="button" className="btn btn-primary pl-wide pl-save" disabled={busy || staged.length === 0 || !!editingId} onClick={openConfirm}>
-        {viaApproval ? 'Submit for approval' : 'Save daily productions'} ({staged.length} batch{staged.length === 1 ? '' : 'es'})
-      </button>
-      {editingId && <p className="pl-help">Finish or cancel the edit to save.</p>}
 
       {confirming && (
         <Modal title={viaApproval ? 'Submit this production for approval?' : 'Confirm daily production'} onClose={() => setConfirming(false)} size="xl"

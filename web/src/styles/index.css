@@ -2882,3 +2882,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sl-day-table .icon-btn.sl-has-proof { color: var(--success, #2e9e5b); }
 /* production: the yield factor alone, right under the residuals (2026-11-13) */
 .pl-calib-min { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 0; }
+/* the day's list, sales and production alike (2026-11-13): a coloured edge sets it apart from the form */
+.day-list { border-left: 4px solid var(--accent, #c8a96a) !important; }
+.day-list-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.day-list-title { margin: 0; font-size: var(--text-base, 1rem); font-weight: 700; }
+.day-list-chip { margin-left: auto; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+.day-list-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.day-list-totals { margin-right: auto; }

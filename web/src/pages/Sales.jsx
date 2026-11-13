@@ -661,9 +661,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
         {/* between the sale being recorded and the day's list (2026-11-08) */}
         {dayOn && dayList.length > 0 && <div className="sl-day-add" aria-hidden="true" />}
         {dayOn && dayList.length > 0 && (
-          <section className="modal modal-xl sl-day-card" aria-label="Day's list">
+          <section className="modal modal-xl sl-day-card day-list" aria-label="Day's list">
             <div className="modal-body">
-            <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
+            <div className="day-list-head"><h3 className="day-list-title">Day's list</h3><span className="day-list-chip">{dayList.length} sale{dayList.length === 1 ? '' : 's'} · {money(dayTotal)}</span></div>
             <table className="rd-table sl-day-table">
               <thead><tr><th aria-label={choosing ? 'Tick for the slip' : 'Proof'} style={{ width: 36 }} /><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Actions" /></tr></thead>
               <tbody>
