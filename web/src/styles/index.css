@@ -2898,3 +2898,4 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .dl-prod-table { table-layout: fixed; width: 100%; }
 .dl-prod-table td, .dl-prod-table th { overflow-wrap: anywhere; }
 .dl-prod-table { min-width: 860px; }
+.sl-add-row { width: 100%; }

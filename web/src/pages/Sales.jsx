@@ -722,10 +722,18 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       </> : null}
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
-        {dayOn
-          ? <button type="button" className="btn btn-outline" disabled={busy} onClick={() => save(true)}><Plus size={14} /> Add to the day's list</button>
-          : <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>}
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
+        {/* as in production (2026-11-13, the user): one wide button adds the sale to the Daily Sales Ledger, Reset clears the form;
+            the ledger's Save all records them */}
+        {dayOn ? <div className="pl-actions sl-add-row">
+          <button type="button" className={`btn btn-primary pl-wide${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save(true)}><Plus size={16} /> Add Sale to Daily Sales</button>
+          <button type="button" className="btn btn-outline" disabled={busy} onClick={() => {
+            setLines([]); setWalkName(''); setWalkPhone(''); setCustomerId(''); setSite(''); setEfd(''); setNotes('');
+            setPays([{ accountId: '', amount: '', receiptNo: '', auto: true }]); setPayMode('order'); setItemPays({}); setPayProofs({}); setError(''); setBad(null);
+          }}>Reset</button>
+        </div> : <>
+          <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
+        </>}
       </>}>
       <div className="modal-form">
         {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
