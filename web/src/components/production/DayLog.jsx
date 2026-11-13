@@ -690,35 +690,43 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       {/* 3 · the day's list — the same look as Sales' (2026-11-13, the user): a coloured edge sets it apart from the form */}
       <section className="pl-card day-list">
         <div className="day-list-head">
-          <h3 className="pl-title">Daily Production Ledger</h3>
+          <h3 className="card-title" style={{ margin: 0 }}>Daily Production Ledger</h3>
           <span className="day-list-chip">{staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</span>
         </div>
         {staged.length === 0 ? (
           <div className="pl-empty">No batches staged yet.</div>
         ) : (
-          <div className="pl-staged">
-            {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
-            {staged.map((s, i) => [s, i]).reverse().map(([s, i]) => (
-              <div key={s.id} className={`pl-staged-row${editingId === s.id ? ' is-editing' : ''}`}>
-                <span className="pl-staged-n">{i + 1}</span>
-                <span className="pl-staged-name">
-                  {(s.outputs || []).map((o, k) => (
-                    <span key={k} className={o.residual ? 'pl-staged-res' : 'pl-staged-main'}>{o.residual ? '+ ' : ''}{o.name} <strong>{qtyText(o.pieces)}</strong> pcs{o.order ? ` · order ${o.order}` : ''}</span>
-                  ))}
-                </span>
-                <span>{qtyText(s.bags)} bags</span>
-                {s.factor == null ? <span className="pl-help">no check</span> : <span className={`pl-badge${s.outOfBand ? ' is-out' : ''}`}>{Math.round(s.factor * 1000) / 10}%</span>}
-                <span className="pl-staged-actions">
-                  <button type="button" className="icon-btn" aria-label="Preview batch" title="Preview" onClick={() => setPreviewing(s)}><Eye size={14} /></button>
-                  <button type="button" className="icon-btn" aria-label="Edit batch" title="Edit" disabled={!s.form} onClick={() => editStaged(s)}><Pencil size={14} /></button>
-                  <button type="button" className="icon-btn" aria-label="Remove batch" title="Remove" onClick={() => { setStaged(st => st.filter(x => x.id !== s.id)); if (editingId === s.id) { setEditingId(null); setForm(emptyForm()); } }}><Trash2 size={14} /></button>
-                </span>
-              </div>
-            ))}
-          </div>
+          // a table like the sales one (2026-11-13, the user): each product a row; bags, yield, team and machine per batch
+          <table className="rd-table sl-day-table">
+            <thead><tr><th style={{ width: 36 }}>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th>Yield</th><th>Team · machine</th><th aria-label="Actions" /></tr></thead>
+            <tbody>
+              {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
+              {staged.map((st, i) => [st, i]).reverse().map(([st, i]) => {
+                const outs = st.outputs?.length ? st.outputs : [{ name: '—', pieces: null }];
+                const span = outs.length;
+                return outs.map((o, k) => (
+                  <tr key={`${st.id}-${k}`} className={`clickable-row${k === 0 ? ' sl-day-first' : ''}${editingId === st.id ? ' is-editing' : ''}`} onClick={() => setPreviewing(st)} title="Look at it">
+                    {k === 0 && <td rowSpan={span}><span className="pl-staged-n">{i + 1}</span></td>}
+                    <td className={o.residual ? 'pl-staged-res' : ''}>{o.residual ? '+ ' : ''}{o.name}{o.order ? <span className="pl-help"> · order {o.order}</span> : ''}</td>
+                    <td style={{ textAlign: 'right' }}>{o.pieces != null ? <>{qtyText(o.pieces)} <span className="pl-help">pcs</span></> : '—'}</td>
+                    {k === 0 && <td rowSpan={span} style={{ textAlign: 'right' }}>{qtyText(st.bags)}</td>}
+                    {k === 0 && <td rowSpan={span}>{st.factor == null ? <span className="pl-help">no check</span> : <span className={`pl-badge${st.outOfBand ? ' is-out' : ''}`}>{Math.round(st.factor * 1000) / 10}%</span>}</td>}
+                    {k === 0 && <td rowSpan={span} className="text-sm">{[st.team, st.machine].filter(Boolean).join(' · ') || <span className="pl-help">—</span>}</td>}
+                    {k === 0 && <td rowSpan={span} className="sl-day-acts" onClick={e => e.stopPropagation()}>
+                      <button type="button" className="icon-btn" aria-label="Look at the batch" title="Look at it" onClick={() => setPreviewing(st)}><Eye size={14} /></button>
+                      <button type="button" className="icon-btn" aria-label="Edit batch" title="Edit it in the form" disabled={!st.form} onClick={() => editStaged(st)}><Pencil size={14} /></button>
+                      <button type="button" className="icon-btn" aria-label="Remove batch" title="Remove from the list" onClick={() => { setStaged(x => x.filter(y => y.id !== st.id)); if (editingId === st.id) { setEditingId(null); setForm(emptyForm()); } }}><Trash2 size={14} /></button>
+                    </td>}
+                  </tr>
+                ));
+              })}
+              <tr className="sl-day-total"><td colSpan={3}><strong>Total</strong> <span className="pl-help">{staged.length} batch{staged.length === 1 ? '' : 'es'}</span></td>
+                <td style={{ textAlign: 'right' }}><strong>{qtyText(stagedBags)}</strong></td><td colSpan={3} /></tr>
+            </tbody>
+          </table>
         )}
         <div className="day-list-foot">
-          <span className="day-list-totals"><strong>Total</strong> <span className="pl-help">{staged.length} batch{staged.length === 1 ? '' : 'es'}</span> · <strong>{qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</strong> cement</span>
+          <span className="day-list-totals" />
           {error && <span className="text-sm text-error" role="alert">{error}</span>}
           {sentNote && <span className="text-sm text-success" role="status">{sentNote}</span>}
           {viaApproval && staged.length > 0 && <span className="pl-help">An earlier date needs an admin's approval.</span>}
