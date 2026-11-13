@@ -1,3 +1,4 @@
+import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Wallet, Plus, Trash2, Upload, Download, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -263,29 +264,23 @@ function RequestModal({ request, branchId, branchName, data, ledger, today, mone
             <span className="pl-help">Check the lines before saving.</span>
           </div>
         )}
-        <table className="rd-table">
-          <thead><tr><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Amount (TZS)</th>{!isNew && st !== 'draft' && <th className="num">Approved (TZS)</th>}<th>Category</th><th /></tr></thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i} className={l.locked ? 'wc-locked' : ''} title={l.locked ? "From the casuals' approved pay sheet — it changes with the sheet" : undefined}>
-                <td><input className="form-input" disabled={!editable || l.locked} value={l.description} onChange={e => set(i, { description: e.target.value })} /></td>
-                <td className="num"><NumberInput step="any" className="form-input" style={{ width: 80 }} disabled={!editable || l.locked} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /></td>
-                <td><input className="form-input" style={{ width: 70 }} disabled={!editable || l.locked} value={l.unit} onChange={e => set(i, { unit: e.target.value })} /></td>
-                <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} disabled={!editable || l.locked} value={l.amount} onChange={e => set(i, { amount: e.target.value })} /></td>
-                {!isNew && st !== 'draft' && <td className="num">{st === 'with_directors' && canAt('cash.approve', branchId)
-                  ? <NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} placeholder={l.amount} value={l.approved} onChange={e => set(i, { approved: e.target.value })} />
-                  : formatAmount(num(l.approved) ?? num(l.amount))}</td>}
-                <td><select className="form-input" disabled={!editable || l.locked} value={l.categoryId} onChange={e => set(i, { categoryId: e.target.value })}>
-                  <option value="">—</option>{data.cats.filter(c => c.status === 'active' || c.id === l.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
-                <td>{editable && !l.locked && lines.length > 1 && <button type="button" className="btn btn-ghost btn-sm" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={13} /></button>}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot><tr>
-            <td>{editable && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => [...ls, { description: '', quantity: '', unit: '', amount: '', categoryId: '' }])}><Plus size={13} /> Add a line</button>}<strong style={{ marginLeft: 8 }}>Total</strong></td>
-            <td /><td /><td className="num"><strong>{money(total)}</strong></td>{!isNew && st !== 'draft' && <td className="num"><strong>{money(approvedTotal)}</strong></td>}<td colSpan={2} />
-          </tr></tfoot>
-        </table>
+        {/* this week's needs as a sheet, like the branch's Excel (2026-11-13, the user) */}
+        <SheetGrid label="This week's needs" rows={lines} onChange={setLines} readOnly={!editable}
+          isLocked={l => !!l.locked} lockedTitle="From the casuals' approved pay sheet — it changes with the sheet"
+          blankRow={{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }}
+          columns={[
+            { key: 'description', label: 'Description', type: 'text' },
+            { key: 'quantity', label: 'Qty', type: 'number', width: 90, align: 'right', show: l => (l.quantity !== '' && l.quantity != null ? formatAmount(num(l.quantity)) : '') },
+            { key: 'unit', label: 'Unit', type: 'text', width: 90 },
+            { key: 'amount', label: 'Amount (TZS)', type: 'number', min: 0, width: 150, align: 'right', show: l => (num(l.amount) != null ? formatAmount(num(l.amount)) : '') },
+            ...(!isNew && st !== 'draft' ? [{ key: 'approved', label: 'Approved (TZS)', type: 'number', min: 0, width: 150, align: 'right', ignoreLock: true,
+              editable: st === 'with_directors' && canAt('cash.approve', branchId), show: l => formatAmount(num(l.approved) ?? num(l.amount) ?? 0) }] : []),
+            { key: 'categoryId', label: 'Category', type: 'select', width: 190,
+              options: data.cats.filter(c => c.status === 'active' || lines.some(l => l.categoryId === c.id)).map(c => ({ value: c.id, label: c.name })),
+              show: l => data.cats.find(c => c.id === l.categoryId)?.name ?? '' },
+          ]}
+          totals={{ amount: money(total), ...(!isNew && st !== 'draft' ? { approved: money(approvedTotal) } : {}) }} />
+        {editable && <p className="pl-help">Type straight into the cells — Enter goes down, Tab across. Copy rows in Excel and paste them here (Ctrl+V) to fill several lines at once.</p>}
         <label className="pe-field"><span>Notes (optional)</span><input className="form-input" disabled={!editable} value={notes} onChange={e => setNotes(e.target.value)} /></label>
         {/* the end of the request: where the money is sent (as on the sheet) */}
         <div className="form-row">

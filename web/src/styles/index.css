@@ -2899,3 +2899,23 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .dl-prod-table td, .dl-prod-table th { overflow-wrap: anywhere; }
 .dl-prod-table { min-width: 860px; }
 .sl-add-row { width: 100%; }
+/* SheetGrid: a sheet that works like Excel (2026-11-13) */
+.xs-grid { overflow-x: auto; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); }
+.xs-grid table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 640px; font-size: var(--text-sm); }
+.xs-grid th, .xs-grid td { border: 1px solid var(--border); padding: 0; height: 32px; }
+.xs-grid .xs-letters th { background: var(--bg-soft); color: var(--text-secondary); font-weight: 500; font-size: 11px; text-align: center; height: 22px; }
+.xs-grid .xs-labels th { background: var(--bg-soft); font-weight: 700; text-align: left; padding: 0 8px; font-size: 12px; }
+.xs-grid .xs-labels th.xs-num { text-align: right; }
+.xs-grid .xs-rn { background: var(--bg-soft); color: var(--text-secondary); text-align: center; font-size: 11px; }
+.xs-grid tr:focus-within .xs-rn { background: #1f7a4d; color: #fff; }
+.xs-grid .xs-in { width: 100%; height: 32px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; padding: 0 8px; outline: none; box-shadow: none; }
+.xs-grid select.xs-in { appearance: none; -webkit-appearance: none; cursor: pointer; }
+.xs-grid .xs-in:focus { outline: 2px solid #1f7a4d; outline-offset: -2px; background: var(--bg-surface); position: relative; z-index: 1; }
+.xs-grid .xs-num { text-align: right; }
+.xs-grid .xs-ro { padding: 0 8px; line-height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xs-grid .xs-locked td { background: var(--bg-soft); color: var(--text-secondary); }
+.xs-grid .xs-blank .xs-rn { opacity: .5; }
+.xs-grid tfoot td { border-top: 2px solid var(--border-strong); padding: 0 8px; height: 34px; }
+.xs-grid .xs-del { text-align: center; }
+.xs-grid .xs-del-btn { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; opacity: 0; padding: 4px; }
+.xs-grid tr:hover .xs-del-btn, .xs-grid tr:focus-within .xs-del-btn { opacity: .8; }
