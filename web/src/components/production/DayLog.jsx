@@ -276,11 +276,15 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   useEffect(() => { outputs.forEach(o => band(o.productId)); }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPieces = outputs.reduce((s, o) => s + (o.pieces ?? 0), 0);
-  const allBanded = outputs.length > 0 && outputs.every(o => bands[o.productId]?.average_yield_per_bag > 0);
-  const theoretical = allBanded ? outputs.reduce((s, o) => s + (o.pieces ?? 0) / bands[o.productId].average_yield_per_bag, 0) : null;
-  const bagsMin = allBanded ? outputs.reduce((s, o) => s + (o.pieces ?? 0) / bands[o.productId].yield_max, 0) : null;
-  const bagsMax = allBanded && outputs.every(o => bands[o.productId].yield_min > 0)
-    ? outputs.reduce((s, o) => s + (o.pieces ?? 0) / bands[o.productId].yield_min, 0) : null;
+  // the check counts only products with pieces entered (2026-11-13, the user: adding a residual hid it);
+  // one with pieces but no wastani can't be checked — its cement share is unknown — and says so
+  const counted = outputs.filter(o => o.pieces > 0);
+  const unbanded = counted.filter(o => !(bands[o.productId]?.average_yield_per_bag > 0));
+  const allBanded = counted.length > 0 && unbanded.length === 0;
+  const theoretical = allBanded ? counted.reduce((s, o) => s + o.pieces / bands[o.productId].average_yield_per_bag, 0) : null;
+  const bagsMin = allBanded ? counted.reduce((s, o) => s + o.pieces / bands[o.productId].yield_max, 0) : null;
+  const bagsMax = allBanded && counted.every(o => bands[o.productId].yield_min > 0)
+    ? counted.reduce((s, o) => s + o.pieces / bands[o.productId].yield_min, 0) : null;
   const outOfBand = theoretical != null && bags > 0 && totalPieces > 0 && (bags < bagsMin - 1e-9 || (bagsMax != null && bags > bagsMax + 1e-9));
   const sqmOf = (productId, pcs) => {
     const it = refs.items[`p:${productId}`];
@@ -662,6 +666,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           <span className="pl-calib-pcs">{main?.name ?? '—'} · <strong>{qtyText(mainPieces ?? 0)}</strong> pcs{form.leftovers.filter(l => l.productId && num(l.pieces)).map(l => (
             <span key={l.productId}> + {refs.items[`p:${l.productId}`]?.name} · <strong>{qtyText(num(l.pieces))}</strong> pcs</span>))}</span>
           <span className="pl-help">cement implied {theoretical != null && totalPieces > 0 ? `${qtyText(round(theoretical, 2))} bags` : '—'}</span>
+          {unbanded.length > 0 && <span className="pl-help text-warning">no check until {unbanded.map(o => refs.items[`p:${o.productId}`]?.name).join(', ')} {unbanded.length === 1 ? 'has' : 'have'} a wastani</span>}
           {theoretical != null && bags > 0 && totalPieces > 0 && (
             <span className={`pl-badge${outOfBand ? ' is-out' : ''}`}>Yield factor: {Math.round((theoretical / bags) * 1000) / 10}%</span>
           )}
