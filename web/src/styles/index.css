@@ -2892,3 +2892,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pl-batch-notes { margin-top: 14px; }
 /* a unit beside a column name or a figure: very small and faint (2026-11-13) */
 .th-unit, .td-unit { font-size: 0.7em; font-weight: 400; opacity: .55; text-transform: none; letter-spacing: 0; }
+/* Daily Production Ledger (2026-11-13): Avg's figure under the word; a faint line between the product block and team · machine */
+.sl-day-table .dl-avg { text-align: left; padding-left: 20px; white-space: nowrap; }
+.sl-day-table .dl-split { border-left: 1px solid var(--border); padding-left: 14px; }
