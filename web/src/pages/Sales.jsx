@@ -655,15 +655,15 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const dayUnpaid = r2(dayList.reduce((t, x) => t + Math.max(x.view.total - x.view.paid, 0), 0));
 
   return (
-    <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Daily Sales Ledger' : 'New quotation'}
+    <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
         <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} title={dayOn && dayList.length ? 'The date of every sale in the list' : undefined} onChange={e => changeDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       after={dayOn ? <>
         {/* between the sale being recorded and the day's list (2026-11-08) */}
         {dayOn && dayList.length > 0 && <div className="sl-day-add" aria-hidden="true" />}
         {dayOn && dayList.length > 0 && (
-          <section className="modal modal-xl sl-day-card day-list" aria-label="Day's list">
+          <section className="modal modal-xl sl-day-card day-list" aria-label="Daily Sales Ledger">
             <div className="modal-body">
-            <div className="day-list-head"><h3 className="day-list-title">Day's list</h3><span className="day-list-chip">{dayList.length} sale{dayList.length === 1 ? '' : 's'} · {money(dayTotal)}</span></div>
+            <div className="day-list-head"><h3 className="card-title" style={{ margin: 0 }}>Daily Sales Ledger</h3><span className="day-list-chip">{dayList.length} sale{dayList.length === 1 ? '' : 's'} · {money(dayTotal)}</span></div>
             <table className="rd-table sl-day-table">
               <thead><tr><th aria-label={choosing ? 'Tick for the slip' : 'Proof'} style={{ width: 36 }} /><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Actions" /></tr></thead>
               <tbody>

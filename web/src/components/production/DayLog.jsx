@@ -589,7 +589,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
       {/* 2 · Main batch output */}
       <section className="pl-card">
-        <h3 className="pl-title">Daily Production Ledger</h3>
+        <h3 className="pl-title">Main batch output</h3>
 
         <div className="pl-sub">
           <h4 className="pl-subtitle">Primary product output</h4>
@@ -690,7 +690,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       {/* 3 · the day's list — the same look as Sales' (2026-11-13, the user): a coloured edge sets it apart from the form */}
       <section className="pl-card day-list">
         <div className="day-list-head">
-          <h3 className="day-list-title">Day's list</h3>
+          <h3 className="pl-title">Daily Production Ledger</h3>
           <span className="day-list-chip">{staged.length} batch{staged.length === 1 ? '' : 'es'} · {qtyText(stagedBags)} bag{stagedBags === 1 ? '' : 's'}</span>
         </div>
         {staged.length === 0 ? (
