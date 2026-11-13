@@ -2889,5 +2889,4 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .day-list-chip { margin-left: auto; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
 .day-list-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
 .day-list-totals { margin-right: auto; }
-.day-list-sub { color: var(--success, #2e9e5b); font-size: var(--text-base, 1rem); }
 .pl-batch-notes { margin-top: 14px; }
