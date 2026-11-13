@@ -2895,3 +2895,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 /* Daily Production Ledger (2026-11-13): Avg's figure under the word; a faint line between the product block and team · machine */
 .sl-day-table .dl-avg { text-align: left; padding-left: 20px; white-space: nowrap; }
 .sl-day-table .dl-split { border-left: 1px solid var(--border); padding-left: 14px; }
+.dl-prod-table { table-layout: fixed; width: 100%; }
+.dl-prod-table td, .dl-prod-table th { overflow-wrap: anywhere; }
+.dl-prod-table { min-width: 860px; }
