@@ -2877,3 +2877,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pcd-std td { border-top: 2px solid var(--border-strong); color: var(--text-secondary); }
 .pb-table td.num, .pb-table th.num { text-align: right; white-space: nowrap; }
 .pb-table tfoot td { border-top: 2px solid var(--border-strong); }
+/* day's list: icons on each sale (2026-11-13) */
+.sl-day-acts { white-space: nowrap; }
+.sl-day-table .icon-btn.sl-has-proof { color: var(--success, #2e9e5b); }

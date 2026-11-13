@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PeriodBar from '../components/PeriodBar';
-import { Receipt, Plus, Trash2, Printer, Check } from 'lucide-react';
+import { Receipt, Plus, Trash2, Printer, Check, Eye, Pencil, Paperclip } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { useSessionPeriod } from '../lib/sessionPeriod';
@@ -595,6 +595,12 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   }
   // Save all shows every sale first — date, items, payments, proofs — and saves only on Confirm (2026-11-11, the user)
   const [checkDay, setCheckDay] = useState(false);
+  const [previewDay, setPreviewDay] = useState(null);   // index of the list's sale being looked at
+  const removeDay = (i, id) => {
+    setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null);
+    setDaySel(sl => { const n = new Set(sl); n.delete(id); return n; });
+    setSlipGroups(gs => gs.map(g => ({ ...g, ids: g.ids.filter(x => x !== id) })).filter(g => g.ids.length));
+  };
   function askSaveDay() {
     setError(''); setBad(null); setDayErr('');
     if (lines.length) { setDayErr('The form above still has a sale: add it to the list, or remove its items.'); return; }
@@ -632,6 +638,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     setSlipGroups([]); setDaySel(new Set()); setChoosing(false);
     setBusy(false);
     if (failed) window.alert(`The sales are saved, but ${failed} proof${failed === 1 ? '' : 's'} could not be posted. Add ${failed === 1 ? 'it' : 'them'} in Sales › Slips.`);
+    // the list kept on this device goes first: the window closes straight after, before the list's own clean-up runs
+    try { localStorage.removeItem(dayKey); } catch { /* storage off */ }
+    await dropFiles(dayKey);
     setDayFiles({});
     setDayList([]);
     onSaved(null);
@@ -656,13 +665,19 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
             <div className="modal-body">
             <div className="sl-day-head"><h3 className="modal-section-title">Day's list</h3><span className="pl-help">Click a sale to fix it in the form above.</span><strong style={{ marginLeft: 'auto' }}>{money(dayTotal)}</strong></div>
             <table className="rd-table sl-day-table">
-              <thead><tr>{choosing && <th aria-label="Tick for the slip" style={{ width: 32 }} />}<th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Remove" /></tr></thead>
+              <thead><tr><th aria-label={choosing ? 'Tick for the slip' : 'Proof'} style={{ width: 36 }} /><th>Name</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th><th>Acc.</th><th aria-label="Actions" /></tr></thead>
               <tbody>
-                {dayList.map((x, i) => x.view.rows.map((r, j) => (
-                  <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => editDay(i)} title="Fix it in the form">
-                    {choosing && j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" aria-label={`Tick ${x.view.name} for one slip`} checked={daySel.has(x.id)} disabled={!(x.view.paid > 0)}
-                        onChange={e => setDaySel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} /></td>}
+                {/* newest on top (2026-11-13, the user); saved in the order they were added */}
+                {dayList.map((x, i) => [x, i]).reverse().map(([x, i]) => x.view.rows.map((r, j) => (
+                  <tr key={`${i}-${j}`} className={`clickable-row${dayBad === i ? ' sl-day-bad' : ''}${j === 0 ? ' sl-day-first' : ''}`} onClick={() => setPreviewDay(i)} title="Look at it">
+                    {j === 0 && <td rowSpan={x.view.rows.length} onClick={e => e.stopPropagation()}>
+                      {choosing
+                        ? <input type="checkbox" aria-label={`Tick ${x.view.name} for one slip`} checked={daySel.has(x.id)} disabled={!(x.view.paid > 0)}
+                            onChange={e => setDaySel(sl => { const n = new Set(sl); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n; })} />
+                        : <button type="button" className={`icon-btn${x.view.proofs > 0 || groupOf(x.id) >= 0 ? ' sl-has-proof' : ''}`} disabled={!(x.view.paid > 0)}
+                            aria-label={`Add the proof of ${x.view.name}`} title={x.view.paid > 0 ? (x.view.proofs > 0 || groupOf(x.id) >= 0 ? 'Its proof — keep or replace it' : 'Add its proof/slip') : 'Nothing paid yet'}
+                            onClick={() => { setDaySel(new Set([x.id])); setGroupSlipOpen(true); }}><Paperclip size={14} /></button>}
+                    </td>}
                     {j === 0 && <td rowSpan={x.view.rows.length}><strong>{x.view.name}</strong></td>}
                     <td>{r.product}</td>
                     <td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td>
@@ -670,10 +685,14 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
                     {j === 0 && <td rowSpan={x.view.rows.length}>{x.view.acc}{x.view.paid < x.view.total - 0.01 && <div className="pl-help text-warning">{formatAmount(r2(x.view.total - x.view.paid))} not paid</div>}
                       {groupOf(x.id) >= 0 && <div className="pl-help sl-shared-tag">+ shared slip {slipGroups.length > 1 ? groupOf(x.id) + 1 : ''}</div>}
                       {x.view.proofs > 0 && (dayFiles[x.id] ? <div className="pl-help">+ proof</div> : <div className="pl-help text-warning" title="Photos are not kept after a refresh">proof: add it again</div>)}</td>}
-                    {j === 0 && <td rowSpan={x.view.rows.length}><button type="button" className="icon-btn" aria-label="Remove from the list" onClick={e => { e.stopPropagation(); setDayList(d => d.filter((_, k) => k !== i)); setDayBad(null); setDaySel(sl => { const n = new Set(sl); n.delete(x.id); return n; }); setSlipGroups(gs => gs.map(g => ({ ...g, ids: g.ids.filter(id => id !== x.id) })).filter(g => g.ids.length)); }}><Trash2 size={14} /></button></td>}
+                    {j === 0 && <td rowSpan={x.view.rows.length} className="sl-day-acts" onClick={e => e.stopPropagation()}>
+                      <button type="button" className="icon-btn" aria-label={`Look at ${x.view.name}`} title="Look at it" onClick={() => setPreviewDay(i)}><Eye size={14} /></button>
+                      <button type="button" className="icon-btn" aria-label={`Edit ${x.view.name}`} title="Edit it in the form" onClick={() => editDay(i)}><Pencil size={14} /></button>
+                      <button type="button" className="icon-btn" aria-label={`Remove ${x.view.name} from the list`} title="Remove from the list" onClick={() => removeDay(i, x.id)}><Trash2 size={14} /></button>
+                    </td>}
                   </tr>
                 )))}
-                <tr className="sl-day-total"><td colSpan={choosing ? 4 : 3}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
+                <tr className="sl-day-total"><td colSpan={4}><strong>Total</strong> <span className="pl-help">{dayList.length} sale{dayList.length === 1 ? '' : 's'}</span></td><td style={{ textAlign: 'right' }}><strong>{money(dayTotal)}</strong></td><td colSpan={2} /></tr>
               </tbody>
             </table>
             {choosing && (
@@ -891,6 +910,33 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           <label className="pe-field"><span>Notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
         </div>
       </div>
+      {previewDay != null && dayList[previewDay] && (() => {
+        const i = previewDay; const x = dayList[i];
+        const own = dayFiles[x.id]?.proofs || [];
+        const g = groupOf(x.id);
+        return (
+          <Modal title={<>{x.view.name} · {dateText(x.view.date)}</>} onClose={() => setPreviewDay(null)}
+            footer={<>
+              <button type="button" className="btn btn-ghost" onClick={() => { removeDay(i, x.id); setPreviewDay(null); }}><Trash2 size={14} /> Remove</button>
+              <button type="button" className="btn btn-outline" onClick={() => setPreviewDay(null)}>Close</button>
+              <button type="button" className="btn btn-primary" onClick={() => { setPreviewDay(null); editDay(i); }}><Pencil size={14} /> Edit</button></>}>
+            <div className="modal-form">
+              <table className="rd-table">
+                <thead><tr><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount (TZS)</th></tr></thead>
+                <tbody>{x.view.rows.map((r, k) => <tr key={k}><td>{r.product}</td><td style={{ textAlign: 'right' }}>{r.qty != null ? <>{qtyText(r.qty)} <span className="pl-help">{r.unit}</span></> : '—'}</td><td style={{ textAlign: 'right' }}>{formatAmount(r.amount)}</td></tr>)}</tbody>
+                <tfoot><tr><td colSpan={2}><strong>Total</strong></td><td style={{ textAlign: 'right' }}><strong>{money(x.view.total)}</strong></td></tr></tfoot>
+              </table>
+              <p>{x.view.paid > 0 ? <>Paid <strong>{money(x.view.paid)}</strong> into {x.view.acc}</> : <span className="text-warning">Not paid</span>}
+                {x.view.paid > 0 && x.view.paid < x.view.total - 0.01 && <span className="text-warning"> · {money(r2(x.view.total - x.view.paid))} not paid</span>}</p>
+              <div className="sl-check-proofs">
+                {own.map((p, k) => (p.file ? <HaveThumb key={k} file={p.file} name={x.view.name} amount={Number(p.amount)} view={x.view} money={money} /> : <span key={k} className="pl-help" title={p.text}>SMS</span>))}
+                {g >= 0 && (slipGroups[g].slip.file ? <span className="sl-check-shared"><span className="pl-help">shared slip</span><HaveThumb file={slipGroups[g].slip.file} name={x.view.name} amount={x.view.paid} view={x.view} money={money} /></span> : <span className="pl-help">shared SMS</span>)}
+                {!own.length && g < 0 && x.view.paid > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setPreviewDay(null); setDaySel(new Set([x.id])); setGroupSlipOpen(true); }}><Paperclip size={13} /> Add proof/slip</button>}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
       {checkDay && (() => {
         const lost = dayList.filter(x => x.view.proofs > 0 && !dayFiles[x.id]);
         const n = dayList.length;

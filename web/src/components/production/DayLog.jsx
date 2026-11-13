@@ -442,6 +442,20 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
 
   const colourName = form.colorId ? refs.colorById[form.colorId]?.name : '';
   const mainPieces = num(form.pieces);
+  // the bag's average counts every product (2026-11-13, the user): each in the main product's pieces by the
+  // products' own yield a bag — same size (equal wastani) simply adds up, (65 + 10) ÷ bags; a smaller residual
+  // counts for the share of the bag it used (30 pcs of a 150-a-bag product = 15 of a 75-a-bag main)
+  const mainYield = bands[form.productId]?.average_yield_per_bag;
+  const mixPieces = mainPieces == null ? null : outputs.reduce((t, o) => {
+    if (!(o.pieces > 0)) return t;
+    const y = bands[o.productId]?.average_yield_per_bag;
+    return t + (mainYield > 0 && y > 0 ? o.pieces * (mainYield / y) : o.pieces);
+  }, 0);
+  const hasResidual = outputs.some(o => !o.primary && o.pieces > 0);
+  const avgHelp = hasResidual ? outputs.filter(o => o.pieces > 0).map(o => {
+    const y = bands[o.productId]?.average_yield_per_bag; const nm = refs.items[`p:${o.productId}`]?.name ?? '';
+    return mainYield > 0 && y > 0 && Math.abs(y - mainYield) > 1e-9 ? `${nm} ${o.pieces} pcs = ${round(o.pieces * mainYield / y, 1)} of the main (${+y} a bag)` : `${nm} ${o.pieces} pcs`;
+  }).join(' + ') + (bags > 0 ? ` ÷ ${qtyText(bags)} bags` : '') : undefined;
   const stagedBags = round(staged.reduce((s, b) => s + b.bags, 0));
   const ColourChip = ({ id }) => (id ? <span className="pl-chip"><i style={{ background: refs.colorById[id]?.name?.toLowerCase() }} />{refs.colorById[id]?.name}</span> : null);
 
@@ -596,7 +610,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
               </label>
               <div className="pl-field">
                 <span className="pl-label">Average</span>
-                <div className="pl-mid">{mainPieces != null && bags > 0 ? `${qtyText(round(mainPieces / bags, 1))} pcs/bag` : '—'}</div>
+                <div className="pl-mid" title={avgHelp}>{mixPieces != null && bags > 0 ? `${qtyText(round(mixPieces / bags, 1))} pcs/bag` : '—'}
+                  {hasResidual && mainPieces != null && bags > 0 && <span className="pl-sub-num"> (main only {qtyText(round(mainPieces / bags, 1))})</span>}</div>
               </div>
               <div className="pl-field">
                 <span className="pl-label">Actual yield</span>
@@ -675,7 +690,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           <div className="pl-empty">No batches staged yet.</div>
         ) : (
           <div className="pl-staged">
-            {staged.map((s, i) => (
+            {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
+            {staged.map((s, i) => [s, i]).reverse().map(([s, i]) => (
               <div key={s.id} className={`pl-staged-row${editingId === s.id ? ' is-editing' : ''}`}>
                 <span className="pl-staged-n">{i + 1}</span>
                 <span className="pl-staged-name">
