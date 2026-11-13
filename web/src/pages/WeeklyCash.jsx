@@ -8,7 +8,7 @@ import { formatMoney, formatMoneyShort, formatAmount, dateText, tableDate } from
 import { loadInventoryRefs, orgToday, qtyText } from '../lib/inventory';
 import PeriodSelect, { usePeriod } from '../components/PeriodSelect';
 import { dbErrorMessage } from '../lib/masterData';
-import { readWeeklySheet, writeWeeklySheet } from '../lib/weeklyCashExcel';
+import { readWeeklySheet, listWeeklySheets, writeWeeklySheet } from '../lib/weeklyCashExcel';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -195,10 +195,24 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
   }
-  async function importFile(f) {
+  // a workbook with several sheets: ask which one (2026-11-13, the user)
+  const [sheetPick, setSheetPick] = useState(null);   // { file, sheets, name }
+  async function chooseFile(f) {
     setError('');
     try {
-      const s = await readWeeklySheet(f);
+      const sheets = await listWeeklySheets(f);
+      if (sheets.length > 1) {
+        const likely = [...sheets].filter(x => x.hasNeeds).sort((a, b) => String(b.week ?? '').localeCompare(String(a.week ?? '')))[0] ?? sheets[0];
+        setSheetPick({ file: f, sheets, name: likely.name });
+        return;
+      }
+      await importFile(f, sheets[0]?.name ?? null);
+    } catch (e) { setError(e.message || 'That file could not be read.'); }
+  }
+  async function importFile(f, sheetName = null) {
+    setError('');
+    try {
+      const s = await readWeeklySheet(f, sheetName);
       setLines(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })));
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
       if (firstEver && s.carried != null) setOpening(String(s.carried));   // the sheet's last balance, carried into this week
@@ -219,6 +233,26 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
 
   const st = request?.status ?? 'draft';
   return (
+    <>
+    {sheetPick && (
+      <Modal title="Which sheet?" onClose={() => setSheetPick(null)}
+        footer={<>
+          <button type="button" className="btn btn-outline" onClick={() => setSheetPick(null)}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={async () => { const p = sheetPick; setSheetPick(null); await importFile(p.file, p.name); }}>Import this sheet</button></>}>
+        <div className="modal-form">
+          <p className="pl-help">{sheetPick.file.name} has {sheetPick.sheets.length} sheets. Pick the one to import.</p>
+          <div className="wc-sheets" role="radiogroup" aria-label="Sheets">
+            {sheetPick.sheets.map(x => (
+              <label key={x.name} className={`wc-sheet${sheetPick.name === x.name ? ' is-on' : ''}${x.hasNeeds ? '' : ' is-off'}`}>
+                <input type="radio" name="wc-sheet" checked={sheetPick.name === x.name} disabled={!x.hasNeeds} onChange={() => setSheetPick(p => ({ ...p, name: x.name }))} />
+                <strong>{x.name}</strong>
+                <span className="pl-help">{x.hasNeeds ? (x.week ? `needs for the week of ${dateText(x.week)}` : 'has a needs table') : 'no needs table'}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </Modal>
+    )}
     <Modal title={isNew ? 'New weekly request' : `Weekly cash — week ending ${dateText(request.week_ending)}`} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
@@ -277,7 +311,7 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
         </div>
         {editable && (
           <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
-            <input ref={fileRef} type="file" accept=".xlsx" hidden onChange={e => { if (e.target.files?.[0]) importFile(e.target.files[0]); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" accept=".xlsx" hidden onChange={e => { if (e.target.files?.[0]) chooseFile(e.target.files[0]); e.target.value = ''; }} />
             <button type="button" className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import Excel sheet</button>
             {prevLive && <button type="button" className="btn btn-ghost btn-sm" onClick={copyLast}><Copy size={14} /> Start from last week's lines</button>}
             <span className="pl-help">Check the lines before saving.</span>
@@ -319,5 +353,6 @@ function RequestModal({ request, branchId, branchName, data, ledger, spentIn = (
         )}
       </div>
     </Modal>
+    </>
   );
 }

@@ -36,12 +36,28 @@ function dateIn(s) {
   return null;
 }
 
-/** Read the "needs this week" table from a workbook file → { weekEnding, lines: [{ description, quantity, unit, amount }], total } */
-export async function readWeeklySheet(file) {
+/** The workbook's sheets (2026-11-13, the user: a file may hold many weeks) → [{ name, hasNeeds, week }] */
+export async function listWeeklySheets(file) {
   const ExcelJS = await loadExcel();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
-  for (const ws of wb.worksheets) {
+  return wb.worksheets.map(ws => {
+    const rows = [];
+    ws.eachRow({ includeEmpty: false }, row => rows.push(row.values.slice(1).map(text)));
+    const hi = rows.findIndex(c => c.some(x => /^\s*description\s*$/i.test(x)) && c.some(x => /^\s*amount\s*$/i.test(x)) && !c.some(x => /cash\s*(in|out)/i.test(x)));
+    let week = null;
+    for (let k = hi - 1; hi > 0 && k >= Math.max(0, hi - 3) && !week; k--) week = dateIn(rows[k].join(' '));
+    return { name: ws.name, hasNeeds: hi >= 0, week };
+  });
+}
+
+/** Read the "needs this week" table from a workbook file (one sheet, by name, or the first that has it)
+ *  → { weekEnding, lines: [{ description, quantity, unit, amount }], total, carried } */
+export async function readWeeklySheet(file, sheetName = null) {
+  const ExcelJS = await loadExcel();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  for (const ws of wb.worksheets.filter(w => !sheetName || w.name === sheetName)) {
     const rows = [];
     ws.eachRow({ includeEmpty: false }, (row, i) => rows.push({ i, cells: row.values.slice(1).map(text), raw: row.values.slice(1) }));
     // the header of the needs table: DESCRIPTION and AMOUNT, without CASH IN/OUT (that is last week's summary)
@@ -65,7 +81,7 @@ export async function readWeeklySheet(file) {
     }
     // last week's summary (CASH IN / CASH OUT / BALANCE), above the needs: its last balance is what was carried
     let carried = null;
-    const si = rows.findIndex((r, k) => k < hi && r.cells.some(c => /cashs*out/i.test(c)) && r.cells.some(c => /balance/i.test(c)));
+    const si = rows.findIndex((r, k) => k < hi && r.cells.some(c => /cash\s*out/i.test(c)) && r.cells.some(c => /balance/i.test(c)));
     if (si >= 0) {
       const cB = rows[si].cells.findIndex(c => /balance/i.test(c));
       for (let k = si + 1; k < hi; k++) { const b = numberOf(rows[k].raw[cB]); if (b != null) carried = b; }

@@ -2919,3 +2919,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .xs-grid .xs-del { text-align: center; }
 .xs-grid .xs-del-btn { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; opacity: 0; padding: 4px; }
 .xs-grid tr:hover .xs-del-btn, .xs-grid tr:focus-within .xs-del-btn { opacity: .8; }
+/* weekly cash: which sheet to import (2026-11-13) */
+.wc-sheets { display: flex; flex-direction: column; gap: 6px; }
+.wc-sheet { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; }
+.wc-sheet.is-on { border-color: var(--accent); background: var(--bg-soft); }
+.wc-sheet.is-off { opacity: .5; cursor: default; }
+.wc-sheet .pl-help { margin-left: auto; }
