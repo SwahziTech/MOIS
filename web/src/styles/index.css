@@ -2880,3 +2880,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 /* day's list: icons on each sale (2026-11-13) */
 .sl-day-acts { white-space: nowrap; }
 .sl-day-table .icon-btn.sl-has-proof { color: var(--success, #2e9e5b); }
+/* production: the yield factor alone, right under the residuals (2026-11-13) */
+.pl-calib-min { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 0; }

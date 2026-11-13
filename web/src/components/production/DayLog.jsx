@@ -660,18 +660,18 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           })}
         </div>
 
-        {/* Weighted batch yield calibration, one compact row (2026-10-25): product · pieces, cement implied (small), yield factor */}
-        <div className="pl-sub pl-calib">
-          <span className="pl-subtitle">Yield calibration</span>
-          <span className="pl-calib-pcs">{main?.name ?? '—'} · <strong>{qtyText(mainPieces ?? 0)}</strong> pcs{form.leftovers.filter(l => l.productId && num(l.pieces)).map(l => (
-            <span key={l.productId}> + {refs.items[`p:${l.productId}`]?.name} · <strong>{qtyText(num(l.pieces))}</strong> pcs</span>))}</span>
-          <span className="pl-help">cement implied {theoretical != null && totalPieces > 0 ? `${qtyText(round(theoretical, 2))} bags` : '—'}</span>
-          {unbanded.length > 0 && <span className="pl-help text-warning">no check until {unbanded.map(o => refs.items[`p:${o.productId}`]?.name).join(', ')} {unbanded.length === 1 ? 'has' : 'have'} a wastani</span>}
-          {theoretical != null && bags > 0 && totalPieces > 0 && (
-            <span className={`pl-badge${outOfBand ? ' is-out' : ''}`}>Yield factor: {Math.round((theoretical / bags) * 1000) / 10}%</span>
-          )}
-          {outOfBand && <span className="pl-help text-warning pl-calib-warn">Outside the band — this batch will be flagged for review.</span>}
-        </div>
+        {/* the yield factor alone (2026-11-13, the user): products, pieces and the cement implied in its tooltip */}
+        {((theoretical != null && bags > 0 && totalPieces > 0) || unbanded.length > 0) && (
+          <div className="pl-calib-min">
+            {unbanded.length > 0 && <span className="pl-help text-warning">No yield check until {unbanded.map(o => refs.items[`p:${o.productId}`]?.name).join(', ')} {unbanded.length === 1 ? 'has' : 'have'} a wastani</span>}
+            {outOfBand && <span className="pl-help text-warning">Outside the band — flagged for review</span>}
+            {theoretical != null && bags > 0 && totalPieces > 0 && (
+              <span className={`pl-badge${outOfBand ? ' is-out' : ''}`}
+                title={`${counted.map(o => `${refs.items[`p:${o.productId}`]?.name ?? ''} ${qtyText(o.pieces)} pcs`).join(' + ')} → cement implied ${qtyText(round(theoretical, 2))} of ${qtyText(bags)} bags`}>
+                Yield factor: {Math.round((theoretical / bags) * 1000) / 10}%</span>
+            )}
+          </div>
+        )}
       </section>
 
       <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} date={date} lists={lists} reload={reloadLists}
