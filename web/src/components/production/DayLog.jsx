@@ -699,8 +699,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
           // a table like the sales one (2026-11-13, the user): each product a row; bags, yield, team and machine per batch
           <table className="rd-table sl-day-table dl-prod-table">
             {/* half the width for the product block (Qty, Bags, Avg close to the products), half for team · machine · yield and the icons (2026-11-13, the user) */}
-            <colgroup><col style={{ width: '4%' }} /><col style={{ width: '18%' }} /><col style={{ width: '9%' }} /><col style={{ width: '7%' }} /><col style={{ width: '12%' }} /><col style={{ width: '16%' }} /><col style={{ width: '14%' }} /><col style={{ width: '9%' }} /><col style={{ width: '11%' }} /></colgroup>
-            <thead><tr><th>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th className="dl-avg" title="Pieces a cement bag — residuals counted in the main product's pieces by each one's wastani">Avg <span className="th-unit">(pcs/bag)</span></th><th className="dl-split">Team</th><th>Machine</th><th>Yield</th><th aria-label="Actions" /></tr></thead>
+            <colgroup><col style={{ width: '4%' }} /><col style={{ width: '18%' }} /><col style={{ width: '9%' }} /><col style={{ width: '7%' }} /><col style={{ width: '12%' }} /><col style={{ width: '14%' }} /><col style={{ width: '16%' }} /><col style={{ width: '9%' }} /><col style={{ width: '11%' }} /></colgroup>
+            <thead><tr><th>No.</th><th>Products</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Bags</th><th className="dl-avg" title="Pieces a cement bag — residuals counted in the main product's pieces by each one's wastani">Avg <span className="th-unit">(pcs/bag)</span></th><th className="dl-split">Machine</th><th>Team</th><th>Yield</th><th aria-label="Actions" /></tr></thead>
             <tbody>
               {/* newest on top (2026-11-13, the user); numbered in the order added, saved in that order */}
               {staged.map((st, i) => [st, i]).reverse().map(([st, i]) => {
@@ -718,8 +718,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                     <td style={{ textAlign: 'right' }}>{o.pieces != null ? <>{qtyText(o.pieces)} <span className="pl-help">pcs</span></> : '—'}</td>
                     {k === 0 && <td rowSpan={span} style={{ textAlign: 'right' }}>{qtyText(st.bags)}</td>}
                     {k === 0 && <td rowSpan={span} className="dl-avg">{avg != null ? <>{qtyText(avg)} <span className="td-unit">pcs</span></> : '—'}</td>}
-                    {k === 0 && <td rowSpan={span} className="text-sm dl-split">{st.team || <span className="pl-help">—</span>}</td>}
-                    {k === 0 && <td rowSpan={span} className="text-sm">{st.machine || <span className="pl-help">—</span>}</td>}
+                    {k === 0 && <td rowSpan={span} className="text-sm dl-split">{st.machine || <span className="pl-help">—</span>}</td>}
+                    {k === 0 && <td rowSpan={span} className="text-sm">{st.team || <span className="pl-help">—</span>}</td>}
                     {k === 0 && <td rowSpan={span}>{st.factor == null ? <span className="pl-help">no check</span> : <span className={`pl-badge${st.outOfBand ? ' is-out' : ''}`}>{Math.round(st.factor * 1000) / 10}%</span>}</td>}
                     {k === 0 && <td rowSpan={span} className="sl-day-acts" onClick={e => e.stopPropagation()}>
                       <button type="button" className="icon-btn" aria-label="Look at the batch" title="Look at it" onClick={() => setPreviewing(st)}><Eye size={14} /></button>
