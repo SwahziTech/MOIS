@@ -397,8 +397,12 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   }
   // a workbook with several sheets: ask which one (2026-11-13, the user)
   const [sheetPick, setSheetPick] = useState(null);   // { file, sheets, name }
-  async function chooseFile(f) {
+  // a sheet already in the report: ask before replacing it — two sheets are never combined (2026-11-15, the user)
+  const [replaceAsk, setReplaceAsk] = useState(null);   // the file waiting for a yes
+  const hasSheet = () => !!sheetLW?.length || lines.some(l => !l.locked && (String(l.description ?? '').trim() || num(l.amount) != null));
+  async function chooseFile(f, sure = false) {
     setError('');
+    if (!sure && hasSheet()) { setReplaceAsk(f); return; }
     try {
       const sheets = await listWeeklySheets(f);
       if (sheets.length > 1) {
@@ -415,11 +419,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     setError('');
     try {
       const s = await readWeeklySheet(f, sheetName);
-      setLines(fillCategories(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })), data.cats, catHistory).map(l => ({ ...l, catAuto: !!l.categoryId })));
+      // everything from the earlier sheet goes; only the casuals' pay-sheet line (from MOIS) stays
+      setLines(cur => [...cur.filter(l => l.locked), ...fillCategories(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })), data.cats, catHistory).map(l => ({ ...l, catAuto: !!l.categoryId }))]);
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
-      if (s.carried != null) setOpening(String(s.carried));   // the sheet's last balance
-      if (s.account && !payTouched) setPayTo({ bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' });
-      if (s.summaryRows?.length) setSheetLW(s.summaryRows.map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date, description, qty, cash_in, cash_out, balance })));
+      setOpening(s.carried != null ? String(s.carried) : '');   // the sheet's last balance
+      if (!payTouched) setPayTo(s.account ? { bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' } : { bank: prevLive?.pay_bank ?? '', no: prevLive?.pay_account_no ?? '', name: prevLive?.pay_account_name ?? '' });
+      clearTimeout(saveTimer.current); setLwEdit(null);
+      setSheetLW(s.summaryRows?.length ? s.summaryRows.map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date, description, qty, cash_in, cash_out, balance })) : null);
       setSource('excel');
       if (s.total != null && Math.abs(s.total - s.lines.reduce((t, l) => t + l.amount, 0)) > 0.5) setError(`Read ${s.lines.length} lines — their sum differs from the sheet's TOTAL (${formatAmount(s.total)}). Check before saving.`);
     } catch (e) { setError(e.message || 'That file could not be read.'); }
@@ -453,6 +459,15 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   ];
   return (
     <>
+    {replaceAsk && (
+      <Modal title="Replace the sheet?" onClose={() => setReplaceAsk(null)}
+        footer={<>
+          <button type="button" className="btn btn-outline" onClick={() => setReplaceAsk(null)}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => { const f = replaceAsk; setReplaceAsk(null); chooseFile(f, true); }}>Replace</button></>}>
+        <p className="text-sm" title="Last week's spending, this week's request, the balance and the bank details are all taken from the new sheet. The two sheets are not combined.">
+          This report already has a sheet. Replace it with {replaceAsk.name}?</p>
+      </Modal>
+    )}
     {sheetPick && (
       <Modal title="Which sheet?" onClose={() => setSheetPick(null)}
         footer={<>
