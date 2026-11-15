@@ -8,7 +8,7 @@ import { PAPERS, pickPaper, lwCells, reqCells, downloadPdf, printPdf, downloadEx
  * paper (A3 by default, one page), portrait/landscape; Save as PDF, Excel or CSV; or print.
  * mode 'review': shown before Submit / Post — the page as the directors will see it; Edit goes back.
  */
-export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultFormat = 'pdf', confirmLabel, busy = false, onConfirm, onClose }) {
+export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultFormat = 'pdf', confirmLabel, busy = false, note = null, onConfirm, onClose }) {
   const [setup, setSetup] = useState(() => pickPaper(doc));
   const [menu, setMenu] = useState(false);   // "Save as" choices (2026-11-15, the user)
   const [working, setWorking] = useState(false);
@@ -40,6 +40,7 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
           <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={onConfirm}>{confirmLabel}</button>
         </> : <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>}
       </>}>
+      {note && <p className="wc-doc-note">{note}</p>}
       <div className="wc-doc-layout">
         <div className="wc-doc-setup">
           <label className="pe-field"><span>Paper</span>

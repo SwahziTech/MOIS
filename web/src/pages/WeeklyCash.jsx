@@ -11,6 +11,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, listWeeklySheets } from '../lib/weeklyCashExcel';
 import { guessCategory, fillCategories } from '../lib/expenseGuess';
 import WeeklyCashDocDialog from '../components/finance/WeeklyCashDocDialog';
+import { saveWeeklyCash } from '../components/purchases/PaidFrom';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -327,7 +328,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     ];
   }, [sheetLW, fig, spentIn, week, opening]);
   const lwTitle = `LAST WEEK'S SPENDING: ${weekRange(addDays(week, -7), week)}`;
-  const reqTitle = `THIS WEEK'S REQUEST: ${weekRange(week, addDays(week, 7))}`;
+  const reqTitle = `THIS WEEK'S REQUEST: ${dateText(week).replace(/, (\d) /, ', 0$1 ')}`;   // one date: "Sat, 07 Nov 2026" (2026-11-15, the user)
 
   // last week's summary, edited like the sheet (2026-11-15, the user): the formulas work as you type,
   // the two total rows stay last with an empty line above them for a new item; undo; saved by itself
@@ -418,10 +419,69 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     return true;
   }
   // save the draft → its id; keepOpen: stay in the window (saving the summary sheet)
+  // two ways in (2026-11-15, the user): (1) import the branch's sheet — when the branch manager posts it,
+  // last week's spending items are written into MOIS as expenses paid from the weekly cash; an item
+  // already in MOIS (same amount that week, and the same words or the same day) is not entered again;
+  // (2) no import — last week's spending comes from what MOIS already has, and only the request is filled.
+  const nw = t => String(t ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const isoOf = t => {
+    const v = String(t ?? '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const d = v ? new Date(`${v} UTC`) : null;
+    return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+  };
+  function spendPlan(rows) {
+    const from = addDays(week, -6);
+    const existing = [...spentIn(week), ...spentIn(week, 'others')].map(x => ({ ...x, used: false }));
+    const out = { record: [], already: [] };
+    (rows || []).forEach((r, i) => {
+      if (FORMULA_ROW.test(r.description || '') || !(num(r.cash_out) > 0) || !String(r.description ?? '').trim()) return;
+      if (r.expense_id || r.record_id) { out.already.push({ r, i }); return; }
+      const d = isoOf(r.date);
+      const day = d && d >= from && d <= week ? d : week;
+      const first = nw(r.description).split(' ')[0];
+      const m = existing.find(x => !x.used && Math.abs(x.amount - num(r.cash_out)) < 1
+        && (nw(x.description) === nw(r.description) || (first && nw(x.description).split(' ').includes(first)) || x.date === day));
+      if (m) { m.used = true; out.already.push({ r, i, match: m }); } else out.record.push({ r, i, day });
+    });
+    return out;
+  }
+  async function recordSpending(rows) {
+    const plan = spendPlan(rows);
+    const next = rows.map(r => ({ ...r }));
+    for (const a of plan.already) if (a.match) next[a.i].record_id = a.match.id;
+    const other = data.cats.find(c => /^other$/i.test(c.name))?.id ?? null;
+    for (const it of plan.record) {
+      const amt = num(it.r.cash_out);
+      const { data: eid, error: err } = await supabase.rpc('record_expense', { p: {
+        branch_id: branchId, expense_date: it.day, paid_on: it.day, amount: amt, amount_paid: amt, payment_method: 'Cash',
+        category_id: it.r.category_id || guessCategory(it.r.description, data.cats, catHistory) || other,
+        description: String(it.r.description).trim(),
+        notes: `Weekly cash sheet ${dateText(week)}${it.r.qty ? ` · ${it.r.qty}` : ''}` } });
+      if (err) return { error: err, rows: next };
+      await saveWeeklyCash('expense', eid, true);
+      next[it.i].expense_id = eid;
+    }
+    return { rows: next };
+  }
+  // how many of the sheet's spending items go into MOIS on posting (shown in the check window)
+  const postNote = () => {
+    if (!poster || !sheetLW?.length) return null;
+    const p = spendPlan(sheetLW);
+    if (!p.record.length && !p.already.length) return null;
+    return `Posting writes last week's spending into MOIS: ${p.record.length} item${p.record.length === 1 ? '' : 's'} recorded as expenses (weekly cash)${p.already.length ? `, ${p.already.length} already in MOIS — not entered again` : ''}.`;
+  };
   async function save({ keepOpen = false, lastWeek = sheetLW, send = false } = {}) {
     setError('');
     if (!check()) return null;
     setBusy(true);
+    // the branch manager posts: the sheet's spending goes into MOIS first; on a problem it is saved, not sent
+    let recErr = null;
+    if (send && poster && lastWeek?.length) {
+      const rec = await recordSpending(withCats(lastWeek));
+      lastWeek = rec.rows; setSheetLW(rec.rows);
+      if (rec.error) { recErr = rec.error; send = false; keepOpen = true; }
+    }
     const carried = lastWeek?.length ? sheetSums(lastWeek).closing : null;
     const { data: id, error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? savedId ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
       opening_balance: firstEver ? (carried ?? num(opening)) : null, notes, source,
@@ -434,6 +494,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
       if (e2) { setBusy(false); setError(dbErrorMessage(e2)); return null; }
     }
     setBusy(false);
+    if (recErr) { await onRefresh?.(); setError(`Not sent: a spending item could not be recorded — ${dbErrorMessage(recErr)}`); return null; }
     if (keepOpen) await onRefresh?.(); else onSaved();
     return id;
   }
@@ -536,7 +597,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
       </Modal>
     )}
     {docMode && (
-      <WeeklyCashDocDialog doc={docModel()} mode={docMode} defaultFormat={docMode === 'review' || !editable ? 'pdf' : 'excel'} busy={busy}
+      <WeeklyCashDocDialog doc={docModel()} mode={docMode} note={docMode === 'review' ? postNote() : null} defaultFormat={docMode === 'review' || !editable ? 'pdf' : 'excel'} busy={busy}
         confirmLabel={primaryLabel} onClose={() => setDocMode(null)}
         onConfirm={async () => { await save({ send: poster }); setDocMode(null); }} />
     )}
@@ -581,7 +642,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         <div className="wc-tables">
           {/* part 1, exactly as on the branch's sheet: only what was paid from the weekly cash (121) */}
           {lwEdit ? <>
-            <SheetGrid label="Last week's spending" className="xs-bold" columns={lwCols}
+            <SheetGrid resizable freeze label="Last week's spending" className="xs-bold" columns={lwCols}
               title={<>
                 <span className="xs-title-left">
                   <button type="button" className="btn btn-ghost btn-sm" aria-label="Undo" title="Undo the last change" disabled={!lwHist.length} onClick={undoEdit}><Undo2 size={14} /></button>
@@ -596,9 +657,9 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
               canEditCell={(col, r) => (r.kind === 'open' ? ['date', 'cash_in'].includes(col.key) : r.kind === 'sent' ? col.key === 'cash_in' : r.kind === 'total_in' ? false : ['date', 'description', 'qty', 'cash_out', 'category_id'].includes(col.key))}
               canRemoveRow={r => r.kind === 'item'} rowClass={lwRowClass}
               blankRow={{ date: '', description: '', qty: '', cash_out: '', category_id: '' }} />
-            {sheetLW?.length > 0 && !firstEver && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
+            {sheetLW?.length > 0 && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
           </> : (
-            <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
+            <SheetGrid resizable freeze label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
               title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm" aria-label="Edit the spending" title="Edit the spending" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
               rows={lwRows.length ? lwRows : [{ description: 'Nothing paid from the weekly cash last week' }]} />
           )}
@@ -627,7 +688,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             </div>
           )}
           {/* part 2: this week's request, as a sheet like the branch's Excel */}
-          <SheetGrid label="This week's request" className="xs-bold" title={reqTitle} rows={lines} onChange={onLinesChange} readOnly={!editable}
+          <SheetGrid resizable freeze label="This week's request" className="xs-bold" title={reqTitle} rows={lines} onChange={onLinesChange} readOnly={!editable}
             isLocked={l => !!l.locked} lockedTitle="From the casuals' approved pay sheet — it changes with the sheet"
             blankRow={{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }}
             columns={[

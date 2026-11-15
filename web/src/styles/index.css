@@ -3002,13 +3002,13 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
    the window scrolls. A sideways-scroll box would stop that, so on a computer the sheet does not scroll
    sideways (it fits, columns resize); on a narrow phone it still scrolls sideways. */
 @media (min-width: 900px) {
-  .xs-grid { overflow: visible; }
-  .xs-grid table { min-width: 0; }
-  .xs-grid.xs-bold table { min-width: 0; }
+  .xs-grid.xs-freeze { overflow: visible; }
+  .xs-grid.xs-freeze table { min-width: 0; }
   /* only the column names freeze, at the very top of the window (2026-11-15, the user); a window sits
      64px below the top of its scrolling backdrop, so the row sticks 64px above that edge */
-  .xs-grid thead th { position: static; }
-  .xs-grid thead .xs-labels th { position: sticky; top: 0; z-index: 4; box-shadow: inset 0 -2px 0 var(--border-strong); }
-  .modal .xs-grid thead .xs-labels th { top: -64px; }
+  .xs-grid.xs-freeze thead th { position: static; }
+  .xs-grid.xs-freeze thead .xs-labels th { position: sticky; top: 0; z-index: 4; box-shadow: inset 0 -2px 0 var(--border-strong); }
+  .modal .xs-grid.xs-freeze thead .xs-labels th { top: -64px; }
 }
 .wc-acct-pick { max-width: 520px; }
+.wc-doc-note { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-soft); font-size: var(--text-sm); }
