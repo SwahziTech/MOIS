@@ -176,10 +176,10 @@ export default function WeeklyCash() {
   // a new request: dated the last Saturday, unless that one exists already
   const newWeek = liveAt(lastSat) ? saturdayOf(addDays(lastSat, 1)) : lastSat;
   const canPrepare = !!branchId && canAt('cash.request', branchId);
-  // an unwanted import can be deleted; a cancelled one used again (123, 2026-11-15, the user)
+  // a cancelled import can be deleted or used again — only cancelled ones (123, 2026-11-15, the user)
   const [askDel, setAskDel] = useState(null);   // request id waiting for "Delete?"
   const [rowBusy, setRowBusy] = useState('');
-  const canDelete = r => canPrepare && ['draft', 'cancelled'].includes(r.status) && !r.sent_by && !(r.lines || []).some(l => l.pay_sheet_id);
+  const canDelete = r => canPrepare && r.status === 'cancelled' && !r.sent_by && !(r.lines || []).some(l => l.pay_sheet_id);
   async function rowAction(fn, r) {
     setRowBusy(r.id); setError('');
     const { error: err } = await supabase.rpc(fn, { p_id: r.id });
@@ -226,7 +226,7 @@ export default function WeeklyCash() {
                           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAskDel(null)}>No</button>
                         </span> : <>
                           {canPrepare && r.status === 'cancelled' && <button type="button" className="btn btn-ghost btn-sm" disabled={rowBusy === r.id} title="Use again — back to draft" aria-label="Use again" onClick={() => rowAction('reopen_cash_request', r)}><RotateCcw size={14} /></button>}
-                          {canDelete(r) && <button type="button" className="btn btn-ghost btn-sm" title="Delete this request — it never went to the directors" aria-label="Delete" onClick={() => setAskDel(r.id)}><Trash2 size={14} /></button>}
+                          {canDelete(r) && <button type="button" className="btn btn-ghost btn-sm" title="Delete this cancelled request" aria-label="Delete" onClick={() => setAskDel(r.id)}><Trash2 size={14} /></button>}
                         </>}
                       </td>
                     </tr>
