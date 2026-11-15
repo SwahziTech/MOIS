@@ -409,7 +409,7 @@ export default function Purchases() {
                   <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
                   <tbody>
                     {loading ? <SkeletonRow cols={8} /> : expensesShown.length === 0 ? (
-                      <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No expenses yet" description="Electricity (LUKU), water, office tools, equipment… — use Record expense." /></td></tr>
+                      <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No expenses yet" description="Electricity, water, office, tools, transport… — use Record expense." /></td></tr>
                     ) : expensesShown.map(e => {
                       const pay = expensePay(e);
                       return (
