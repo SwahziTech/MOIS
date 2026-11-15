@@ -1,6 +1,6 @@
 import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Wallet, Plus, Upload, Download, Copy, Pencil, Save, RotateCcw } from 'lucide-react';
+import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Undo2, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -22,17 +22,39 @@ const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x
 const saturdayOf = d => { const w = new Date(`${d}T00:00:00Z`).getUTCDay(); return addDays(d, (6 - w + 7) % 7); };
 // "Sat, 31 Oct – Sat, 7 Nov 2026"
 const weekRange = (a, b) => `${a.slice(0, 4) === b.slice(0, 4) ? dateText(a).replace(/ \d{4}$/, '') : dateText(a)} – ${dateText(b)}`;
-// the sheet's own rows in bold: BALANCE, CASH SENT, TOTAL CASH (2026-11-15, the user)
-const BOLD_ROW = /^\s*(balance|cash\s*sent|total)/i;
-// a summary as written on the sheet → its figures
+// last week's summary works like the sheet's formulas (2026-11-15, the user): the person types the
+// balance, the cash sent and the items; TOTAL CASH, each running balance, TOTAL CASH (out) and the
+// closing BALANCE are worked out, and the last two rows always stay last.
+const FORMULA_ROW = /^\s*(balance|cash\s*sent|total)/i;
+// any rows (imported, typed, saved) → { date, opening, sent, items }
+function sheetParts(rows) {
+  const bal = rows.find(r => /^\s*balance\s*$/i.test(r.description || ''));
+  const sent = rows.find(r => /cash\s*sent/i.test(r.description || ''));
+  return { date: bal?.date ?? '', opening: bal?.cash_in ?? '', sent: sent?.cash_in ?? '',
+    items: rows.filter(r => !FORMULA_ROW.test(r.description || '')).map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '' })) };
+}
+// the parts → the sheet, every formula worked out
+function sheetRows(p) {
+  const totalIn = r2((num(p.opening) ?? 0) + (num(p.sent) ?? 0));
+  let b = totalIn;
+  const items = p.items.map(i => { b = r2(b - (num(i.cash_out) ?? 0)); return { ...i, kind: 'item', balance: b }; });
+  const spent = r2(p.items.reduce((t, i) => t + (num(i.cash_out) ?? 0), 0));
+  return [
+    { kind: 'open', date: p.date, description: 'BALANCE', cash_in: p.opening, bold: true },
+    { kind: 'sent', description: 'CASH SENT', cash_in: p.sent, bold: true },
+    { kind: 'total_in', description: 'TOTAL CASH', cash_in: totalIn, bold: true },
+    ...items,
+    { kind: 'total_out', description: 'TOTAL CASH', cash_out: spent, bold: true },
+    { kind: 'close', description: 'BALANCE', cash_in: r2(totalIn - spent), bold: true },
+  ];
+}
+// rows kept in the database: plain values
+const storeRows = p => sheetRows({ ...p, items: p.items.filter(i => [i.date, i.description, i.qty, i.cash_out].some(v => String(v ?? '').trim())) })
+  .map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date: String(date ?? '').trim(), description: String(description ?? '').trim(), qty: String(qty ?? '').trim(), cash_in: num(cash_in), cash_out: num(cash_out), balance: num(balance) }));
+// a summary as written → its figures
 function sheetSums(rows) {
-  const is = (r, re) => re.test(r.description || '');
-  const first = rows.find(r => is(r, /^\s*balance\s*$/i) && r.cash_in != null);
-  const last = [...rows].reverse().find(r => is(r, /^\s*balance\s*$/i) && r.cash_in != null && r !== first);
-  const lastBal = [...rows].reverse().find(r => r.balance != null);
-  const sent = rows.find(r => is(r, /cash\s*sent/i))?.cash_in ?? 0;
-  const spent = rows.filter(r => !is(r, /^\s*total/i)).reduce((t, r) => t + (Number(r.cash_out) || 0), 0);
-  return { opening: first ? Number(first.cash_in) : null, sent: Number(sent) || 0, spent: r2(spent), closing: last ? Number(last.cash_in) : lastBal ? Number(lastBal.balance) : null };
+  const rs = sheetRows(sheetParts(rows));
+  return { opening: num(rs[0].cash_in), sent: num(rs[1].cash_in) ?? 0, spent: rs[rs.length - 2].cash_out, closing: rs[rs.length - 1].cash_in };
 }
 const STATUS = { draft: ['Draft', 'badge-neutral'], with_directors: ['With directors', 'badge-warning'], approved: ['Approved', 'badge-info'], rejected: ['Turned down', 'badge-error'], paid: ['Paid', 'badge-success'], cancelled: ['Cancelled', 'badge-neutral'] };
 const asked = r => (r.lines || []).reduce((t, l) => t + Number(l.amount), 0);
@@ -230,18 +252,8 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const [sheetLW, setSheetLW] = useState(request?.last_week?.rows ?? null);
   const fig = weekOf(week);
   const lwRows = useMemo(() => {
-    if (sheetLW?.length) return sheetLW.map(x => ({ ...x, bold: BOLD_ROW.test(x.description || '') }));
-    if (fig && !fig.first) {
-      let b = r2(fig.opening + fig.sent);
-      return [
-        { date: addDays(week, -7), description: 'BALANCE', cash_in: fig.opening, bold: true },
-        { description: 'CASH SENT', cash_in: fig.sent, bold: true },
-        { description: 'TOTAL CASH', cash_in: b, bold: true },
-        ...fig.lines.map(l => { b = r2(b - l.amount); return { date: l.date, description: l.description, qty: l.qty, cash_out: l.amount, balance: b }; }),
-        { description: 'TOTAL CASH', cash_out: fig.spent, bold: true },
-        { description: 'BALANCE', cash_in: fig.closing, bold: true },
-      ];
-    }
+    if (sheetLW?.length) return sheetRows(sheetParts(sheetLW));
+    if (fig && !fig.first) return sheetRows({ date: addDays(week, -7), opening: fig.opening, sent: fig.sent, items: fig.lines.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount })) });
     const rec = spentIn(week);
     return [
       ...rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount })),
@@ -252,16 +264,53 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const lwTitle = `LAST WEEK'S SPENDING: ${weekRange(addDays(week, -7), week)}`;
   const reqTitle = `THIS WEEK'S REQUEST: ${weekRange(week, addDays(week, 7))}`;
 
-  // last week's summary, edited by hand (2026-11-15, the user: an edit icon on top, save at the bottom)
-  const [lwEdit, setLwEdit] = useState(null);
-  const startEdit = () => setLwEdit(lwRows.map(r => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? tableDate(r.date) : r.date ?? '', description: r.description ?? '', qty: r.qty ?? '',
-    cash_in: r.cash_in != null ? String(r.cash_in) : '', cash_out: r.cash_out != null ? String(r.cash_out) : '', balance: r.balance != null ? String(r.balance) : '' })));
-  async function saveSheet(rows) {
-    setSheetLW(rows); setLwEdit(null);
-    if (!isNew) await save({ keepOpen: true, lastWeek: rows });
+  // last week's summary, edited like the sheet (2026-11-15, the user): the formulas work as you type,
+  // the two total rows stay last with an empty line above them for a new item; undo; saved by itself
+  const [lwEdit, setLwEdit] = useState(null);   // { parts, hist: [parts…], dirty }
+  const [lwSaved, setLwSaved] = useState('');   // '' | 'saving' | 'saved'
+  const startEdit = () => {
+    const p = sheetParts(lwRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close'));
+    const s = v => (v == null ? '' : String(v));
+    setLwEdit({ parts: { date: /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? tableDate(p.date) : s(p.date), opening: s(p.opening), sent: s(p.sent),
+      items: p.items.map(i => ({ ...i, date: /^\d{4}-\d{2}-\d{2}$/.test(i.date || '') ? tableDate(i.date) : s(i.date), cash_out: s(i.cash_out) })) }, hist: [], dirty: false, at: 0 });
+    setLwSaved('');
+  };
+  const editRows = lwEdit ? sheetRows(lwEdit.parts) : [];
+  function onEditRows(next) {
+    const [o, sn] = next;
+    const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '' })) };
+    setLwEdit(e => {
+      const now = Date.now();
+      const hist = now - e.at > 800 ? [...e.hist, e.parts].slice(-50) : e.hist;   // a typed word is one step back
+      return { parts, hist, dirty: true, at: now };
+    });
   }
-  const cleanSheet = rs => rs.filter(r => [r.date, r.description, r.qty, r.cash_in, r.cash_out, r.balance].some(v => String(v ?? '').trim()))
-    .map(r => ({ date: String(r.date ?? '').trim(), description: String(r.description ?? '').trim(), qty: String(r.qty ?? '').trim(), cash_in: num(r.cash_in), cash_out: num(r.cash_out), balance: num(r.balance) }));
+  const undoEdit = () => setLwEdit(e => (e.hist.length ? { ...e, parts: e.hist[e.hist.length - 1], hist: e.hist.slice(0, -1), dirty: true, at: 0 } : e));
+  // saved by itself a moment after the last change
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (!lwEdit?.dirty) return undefined;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => persistSheet(storeRows(lwEdit.parts)), 1500);
+    return () => clearTimeout(saveTimer.current);
+  }, [lwEdit?.parts]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function persistSheet(rows) {
+    setSheetLW(rows);
+    if (isNew) return;
+    setLwSaved('saving');
+    const id = await save({ keepOpen: true, lastWeek: rows });
+    setLwSaved(id !== null ? 'saved' : '');
+  }
+  async function stopEdit() {
+    clearTimeout(saveTimer.current);
+    if (lwEdit?.dirty) await persistSheet(storeRows(lwEdit.parts));
+    setLwEdit(null);
+  }
+  async function useRecords() {
+    clearTimeout(saveTimer.current);
+    setLwEdit(null); setSheetLW(null);
+    if (!isNew) await save({ keepOpen: true, lastWeek: null });
+  }
 
   // last week's payments: which came from the weekly cash (tick in / out, 121)
   const lwAll = useMemo(() => [...spentIn(week).map(l => ({ ...l, on: true })), ...spentIn(week, 'others').map(l => ({ ...l, on: false }))]
@@ -345,10 +394,12 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     lw: { title: lwTitle, rows: lwRows.map(r => ({ ...r, date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? tableDate(r.date) : r.date })) },
     req: { title: reqTitle, showApproved, total, approvedTotal,
       lines: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(l.amount) ?? 0, approved: num(l.approved) ?? num(l.amount) ?? 0 })) },
-    account: payTo.bank || payTo.no || payTo.name ? { bank: payTo.bank, number: payTo.no, holder: payTo.name } : null,
+    account: { bank: payTo.bank, number: payTo.no, holder: payTo.name },   // always on the page (2026-11-15, the user)
     notes: notes.trim(), fileName: `Weekly cash ${branchName ?? ''} ${week}`,
   });
 
+  // the total rows stand out: TOTAL CASH on top, the two closing rows at the bottom
+  const lwRowClass = r => (r.kind === 'total_in' ? 'xs-total xs-total-in' : r.kind === 'total_out' ? 'xs-total xs-total-first' : r.kind === 'close' ? 'xs-total' : '');
   const lwCols = [
     { key: 'date', label: 'Date', type: 'text', width: 110, show: l => (/^\d{4}-\d{2}-\d{2}$/.test(l.date || '') ? tableDate(l.date) : l.date || '') },
     { key: 'description', label: 'Description', type: 'text', show: l => (l.bold ? <strong>{l.description}</strong> : l.description) },
@@ -364,7 +415,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
           <button type="button" className="btn btn-outline" onClick={() => setSheetPick(null)}>Cancel</button>
           <button type="button" className="btn btn-primary" onClick={async () => { const p = sheetPick; setSheetPick(null); await importFile(p.file, p.name); }}>Import this sheet</button></>}>
         <div className="modal-form">
-          <p className="pl-help">{sheetPick.file.name} has {sheetPick.sheets.length} sheets. Pick the one to import.</p>
+          {/* the import button at the top too — the list can be long (2026-11-15, the user) */}
+          <div className="wc-top">
+            <p className="pl-help" style={{ margin: 0 }}>{sheetPick.file.name} has {sheetPick.sheets.length} sheets. Pick the one to import.</p>
+            <div className="wc-top-right">
+              <button type="button" className="btn btn-primary btn-sm" onClick={async () => { const p = sheetPick; setSheetPick(null); await importFile(p.file, p.name); }}>Import this sheet</button>
+            </div>
+          </div>
           <div className="wc-sheets" role="radiogroup" aria-label="Sheets">
             {sheetPick.sheets.map(x => (
               <label key={x.name} className={`wc-sheet${sheetPick.name === x.name ? ' is-on' : ''}${x.hasNeeds ? '' : ' is-off'}`}>
@@ -390,7 +447,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         </div>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         {editable && <button type="button" className={`btn btn-outline${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>Save draft</button>}
-        {editable && (canAt('cash.request', branchId) || poster) && <button type="button" className="btn btn-primary" disabled={busy || !!lwEdit} title={lwEdit ? 'Save the summary sheet first' : undefined}
+        {editable && (canAt('cash.request', branchId) || poster) && <button type="button" className="btn btn-primary" disabled={busy || !!lwEdit} title={lwEdit ? "Stop editing last week's spending first (the lock or pencil on its heading)" : undefined}
           onClick={() => { setError(''); if (check()) setDocMode('review'); }}>{primaryLabel}</button>}
         {!isNew && st === 'with_directors' && canAt('cash.approve', branchId) && <>
           <button type="button" className="btn btn-ghost" disabled={busy || !note.trim()} onClick={() => step('reject', { note })}>Turn down</button>
@@ -423,15 +480,25 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         <div className="wc-tables">
           {/* part 1, exactly as on the branch's sheet: only what was paid from the weekly cash (121) */}
           {lwEdit ? <>
-            <SheetGrid label="Last week's spending" className="xs-bold" title={lwTitle} rows={lwEdit} onChange={setLwEdit} columns={lwCols}
-              blankRow={{ date: '', description: '', qty: '', cash_in: '', cash_out: '', balance: '' }} />
-            <div className="wc-sheet-save">
-              {sheetLW?.length > 0 && !firstEver && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={() => saveSheet(null)}><RotateCcw size={14} /> Use MOIS records</button>}
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLwEdit(null)}>Cancel</button>
-              <button type="button" className={`btn btn-primary btn-sm${busy ? ' btn-loading' : ''}`} disabled={busy} title="Save the summary" onClick={() => saveSheet(cleanSheet(lwEdit))}><Save size={14} /> Save</button>
-            </div>
+            <SheetGrid label="Last week's spending" className="xs-bold" columns={lwCols}
+              title={<>
+                <span className="xs-title-left">
+                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Undo" title="Undo the last change" disabled={!lwEdit.hist.length} onClick={undoEdit}><Undo2 size={14} /></button>
+                </span>
+                {lwTitle}
+                <span className="xs-title-act">
+                  {lwSaved && <span className="pl-help">{lwSaved === 'saving' ? 'Saving…' : 'Saved'}</span>}
+                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Stop editing" title={lwEdit.dirty ? 'Done — stop editing (changes are saved)' : 'Stop editing'} onClick={stopEdit}>{lwEdit.dirty ? <Lock size={14} /> : <Pencil size={14} />}</button>
+                </span>
+              </>}
+              rows={editRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close')} onChange={onEditRows}
+              footRows={editRows.filter(r => r.kind === 'total_out' || r.kind === 'close')}
+              canEditCell={(col, r) => (r.kind === 'open' ? ['date', 'cash_in'].includes(col.key) : r.kind === 'sent' ? col.key === 'cash_in' : r.kind === 'total_in' ? false : ['date', 'description', 'qty', 'cash_out'].includes(col.key))}
+              canRemoveRow={r => r.kind === 'item'} rowClass={lwRowClass}
+              blankRow={{ date: '', description: '', qty: '', cash_out: '' }} />
+            {sheetLW?.length > 0 && !firstEver && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
           </> : (
-            <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols}
+            <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
               title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm" aria-label="Edit the spending" title="Edit the spending" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
               rows={lwRows.length ? lwRows : [{ description: 'Nothing paid from the weekly cash last week' }]} />
           )}

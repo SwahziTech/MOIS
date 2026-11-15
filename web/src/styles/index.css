@@ -2962,3 +2962,19 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .wc-doc-page .wc-doc-table thead th { background: #ebebeb; }
 .wc-doc-page .wc-doc-table th.wc-doc-cap { background: #fff; }
 .wc-doc-page .wc-doc-table tfoot td { background: #ebebeb; }
+.xs-grid .xs-title .xs-title-left { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
+.xs-grid .xs-title .xs-title-act { align-items: center; }
+.xs-grid tr.xs-total td { background: var(--bg-soft); }
+.xs-grid tr.xs-total-in td { border-top: 2px solid var(--text-primary); border-bottom: 2px solid var(--text-primary); }
+.xs-grid tr.xs-total-first td { border-top: 2px solid var(--text-primary); }
+.xs-grid tbody.xs-foot td { height: 32px; }
+/* printed documents: Times New Roman, 12 pt (2026-11-15, the user) */
+.doc, .doc * { font-family: 'Times New Roman', Times, serif; }
+.doc { font-size: 12pt; }
+.wc-doc-page, .wc-doc-page * { font-family: 'Times New Roman', Times, serif; }
+.wc-doc-page { font-size: 16px; }
+.wc-doc-page .wc-doc-table thead th { font-size: 15px; }
+.wc-doc-page .wc-doc-table th.wc-doc-cap { font-size: 17px; }
+.wc-doc-company { font-size: 22px; }
+.wc-doc-title { font-size: 19px; }
+.xs-grid.xs-bold table { min-width: 900px; }

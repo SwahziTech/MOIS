@@ -17,13 +17,15 @@ import NumberInput from './NumberInput';
  * isLocked(row): a row that can't be changed (shown grey); blankRow: what a new row starts as
  * totals:  { [column key]: node } shown on the foot; totalLabel
  * title:   a heading across the top of the sheet (centred); className: e.g. xs-bold for a bold outer frame
+ * canEditCell(col, row) / canRemoveRow(row): per-cell locks (formula cells); rowClass(row): extra row class
+ * footRows: fixed rows under the blank row (formula totals), shown read-only
  */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
 
-export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet', title = null, className = '' }) {
+export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet', title = null, className = '', canEditCell = null, canRemoveRow = null, rowClass = null, footRows = [] }) {
   const box = useRef(null);
-  const canEdit = (col, row) => (col.editable ?? !readOnly) && (col.ignoreLock || !isLocked(row));
+  const canEdit = (col, row) => (col.editable ?? !readOnly) && (col.ignoreLock || !isLocked(row)) && (!canEditCell || canEditCell(col, row));
   const editableCols = columns.map((c, i) => ({ c, i })).filter(x => x.c.editable ?? !readOnly);
   // an empty row always waits at the bottom while the sheet can be typed in
   const shown = readOnly ? rows : [...rows, { ...blankRow, __blank: true }];
@@ -75,6 +77,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
         const col = columns[order[k]];
         if (!col) return;
         const val = v.trim();
+        if (canEditCell && !canEditCell(col, next[target])) return;   // a formula cell stays as it is
         next[target][col.key] = col.type === 'number' ? cleanNumber(val)
           : col.type === 'select' ? (col.options || []).find(o => o.label.toLowerCase() === val.toLowerCase() || o.value === val)?.value ?? ''
           : val;
@@ -111,14 +114,23 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
         </thead>
         <tbody>
           {shown.map((row, r) => (
-            <tr key={r} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
+            <tr key={r} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
               <td className="xs-rn">{r + 1}</td>
               {columns.map((col, c) => <td key={col.key}>{cell(row, r, col, c)}</td>)}
-              {!readOnly && <td className="xs-del">{!row.__blank && !isLocked(row) && (
+              {!readOnly && <td className="xs-del">{!row.__blank && !isLocked(row) && (!canRemoveRow || canRemoveRow(row)) && (
                 <button type="button" tabIndex={-1} className="xs-del-btn" aria-label={`Remove row ${r + 1}`} title="Remove the row" onClick={() => removeRow(r)}><X size={12} /></button>)}</td>}
             </tr>
           ))}
         </tbody>
+        {footRows.length > 0 && <tbody className="xs-foot">
+          {footRows.map((row, k) => (
+            <tr key={`f${k}`} className={rowClass ? rowClass(row) || '' : ''}>
+              <td className="xs-rn">{shown.length + k + 1}</td>
+              {columns.map(col => <td key={col.key}><div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div></td>)}
+              {!readOnly && <td />}
+            </tr>
+          ))}
+        </tbody>}
         {totals && Object.keys(totals).length > 0 && <tfoot>
           <tr><td className="xs-rn" />{columns.map((c, i) => <td key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{i === 0 ? <strong>{totalLabel}</strong> : totals[c.key] != null ? <strong>{totals[c.key]}</strong> : null}</td>)}{!readOnly && <td />}</tr>
         </tfoot>}

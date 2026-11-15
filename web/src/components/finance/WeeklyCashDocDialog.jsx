@@ -35,7 +35,7 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
           <div className="pe-field"><span>Format</span><div className="filter-chips">{chip(format === 'pdf', 'PDF', () => setFormat('pdf'))}{chip(format === 'excel', 'Excel', () => setFormat('excel'))}</div></div>
           <label className="pe-field"><span>Paper</span>
             <select className="form-input" value={setup.paper} onChange={e => setSetup(s => ({ ...s, paper: e.target.value }))}>
-              {Object.keys(PAPERS).map(p => <option key={p} value={p}>{p}{p === pickPaper(doc).paper ? ' (fits one page)' : ''}</option>)}
+              {Object.keys(PAPERS).map(p => <option key={p} value={p}>{p}{p === pickPaper(doc).paper ? ' (default)' : ''}</option>)}
             </select>
           </label>
           <div className="pe-field"><span>Orientation</span><div className="filter-chips">{chip(setup.orientation === 'portrait', 'Portrait', () => setSetup(s => ({ ...s, orientation: 'portrait' })))}{chip(setup.orientation === 'landscape', 'Landscape', () => setSetup(s => ({ ...s, orientation: 'landscape' })))}</div></div>

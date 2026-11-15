@@ -15,11 +15,9 @@ const EXCEL_PAPER = { A5: 11, A4: 9, A3: 8, Letter: 1, Legal: 5 };
 
 const amt = v => (v == null || v === '' || Number.isNaN(Number(v)) ? '' : Math.round(Number(v)).toLocaleString('en-US'));
 
-/** The smallest usual paper the report fits on, one page, at a readable size */
-export function pickPaper(doc) {
-  const rows = (doc.lw?.rows?.length ?? 0) + (doc.req?.lines?.length ?? 0);
-  const mm = 40 + 8 * 4 + rows * 6.2 + (doc.account ? 14 : 0) + (doc.notes ? 8 : 0);   // at 9 pt
-  return { paper: mm <= 287 ? 'A4' : 'A3', orientation: 'portrait' };
+/** The weekly report's paper: A3, portrait (2026-11-15, the user) */
+export function pickPaper() {
+  return { paper: 'A3', orientation: 'portrait' };
 }
 
 const lwHead = ['DATE', 'DESCRIPTION', 'QTY', 'CASH IN (TZS)', 'CASH OUT (TZS)', 'BALANCE (TZS)'];
@@ -33,22 +31,23 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
   const autoTable = (await import('jspdf-autotable')).default;
   const [pw, ph] = PAPERS[paper] ?? PAPERS.A4;
   let pdf;
-  for (let fs = 10; fs >= 4; fs -= 0.5) {
+  // printed documents: Times New Roman, 12 pt; smaller only if it would not fit one page
+  for (let fs = 12; fs >= 4; fs -= 0.5) {
     pdf = new jsPDF({ unit: 'mm', format: [pw, ph], orientation });
     const W = pdf.internal.pageSize.getWidth();
     const m = 10;
     let y = m + 2;
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(fs + 4);
+    pdf.setFont('times', 'bold'); pdf.setFontSize(fs + 4);
     if (doc.company) { pdf.text(doc.company, W / 2, y, { align: 'center' }); y += (fs + 4) * 0.45; }
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(fs);
+    pdf.setFont('times', 'normal'); pdf.setFontSize(fs);
     if (doc.branch) { pdf.text(doc.branch, W / 2, y, { align: 'center' }); y += fs * 0.5; }
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(fs + 2);
+    pdf.setFont('times', 'bold'); pdf.setFontSize(fs + 2);
     pdf.text(doc.title, W / 2, y + 1, { align: 'center' });
-    if (doc.status) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(fs - 1); pdf.text(doc.status, W - m, y + 1, { align: 'right' }); }
+    if (doc.status) { pdf.setFont('times', 'normal'); pdf.setFontSize(fs - 1); pdf.text(doc.status, W - m, y + 1, { align: 'right' }); }
     y += fs * 0.7;
     const base = {
       theme: 'grid', margin: { left: m, right: m }, tableLineWidth: 0.6, tableLineColor: 0,
-      styles: { fontSize: fs, cellPadding: fs * 0.16, lineColor: 120, lineWidth: 0.1, textColor: 20, overflow: 'linebreak' },
+      styles: { font: 'times', fontSize: fs, cellPadding: fs * 0.16, lineColor: 120, lineWidth: 0.1, textColor: 20, overflow: 'linebreak' },
       headStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold', lineColor: 120, lineWidth: 0.1 },
     };
     const titleRow = (t, n) => [{ content: t, colSpan: n, styles: { halign: 'center', fontStyle: 'bold', fontSize: fs + 1, fillColor: [255, 255, 255] } }];
@@ -71,7 +70,7 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
       autoTable(pdf, { ...base, startY: y, head: [['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME']], body: [[doc.account.bank || '', doc.account.number || '', doc.account.holder || '']] });
       y = pdf.lastAutoTable.finalY + 3;
     }
-    if (doc.notes) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(fs); pdf.text(`Notes: ${doc.notes}`, m, y + fs * 0.35, { maxWidth: W - 2 * m }); }
+    if (doc.notes) { pdf.setFont('times', 'normal'); pdf.setFontSize(fs); pdf.text(`Notes: ${doc.notes}`, m, y + fs * 0.35, { maxWidth: W - 2 * m }); }
     if (pdf.getNumberOfPages() === 1) break;
   }
   return pdf;
@@ -93,13 +92,14 @@ export async function downloadExcel(doc, { paper = 'A4', orientation = 'portrait
   ws.columns = [{ width: 13 }, { width: 34 }, { width: 12 }, { width: 15 }, { width: 15 }, { width: 15 }];
   const thin = { style: 'thin' }, thick = { style: 'medium' };
   let r = 1;
-  const merged = (t, span, font = { bold: true }) => { ws.mergeCells(r, 1, r, span); const c = ws.getCell(r, 1); c.value = t; c.font = font; c.alignment = { horizontal: 'center' }; r += 1; };
+  const TNR = { name: 'Times New Roman', size: 12 };
+  const merged = (t, span, font = { bold: true }) => { font = { ...TNR, ...font }; ws.mergeCells(r, 1, r, span); const c = ws.getCell(r, 1); c.value = t; c.font = font; c.alignment = { horizontal: 'center' }; r += 1; };
   // a table with a bold outer frame
   const table = (title, head, rows, span, start = 1) => {
     const top = r;
-    ws.mergeCells(r, start, r, start + span - 1); const tc = ws.getCell(r, start); tc.value = title; tc.font = { bold: true }; tc.alignment = { horizontal: 'center' }; r += 1;
+    ws.mergeCells(r, start, r, start + span - 1); const tc = ws.getCell(r, start); tc.value = title; tc.font = { ...TNR, bold: true }; tc.alignment = { horizontal: 'center' }; r += 1;
     const put = (vals, bold, fill) => {
-      vals.forEach((v, k) => { const c = ws.getCell(r, start + k); c.value = v; c.border = { top: thin, left: thin, bottom: thin, right: thin }; if (typeof v === 'number') c.numFmt = '#,##0'; if (bold) c.font = { bold: true };
+      vals.forEach((v, k) => { const c = ws.getCell(r, start + k); c.value = v; c.border = { top: thin, left: thin, bottom: thin, right: thin }; if (typeof v === 'number') c.numFmt = '#,##0'; c.font = { ...TNR, bold: !!bold };
         if (fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEBEBEB' } }; });
       r += 1;
     };
@@ -124,7 +124,7 @@ export async function downloadExcel(doc, { paper = 'A4', orientation = 'portrait
   ], head.length, 2);
   r += 1;
   if (doc.account) table('PAY TO', ['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME'], [{ cells: [doc.account.bank || '', doc.account.number || '', doc.account.holder || ''] }], 3, 2);
-  if (doc.notes) { r += 1; ws.getCell(r, 2).value = `Notes: ${doc.notes}`; }
+  if (doc.notes) { r += 1; const c = ws.getCell(r, 2); c.value = `Notes: ${doc.notes}`; c.font = TNR; }
   const buf = await wb.xlsx.writeBuffer();
   const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const a = document.createElement('a'); a.href = url; a.download = `${doc.fileName}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
