@@ -1,6 +1,6 @@
 import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw } from 'lucide-react';
+import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -176,6 +176,18 @@ export default function WeeklyCash() {
   // a new request: dated the last Saturday, unless that one exists already
   const newWeek = liveAt(lastSat) ? saturdayOf(addDays(lastSat, 1)) : lastSat;
   const canPrepare = !!branchId && canAt('cash.request', branchId);
+  // an unwanted import can be deleted; a cancelled one used again (123, 2026-11-15, the user)
+  const [askDel, setAskDel] = useState(null);   // request id waiting for "Delete?"
+  const [rowBusy, setRowBusy] = useState('');
+  const canDelete = r => canPrepare && ['draft', 'cancelled'].includes(r.status) && !r.sent_by && !(r.lines || []).some(l => l.pay_sheet_id);
+  async function rowAction(fn, r) {
+    setRowBusy(r.id); setError('');
+    const { error: err } = await supabase.rpc(fn, { p_id: r.id });
+    setRowBusy(''); setAskDel(null);
+    if (err) { setActionError(/delete_cash_request|reopen_cash_request/.test(err.message || '') ? 'This needs the latest database update (123).' : dbErrorMessage(err)); return; }
+    setActionError(''); await load();
+  }
+  const [actionError, setActionError] = useState('');
 
   return (
     <PageShell title="Weekly cash" subtitle="Finance"
@@ -193,9 +205,9 @@ export default function WeeklyCash() {
           <div><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
           <div className="card"><div className="table-container">
             <table>
-              <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th></tr></thead>
+              <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
               <tbody>
-                {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
+                {shownWeeks.length === 0 ? <tr><td colSpan={8} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
                 : shownWeeks.map(r => {
                   const w = ledger[r.week_ending];
                   return (
@@ -207,12 +219,23 @@ export default function WeeklyCash() {
                       <td className="num">{r.status === 'paid' ? formatAmount(Number(r.paid_amount)) : ''}</td>
                       <td className="num">{w ? formatAmount(w.spent) : ''}</td>
                       <td className="num"><strong>{w ? formatAmount(w.closing) : ''}</strong></td>
+                      <td className="wc-row-act" onClick={e => e.stopPropagation()}>
+                        {askDel === r.id ? <span className="flex items-center gap-8">
+                          <span className="text-sm">Delete?</span>
+                          <button type="button" className="btn btn-ghost btn-sm text-error" disabled={rowBusy === r.id} onClick={() => rowAction('delete_cash_request', r)}>Yes</button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAskDel(null)}>No</button>
+                        </span> : <>
+                          {canPrepare && r.status === 'cancelled' && <button type="button" className="btn btn-ghost btn-sm" disabled={rowBusy === r.id} title="Use again — back to draft" aria-label="Use again" onClick={() => rowAction('reopen_cash_request', r)}><RotateCcw size={14} /></button>}
+                          {canDelete(r) && <button type="button" className="btn btn-ghost btn-sm" title="Delete this request — it never went to the directors" aria-label="Delete" onClick={() => setAskDel(r.id)}><Trash2 size={14} /></button>}
+                        </>}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div></div>
+          {actionError && <p className="text-sm text-error" role="alert" style={{ marginTop: 8 }}>{actionError}</p>}
           <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
         </>
       )}
