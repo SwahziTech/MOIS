@@ -252,13 +252,32 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const prevLive = data.requests.filter(r => !['cancelled', 'rejected'].includes(r.status) && r.id !== request?.id).sort((a, b) => (a.week_ending < b.week_ending ? 1 : -1))[0];
   const [week, setWeek] = useState(request?.week_ending ?? newWeek ?? saturdayOf(today));
   // where the money is sent: written on the request, carried from the previous week's
-  const [payTo, setPayTo] = useState({ bank: request?.pay_bank ?? prevLive?.pay_bank ?? '', no: request?.pay_account_no ?? prevLive?.pay_account_no ?? '', name: request?.pay_account_name ?? prevLive?.pay_account_name ?? '' });
+  // accounts the branch used before, the latest first: the last one fills in by itself; another can be picked (2026-11-15, the user)
+  const savedAccounts = useMemo(() => {
+    const seen = new Map();
+    for (const r of [...data.requests].filter(x => x.id !== request?.id).sort((a, b) => String(b.updated_at ?? b.week_ending).localeCompare(String(a.updated_at ?? a.week_ending)))) {
+      const a = { bank: (r.pay_bank ?? '').trim(), no: (r.pay_account_no ?? '').trim(), name: (r.pay_account_name ?? '').trim() };
+      if (!a.bank && !a.no && !a.name) continue;
+      const k = `${a.bank}|${a.no}|${a.name}`.toLowerCase();
+      if (!seen.has(k)) seen.set(k, a);
+    }
+    return [...seen.values()];
+  }, [data.requests, request?.id]);
+  const [payTo, setPayTo] = useState(() => (request && (request.pay_bank || request.pay_account_no || request.pay_account_name)
+    ? { bank: request.pay_bank ?? '', no: request.pay_account_no ?? '', name: request.pay_account_name ?? '' }
+    : savedAccounts[0] ? { ...savedAccounts[0] } : { bank: '', no: '', name: '' }));
   const [opening, setOpening] = useState(request?.opening_balance != null ? String(Number(request.opening_balance)) : '');
   const [notes, setNotes] = useState(request?.notes ?? '');
   const [source, setSource] = useState(request?.source ?? 'app');
   // what the branch chose before, newest first: the same item gets the same category (2026-11-15)
-  const catHistory = useMemo(() => [...data.requests].sort((a, b) => (a.week_ending < b.week_ending ? 1 : -1))
-    .flatMap(r => (r.lines || []).map(l => ({ description: l.description, category_id: l.category_id }))), [data.requests]);
+  // it learns from every saved choice (2026-11-15, the user): request lines, last week's spending rows and the
+  // expenses recorded — the latest choice for the same item wins
+  const catHistory = useMemo(() => [
+    ...[...data.requests].sort((a, b) => String(b.updated_at ?? b.week_ending).localeCompare(String(a.updated_at ?? a.week_ending)))
+      .flatMap(r => [...(r.lines || []).map(l => ({ description: l.description, category_id: l.category_id })),
+        ...((r.last_week?.rows) || []).map(x => ({ description: x.description, category_id: x.category_id }))]),
+    ...[...data.expenses].sort((a, b) => String(b.paid_on ?? '').localeCompare(String(a.paid_on ?? ''))).map(e => ({ description: e.description, category_id: e.category_id })),
+  ].filter(h => h.category_id && h.description), [data.requests, data.expenses]);
   const [lines, setLinesRaw] = useState(() => {
     const ls = request?.lines?.length
       ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.amount)), approved: l.approved_amount != null ? String(Number(l.approved_amount)) : '', categoryId: l.category_id ?? '', locked: !!l.pay_sheet_id }))
@@ -446,7 +465,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
       setLines(cur => [...cur.filter(l => l.locked), ...fillCategories(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })), data.cats, catHistory).map(l => ({ ...l, catAuto: !!l.categoryId }))]);
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
       setOpening(s.carried != null ? String(s.carried) : '');   // the sheet's last balance
-      if (!payTouched) setPayTo(s.account ? { bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' } : { bank: prevLive?.pay_bank ?? '', no: prevLive?.pay_account_no ?? '', name: prevLive?.pay_account_name ?? '' });
+      if (!payTouched) setPayTo(s.account ? { bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' } : savedAccounts[0] ? { ...savedAccounts[0] } : { bank: '', no: '', name: '' });   // no account on the sheet: the last one used
       clearTimeout(saveTimer.current); setLwEdit(null);
       setSheetLW(s.summaryRows?.length ? s.summaryRows.map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date, description, qty, cash_in, cash_out, balance })) : null);
       setSource('excel');
@@ -627,6 +646,15 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         {editable && <p className="pl-help" style={{ margin: 0 }} title="Enter goes down, Tab across. Copy rows in Excel and paste them here (Ctrl+V) to fill several lines at once.">Type straight into the cells, or paste rows from Excel.</p>}
 
         {/* where the money is sent — one row; the note below (2026-11-15, the user) */}
+        {editable && savedAccounts.length > 0 && (
+          <label className="pe-field wc-acct-pick"><span>Account</span>
+            <select className="form-input" value={savedAccounts.findIndex(a => a.bank === payTo.bank && a.no === payTo.no && a.name === payTo.name)}
+              onChange={e => { const k = Number(e.target.value); setPayTouched(true); setPayTo(k >= 0 ? { ...savedAccounts[k] } : { bank: '', no: '', name: '' }); }}>
+              {savedAccounts.map((a, k) => <option key={k} value={k}>{[a.bank, a.no, a.name].filter(Boolean).join(' · ')}{k === 0 ? ' (last used)' : ''}</option>)}
+              <option value={-1}>Another account…</option>
+            </select>
+          </label>
+        )}
         <div className="wc-pay-row">
           <label className="pe-field"><span>Bank</span><input className="form-input" disabled={!editable} placeholder="e.g. the bank's name" value={payTo.bank} onChange={e => { setPayTouched(true); setPayTo({ ...payTo, bank: e.target.value }); }} /></label>
           <label className="pe-field"><span>Account number</span><input className="form-input" disabled={!editable} value={payTo.no} onChange={e => { setPayTouched(true); setPayTo({ ...payTo, no: e.target.value }); }} /></label>
