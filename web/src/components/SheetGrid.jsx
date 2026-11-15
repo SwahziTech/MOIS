@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import NumberInput from './NumberInput';
 
@@ -20,12 +20,57 @@ import NumberInput from './NumberInput';
  * canEditCell(col, row) / canRemoveRow(row): per-cell locks (formula cells); rowClass(row): extra row class
  * footRows: fixed rows under the blank row (formula totals), shown read-only
  * column.wrap: the read-only text wraps onto more lines instead of being cut
+ *
+ * Sizes, as in Excel (2026-11-15, the user): drag a column letter's right edge to widen or narrow it,
+ * double-click that edge to fit the words; drag a row number's bottom edge for a taller row,
+ * double-click it to go back. Double-click the top-left corner to reset every size. Column widths
+ * are kept on this device for this sheet; row heights last while the page is open.
  */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
 
 export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet', title = null, className = '', canEditCell = null, canRemoveRow = null, rowClass = null, footRows = [] }) {
   const box = useRef(null);
+  const sizeKey = `xs-size:${label}`;
+  const [colW, setColW] = useState(() => { try { return JSON.parse(localStorage.getItem(sizeKey) || '{}') || {}; } catch { return {}; } });
+  const [rowH, setRowH] = useState({});
+  const keepCols = w => { try { localStorage.setItem(sizeKey, JSON.stringify(w)); } catch { /* sizes are a convenience */ } };
+  const widthOf = c => colW[c.key] ?? c.width;
+  // drag an edge: the column's width or the row's height follows the pointer
+  function drag(e, start, apply, done) {
+    e.preventDefault(); e.stopPropagation();
+    const el = e.currentTarget; try { el.setPointerCapture?.(e.pointerId); } catch { /* not every pointer can be captured */ }
+    const x0 = e.clientX, y0 = e.clientY;
+    let last = null;
+    const move = ev => { last = apply(start, ev.clientX - x0, ev.clientY - y0); };
+    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); done?.(last); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  const startCol = (e, c) => {
+    const start = e.currentTarget.parentElement.getBoundingClientRect().width;
+    drag(e, start, (w0, dx) => { const w = Math.max(40, Math.round(w0 + dx)); let next; setColW(p => (next = { ...p, [c.key]: w })); return next; }, next => next && keepCols(next));
+  };
+  const startRow = (e, key) => {
+    const start = e.currentTarget.closest('tr').getBoundingClientRect().height;
+    drag(e, start, (h0, dx, dy) => { setRowH(p => ({ ...p, [key]: Math.max(24, Math.round(h0 + dy)) })); return null; });
+  };
+  // double-click a column edge: as wide as its longest words
+  function fitCol(c) {
+    const cells = [...(box.current?.querySelectorAll(`[data-col="${c.key}"]`) || [])];
+    const ctx = document.createElement('canvas').getContext('2d');
+    let w = 40;
+    for (const td of cells) {
+      const el = td.querySelector('input, select, .xs-ro') || td;
+      ctx.font = getComputedStyle(el).font;
+      const t = el.tagName === 'INPUT' ? el.value : el.tagName === 'SELECT' ? el.options[el.selectedIndex]?.text ?? '' : el.innerText;
+      for (const line of String(t).split('\n')) w = Math.max(w, ctx.measureText(line).width);
+    }
+    const next = { ...colW, [c.key]: Math.ceil(w + 28) };
+    setColW(next); keepCols(next);
+  }
+  const resetSizes = () => { setColW({}); setRowH({}); keepCols({}); };
+  const allSized = columns.every(c => widthOf(c));
+  const tableWidth = allSized ? 38 + columns.reduce((t, c) => t + widthOf(c), 0) + (readOnly ? 0 : 30) : undefined;
   const canEdit = (col, row) => (col.editable ?? !readOnly) && (col.ignoreLock || !isLocked(row)) && (!canEditCell || canEditCell(col, row));
   const editableCols = columns.map((c, i) => ({ c, i })).filter(x => x.c.editable ?? !readOnly);
   // an empty row always waits at the bottom while the sheet can be typed in
@@ -106,18 +151,21 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
 
   return (
     <div className={`xs-grid${className ? ` ${className}` : ''}`} ref={box} role="grid" aria-label={label}>
-      <table>
-        <colgroup><col style={{ width: 38 }} />{columns.map(c => <col key={c.key} style={c.width ? { width: c.width } : undefined} />)}{!readOnly && <col style={{ width: 30 }} />}</colgroup>
+      <table style={tableWidth ? { width: tableWidth, minWidth: tableWidth } : undefined}>
+        <colgroup><col style={{ width: 38 }} />{columns.map(c => <col key={c.key} style={widthOf(c) ? { width: widthOf(c) } : undefined} />)}{!readOnly && <col style={{ width: 30 }} />}</colgroup>
         <thead>
           {title && <tr className="xs-title"><th colSpan={columns.length + (readOnly ? 1 : 2)}>{title}</th></tr>}
-          <tr className="xs-letters"><th />{columns.map((c, i) => <th key={c.key}>{LETTERS[i]}</th>)}{!readOnly && <th />}</tr>
+          <tr className="xs-letters"><th className="xs-corner" title="Double-click to reset the column widths and row heights" onDoubleClick={resetSizes} />{columns.map((c, i) => (
+            <th key={c.key}>{LETTERS[i]}<span className="xs-col-rs" role="separator" aria-orientation="vertical" aria-label={`Resize column ${LETTERS[i]}`}
+              title="Drag to resize · double-click to fit" onPointerDown={e => startCol(e, c)} onDoubleClick={() => fitCol(c)} /></th>))}{!readOnly && <th />}</tr>
           <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{c.label}</th>)}{!readOnly && <th />}</tr>
         </thead>
         <tbody>
           {shown.map((row, r) => (
-            <tr key={r} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
-              <td className="xs-rn">{r + 1}</td>
-              {columns.map((col, c) => <td key={col.key}>{cell(row, r, col, c)}</td>)}
+            <tr key={r} style={rowH[r] ? { height: rowH[r] } : undefined} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
+              <td className="xs-rn">{r + 1}<span className="xs-row-rs" role="separator" aria-label={`Resize row ${r + 1}`} title="Drag to resize · double-click to reset"
+                onPointerDown={e => startRow(e, r)} onDoubleClick={() => setRowH(p => { const n = { ...p }; delete n[r]; return n; })} /></td>
+              {columns.map((col, c) => <td key={col.key} data-col={col.key}>{cell(row, r, col, c)}</td>)}
               {!readOnly && <td className="xs-del">{!row.__blank && !isLocked(row) && (!canRemoveRow || canRemoveRow(row)) && (
                 <button type="button" tabIndex={-1} className="xs-del-btn" aria-label={`Remove row ${r + 1}`} title="Remove the row" onClick={() => removeRow(r)}><X size={12} /></button>)}</td>}
             </tr>
@@ -125,9 +173,10 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
         </tbody>
         {footRows.length > 0 && <tbody className="xs-foot">
           {footRows.map((row, k) => (
-            <tr key={`f${k}`} className={rowClass ? rowClass(row) || '' : ''}>
-              <td className="xs-rn">{shown.length + k + 1}</td>
-              {columns.map(col => <td key={col.key}><div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div></td>)}
+            <tr key={`f${k}`} style={rowH[`f${k}`] ? { height: rowH[`f${k}`] } : undefined} className={rowClass ? rowClass(row) || '' : ''}>
+              <td className="xs-rn">{shown.length + k + 1}<span className="xs-row-rs" role="separator" aria-label="Resize row" title="Drag to resize · double-click to reset"
+                onPointerDown={e => startRow(e, `f${k}`)} onDoubleClick={() => setRowH(p => { const n = { ...p }; delete n[`f${k}`]; return n; })} /></td>
+              {columns.map(col => <td key={col.key} data-col={col.key}><div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div></td>)}
               {!readOnly && <td />}
             </tr>
           ))}

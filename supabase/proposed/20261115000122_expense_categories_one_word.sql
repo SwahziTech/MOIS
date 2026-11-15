@@ -10,7 +10,7 @@
 -- the known two-word names → one word (only where that word is not taken already)
 UPDATE public.expense_categories c SET name = v.new
   FROM (VALUES ('Electricity (LUKU)', 'Electricity'), ('Office tools', 'Office'), ('Spare parts', 'Spares'),
-               ('General expenses', 'General'), ('Statutory contributions', 'Statutory')) AS v(old, new)
+               ('General expenses', 'Expense'), ('General', 'Expense'), ('Statutory contributions', 'Statutory')) AS v(old, new)
  WHERE public.normalize_name(c.name) = public.normalize_name(v.old)
    AND NOT EXISTS (SELECT 1 FROM public.expense_categories x WHERE x.organization_id = c.organization_id AND public.normalize_name(x.name) = public.normalize_name(v.new));
 -- anything else with a space: the words joined ("Fuel costs" → "FuelCosts"), or with its id's start when that is taken
