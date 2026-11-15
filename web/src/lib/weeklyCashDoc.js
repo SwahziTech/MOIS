@@ -56,7 +56,7 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
       body: doc.lw.rows.map(r => lwCells(r).map(c => ({ content: c, styles: r.bold ? { fontStyle: 'bold' } : {} }))),
       columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     });
-    y = pdf.lastAutoTable.finalY + 4;
+    y = pdf.lastAutoTable.finalY + 12;   // a clear gap between the two sheets (2026-11-15, the user)
     const n = reqHead(doc).length;
     autoTable(pdf, { ...base, startY: y,
       head: [titleRow(doc.req.title, n), reqHead(doc)],
@@ -74,6 +74,20 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
     if (pdf.getNumberOfPages() === 1) break;
   }
   return pdf;
+}
+
+/** CSV: the two sheets and the account, one after another (opens in any spreadsheet) */
+export function downloadCsv(doc) {
+  const q = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const plain = v => (v == null || v === '' ? '' : Number(v));
+  const out = [[doc.company], [doc.branch], [doc.title], [], [doc.lw.title], lwHead,
+    ...doc.lw.rows.map(x => [x.date ?? '', x.description ?? '', x.qty ?? '', plain(x.cash_in), plain(x.cash_out), plain(x.balance)]), [], [], [doc.req.title], reqHead(doc),
+    ...doc.req.lines.map(l => [l.description ?? '', l.qty ?? '', plain(l.amount), ...(doc.req.showApproved ? [plain(l.approved ?? l.amount)] : [])]),
+    ['TOTAL', '', plain(doc.req.total), ...(doc.req.showApproved ? [plain(doc.req.approvedTotal)] : [])], [],
+    ['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME'], [doc.account?.bank ?? '', doc.account?.number ?? '', doc.account?.holder ?? ''], ...(doc.notes ? [[], [`Notes: ${doc.notes}`]] : [])];
+  const url = URL.createObjectURL(new Blob(['﻿' + out.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = `${doc.fileName}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 export async function downloadPdf(doc, setup) { (await buildPdf(doc, setup)).save(`${doc.fileName}.pdf`); }
@@ -116,7 +130,7 @@ export async function downloadExcel(doc, { paper = 'A4', orientation = 'portrait
   merged(doc.title, 6);
   r += 1;
   table(doc.lw.title, lwHead, doc.lw.rows.map(x => ({ bold: x.bold, cells: [x.date ?? '', x.description ?? '', x.qty ?? '', n(x.cash_in), n(x.cash_out), n(x.balance)] })), 6);
-  r += 1;
+  r += 2;
   const head = reqHead(doc);
   table(doc.req.title, head, [
     ...doc.req.lines.map(l => ({ cells: [l.description ?? '', l.qty ?? '', n(l.amount), ...(doc.req.showApproved ? [n(l.approved ?? l.amount)] : [])] })),

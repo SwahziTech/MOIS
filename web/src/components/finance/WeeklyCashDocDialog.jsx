@@ -1,27 +1,37 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Download, Printer } from 'lucide-react';
+import { Download, Printer, ChevronDown } from 'lucide-react';
 import Modal from '../Modal';
-import { PAPERS, pickPaper, lwCells, reqCells, downloadPdf, printPdf, downloadExcel } from '../../lib/weeklyCashDoc';
+import { PAPERS, pickPaper, lwCells, reqCells, downloadPdf, printPdf, downloadExcel, downloadCsv } from '../../lib/weeklyCashDoc';
 
 /*
  * Page setup + preview for the weekly cash report (2026-11-15, the user), like Excel's print window:
- * paper (defaults to the one it fits on, one page), portrait/landscape, PDF or Excel; then save or print.
+ * paper (A3 by default, one page), portrait/landscape; Save as PDF, Excel or CSV; or print.
  * mode 'review': shown before Submit / Post — the page as the directors will see it; Edit goes back.
  */
 export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultFormat = 'pdf', confirmLabel, busy = false, onConfirm, onClose }) {
   const [setup, setSetup] = useState(() => pickPaper(doc));
-  const [format, setFormat] = useState(defaultFormat);
+  const [menu, setMenu] = useState(false);   // "Save as" choices (2026-11-15, the user)
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const run = async fn => { setError(''); setWorking(true); try { await fn(); } catch (e) { console.error(e); setError('That could not be made. Please try again.'); } setWorking(false); };
-  const save = () => run(() => (format === 'excel' ? downloadExcel(doc, setup) : downloadPdf(doc, setup)));
+  const FORMATS = { pdf: ['PDF (.pdf)', () => downloadPdf(doc, setup)], excel: ['Excel (.xlsx)', () => downloadExcel(doc, setup)], csv: ['CSV (.csv)', () => downloadCsv(doc)] };
+  // the usual one first: PDF for readers, Excel for whoever edits
+  const order = [defaultFormat, ...Object.keys(FORMATS).filter(k => k !== defaultFormat)];
+  const saveAs = k => { setMenu(false); run(FORMATS[k][1]); };
   const chip = (on, label, click) => <button type="button" className={`filter-chip${on ? ' is-on' : ''}`} onClick={click}>{label}</button>;
 
   return (
     <Modal title={mode === 'review' ? 'Check before sending' : 'Export'} onClose={onClose} size="xl"
       footer={<>
         <div className="wc-foot-left">
-          <button type="button" className="btn btn-ghost" disabled={working} onClick={save} title={format === 'excel' ? 'Save as Excel' : 'Save as PDF'}><Download size={14} /> Save {format === 'excel' ? 'Excel' : 'PDF'}</button>
+          <div className="wc-saveas">
+            <button type="button" className="btn btn-ghost" disabled={working} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}><Download size={14} /> Save as <ChevronDown size={14} /></button>
+            {menu && (
+              <div className="wc-saveas-menu" role="menu">
+                {order.map(k => <button key={k} type="button" role="menuitem" onClick={() => saveAs(k)}>{FORMATS[k][0]}</button>)}
+              </div>
+            )}
+          </div>
           <button type="button" className="btn btn-ghost" disabled={working} onClick={() => run(() => printPdf(doc, setup))} title="Print"><Printer size={14} /> Print</button>
         </div>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
@@ -32,7 +42,6 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
       </>}>
       <div className="wc-doc-layout">
         <div className="wc-doc-setup">
-          <div className="pe-field"><span>Format</span><div className="filter-chips">{chip(format === 'pdf', 'PDF', () => setFormat('pdf'))}{chip(format === 'excel', 'Excel', () => setFormat('excel'))}</div></div>
           <label className="pe-field"><span>Paper</span>
             <select className="form-input" value={setup.paper} onChange={e => setSetup(s => ({ ...s, paper: e.target.value }))}>
               {Object.keys(PAPERS).map(p => <option key={p} value={p}>{p}{p === pickPaper(doc).paper ? ' (default)' : ''}</option>)}

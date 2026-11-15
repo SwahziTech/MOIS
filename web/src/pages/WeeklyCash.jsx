@@ -1,6 +1,6 @@
 import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Wallet, Plus, Upload, Download, Copy, Pencil, Save, Undo2, RotateCcw } from 'lucide-react';
+import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -502,7 +502,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
                 </span>
                 {lwTitle}
                 <span className="xs-title-act">
-                  <button type="button" className="btn btn-ghost btn-sm xs-toggle is-on" aria-pressed="true" aria-label="Editing on — click to stop" title="Editing is on — click to stop (changes are saved)" onClick={stopEdit}><Pencil size={14} /></button>
+                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Lock — stop editing" title="Lock — stop editing (changes are saved)" onClick={stopEdit}><Lock size={14} /></button>
                 </span>
               </>}
               rows={editRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close')} onChange={onEditRows}
@@ -513,7 +513,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             {sheetLW?.length > 0 && !firstEver && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
           </> : (
             <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
-              title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm xs-toggle" aria-pressed="false" aria-label="Edit the spending" title="Editing is off — click to edit" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
+              title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm" aria-label="Edit the spending" title="Edit the spending" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
               rows={lwRows.length ? lwRows : [{ description: 'Nothing paid from the weekly cash last week' }]} />
           )}
           {showTick && (

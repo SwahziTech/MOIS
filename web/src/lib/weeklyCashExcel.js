@@ -82,14 +82,28 @@ export async function readWeeklySheet(file, sheetName = null) {
     }
     // where the money is sent, under the TOTAL (2026-11-15, the user): a row with the bank and the
     // account number, and a "JINA" row with the account name
+    // (2026-11-15: read loosely — anywhere under the TOTAL; bank and number in one cell or apart;
+    // "BANK", "A/C", "ACCOUNT", "JINA", "NAME" labels; a known bank or mobile-money name)
     const account = { bank: '', number: '', holder: '' };
-    for (let k = tk + 1; tk >= 0 && k < Math.min(rows.length, tk + 8); k++) {
+    const BANKS = /\b(crdb|nmb|nbc|exim|stanbic|absa|equity|azania|dtb|diamond|tpb|postbank|kcb|i&m|access|akiba|amana|mkombozi|uchumi|bank|m-?pesa|tigo\s*pesa|airtel\s*money|halo\s*pesa|mixx|lipa)\b/i;
+    const NUM = /\d[\d\s-]{5,}\d/;
+    const label = s => s.replace(/^\s*(bank|benki|a\/?c(\s*no\.?)?|acc(ount)?(\s*(no\.?|number))?|namba|jina|name)\s*[:.-]?\s*/i, '').trim();
+    for (let k = tk + 1; tk >= 0 && k < rows.length; k++) {
       const cs = rows[k].cells.map(c => String(c ?? '').trim()).filter(Boolean);
       if (!cs.length) continue;
-      const j = cs.findIndex(c => /^jina\b/i.test(c));
-      if (j >= 0) { account.holder = (cs[j].replace(/^jina\s*[:-]?\s*/i, '') || cs[j + 1] || '').trim(); continue; }
-      const n = cs.findIndex(c => (c.replace(/\D/g, '').length >= 6 && /^[\d\s-]+$/.test(c)));
-      if (n >= 0 && !account.number) { account.number = cs[n]; account.bank = cs.slice(0, n).join(' ') || cs.slice(n + 1).join(' '); }
+      const j = cs.findIndex(c => /^\s*(jina|name|account\s*name)\b/i.test(c));
+      if (j >= 0 && !account.holder) { account.holder = label(cs[j]) || cs[j + 1] || ''; continue; }
+      const b = cs.findIndex(c => /^\s*(bank|benki)\b/i.test(c));
+      if (b >= 0 && !account.bank) account.bank = label(cs[b]) || (NUM.test(cs[b + 1] || '') ? '' : cs[b + 1] || '');
+      const n = cs.findIndex(c => NUM.test(c));
+      if (n >= 0 && !account.number) {
+        account.number = cs[n].match(NUM)[0].trim();
+        const rest = label(cs[n].replace(NUM, '')).trim();
+        if (!account.bank) account.bank = rest || cs.slice(0, n).map(label).filter(x => x && !NUM.test(x)).join(' ') || cs.slice(n + 1).find(x => BANKS.test(x)) || '';
+      } else if (!account.bank) {
+        const bn = cs.find(c => BANKS.test(c) && !/total/i.test(c));
+        if (bn) account.bank = label(bn);
+      }
     }
     // last week's summary (CASH IN / CASH OUT / BALANCE), above the needs: its last balance is what was carried
     // and the summary itself, row by row, kept exactly as on the sheet (121)
