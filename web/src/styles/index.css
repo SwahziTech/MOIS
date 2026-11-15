@@ -2986,3 +2986,4 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .wc-saveas-menu button:hover, .wc-saveas-menu button:focus-visible { background: var(--bg-soft); }
 .wc-doc-table { margin-bottom: 28px; }
 .wc-tables { gap: 16px; }
+.xs-grid .xs-ro.xs-wrap { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; padding-top: 7px; padding-bottom: 7px; word-break: break-word; }

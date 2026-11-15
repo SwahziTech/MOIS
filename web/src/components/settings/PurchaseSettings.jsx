@@ -71,7 +71,7 @@ export function BranchVatCard() {
  * bought is typed on each expense and never added here. Org admins keep it.
  */
 export function ExpenseCategoriesCard() {
-  return <NamedListCard table="expense_categories" perm="materials.manage" title="Expense categories" placeholder="New category, e.g. Fuel"
+  return <NamedListCard table="expense_categories" perm="materials.manage" title="Expense categories" placeholder="New category, e.g. Fuel" singleWord
     help="An expense is filed under one of these. What was bought (a hammer, a LUKU token…) is typed on each expense, not kept here." />;
 }
 
@@ -82,7 +82,7 @@ export function RejectReasonsCard() {
 }
 
 /** A short list an organization keeps (name, order, in use) */
-function NamedListCard({ table, perm, title, help, placeholder }) {
+function NamedListCard({ table, perm, title, help, placeholder, singleWord = false }) {
   const { canManage, organization } = useAuth();
   const canEdit = canManage(perm);
   const [cats, setCats] = useState(null);
@@ -97,6 +97,8 @@ function NamedListCard({ table, perm, title, help, placeholder }) {
   }
   useEffect(() => { load(); }, []);
 
+  // expense categories are one word, so they fit in a sheet's column (2026-11-15, the user)
+  const oneWordOk = v => !singleWord || !/\s/.test(v.trim());
   async function run(q) {
     setError('');
     setBusy(true);
@@ -109,6 +111,7 @@ function NamedListCard({ table, perm, title, help, placeholder }) {
   async function add(e) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (!oneWordOk(name)) { setError('One word, e.g. Transport.'); return; }
     const next = Math.max(0, ...cats.filter(c => c.display_order < 99).map(c => c.display_order)) + 1;   // "Other" (99) stays last
     if (await run(supabase.from(table).insert({ organization_id: organization.id, name: name.trim(), display_order: next }))) setName('');
   }
@@ -125,7 +128,7 @@ function NamedListCard({ table, perm, title, help, placeholder }) {
               <>
                 <input className="form-input" style={{ maxWidth: 220 }} aria-label="Name" value={renaming.name} onChange={e => setRenaming({ ...renaming, name: e.target.value })} />
                 <button type="button" className="btn btn-primary btn-sm" disabled={busy || !renaming.name.trim()}
-                  onClick={async () => { if (await run(supabase.from(table).update({ name: renaming.name.trim() }).eq('id', c.id))) setRenaming(null); }}>Save</button>
+                  onClick={async () => { if (!oneWordOk(renaming.name)) { setError('One word, e.g. Transport.'); return; } if (await run(supabase.from(table).update({ name: renaming.name.trim() }).eq('id', c.id))) setRenaming(null); }}>Save</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRenaming(null)}>Cancel</button>
               </>
             ) : (

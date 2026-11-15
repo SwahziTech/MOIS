@@ -19,6 +19,7 @@ import NumberInput from './NumberInput';
  * title:   a heading across the top of the sheet (centred); className: e.g. xs-bold for a bold outer frame
  * canEditCell(col, row) / canRemoveRow(row): per-cell locks (formula cells); rowClass(row): extra row class
  * footRows: fixed rows under the blank row (formula totals), shown read-only
+ * column.wrap: the read-only text wraps onto more lines instead of being cut
  */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
@@ -89,7 +90,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
 
   const cell = (row, r, col, c) => {
     if (!canEdit(col, row)) {
-      return <div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div>;
+      return <div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}${col.wrap ? ' xs-wrap' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div>;
     }
     const common = { 'data-cell': `${r}:${c}`, 'aria-label': `${col.label}, row ${r + 1}`, onKeyDown: e => onKey(e, r, c), onPaste: e => onPaste(e, r, c),
       onFocus: e => { if (e.target.select && e.target.tagName === 'INPUT') e.target.select(); } };

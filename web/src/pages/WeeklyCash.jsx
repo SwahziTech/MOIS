@@ -443,11 +443,11 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     ? r.category_id || guessCategory(r.description, data.cats, catHistory) : '');
   const lwCols = [
     { key: 'date', label: 'Date', type: 'text', width: 110, show: l => (/^\d{4}-\d{2}-\d{2}$/.test(l.date || '') ? tableDate(l.date) : l.date || '') },
-    { key: 'description', label: 'Description', type: 'text', show: l => (l.bold ? <strong>{l.description}</strong> : l.description) },
-    { key: 'qty', label: 'Qty', type: 'text', width: 120, show: l => <span className="pl-help">{l.qty || ''}</span> },
-    ...['cash_in', 'cash_out', 'balance'].map((k, i) => ({ key: k, label: `${['Cash in', 'Cash out', 'Balance'][i]} (TZS)`, type: 'number', width: 140, align: 'right',
+    { key: 'description', label: 'Description', type: 'text', wrap: true, show: l => (l.bold ? <strong>{l.description}</strong> : l.description) },
+    { key: 'qty', label: 'Qty', type: 'text', width: 90, show: l => <span className="pl-help">{l.qty || ''}</span> },
+    ...['cash_in', 'cash_out', 'balance'].map((k, i) => ({ key: k, label: `${['Cash in', 'Cash out', 'Balance'][i]} (TZS)`, type: 'number', width: 125, align: 'right',
       show: l => (l[k] != null && l[k] !== '' ? (l.bold ? <strong>{formatAmount(Number(l[k]))}</strong> : formatAmount(Number(l[k]))) : '') })),
-    { key: 'category_id', label: 'Category', type: 'select', width: 170,
+    { key: 'category_id', label: 'Category', type: 'select', width: 120,
       options: data.cats.filter(c => c.status === 'active').map(c => ({ value: c.id, label: c.name })),
       show: l => data.cats.find(c => c.id === catOf(l))?.name ?? '' },
   ];
@@ -574,13 +574,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             isLocked={l => !!l.locked} lockedTitle="From the casuals' approved pay sheet — it changes with the sheet"
             blankRow={{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }}
             columns={[
-              { key: 'description', label: 'Description', type: 'text' },
+              { key: 'description', label: 'Description', type: 'text', wrap: true },
               { key: 'quantity', label: 'Qty', type: 'number', width: 90, align: 'right', show: l => (l.quantity !== '' && l.quantity != null ? formatAmount(num(l.quantity)) : '') },
               { key: 'unit', label: 'Unit', type: 'text', width: 90 },
               { key: 'amount', label: 'Amount (TZS)', type: 'number', min: 0, width: 150, align: 'right', show: l => (num(l.amount) != null ? formatAmount(num(l.amount)) : '') },
               ...(showApproved ? [{ key: 'approved', label: 'Approved (TZS)', type: 'number', min: 0, width: 150, align: 'right', ignoreLock: true,
                 editable: st === 'with_directors' && canAt('cash.approve', branchId), show: l => formatAmount(num(l.approved) ?? num(l.amount) ?? 0) }] : []),
-              { key: 'categoryId', label: 'Category', type: 'select', width: 190,
+              { key: 'categoryId', label: 'Category', type: 'select', width: 130,
                 options: data.cats.filter(c => c.status === 'active' || lines.some(l => l.categoryId === c.id)).map(c => ({ value: c.id, label: c.name })),
                 show: l => data.cats.find(c => c.id === l.categoryId)?.name ?? '' },
             ]}

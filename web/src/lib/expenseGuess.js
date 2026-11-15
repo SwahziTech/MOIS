@@ -10,14 +10,14 @@ const RULES = [
   // loading / offloading and posho are pay to people → Wages (2026-11-15, the user)
   ['Wages', /\b(vibarua|kibarua|casual|casuals|daily\s*labou?r|posho|upakizi|kupakia|kushusha|kupakua|loading|offloading)\b/i],
   ['Salaries', /\b(mishahara|mshahara|salary|salaries|payroll)\b/i],
-  ['General expenses', /\bmafuta\s+ya\s+kula\b|\b(makato|wakala|charges?|bank\s*fee|sabuni|soap|chakula|food|chai|tea|usafi|cleaning|maji\s+ya\s+kunywa)\b/i],
+  ['General', /\bmafuta\s+ya\s+kula\b|\b(makato|wakala|charges?|bank\s*fee|sabuni|soap|chakula|food|chai|tea|usafi|cleaning|maji\s+ya\s+kunywa)\b/i],
   ['Transport', /\b(nauli|usafiri|transport|fare|kuosha\s+gari|car\s*wash|gari|lori|truck|bodaboda|diesel|petrol|fuel)\b/i],
-  ['Spare parts', /\b(spare|spea|fan\s*belts?|belts?|bolts?|nati|nuts?|bearings?|oil|grease|filters?|seal|tyre|tairi|plug)\b/i],
+  ['Spares', /\b(spare|spea|fan\s*belts?|belts?|bolts?|nati|nuts?|bearings?|oil|grease|filters?|seal|tyre|tairi|plug)\b/i],
   ['Tools', /\b(cutting|grinding|grending|disc|disk|stick|electrodes?|gamboot|gumboots?|gloves?|glavu|spana|spanner|nyundo|hammer|tools?|shovel|sepeto|koleo|toroli|wheelbarrow|brashi|brush|helmet|reflector)\b/i],
   ['Materials', /\b(cement|saruji|mchanga|sand|kokoto|aggregate|rangi|paint|dawa|chuma|nondo|waya|wire|material|materials)\b/i],
-  ['Electricity (LUKU)', /\b(luku|umeme|electricity|token)\b/i],
+  ['Electricity', /\b(luku|umeme|electricity|token)\b/i],
   ['Water', /\b(maji|water)\b/i],
-  ['Office tools', /\b(vocha|voucher|bundle|router|internet|wifi|stationery|karatasi|paper|printer|ink|kalamu|pen|file|sim\s*card|simu|airtime)\b/i],
+  ['Office', /\b(vocha|voucher|bundle|router|internet|wifi|stationery|karatasi|paper|printer|ink|kalamu|pen|file|sim\s*card|simu|airtime)\b/i],
   ['Other', /\b(ziada|other|others|mengineyo|dharura|emergency)\b/i],
 ];
 const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
