@@ -9,6 +9,7 @@ import { loadInventoryRefs, orgToday, qtyText } from '../lib/inventory';
 import PeriodSelect, { usePeriod } from '../components/PeriodSelect';
 import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, listWeeklySheets } from '../lib/weeklyCashExcel';
+import { guessCategory, fillCategories } from '../lib/expenseGuess';
 import WeeklyCashDocDialog from '../components/finance/WeeklyCashDocDialog';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -232,9 +233,29 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const [opening, setOpening] = useState(request?.opening_balance != null ? String(Number(request.opening_balance)) : '');
   const [notes, setNotes] = useState(request?.notes ?? '');
   const [source, setSource] = useState(request?.source ?? 'app');
-  const [lines, setLines] = useState(() => (request?.lines?.length
-    ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.amount)), approved: l.approved_amount != null ? String(Number(l.approved_amount)) : '', categoryId: l.category_id ?? '', locked: !!l.pay_sheet_id }))
-    : [{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }]));
+  // what the branch chose before, newest first: the same item gets the same category (2026-11-15)
+  const catHistory = useMemo(() => [...data.requests].sort((a, b) => (a.week_ending < b.week_ending ? 1 : -1))
+    .flatMap(r => (r.lines || []).map(l => ({ description: l.description, category_id: l.category_id }))), [data.requests]);
+  const [lines, setLinesRaw] = useState(() => {
+    const ls = request?.lines?.length
+      ? [...request.lines].sort((a, b) => a.line_no - b.line_no).map(l => ({ id: l.id, description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.amount)), approved: l.approved_amount != null ? String(Number(l.approved_amount)) : '', categoryId: l.category_id ?? '', locked: !!l.pay_sheet_id }))
+    : [{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }];
+    return isNew || request.status === 'draft' ? fillCategories(ls, data.cats, catHistory).map(l => ({ ...l, catAuto: !l.locked && !!l.categoryId && !ls.find(x => x === l) })) : ls;
+  });
+  const setLines = setLinesRaw;
+  // typing an item: its category is guessed, unless someone picked one by hand
+  function onLinesChange(next) {
+    setLinesRaw(prev => next.map((l, i) => {
+      const was = prev[i];
+      if (l.locked) return l;
+      if (was && l.categoryId !== was.categoryId) return { ...l, catAuto: false };   // chosen by hand
+      if (l.description !== was?.description && (!l.categoryId || l.catAuto)) {
+        const g = guessCategory(l.description, data.cats, catHistory);
+        return { ...l, categoryId: g || (l.catAuto ? '' : l.categoryId), catAuto: !!g };
+      }
+      return l;
+    }));
+  }
   const [pay, setPay] = useState({ paid_on: today, amount: '', reference: '' });
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -392,7 +413,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     setError('');
     try {
       const s = await readWeeklySheet(f, sheetName);
-      setLines(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })));
+      setLines(fillCategories(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })), data.cats, catHistory).map(l => ({ ...l, catAuto: !!l.categoryId })));
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
       if (s.carried != null) setOpening(String(s.carried));   // the sheet's last balance
       if (s.account && !payTouched) setPayTo({ bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' });
@@ -541,7 +562,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             </div>
           )}
           {/* part 2: this week's request, as a sheet like the branch's Excel */}
-          <SheetGrid label="This week's request" className="xs-bold" title={reqTitle} rows={lines} onChange={setLines} readOnly={!editable}
+          <SheetGrid label="This week's request" className="xs-bold" title={reqTitle} rows={lines} onChange={onLinesChange} readOnly={!editable}
             isLocked={l => !!l.locked} lockedTitle="From the casuals' approved pay sheet — it changes with the sheet"
             blankRow={{ description: '', quantity: '', unit: '', amount: '', categoryId: '' }}
             columns={[
