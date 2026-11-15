@@ -2964,7 +2964,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .wc-doc-page .wc-doc-table tfoot td { background: #ebebeb; }
 .xs-grid .xs-title .xs-title-left { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
 .xs-grid .xs-title .xs-title-act { align-items: center; }
-.xs-grid tr.xs-total td { background: var(--bg-soft); }
+.xs-grid tr.xs-total td { background: transparent; }
+.xs-grid .xs-toggle.is-on { background: var(--accent); color: var(--accent-contrast, #111); }
+.xs-grid .xs-toggle:not(.is-on) { opacity: .75; }
 .xs-grid tr.xs-total-in td { border-top: 2px solid var(--text-primary); border-bottom: 2px solid var(--text-primary); }
 .xs-grid tr.xs-total-first td { border-top: 2px solid var(--text-primary); }
 .xs-grid tbody.xs-foot td { height: 32px; }

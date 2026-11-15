@@ -71,13 +71,25 @@ export async function readWeeklySheet(file, sheetName = null) {
     for (let k = hi - 1; k >= Math.max(0, hi - 3) && !weekEnding; k--) weekEnding = dateIn(rows[k].cells.join(' '));
     const lines = [];
     let total = null;
+    let tk = -1;
     for (let k = hi + 1; k < rows.length; k++) {
       const desc = (rows[k].cells[cD] ?? '').trim();
       if (!desc) continue;
-      if (/^total/i.test(desc)) { total = numberOf(rows[k].raw[cA]); break; }
+      if (/^total/i.test(desc)) { total = numberOf(rows[k].raw[cA]); tk = k; break; }
       const amount = numberOf(rows[k].raw[cA]);
       if (amount == null) continue;
       lines.push({ description: desc, ...(cQ >= 0 ? splitQty(rows[k].raw[cQ]) : { quantity: null, unit: '' }), amount });
+    }
+    // where the money is sent, under the TOTAL (2026-11-15, the user): a row with the bank and the
+    // account number, and a "JINA" row with the account name
+    const account = { bank: '', number: '', holder: '' };
+    for (let k = tk + 1; tk >= 0 && k < Math.min(rows.length, tk + 8); k++) {
+      const cs = rows[k].cells.map(c => String(c ?? '').trim()).filter(Boolean);
+      if (!cs.length) continue;
+      const j = cs.findIndex(c => /^jina\b/i.test(c));
+      if (j >= 0) { account.holder = (cs[j].replace(/^jina\s*[:-]?\s*/i, '') || cs[j + 1] || '').trim(); continue; }
+      const n = cs.findIndex(c => (c.replace(/\D/g, '').length >= 6 && /^[\d\s-]+$/.test(c)));
+      if (n >= 0 && !account.number) { account.number = cs[n]; account.bank = cs.slice(0, n).join(' ') || cs.slice(n + 1).join(' '); }
     }
     // last week's summary (CASH IN / CASH OUT / BALANCE), above the needs: its last balance is what was carried
     // and the summary itself, row by row, kept exactly as on the sheet (121)
@@ -108,7 +120,7 @@ export async function readWeeklySheet(file, sheetName = null) {
       const last = summaryRows[summaryRows.length - 1];
       if (last && /^\s*balance\s*$/i.test(last.description) && last.balance == null && last.cash_in != null) carried = last.cash_in;
     }
-    if (lines.length) return { weekEnding, lines, total, carried, summaryRows };
+    if (lines.length) return { weekEnding, lines, total, carried, summaryRows, account: account.bank || account.number || account.holder ? account : null };
   }
   throw new Error('No table with DESCRIPTION, QTY and AMOUNT was found in this file.');
 }

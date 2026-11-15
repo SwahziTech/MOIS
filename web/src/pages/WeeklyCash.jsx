@@ -1,6 +1,6 @@
 import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Undo2, RotateCcw } from 'lucide-react';
+import { Wallet, Plus, Upload, Download, Copy, Pencil, Save, Undo2, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -240,6 +240,8 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [docMode, setDocMode] = useState(null);   // 'export' | 'review'
+  const [savedId, setSavedId] = useState(null);   // a new request saved without closing the window
+  const [payTouched, setPayTouched] = useState(false);   // bank details typed here win over the imported sheet's
   const fileRef = useRef(null);
   const firstEver = !data.requests.some(r => !['cancelled', 'rejected'].includes(r.status) && r.id !== request?.id && r.week_ending < week);   // the first request in MOIS
   const total = lines.reduce((t, l) => t + (num(l.amount) ?? 0), 0);
@@ -266,26 +268,30 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
 
   // last week's summary, edited like the sheet (2026-11-15, the user): the formulas work as you type,
   // the two total rows stay last with an empty line above them for a new item; undo; saved by itself
-  const [lwEdit, setLwEdit] = useState(null);   // { parts, hist: [parts…], dirty }
+  const [lwEdit, setLwEdit] = useState(null);   // { parts, dirty, at }
+  const [lwHist, setLwHist] = useState([]);      // every earlier state, kept after saving (2026-11-15, the user: undo undoes all)
   const [lwSaved, setLwSaved] = useState('');   // '' | 'saving' | 'saved'
   const startEdit = () => {
     const p = sheetParts(lwRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close'));
     const s = v => (v == null ? '' : String(v));
     setLwEdit({ parts: { date: /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? tableDate(p.date) : s(p.date), opening: s(p.opening), sent: s(p.sent),
-      items: p.items.map(i => ({ ...i, date: /^\d{4}-\d{2}-\d{2}$/.test(i.date || '') ? tableDate(i.date) : s(i.date), cash_out: s(i.cash_out) })) }, hist: [], dirty: false, at: 0 });
+      items: p.items.map(i => ({ ...i, date: /^\d{4}-\d{2}-\d{2}$/.test(i.date || '') ? tableDate(i.date) : s(i.date), cash_out: s(i.cash_out) })) }, dirty: false, at: 0 });
     setLwSaved('');
   };
   const editRows = lwEdit ? sheetRows(lwEdit.parts) : [];
   function onEditRows(next) {
     const [o, sn] = next;
     const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '' })) };
-    setLwEdit(e => {
-      const now = Date.now();
-      const hist = now - e.at > 800 ? [...e.hist, e.parts].slice(-50) : e.hist;   // a typed word is one step back
-      return { parts, hist, dirty: true, at: now };
-    });
+    const now = Date.now();
+    if (now - lwEdit.at > 800) setLwHist(h => [...h, lwEdit.parts].slice(-200));   // a typed word is one step back
+    setLwEdit({ parts, dirty: true, at: now });
   }
-  const undoEdit = () => setLwEdit(e => (e.hist.length ? { ...e, parts: e.hist[e.hist.length - 1], hist: e.hist.slice(0, -1), dirty: true, at: 0 } : e));
+  // back one step at a time, through saved changes too, to how it was when the window opened; the step back is saved
+  function undoEdit() {
+    if (!lwHist.length) return;
+    setLwEdit(e => ({ ...(e || {}), parts: lwHist[lwHist.length - 1], dirty: true, at: 0 }));
+    setLwHist(h => h.slice(0, -1));
+  }
   // saved by itself a moment after the last change
   const saveTimer = useRef(null);
   useEffect(() => {
@@ -296,7 +302,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   }, [lwEdit?.parts]); // eslint-disable-line react-hooks/exhaustive-deps
   async function persistSheet(rows) {
     setSheetLW(rows);
-    if (isNew) return;
+    if (!request && !savedId) return;
     setLwSaved('saving');
     const id = await save({ keepOpen: true, lastWeek: rows });
     setLwSaved(id !== null ? 'saved' : '');
@@ -305,6 +311,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     clearTimeout(saveTimer.current);
     if (lwEdit?.dirty) await persistSheet(storeRows(lwEdit.parts));
     setLwEdit(null);
+  }
+  async function saveBoth() {
+    clearTimeout(saveTimer.current);
+    let rows = sheetLW;
+    if (lwEdit) { rows = storeRows(lwEdit.parts); setSheetLW(rows); setLwEdit(e => ({ ...e, dirty: false })); }
+    const id = await save({ keepOpen: true, lastWeek: rows });
+    if (id !== null) setLwSaved('saved');
   }
   async function useRecords() {
     clearTimeout(saveTimer.current);
@@ -345,13 +358,14 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     if (!check()) return null;
     setBusy(true);
     const carried = lastWeek?.length ? sheetSums(lastWeek).closing : null;
-    const { data: id, error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
+    const { data: id, error: err } = await supabase.rpc('save_cash_request', { p: { id: request?.id ?? savedId ?? null, branch_id: branchId, week_ending: week, pay_bank: payTo.bank, pay_account_no: payTo.no, pay_account_name: payTo.name,
       opening_balance: firstEver ? (carried ?? num(opening)) : null, notes, source,
       last_week: lastWeek?.length ? { rows: lastWeek } : null,
       lines: filled().map(l => ({ description: l.description, quantity: num(l.quantity), unit: l.unit, amount: num(l.amount), category_id: l.categoryId || null })) } });
     if (err) { setBusy(false); setError(dbErrorMessage(err)); return null; }
+    if (id && !request) setSavedId(id);
     if (send) {
-      const { error: e2 } = await supabase.rpc('cash_request_step', { p_id: id ?? request.id, p_step: 'send', p: {} });
+      const { error: e2 } = await supabase.rpc('cash_request_step', { p_id: id ?? request?.id ?? savedId, p_step: 'send', p: {} });
       if (e2) { setBusy(false); setError(dbErrorMessage(e2)); return null; }
     }
     setBusy(false);
@@ -381,6 +395,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
       setLines(s.lines.map(l => ({ description: l.description, quantity: l.quantity != null ? String(l.quantity) : '', unit: l.unit || '', amount: String(l.amount), categoryId: '' })));
       if (s.weekEnding) setWeek(saturdayOf(s.weekEnding));
       if (s.carried != null) setOpening(String(s.carried));   // the sheet's last balance
+      if (s.account && !payTouched) setPayTo({ bank: s.account.bank || '', no: s.account.number || '', name: s.account.holder || '' });
       if (s.summaryRows?.length) setSheetLW(s.summaryRows.map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date, description, qty, cash_in, cash_out, balance })));
       setSource('excel');
       if (s.total != null && Math.abs(s.total - s.lines.reduce((t, l) => t + l.amount, 0)) > 0.5) setError(`Read ${s.lines.length} lines — their sum differs from the sheet's TOTAL (${formatAmount(s.total)}). Check before saving.`);
@@ -483,12 +498,11 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             <SheetGrid label="Last week's spending" className="xs-bold" columns={lwCols}
               title={<>
                 <span className="xs-title-left">
-                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Undo" title="Undo the last change" disabled={!lwEdit.hist.length} onClick={undoEdit}><Undo2 size={14} /></button>
+                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Undo" title="Undo the last change" disabled={!lwHist.length} onClick={undoEdit}><Undo2 size={14} /></button>
                 </span>
                 {lwTitle}
                 <span className="xs-title-act">
-                  {lwSaved && <span className="pl-help">{lwSaved === 'saving' ? 'Saving…' : 'Saved'}</span>}
-                  <button type="button" className="btn btn-ghost btn-sm" aria-label="Stop editing" title={lwEdit.dirty ? 'Done — stop editing (changes are saved)' : 'Stop editing'} onClick={stopEdit}>{lwEdit.dirty ? <Lock size={14} /> : <Pencil size={14} />}</button>
+                  <button type="button" className="btn btn-ghost btn-sm xs-toggle is-on" aria-pressed="true" aria-label="Editing on — click to stop" title="Editing is on — click to stop (changes are saved)" onClick={stopEdit}><Pencil size={14} /></button>
                 </span>
               </>}
               rows={editRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close')} onChange={onEditRows}
@@ -499,7 +513,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             {sheetLW?.length > 0 && !firstEver && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
           </> : (
             <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
-              title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm" aria-label="Edit the spending" title="Edit the spending" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
+              title={<>{lwTitle}{editable && <span className="xs-title-act"><button type="button" className="btn btn-ghost btn-sm xs-toggle" aria-pressed="false" aria-label="Edit the spending" title="Editing is off — click to edit" onClick={startEdit}><Pencil size={14} /></button></span>}</>}
               rows={lwRows.length ? lwRows : [{ description: 'Nothing paid from the weekly cash last week' }]} />
           )}
           {showTick && (
@@ -519,6 +533,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
             </details>
           )}
 
+          {/* one Save for both sheets, even with saving by itself on (2026-11-15, the user) */}
+          {editable && (
+            <div className="wc-sheet-save">
+              {lwSaved && <span className="pl-help">{lwSaved === 'saving' ? 'Saving…' : 'Saved'}</span>}
+              <button type="button" className={`btn btn-primary btn-sm${busy ? ' btn-loading' : ''}`} disabled={busy} title="Save both sheets" onClick={saveBoth}><Save size={14} /> Save</button>
+            </div>
+          )}
           {/* part 2: this week's request, as a sheet like the branch's Excel */}
           <SheetGrid label="This week's request" className="xs-bold" title={reqTitle} rows={lines} onChange={setLines} readOnly={!editable}
             isLocked={l => !!l.locked} lockedTitle="From the casuals' approved pay sheet — it changes with the sheet"
@@ -540,9 +561,9 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
 
         {/* where the money is sent — one row; the note below (2026-11-15, the user) */}
         <div className="wc-pay-row">
-          <label className="pe-field"><span>Bank</span><input className="form-input" disabled={!editable} placeholder="e.g. the bank's name" value={payTo.bank} onChange={e => setPayTo({ ...payTo, bank: e.target.value })} /></label>
-          <label className="pe-field"><span>Account number</span><input className="form-input" disabled={!editable} value={payTo.no} onChange={e => setPayTo({ ...payTo, no: e.target.value })} /></label>
-          <label className="pe-field"><span>Account name (jina)</span><input className="form-input" disabled={!editable} value={payTo.name} onChange={e => setPayTo({ ...payTo, name: e.target.value })} /></label>
+          <label className="pe-field"><span>Bank</span><input className="form-input" disabled={!editable} placeholder="e.g. the bank's name" value={payTo.bank} onChange={e => { setPayTouched(true); setPayTo({ ...payTo, bank: e.target.value }); }} /></label>
+          <label className="pe-field"><span>Account number</span><input className="form-input" disabled={!editable} value={payTo.no} onChange={e => { setPayTouched(true); setPayTo({ ...payTo, no: e.target.value }); }} /></label>
+          <label className="pe-field"><span>Account name (jina)</span><input className="form-input" disabled={!editable} value={payTo.name} onChange={e => { setPayTouched(true); setPayTo({ ...payTo, name: e.target.value }); }} /></label>
         </div>
         <label className="pe-field"><span>Notes (optional)</span><input className="form-input" disabled={!editable} value={notes} onChange={e => setNotes(e.target.value)} /></label>
         {!isNew && st === 'with_directors' && canAt('cash.approve', branchId) && (
