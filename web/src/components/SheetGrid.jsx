@@ -16,11 +16,12 @@ import NumberInput from './NumberInput';
  * rows:    the rows (objects); onChange(rows) gets the whole new list
  * isLocked(row): a row that can't be changed (shown grey); blankRow: what a new row starts as
  * totals:  { [column key]: node } shown on the foot; totalLabel
+ * title:   a heading across the top of the sheet (centred); className: e.g. xs-bold for a bold outer frame
  */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
 
-export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet' }) {
+export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet', title = null, className = '' }) {
   const box = useRef(null);
   const canEdit = (col, row) => (col.editable ?? !readOnly) && (col.ignoreLock || !isLocked(row));
   const editableCols = columns.map((c, i) => ({ c, i })).filter(x => x.c.editable ?? !readOnly);
@@ -100,10 +101,11 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
   };
 
   return (
-    <div className="xs-grid" ref={box} role="grid" aria-label={label}>
+    <div className={`xs-grid${className ? ` ${className}` : ''}`} ref={box} role="grid" aria-label={label}>
       <table>
         <colgroup><col style={{ width: 38 }} />{columns.map(c => <col key={c.key} style={c.width ? { width: c.width } : undefined} />)}{!readOnly && <col style={{ width: 30 }} />}</colgroup>
         <thead>
+          {title && <tr className="xs-title"><th colSpan={columns.length + (readOnly ? 1 : 2)}>{title}</th></tr>}
           <tr className="xs-letters"><th />{columns.map((c, i) => <th key={c.key}>{LETTERS[i]}</th>)}{!readOnly && <th />}</tr>
           <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{c.label}</th>)}{!readOnly && <th />}</tr>
         </thead>
