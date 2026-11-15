@@ -3007,6 +3007,7 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
   /* only the column names freeze, at the very top of the window (2026-11-15, the user); a window sits
      64px below the top of its scrolling backdrop, so the row sticks 64px above that edge */
   .xs-grid.xs-freeze thead th { position: static; }
+  .xs-grid.xs-freeze thead .xs-title th, .xs-grid.xs-freeze thead .xs-letters th { position: relative; }   /* the title icons and column edges sit inside their cells */
   .xs-grid.xs-freeze thead .xs-labels th { position: sticky; top: 0; z-index: 4; box-shadow: inset 0 -2px 0 var(--border-strong); }
   .modal .xs-grid.xs-freeze thead .xs-labels th { top: -64px; }
 }
