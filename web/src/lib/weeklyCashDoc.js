@@ -54,7 +54,7 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
     autoTable(pdf, { ...base, startY: y,
       head: [titleRow(doc.lw.title, 6), lwHead],
       body: doc.lw.rows.map(r => lwCells(r).map(c => ({ content: c, styles: r.bold ? { fontStyle: 'bold' } : {} }))),
-      columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } },
     });
     y = pdf.lastAutoTable.finalY + 12;   // a clear gap between the two sheets (2026-11-15, the user)
     const n = reqHead(doc).length;
@@ -62,8 +62,8 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
       head: [titleRow(doc.req.title, n), reqHead(doc)],
       body: doc.req.lines.map(l => reqCells(doc, l)),
       foot: [['TOTAL', '', `Tsh ${amt(doc.req.total)}`, ...(doc.req.showApproved ? [`Tsh ${amt(doc.req.approvedTotal)}`] : [])]],
-      footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold', halign: 'right' },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+      footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold', halign: 'center' },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' } },
     });
     y = pdf.lastAutoTable.finalY + 3;
     if (doc.account) {
@@ -113,7 +113,7 @@ export async function downloadExcel(doc, { paper = 'A4', orientation = 'portrait
     const top = r;
     ws.mergeCells(r, start, r, start + span - 1); const tc = ws.getCell(r, start); tc.value = title; tc.font = { ...TNR, bold: true }; tc.alignment = { horizontal: 'center' }; r += 1;
     const put = (vals, bold, fill) => {
-      vals.forEach((v, k) => { const c = ws.getCell(r, start + k); c.value = v; c.border = { top: thin, left: thin, bottom: thin, right: thin }; if (typeof v === 'number') c.numFmt = '#,##0'; c.font = { ...TNR, bold: !!bold };
+      vals.forEach((v, k) => { const c = ws.getCell(r, start + k); c.value = v; c.border = { top: thin, left: thin, bottom: thin, right: thin }; if (typeof v === 'number') { c.numFmt = '#,##0'; c.alignment = { horizontal: 'center' }; } c.font = { ...TNR, bold: !!bold };
         if (fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEBEBEB' } }; });
       r += 1;
     };

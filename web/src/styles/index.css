@@ -3013,3 +3013,6 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 }
 .wc-acct-pick { max-width: 520px; }
 .wc-doc-note { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-soft); font-size: var(--text-sm); }
+.xs-grid .xs-center { text-align: center; }
+.xs-grid .xs-labels th.xs-center { text-align: center; }
+.wc-doc-page .wc-doc-table .n { text-align: center; }

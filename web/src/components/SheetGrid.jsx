@@ -30,6 +30,8 @@ import NumberInput from './NumberInput';
  * are kept on this device for this sheet; row heights last while the page is open.
  */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+// column.align: 'right' (numbers) or 'center' (the weekly cash amounts, 2026-11-15)
+const alignCls = col => (col.align === 'right' ? ' xs-num' : col.align === 'center' ? ' xs-center' : '');
 const cleanNumber = v => String(v ?? '').replace(/[^\d.-]/g, '');
 
 export default function SheetGrid({ columns, rows, onChange, readOnly = false, isLocked = () => false, lockedTitle, blankRow = {}, totals = null, totalLabel = 'Total', label = 'Sheet', title = null, className = '', canEditCell = null, canRemoveRow = null, rowClass = null, footRows = [], resizable = false, freeze = false }) {
@@ -138,11 +140,11 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
 
   const cell = (row, r, col, c) => {
     if (!canEdit(col, row)) {
-      return <div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}${col.wrap ? ' xs-wrap' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div>;
+      return <div className={`xs-ro${alignCls(col)}${col.wrap ? ' xs-wrap' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div>;
     }
     const common = { 'data-cell': `${r}:${c}`, 'aria-label': `${col.label}, row ${r + 1}`, onKeyDown: e => onKey(e, r, c), onPaste: e => onPaste(e, r, c),
       onFocus: e => { if (e.target.select && e.target.tagName === 'INPUT') e.target.select(); } };
-    if (col.type === 'number') return <NumberInput {...common} className="xs-in xs-num" step="any" min={col.min} value={row[col.key] ?? ''} onChange={e => setCell(r, col.key, e.target.value)} />;
+    if (col.type === 'number') return <NumberInput {...common} className={`xs-in${col.align === 'center' ? ' xs-center' : ' xs-num'}`} step="any" min={col.min} value={row[col.key] ?? ''} onChange={e => setCell(r, col.key, e.target.value)} />;
     if (col.type === 'select') return (
       <select {...common} className="xs-in" value={row[col.key] ?? ''} onChange={e => setCell(r, col.key, e.target.value)}>
         <option value="">—</option>
@@ -161,7 +163,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
           <tr className="xs-letters"><th className={resizable ? 'xs-corner' : undefined} title={resizable ? 'Double-click to reset the column widths and row heights' : undefined} onDoubleClick={resizable ? resetSizes : undefined} />{columns.map((c, i) => (
             <th key={c.key}>{LETTERS[i]}{resizable && <span className="xs-col-rs" role="separator" aria-orientation="vertical" aria-label={`Resize column ${LETTERS[i]}`}
               title="Drag to resize · double-click to fit" onPointerDown={e => startCol(e, c)} onDoubleClick={() => fitCol(c)} />}</th>))}{!readOnly && <th />}</tr>
-          <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{c.label}</th>)}{!readOnly && <th />}</tr>
+          <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} className={alignCls(c).trim()}>{c.label}</th>)}{!readOnly && <th />}</tr>
         </thead>
         <tbody>
           {shown.map((row, r) => (
@@ -179,13 +181,13 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
             <tr key={`f${k}`} style={rowH[`f${k}`] ? { height: rowH[`f${k}`] } : undefined} className={rowClass ? rowClass(row) || '' : ''}>
               <td className="xs-rn">{shown.length + k + 1}{resizable && <span className="xs-row-rs" role="separator" aria-label="Resize row" title="Drag to resize · double-click to reset"
                 onPointerDown={e => startRow(e, `f${k}`)} onDoubleClick={() => setRowH(p => { const n = { ...p }; delete n[`f${k}`]; return n; })} />}</td>
-              {columns.map(col => <td key={col.key} data-col={col.key}><div className={`xs-ro${col.align === 'right' ? ' xs-num' : ''}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div></td>)}
+              {columns.map(col => <td key={col.key} data-col={col.key}><div className={`xs-ro${alignCls(col)}`}>{col.show ? col.show(row) : String(row[col.key] ?? '')}</div></td>)}
               {!readOnly && <td />}
             </tr>
           ))}
         </tbody>}
         {totals && Object.keys(totals).length > 0 && <tfoot>
-          <tr><td className="xs-rn" />{columns.map((c, i) => <td key={c.key} className={c.align === 'right' ? 'xs-num' : ''}>{i === 0 ? <strong>{totalLabel}</strong> : totals[c.key] != null ? <strong>{totals[c.key]}</strong> : null}</td>)}{!readOnly && <td />}</tr>
+          <tr><td className="xs-rn" />{columns.map((c, i) => <td key={c.key} className={alignCls(c).trim()}>{i === 0 ? <strong>{totalLabel}</strong> : totals[c.key] != null ? <strong>{totals[c.key]}</strong> : null}</td>)}{!readOnly && <td />}</tr>
         </tfoot>}
       </table>
     </div>
