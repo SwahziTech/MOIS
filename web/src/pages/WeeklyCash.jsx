@@ -32,7 +32,7 @@ function sheetParts(rows) {
   const bal = rows.find(r => /^\s*balance\s*$/i.test(r.description || ''));
   const sent = rows.find(r => /cash\s*sent/i.test(r.description || ''));
   return { date: bal?.date ?? '', opening: bal?.cash_in ?? '', sent: sent?.cash_in ?? '',
-    items: rows.filter(r => !FORMULA_ROW.test(r.description || '')).map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '' })) };
+    items: rows.filter(r => !FORMULA_ROW.test(r.description || '')).map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id ?? '' })) };
 }
 // the parts → the sheet, every formula worked out
 function sheetRows(p) {
@@ -51,7 +51,7 @@ function sheetRows(p) {
 }
 // rows kept in the database: plain values
 const storeRows = p => sheetRows({ ...p, items: p.items.filter(i => [i.date, i.description, i.qty, i.cash_out].some(v => String(v ?? '').trim())) })
-  .map(({ date, description, qty, cash_in, cash_out, balance }) => ({ date: String(date ?? '').trim(), description: String(description ?? '').trim(), qty: String(qty ?? '').trim(), cash_in: num(cash_in), cash_out: num(cash_out), balance: num(balance) }));
+  .map(({ date, description, qty, cash_in, cash_out, balance, category_id }) => ({ date: String(date ?? '').trim(), description: String(description ?? '').trim(), qty: String(qty ?? '').trim(), cash_in: num(cash_in), cash_out: num(cash_out), balance: num(balance), category_id: category_id || null }));
 // a summary as written → its figures
 function sheetSums(rows) {
   const rs = sheetRows(sheetParts(rows));
@@ -115,7 +115,7 @@ export default function WeeklyCash() {
     const qtyOfMove = mid => data.tx.filter(t => t.movement_id === mid && t.material_id)
       .map(t => `${qtyText(Number(t.entered_quantity))} ${data.refs.unitById[t.entered_unit_id]?.symbol ?? ''}`).join(', ');
     return [
-      ...data.expenses.filter(e => inWeek(e.paid_on) && pick(e)).map(e => ({ kind: 'expense', id: e.id, date: e.paid_on, description: e.description, qty: e.quantity ? qtyText(Number(e.quantity)) : '', amount: Number(e.amount_paid) })),
+      ...data.expenses.filter(e => inWeek(e.paid_on) && pick(e)).map(e => ({ kind: 'expense', id: e.id, date: e.paid_on, description: e.description, qty: e.quantity ? qtyText(Number(e.quantity)) : '', amount: Number(e.amount_paid), category_id: e.category_id ?? '' })),
       ...data.payments.filter(p => inWeek(p.paid_on) && pick(p)).map(p => ({ kind: 'purchase_payment', id: p.id, date: p.paid_on, description: `${goods(p.purchase.movement_id) || 'Purchase'}${supplier(p.purchase.supplier_id) ? ` — ${supplier(p.purchase.supplier_id)}` : ''}`, qty: qtyOfMove(p.purchase.movement_id), amount: Number(p.amount) })),
     ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }, [data]);
@@ -276,7 +276,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const fig = weekOf(week);
   const lwRows = useMemo(() => {
     if (sheetLW?.length) return sheetRows(sheetParts(sheetLW));
-    if (fig && !fig.first) return sheetRows({ date: addDays(week, -7), opening: fig.opening, sent: fig.sent, items: fig.lines.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount })) });
+    if (fig && !fig.first) return sheetRows({ date: addDays(week, -7), opening: fig.opening, sent: fig.sent, items: fig.lines.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount, category_id: l.category_id ?? '' })) });
     const rec = spentIn(week);
     return [
       ...rec.map(l => ({ date: l.date, description: l.description, qty: l.qty, cash_out: l.amount })),
@@ -296,13 +296,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     const p = sheetParts(lwRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close'));
     const s = v => (v == null ? '' : String(v));
     setLwEdit({ parts: { date: /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? tableDate(p.date) : s(p.date), opening: s(p.opening), sent: s(p.sent),
-      items: p.items.map(i => ({ ...i, date: /^\d{4}-\d{2}-\d{2}$/.test(i.date || '') ? tableDate(i.date) : s(i.date), cash_out: s(i.cash_out) })) }, dirty: false, at: 0 });
+      items: p.items.map(i => ({ ...i, date: /^\d{4}-\d{2}-\d{2}$/.test(i.date || '') ? tableDate(i.date) : s(i.date), cash_out: s(i.cash_out), category_id: i.category_id || guessCategory(i.description, data.cats, catHistory) })) }, dirty: false, at: 0 });
     setLwSaved('');
   };
   const editRows = lwEdit ? sheetRows(lwEdit.parts) : [];
   function onEditRows(next) {
     const [o, sn] = next;
-    const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '' })) };
+    const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id || (String(r.description ?? '').trim() ? guessCategory(r.description, data.cats, catHistory) : '') })) };
     const now = Date.now();
     if (now - lwEdit.at > 800) setLwHist(h => [...h, lwEdit.parts].slice(-200));   // a typed word is one step back
     setLwEdit({ parts, dirty: true, at: now });
@@ -321,7 +321,9 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
     saveTimer.current = setTimeout(() => persistSheet(storeRows(lwEdit.parts)), 1500);
     return () => clearTimeout(saveTimer.current);
   }, [lwEdit?.parts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const withCats = rows => rows && rows.map(r => (FORMULA_ROW.test(r.description || '') || r.category_id ? r : { ...r, category_id: guessCategory(r.description, data.cats, catHistory) || null }));
   async function persistSheet(rows) {
+    rows = withCats(rows);
     setSheetLW(rows);
     if (!request && !savedId) return;
     setLwSaved('saving');
@@ -336,7 +338,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   async function saveBoth() {
     clearTimeout(saveTimer.current);
     let rows = sheetLW;
-    if (lwEdit) { rows = storeRows(lwEdit.parts); setSheetLW(rows); setLwEdit(e => ({ ...e, dirty: false })); }
+    if (lwEdit) { rows = withCats(storeRows(lwEdit.parts)); setSheetLW(rows); setLwEdit(e => ({ ...e, dirty: false })); }
     const id = await save({ keepOpen: true, lastWeek: rows });
     if (id !== null) setLwSaved('saved');
   }
@@ -436,12 +438,18 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
 
   // the total rows stand out: TOTAL CASH on top, the two closing rows at the bottom
   const lwRowClass = r => (r.kind === 'total_in' ? 'xs-total xs-total-in' : r.kind === 'total_out' ? 'xs-total xs-total-first' : r.kind === 'close' ? 'xs-total' : '');
+  // each spending line's category: as chosen, else guessed from the item (2026-11-15, the user)
+  const catOf = r => (r.kind === 'item' || (!r.kind && r.cash_out != null && !FORMULA_ROW.test(r.description || ''))
+    ? r.category_id || guessCategory(r.description, data.cats, catHistory) : '');
   const lwCols = [
     { key: 'date', label: 'Date', type: 'text', width: 110, show: l => (/^\d{4}-\d{2}-\d{2}$/.test(l.date || '') ? tableDate(l.date) : l.date || '') },
     { key: 'description', label: 'Description', type: 'text', show: l => (l.bold ? <strong>{l.description}</strong> : l.description) },
     { key: 'qty', label: 'Qty', type: 'text', width: 120, show: l => <span className="pl-help">{l.qty || ''}</span> },
     ...['cash_in', 'cash_out', 'balance'].map((k, i) => ({ key: k, label: `${['Cash in', 'Cash out', 'Balance'][i]} (TZS)`, type: 'number', width: 140, align: 'right',
       show: l => (l[k] != null && l[k] !== '' ? (l.bold ? <strong>{formatAmount(Number(l[k]))}</strong> : formatAmount(Number(l[k]))) : '') })),
+    { key: 'category_id', label: 'Category', type: 'select', width: 170,
+      options: data.cats.filter(c => c.status === 'active').map(c => ({ value: c.id, label: c.name })),
+      show: l => data.cats.find(c => c.id === catOf(l))?.name ?? '' },
   ];
   return (
     <>
@@ -528,9 +536,9 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
               </>}
               rows={editRows.filter(r => r.kind !== 'total_out' && r.kind !== 'close')} onChange={onEditRows}
               footRows={editRows.filter(r => r.kind === 'total_out' || r.kind === 'close')}
-              canEditCell={(col, r) => (r.kind === 'open' ? ['date', 'cash_in'].includes(col.key) : r.kind === 'sent' ? col.key === 'cash_in' : r.kind === 'total_in' ? false : ['date', 'description', 'qty', 'cash_out'].includes(col.key))}
+              canEditCell={(col, r) => (r.kind === 'open' ? ['date', 'cash_in'].includes(col.key) : r.kind === 'sent' ? col.key === 'cash_in' : r.kind === 'total_in' ? false : ['date', 'description', 'qty', 'cash_out', 'category_id'].includes(col.key))}
               canRemoveRow={r => r.kind === 'item'} rowClass={lwRowClass}
-              blankRow={{ date: '', description: '', qty: '', cash_out: '' }} />
+              blankRow={{ date: '', description: '', qty: '', cash_out: '', category_id: '' }} />
             {sheetLW?.length > 0 && !firstEver && <div className="wc-sheet-save"><button type="button" className="btn btn-ghost btn-sm" disabled={busy} title="Drop the typed summary and use what MOIS recorded" onClick={useRecords}><RotateCcw size={14} /> Use MOIS records</button></div>}
           </> : (
             <SheetGrid label="Last week's spending" className="xs-bold" readOnly columns={lwCols} rowClass={lwRowClass}
