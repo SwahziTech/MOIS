@@ -2998,3 +2998,14 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .xs-grid tbody tr[style] .xs-in { height: 100%; min-height: 32px; }
 .xs-grid tbody tr[style] .xs-ro { white-space: normal; line-height: 1.3; }
 .wc-row-act { text-align: right; white-space: nowrap; }
+/* frozen sheet headers (2026-11-15, the user): the title, column letters and labels stay at the top while
+   the window scrolls. A sideways-scroll box would stop that, so on a computer the sheet does not scroll
+   sideways (it fits, columns resize); on a narrow phone it still scrolls sideways. */
+@media (min-width: 900px) {
+  .xs-grid { overflow: visible; }
+  .xs-grid table { min-width: 0; }
+  .xs-grid.xs-bold table { min-width: 0; }
+  .xs-grid thead { position: sticky; top: 0; z-index: 4; }
+  .xs-grid thead th { position: static; }
+  .xs-grid thead tr:last-child th { box-shadow: inset 0 -2px 0 var(--border-strong); }
+}
