@@ -8,7 +8,8 @@ import { formatMoney, dateText, tableDate } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
-import { PageTabs, ChipRow } from '../components/ListControls';
+import { PageTabs, ChipRow, ListToolbar } from '../components/ListControls';
+import ProcTable, { STATUS as PROC_STATUS, STATUS_OPTIONS } from '../components/purchases/ProcTable';
 import { PaidFrom, saveWeeklyCash } from '../components/purchases/PaidFrom';
 import MoneyOutPanel from '../components/purchases/MoneyOutPanel';
 import Suppliers from './Suppliers';
@@ -69,6 +70,12 @@ export default function Purchases({ section = 'purchases' }) {
   const [pTab, setPTab] = useState(null);     // Purchases: buy | costs | waiting (null until loaded)
   const [eTab, setETab] = useState(startTab === 'electricity' ? 'electricity' : 'list');   // Expenses: list | electricity
   const [expFilter, setExpFilter] = useState(startTab === 'wages' ? 'wages' : '');      // '' | wages | salaries | transport | expense
+  // one table for all procurement (2026-11-16): search, sort, status and type filters; a click opens the record
+  const [q, setQ] = useState('');
+  const [sortBy, setSortBy] = useState('new');
+  const [stFilter, setStFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [detail, setDetail] = useState(null);   // a purchase opened from the table
   const tab = section === 'orders' ? 'requests'
     : top === 'all' ? 'all' : top === 'suppliers' ? 'suppliers'
     : top === 'expenses' ? (eTab === 'electricity' ? 'electricity' : 'expenses')
@@ -277,6 +284,57 @@ export default function Purchases({ section = 'purchases' }) {
   const expensesShown = expensesHere.filter(e => period.has(e.expense_date));
   const expensePay = e => (e.status === 'void' ? 'void' : Number(e.amount_paid) >= Number(e.amount) ? 'paid' : Number(e.amount_paid) > 0 ? 'part_paid' : 'unpaid');
   const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
+  // where a purchase stands: paid and delivered are two tracks, shown as one plain status
+  const purchaseStatus = p => {
+    if (p.status !== 'recorded') return 'void';
+    const pay = totals[p.id]?.payment_status; const d = delivOf(p);
+    if (d === 'delivered') return pay === 'paid' ? 'done' : pay === 'part_paid' ? 'part_paid' : 'deliv_due';
+    if (d === 'part') return 'part_deliv';
+    return pay === 'paid' ? 'paid_wait' : pay === 'part_paid' ? 'part_paid' : 'ordered';
+  };
+  const expenseStatus = e => (e.status === 'void' ? 'void' : expensePay(e) === 'paid' ? 'done' : expensePay(e) === 'part_paid' ? 'part_paid' : 'not_paid');
+  const linesOf = p => {
+    const priceOfTx = Object.fromEntries((p.lines || []).map(l => [l.transaction_id, l.unit_price]));
+    return p.items?.length
+      ? [...p.items].sort((a, b) => a.line_no - b.line_no).map(i => ({ material_id: i.material_id, qty: Number(i.quantity), unit_id: i.unit_id, price: i.unit_price }))
+      : (txByMove[p.movement_id] || []).filter(x => x.material_id).map(x => ({ material_id: x.material_id, qty: Number(x.entered_quantity), unit_id: x.entered_unit_id, price: priceOfTx[x.id] }));
+  };
+  const itemOf = l => ({ name: refs?.items['m:' + l.material_id]?.name ?? '—', qty: l.qty, unit: refs?.unitById[l.unit_id]?.symbol ?? '', price: l.price });
+  const purchaseRows = [
+    ...pendingHere.map(p => {
+      const rl = p.payload?.receipt?.lines || [];
+      const priceOf = m => (p.payload?.lines || []).find(l => l.material_id === m)?.unit_price;
+      return { key: 'a' + p.id, kind: 'purchase', date: p.payload?.receipt?.movement_date ?? p.payload?.purchase_date, status: 'approval',
+        items: rl.length ? rl.map(l => itemOf({ material_id: l.material_id, qty: Number(l.quantity), unit_id: l.unit_id, price: priceOf(l.material_id) })) : [{ name: p.summary }],
+        amount: rl.reduce((t, l) => t + Number(l.quantity) * Number(priceOf(l.material_id) ?? 0), 0) + Number(p.payload?.transport_charge ?? 0),
+        source: p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '', sub: people[p.requested_by] ?? '',
+        onOpen: () => navigate('/approvals') };
+    }),
+    ...purchasesHere.filter(p => period.has(p.purchase_date)).map(p => {
+      const t = totals[p.id]; const st = purchaseStatus(p); const ds = deliv[p.id];
+      const one = ds?.items?.length === 1 ? ds.items[0] : null;
+      return { key: 'p' + p.id, kind: 'purchase', date: p.purchase_date, ref: p.invoice_reference, items: linesOf(p).map(itemOf), amount: t?.total,
+        source: supplierName(p.supplier_id), status: st, muted: st === 'void',
+        sub: st === 'void' ? p.void_reason : st === 'part_paid' || st === 'deliv_due' ? (t ? money(t.balance) + ' to pay' : '')
+          : (st === 'part_deliv' || st === 'paid_wait') && one ? qtyText(Math.round(Number(one.delivered) * 100) / 100) + ' of ' + qtyText(Number(one.quantity)) + ' ' + (refs?.unitById[one.unit_id]?.symbol ?? '') + ' in' : '',
+        onOpen: () => setDetail(p) };
+    }),
+  ];
+  const expenseRows = expensesHere.filter(e => period.has(e.expense_date)).map(e => {
+    const st = expenseStatus(e);
+    return { key: 'e' + e.id, kind: 'expense', date: e.expense_date, kindLabel: catName(e.category_id),
+      items: [{ name: e.description, qty: e.quantity != null ? Number(e.quantity) : null, unit: '', price: e.unit_price }], amount: e.amount,
+      source: e.supplier_id ? supplierName(e.supplier_id) : '', status: st, muted: st === 'void',
+      sub: st === 'void' ? e.void_reason : st === 'part_paid' ? money(round2(e.amount - e.amount_paid)) + ' to pay' : '',
+      onOpen: () => { if (e.status === 'recorded' && canRecordAt(e.branch_id)) setEditingExpense(e); } };
+  });
+  const words = r => [r.ref, r.source, r.kindLabel, ...r.items.map(x => x.name)].filter(Boolean).join(' ').toLowerCase();
+  const procRows = (tab === 'all' ? [...purchaseRows, ...expenseRows] : tab === 'purchases' ? purchaseRows : tab === 'expenses' ? expenseRows : [])
+    .filter(r => (!q.trim() || words(r).includes(q.trim().toLowerCase())) && (!stFilter || r.status === stFilter) && (!typeFilter || r.kind === typeFilter))
+    .sort((a, b) => sortBy === 'old' ? String(a.date).localeCompare(String(b.date))
+      : sortBy === 'amount' ? Number(b.amount || 0) - Number(a.amount || 0)
+      : sortBy === 'item' ? String(a.items[0]?.name ?? '').localeCompare(String(b.items[0]?.name ?? ''))
+      : String(b.date).localeCompare(String(a.date)));
   const owed = purchasesHere.filter(p => p.status === 'recorded').reduce((s, p) => s + Math.max(Number(totals[p.id]?.balance ?? 0), 0), 0);
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const describeLines = lines => (lines || []).filter(t => t.material_id)
@@ -305,16 +363,12 @@ export default function Purchases({ section = 'purchases' }) {
 
   return (
     <PageShell title={section === 'orders' ? 'Orders' : top === 'expenses' ? 'Expenses' : top === 'suppliers' ? 'Suppliers' : 'Purchases'} subtitle="Procurement" onSettings={() => setExpSettings(true)}
-      actions={expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
-        <button type="button" className="btn btn-outline" onClick={() => setEditingExpense('new')}>
-          <Plus size={14} /> Record expense
-        </button>
-      )}
-      primaryAction={section !== 'expenses' && canRecordAt(branchId) && (
-        <button type="button" className="btn btn-primary" disabled={!refs} onClick={() => setEditing({ mode: 'new' })}>
-          <Plus size={14} /> Record Goods + Purchase
-        </button>
-      )}>
+      // one golden button, following the open tab (2026-11-16): expenses → Record expense, else Record purchase
+      primaryAction={section !== 'orders' && top !== 'suppliers' && (top === 'expenses'
+        ? expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
+          <button type="button" className="btn btn-primary" onClick={() => setEditingExpense('new')}><Plus size={14} /> Record expense</button>)
+        : canRecordAt(branchId) && (
+          <button type="button" className="btn btn-primary" disabled={!refs} onClick={() => setEditing({ mode: 'new' })}><Plus size={14} /> Record purchase</button>))}>
       {/* page order (locked): heading → tabs → summary → search/filters → list */}
       {purchaseTabs}
       {tab === 'purchases' && owed > 0 && <p className="text-sm text-muted mb-8" style={{ textAlign: 'right' }}>Still to pay: <strong>{money(round2(owed))}</strong></p>}
@@ -324,39 +378,28 @@ export default function Purchases({ section = 'purchases' }) {
           onRecordExpense={prefill => { setExpensePrefill(prefill); setEditingExpense('new'); }}
           onRecordToken={q => setTokenFor(q)} />
       : tab === 'suppliers' ? <Embedded param="sv"><Suppliers /></Embedded>
-      : tab === 'all' ? <MoneyOutPanel types={false} branchId={branchId} inBranch={inBranch} period={period} today={today} expenses={expenses} expCats={expCats} suppliers={refs?.suppliers || []} money={money} />
+      : ['all', 'purchases', 'expenses'].includes(tab) ? (
+        <div className="card">
+          {error ? <ErrorState message={error} onRetry={load} /> : (
+            <div className="table-container">
+              <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
+              <div className="card-body" style={{ paddingBottom: 0 }}>
+                <ListToolbar filterFirst search={q} onSearch={setQ} placeholder={tab === 'expenses' ? 'Search expenses…' : tab === 'purchases' ? 'Search purchases…' : 'Search purchases and expenses…'}
+                  sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'amount', label: 'Amount, highest first' }, { value: 'item', label: 'Item, A to Z' }] }}
+                  filters={[
+                    { key: 'status', label: 'Status', value: stFilter, onChange: setStFilter, options: STATUS_OPTIONS.filter(o => !o.value || (tab === 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].includes(o.value) : tab === 'purchases' ? o.value !== 'not_paid' : true)) },
+                    ...(tab === 'all' ? [{ key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [{ value: '', label: 'All' }, { value: 'purchase', label: 'Purchases' }, { value: 'expense', label: 'Expenses' }] }] : []),
+                    ...(tab !== 'purchases' ? [{ key: 'cat', label: 'Expense', value: expFilter, onChange: setExpFilter, options: [{ value: '', label: 'All' }, { value: 'wages', label: 'Wages' }, { value: 'salaries', label: 'Salaries' }, { value: 'transport', label: 'Transport' }, { value: 'electricity', label: 'Electricity' }, { value: 'expense', label: 'Expense' }] }] : []),
+                  ]} />
+              </div>
+              <ProcTable rows={procRows} loading={loading} money={money} />
+            </div>
+          )}
+        </div>
+      )
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            {/* the period, and for purchases a filter: paid and delivered are two tracks (120; a filter, not chips, 2026-11-16) */}
-            {(tab === 'purchases' || tab === 'expenses') && (
-              <div className="card-body pu-bar" style={{ paddingBottom: 0 }}>
-                <PeriodSelect period={period} today={today} extra={[['all', 'All time']]} />
-                {tab === 'expenses' && (
-                  <label className="pu-filter" title="Filter">
-                    <Filter size={15} aria-hidden="true" />
-                    <select className="form-input" aria-label="Filter" value={expFilter} onChange={e => setExpFilter(e.target.value)}>
-                      <option value="">All</option>
-                      <option value="wages">Wages</option>
-                      <option value="salaries">Salaries</option>
-                      <option value="transport">Transport</option>
-                      <option value="expense">Expense</option>
-                    </select>
-                  </label>
-                )}
-                {tab === 'purchases' && (
-                  <label className="pu-filter" title="Filter">
-                    <Filter size={15} aria-hidden="true" />
-                    <select className="form-input" aria-label="Filter" value={puFilter} onChange={e => setPuFilter(e.target.value)}>
-                      <option value="">All</option>
-                      <option value="delivery">Waiting delivery{waitingDelivery ? ' (' + waitingDelivery + ')' : ''}</option>
-                      <option value="payment">Waiting payment</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </label>
-                )}
-              </div>
-            )}
             {tab === 'waiting' && (
               <table>
                 <thead><tr><th>Received</th><th>Store</th><th>Goods</th><th>Received by</th><th aria-label="Actions" /></tr></thead>
@@ -380,131 +423,6 @@ export default function Purchases({ section = 'purchases' }) {
                   ))}
                 </tbody>
               </table>
-            )}
-
-            {tab === 'purchases' && (
-              <table>
-                <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Status</th><th aria-label="Actions" /></tr></thead>
-                <tbody>
-                  {/* Sent for approval (backdated or by a branch manager): shown until an admin decides */}
-                  {!loading && pendingHere.map(p => {
-                    // the same short columns, read from what was sent for approval
-                    const rl = p.payload?.receipt?.lines || [];
-                    const priceOf = m => (p.payload?.lines || []).find(l => l.material_id === m)?.unit_price;
-                    const goods = rl.reduce((sum, l) => sum + Number(l.quantity) * Number(priceOf(l.material_id) ?? 0), 0);
-                    return (
-                    <tr key={p.id} className="text-muted">
-                      <td>{tableDate(p.payload?.receipt?.movement_date) ?? p.payload?.purchase_date ?? '—'}</td>
-                      {rl.length ? <>
-                        <td style={{ fontWeight: 500 }}>{rl.map((l, i) => <div key={i}>{refs?.items[`m:${l.material_id}`]?.name ?? '—'}</div>)}</td>
-                        <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{qtyText(l.quantity)} <span className="text-xs">{refs?.unitById[l.unit_id]?.symbol}</span></div>)}</td>
-                        <td style={{ textAlign: 'right' }}>{rl.map((l, i) => <div key={i}>{priceOf(l.material_id) != null ? money(priceOf(l.material_id)) : '—'}</div>)}</td>
-                      </> : <td className="text-sm" colSpan={3}>{p.summary}</td>}
-                      <td>{p.payload?.supplier_id ? supplierName(p.payload.supplier_id) : p.payload?.new_supplier_name ?? '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{rl.length ? money(round2(goods + Number(p.payload?.transport_charge ?? 0))) : ''}</td>
-                      <td><span className="badge badge-warning">Waiting for approval</span>
-                        <div className="text-xs">{people[p.requested_by] ?? ''} · {tableDate(p.requested_at)}</div></td>
-                      <td style={{ textAlign: 'right' }}><Link to="/approvals" className="btn btn-ghost btn-sm">Approvals</Link></td>
-                    </tr>
-                    );
-                  })}
-                  {loading ? <SkeletonRow cols={8} /> : purchasesShown.length === 0 ? (
-                    pendingHere.length ? null : <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No purchases yet" description="" /></td></tr>
-                  ) : purchasesShown.map(p => {
-                    const t = totals[p.id];
-                    const priceOfTx = Object.fromEntries((p.lines || []).map(l => [l.transaction_id, l.unit_price]));
-                    // a purchase coming later (120): what was bought; else the receipt's lines, as before
-                    const ls = p.items?.length
-                      ? [...p.items].sort((a, b) => a.line_no - b.line_no).map(i => ({ id: i.id, material_id: i.material_id, entered_quantity: i.quantity, entered_unit_id: i.unit_id, price: i.unit_price }))
-                      : (txByMove[p.movement_id] || []).filter(x => x.material_id).map(x => ({ ...x, price: priceOfTx[x.id] }));
-                    const ds = deliv[p.id];
-                    const dState = delivOf(p);
-                    const oneItem = ds?.items?.length === 1 ? ds.items[0] : null;
-                    return (
-                      <tr key={p.id} className={p.status === 'void' ? 'text-muted' : ''}>
-                        <td>{tableDate(p.purchase_date)}{p.invoice_reference && <div className="text-xs text-muted">{p.invoice_reference}</div>}</td>
-                        <td style={{ fontWeight: 500 }}>{ls.map(x => {
-                          // double-click (a tap on a phone) opens that material's purchases
-                          const open = () => { const it = refs?.items[`m:${x.material_id}`]; if (it) setHistoryOf({ id: it.id, name: it.name }); };
-                          return <div key={x.id} className="pu-item" title="Double-click for its purchases" onDoubleClick={open} onClick={() => { if (window.matchMedia('(pointer: coarse)').matches) open(); }}>{refs?.items[`m:${x.material_id}`]?.name ?? '—'}</div>;
-                        })}</td>
-                        <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{qtyText(x.entered_quantity)} <span className="text-muted text-xs">{refs?.unitById[x.entered_unit_id]?.symbol}</span></div>)}</td>
-                        <td style={{ textAlign: 'right' }}>{ls.map(x => <div key={x.id}>{x.price != null ? money(x.price) : '—'}</div>)}</td>
-                        <td>{supplierName(p.supplier_id)}</td>
-                        <td style={{ textAlign: 'right' }}>{t ? money(t.total) : '—'}</td>
-                        <td>
-                          {p.status === 'recorded' && dState === 'delivered' && t?.payment_status === 'paid'
-                            ? <span className="badge badge-success" title="Paid and delivered">Done</span>
-                            : <>
-                              <span className={`badge ${PAYMENT_BADGE[t?.payment_status] ?? 'badge-neutral'}`}>{PAYMENT_LABEL[t?.payment_status] ?? '—'}</span>
-                              {p.status === 'recorded' && (dState === 'delivered'
-                                ? <span className="badge badge-success" style={{ marginLeft: 4 }}>Delivered</span>
-                                : <span className={`badge ${dState === 'part' ? 'badge-warning' : 'badge-neutral'}`} style={{ marginLeft: 4 }}
-                                    title={(ds?.items || []).map(i => `${refs?.items[`m:${i.material_id}`]?.name ?? ''}: ${qtyText(Math.round(Number(i.delivered) * 100) / 100)} of ${qtyText(Number(i.quantity))} ${refs?.unitById[i.unit_id]?.symbol ?? ''}`).join(' · ')}>
-                                    {oneItem ? `${qtyText(Math.round(Number(oneItem.delivered) * 100) / 100)} of ${qtyText(Number(oneItem.quantity))} ${refs?.unitById[oneItem.unit_id]?.symbol ?? ''}` : dState === 'part' ? 'Part delivered' : 'Not delivered'}
-                                  </span>)}
-                            </>}
-                          {t?.payment_status === 'part_paid' && <div className="text-xs text-muted">{money(t.balance)} to pay</div>}
-                          {(slips[p.id] || []).map(d => <button key={d.id} type="button" className="link-btn text-xs" style={{ display: 'block' }} onClick={() => setSlipOpen(d)}>{d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)}</button>)}
-                          {p.status === 'void' && <div className="text-xs text-muted">{p.void_reason}</div>}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          {p.status === 'recorded' && dState !== 'delivered' && canRecordAt(p.branch_id) && (
-                            <button type="button" className="btn btn-primary btn-sm" style={{ marginRight: 6 }} onClick={() => setDelivering(p)}>Delivery…</button>
-                          )}
-                          {p.status === 'recorded' && canRecordAt(p.branch_id) && t && Number(t.balance) > 0.004 && (
-                            <button type="button" className="btn btn-primary btn-sm" style={{ marginRight: 6 }} onClick={() => setPaying({ purchase: p, total: t.total })}>Pay…</button>
-                          )}
-                          {p.status === 'recorded' && canRecordAt(p.branch_id) && (
-                            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ mode: 'edit', purchase: p })}>Open</button>
-                          )}
-                          {p.status === 'recorded' && p.movement_id && (
-                            <button type="button" className="btn btn-ghost btn-sm" title="Goods received note" onClick={() => window.open(`/print/grn/${p.movement_id}`, '_blank', 'noopener')}>GRN</button>
-                          )}
-                          {p.status === 'void' && isTechAdmin && (
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleting(p)}>Delete…</button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-
-            {tab === 'expenses' && (
-              <>
-                <table>
-                  <thead><tr><th>Date</th><th>Item</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Price</th><th>Source</th><th style={{ textAlign: 'right' }}>Total</th><th>Payment</th><th aria-label="Actions" /></tr></thead>
-                  <tbody>
-                    {loading ? <SkeletonRow cols={8} /> : expensesShown.length === 0 ? (
-                      <tr><td colSpan={8}><EmptyState icon={ShoppingCart} title="No expenses yet" description="Salaries, wages, electricity and other spending — use Record expense." /></td></tr>
-                    ) : expensesShown.map(e => {
-                      const pay = expensePay(e);
-                      return (
-                        <tr key={e.id} className={e.status === 'void' ? 'text-muted' : ''}>
-                          <td>{tableDate(e.expense_date)}</td>
-                          <td><span style={{ fontWeight: 500 }}>{e.description}</span><div className="text-xs text-muted">{catName(e.category_id)}</div></td>
-                          <td style={{ textAlign: 'right' }}>{e.quantity != null ? qtyText(e.quantity) : '—'}</td>
-                          <td style={{ textAlign: 'right' }}>{e.unit_price != null ? money(e.unit_price) : '—'}</td>
-                          <td>{e.supplier_id ? supplierName(e.supplier_id) : '—'}</td>
-                          <td style={{ textAlign: 'right' }}>{money(e.amount)}{e.vat_amount != null && <div className="text-xs text-muted">VAT {money(e.vat_amount)}</div>}</td>
-                          <td>
-                            <span className={`badge ${PAYMENT_BADGE[pay] ?? 'badge-neutral'}`}>{PAYMENT_LABEL[pay]}</span>
-                            {pay === 'part_paid' && <div className="text-xs text-muted">{money(round2(e.amount - e.amount_paid))} to pay</div>}
-                            {e.status === 'void' && <div className="text-xs text-muted">{e.void_reason}</div>}
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {e.status === 'recorded' && canRecordAt(e.branch_id) && (
-                              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingExpense(e)}>Open</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </>
             )}
 
             {tab === 'costs' && (!branchId ? (
@@ -554,6 +472,48 @@ export default function Purchases({ section = 'purchases' }) {
       {tokenFor && <BuyModal q={tokenFor} meterName={tokenFor.meterName} today={orgToday(organization?.timezone)} money={money}
         onClose={() => setTokenFor(null)} onSaved={async () => { setTokenFor(null); setOrdersKey(k => k + 1); await load(); }} />}
       {slipOpen && <ProofView row={slipOpen} onClose={() => setSlipOpen(null)} />}
+      {detail && (() => {
+        const p = detail; const t = totals[p.id]; const st = purchaseStatus(p); const ds = deliv[p.id];
+        const [label, cls, help] = PROC_STATUS[st];
+        const can = p.status === 'recorded' && canRecordAt(p.branch_id);
+        const close = () => setDetail(null);
+        return (
+          <Modal title={'Purchase · ' + dateText(p.purchase_date)} onClose={close}
+            footer={<>
+              {p.status === 'void' && isTechAdmin && <button type="button" className="btn btn-ghost" onClick={() => { close(); setDeleting(p); }}>Delete…</button>}
+              {p.status === 'recorded' && p.movement_id && <button type="button" className="btn btn-ghost" onClick={() => window.open('/print/grn/' + p.movement_id, '_blank', 'noopener')}>Goods received note</button>}
+              {can && <button type="button" className="btn btn-outline" onClick={() => { close(); setEditing({ mode: 'edit', purchase: p }); }}>Change</button>}
+              {can && delivOf(p) !== 'delivered' && <button type="button" className="btn btn-primary" onClick={() => { close(); setDelivering(p); }}>Record delivery</button>}
+              {can && t && Number(t.balance) > 0.004 && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
+              <button type="button" className="btn btn-outline" onClick={close}>Close</button>
+            </>}>
+            <div className="modal-form">
+              <p className="text-sm" style={{ margin: 0 }}><span className={'badge ' + cls}>{label}</span> <span className="text-muted">{help}</span></p>
+              {p.status === 'void' && p.void_reason && <p className="text-sm text-muted" style={{ margin: 0 }}>{p.void_reason}</p>}
+              <div className="pd-grid">
+                <span className="pl-help">Supplier</span><strong>{supplierName(p.supplier_id)}{p.invoice_reference ? ' · ' + p.invoice_reference : ''}</strong>
+                <span className="pl-help">Total</span><strong>{t ? money(t.total) : '—'}</strong>
+                <span className="pl-help">Paid</span><strong>{t ? money(t.amount_paid) : '—'}{t && Number(t.balance) > 0.004 ? ' · ' + money(t.balance) + ' to pay' : ''}</strong>
+              </div>
+              <table className="pd-lines">
+                <thead><tr><th>Item</th><th className="num">Bought</th><th className="num">Price (TZS)</th><th className="num">Delivered</th></tr></thead>
+                <tbody>{linesOf(p).map((l, i) => {
+                  const di = (ds?.items || []).find(x => x.material_id === l.material_id);
+                  const u = refs?.unitById[l.unit_id]?.symbol ?? '';
+                  return <tr key={i}><td>{refs?.items['m:' + l.material_id]?.name ?? '—'}</td><td className="num">{qtyText(l.qty)} {u}</td><td className="num">{l.price != null ? money(l.price).replace(/^Tsh\s*/, '') : '—'}</td>
+                    <td className="num">{p.status !== 'recorded' ? '—' : di ? qtyText(Math.round(Number(di.delivered) * 100) / 100) + ' ' + u : delivOf(p) === 'delivered' ? 'All' : '—'}</td></tr>;
+                })}</tbody>
+              </table>
+              {(slips[p.id] || []).length > 0 && (
+                <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                  <span className="pl-help">Proof:</span>
+                  {(slips[p.id] || []).map(d => <button key={d.id} type="button" className="btn btn-ghost btn-sm" onClick={() => setSlipOpen(d)}>{d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)}</button>)}
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
       {paying && <PayPurchaseModal purchase={paying.purchase} total={paying.total} supplierName={supplierName(paying.purchase.supplier_id)} currency={organization?.currency_code}
         accounts={payAccounts.filter(a => a.branch_id === paying.purchase.branch_id)} onClose={() => setPaying(null)} onSaved={async () => { setPaying(null); await load(); }} />}
       {delivering && <DeliveryModal purchase={delivering} status={deliv[delivering.id]} refs={refs} organization={organization} canAt={canAt}

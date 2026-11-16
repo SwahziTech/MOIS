@@ -10,15 +10,17 @@ import { Search, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
  */
 
 /** Search bar + Sort / Filter menu (+ any extra controls, e.g. an ActionMenu) on one row */
-export function ListToolbar({ search, onSearch, placeholder = 'Search…', sort, filters = [], id, children }) {
+// filterFirst: the Sort / Filter button at the search's left (Procurement, 2026-11-16)
+export function ListToolbar({ search, onSearch, placeholder = 'Search…', sort, filters = [], id, children, filterFirst = false }) {
   return (
-    <div className="list-toolbar">
+    <div className={`list-toolbar${filterFirst ? ' is-filter-first' : ''}`}>
+      {filterFirst && (sort || filters.length > 0) && <SortFilterMenu sort={sort} filters={filters} />}
       <div className="search-wrapper list-search">
         <Search size={15} className="search-icon" />
         <input id={id} type="search" className="search-input" placeholder={placeholder}
           value={search} onChange={e => onSearch(e.target.value)} aria-label={placeholder} />
       </div>
-      {(sort || filters.length > 0) && <SortFilterMenu sort={sort} filters={filters} />}
+      {!filterFirst && (sort || filters.length > 0) && <SortFilterMenu sort={sort} filters={filters} />}
       {children}
     </div>
   );
