@@ -15,8 +15,21 @@ const MODES = [
 ];
 // USSD menus (dialled from a phone): the bank's or the network's own menu, where the person pays
 const USSD = { crdb: '*150*03#', nmb: '*150*66#', mpesa: '*150*00#', mixx: '*150*01#', airtel: '*150*60#', halopesa: '*150*88#' };
-// Opening the bank's own app from a web page did not work on the phone (2026-11-16): the button dials
-// the menu instead. A Flutter app could find and open installed apps — for when the mobile app is built.
+// One button opens the bank's or network's own app on an Android phone (2026-11-16, the user: as before,
+// with the menu code on the button). It starts the app's home screen (MAIN + LAUNCHER); if Android can't,
+// the app's own Play Store page opens ("Open" when installed). No app known, or not Android: it dials the
+// menu. Play Store ids from public app listings, not confirmed with the banks. (A Flutter app could find and
+// open installed apps properly — for when the mobile app is built.)
+const APPS = {
+  crdb: { pkg: 'apps.crdbbank.com.mobapp', name: 'CRDB SimBanking' },
+  nmb: { pkg: 'com.nmb10.eclectics', name: 'NMB Mkononi' },
+  mpesa: { pkg: 'com.vodafone.mpesa.tanzania', name: 'M-Pesa' },
+  mixx: { pkg: 'tz.tigo.mfsapp', name: 'Mixx by Yas' },
+  airtel: { pkg: null, name: 'Airtel Money' },
+  halopesa: { pkg: null, name: 'HaloPesa' },
+};
+const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+const appLink = a => `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(`https://play.google.com/store/apps/details?id=${a.pkg}`)};end`;
 const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
 // banks in Tanzania other than CRDB, for the drop-down (2026-11-16, the user); "Another bank" lets one be typed
 const BANKS = ['NMB', 'NBC', 'Selcom Microfinance Bank', 'Exim Bank', 'Stanbic Bank', 'Absa Bank', 'Equity Bank', 'Azania Bank',
@@ -122,7 +135,12 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
       {mode === 'mobile' && (!phone.trim() || badPhone) && <p className="text-sm text-warning" style={{ margin: 0 }}>{phone.trim() ? 'That is not a valid phone number — e.g. 0712 345 678 or 255712345678.' : 'Enter the phone number to send to.'}</p>}
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
-        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mkononi'} ({ussd})</a>}
+        {ussd && (() => {
+          const app = mode === 'crdb' ? APPS.crdb : mode === 'mobile' ? APPS[net] : APPS.nmb;
+          const viaApp = app?.pkg && isAndroid();
+          return <a className="btn btn-primary btn-sm" href={viaApp ? appLink(app) : `tel:${ussd.replace(/#/g, '%23')}`}
+            title={viaApp ? `Open the ${app.name} app` : `Dial ${ussd} on this phone`}><Phone size={14} /> Open {app?.name ?? 'the menu'} ({ussd})</a>;
+        })()}
       </div>
       <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
         Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
