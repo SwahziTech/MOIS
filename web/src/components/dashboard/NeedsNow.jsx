@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -7,6 +7,7 @@ import { useBranch } from '../../hooks/useBranch';
 import { formatMoney, formatAmount, dateText } from '../../lib/format';
 import { WaitingSlips } from '../sales/PaymentProofs';
 import { PayModal } from './DirectorPayments';
+import WeeklyCash from '../../pages/WeeklyCash';
 
 /*
  * "Needs you now" for the directors, grouped (2026-11-16, the user): one card a kind, with its number in
@@ -67,19 +68,19 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
 }
 
 function CashList({ rows, asked, money, onPaid }) {
-  const navigate = useNavigate();
   const { branches } = useBranch();
   const { canAt } = useAuth();
   const [paying, setPaying] = useState(null);   // an approved request being paid
+  const [viewing, setViewing] = useState(null);   // the report open full screen, here (2026-11-16)
   if (!rows) return <span className="skeleton" />;
-  const go = (r, view) => navigate(`/weekly-cash?open=${r.id}&branch=${r.branch_id}${view ? '&view=1' : ''}`);
+  const go = r => setViewing(r);   // the document opens here, over this page
   return (
     <div className="nn-list">
       {rows.map(r => {
         const ls = [...(r.lines || [])].sort((a, b) => Number(b.amount) - Number(a.amount));
         return (
           <div key={r.id} className="nn-item">
-            <button type="button" className="nn-item-main" onClick={() => go(r, false)} title="Open the request">
+            <button type="button" className="nn-item-main" onClick={() => go(r, false)} title="Open the report">
               <strong>{branches.find(b => b.id === r.branch_id)?.name ?? 'Branch'} · {dateText(r.week_ending)}</strong>
               <span className="pl-help"><span className={`badge ${r.status === 'approved' ? 'badge-info' : 'badge-warning'}`}>{r.status === 'approved' ? 'Approved · to pay' : 'To approve'}</span> {money(asked(r))} · {ls.length} line{ls.length === 1 ? '' : 's'}{r.source === 'excel' ? ' · from Excel' : ''}</span>
               <span className="nn-lines">{ls.slice(0, 3).map((l, k) => <span key={k}>{l.description} · {formatAmount(Number(l.amount))}</span>)}{ls.length > 3 && <span className="pl-help">+{ls.length - 3} more</span>}</span>
@@ -93,6 +94,7 @@ function CashList({ rows, asked, money, onPaid }) {
           </div>
         );
       })}
+      {viewing && <WeeklyCash embed={{ id: viewing.id, branch: viewing.branch_id }} onEmbedClose={() => setViewing(null)} onEmbedSaved={() => { setViewing(null); onPaid?.(); }} />}
       {paying && <PayModal preset={{ kind: 'weekly_cash', branch: paying.branch_id, ref: paying.id }} onClose={() => setPaying(null)} onSaved={() => { setPaying(null); onPaid?.(); }} />}
     </div>
   );

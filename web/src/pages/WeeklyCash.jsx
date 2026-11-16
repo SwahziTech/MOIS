@@ -76,9 +76,13 @@ const approvedOf = r => (r.lines || []).reduce((t, l) => t + Number(l.approved_a
  * can be imported from the branch's Excel sheet or filled here, and exported
  * in the same layout.
  */
-export default function WeeklyCash() {
+// embed: { id, branch } — only that request's document, full screen, over the page the person is on
+// (the directors' View, 2026-11-16: no going to Finance; closing leaves them where they were)
+export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved }) {
   const { organization, canAt } = useAuth();
-  const { branchId, branchName, setBranchId } = useBranch();
+  const { branchId: ctxBranch, branchName: ctxName, setBranchId, branches } = useBranch();
+  const branchId = embed?.branch || ctxBranch;
+  const branchName = embed ? (branches || []).find(b => b.id === embed.branch)?.name ?? null : ctxName;
   // opened from the director's card: ?open=<request>&branch=<branch>&view=1 → that request, full screen (2026-11-16)
   const [params, setParams] = useSearchParams();
   const wantOpen = params.get('open');
@@ -109,9 +113,9 @@ export default function WeeklyCash() {
     setData({ requests: rq.data || [], expenses: ex.data || [], payments: pp.data || [], cats: cats.data || [], refs, tx });
   }
   useEffect(() => { setData(null); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const b = params.get('branch'); if (b && b !== branchId) setBranchId(b); }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (embed) return; const b = params.get('branch'); if (b && b !== branchId) setBranchId(b); }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!wantOpen || !data) return;
+    if (embed || !wantOpen || !data) return;
     const r = data.requests.find(x => x.id === wantOpen);
     if (r) { setOpen({ ...r, __view: wantView }); setParams({}, { replace: true }); }
   }, [wantOpen, data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -203,6 +207,12 @@ export default function WeeklyCash() {
   }
   const [actionError, setActionError] = useState('');
 
+  if (embed) {
+    const r = data?.requests.find(x => x.id === embed.id);
+    if (!r) return null;
+    return <RequestModal key={r.id} viewOnly startView request={r} newWeek={newWeek} branchId={branchId} branchName={branchName} data={data} weekOf={weekOf} spentIn={spentIn} today={today} money={money}
+      organization={organization} onRefresh={load} onClose={() => onEmbedClose?.()} onSaved={() => onEmbedSaved?.()} />;
+  }
   return (
     <PageShell title="Weekly cash" subtitle="Finance"
       description={branchId ? branchName : 'Pick a branch in the sidebar'}
@@ -258,7 +268,7 @@ export default function WeeklyCash() {
   );
 }
 
-function RequestModal({ startView = false, request, newWeek, branchId, branchName, data, weekOf, spentIn = () => [], today, money, organization, onRefresh, onClose, onSaved }) {
+function RequestModal({ viewOnly = false, startView = false, request, newWeek, branchId, branchName, data, weekOf, spentIn = () => [], today, money, organization, onRefresh, onClose, onSaved }) {
   const { canAt } = useAuth();
   const isNew = !request;
   const editable = isNew || request.status === 'draft';
@@ -634,14 +644,14 @@ function RequestModal({ startView = false, request, newWeek, branchId, branchNam
         canDecide={!isNew && st === 'with_directors' && canAt('cash.approve', branchId)}
         onApprove={() => approveIt('')}
         onSendBack={n => step('back_to_draft', { note: n })}
-        onClose={() => setViewing(false)} />
+        onClose={() => (viewOnly ? onClose() : setViewing(false))} />
     )}
     {docMode && (
       <WeeklyCashDocDialog doc={docModel()} mode={docMode} note={docMode === 'review' ? postNote() : null} defaultFormat={docMode === 'review' || !editable ? 'pdf' : 'excel'} busy={busy}
         confirmLabel={primaryLabel} onClose={() => setDocMode(null)}
         onConfirm={async () => { await save({ send: poster }); setDocMode(null); }} />
     )}
-    <Modal title="WEEKLY CASH REPORT" onClose={onClose} size="xl"
+    {!viewOnly && <Modal title="WEEKLY CASH REPORT" onClose={onClose} size="xl"
       footer={<>
         <div className="wc-foot-left">
           <button type="button" className="btn btn-ghost" onClick={() => setDocMode('export')}><Download size={14} /> Export</button>
@@ -772,7 +782,7 @@ function RequestModal({ startView = false, request, newWeek, branchId, branchNam
           </div>
         )}
       </div>
-    </Modal>
+    </Modal>}
     </>
   );
 }
