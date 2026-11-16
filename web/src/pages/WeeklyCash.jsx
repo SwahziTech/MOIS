@@ -465,14 +465,19 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
   };
   function spendPlan(rows) {
-    const from = addDays(week, -6);
-    const existing = [...spentIn(week), ...spentIn(week, 'others')].map(x => ({ ...x, used: false }));
+    // the sheet's week runs from the Saturday before (its BALANCE date) to the report date; an item with no
+    // date of its own is put on the sheet's first day, not the report date (2026-11-16, the user: the spending
+    // belongs to the older week, before the cash sent on the report date)
+    const from = addDays(week, -7);
+    const start = (() => { const b = isoOf((rows || []).find(r => /^\s*balance\s*$/i.test(r.description || ''))?.date); return b && b >= from && b <= week ? b : from; })();
+    const existing = [...spentIn(week), ...spentIn(week, 'others'), ...[...spentIn(from), ...spentIn(from, 'others')].filter(x => x.date === from)]
+      .map(x => ({ ...x, used: false }));
     const out = { record: [], already: [] };
     (rows || []).forEach((r, i) => {
       if (FORMULA_ROW.test(r.description || '') || !(num(r.cash_out) > 0) || !String(r.description ?? '').trim()) return;
       if (r.expense_id || r.record_id) { out.already.push({ r, i }); return; }
       const d = isoOf(r.date);
-      const day = d && d >= from && d <= week ? d : week;
+      const day = d && d >= from && d <= week ? d : start;
       const first = nw(r.description).split(' ')[0];
       const m = existing.find(x => !x.used && Math.abs(x.amount - num(r.cash_out)) < 1
         && (nw(x.description) === nw(r.description) || (first && nw(x.description).split(' ').includes(first)) || x.date === day));
