@@ -37,7 +37,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const rawStores = stores.filter(w => w.type === 'raw_materials' || w.type === 'general');
   const curingStore = stores.find(w => w.type === 'wip');
   const canBackdate = canAt('inventory.adjust', branchId, null);
-  const isManager = canAt('products.manage', branchId, null);   // may allow other products for one batch
+  // may allow other products for one batch: the manager, and the secretary (127, 2026-11-16)
+  const isManager = canAt('products.manage', branchId, null) || canAt('production.other_products', branchId, null);
   const key = draftKey(organization?.id, branchId);
 
   // Restore the unsaved list (and the batch being typed) from this device
