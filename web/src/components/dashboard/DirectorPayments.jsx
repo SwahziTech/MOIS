@@ -1,3 +1,4 @@
+import PayTo from './PayTo';
 import { useEffect, useMemo, useState } from 'react';
 import { Upload, FileImage, Banknote, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -28,13 +29,14 @@ const KIND_LABEL = Object.fromEntries(KINDS);
 const num = v => (String(v ?? '').trim() === '' ? null : Number(String(v).replace(/,/g, '')));
 const r2 = n => Math.round(n * 100) / 100;
 
-export function PayModal({ onClose, onSaved }) {
+// preset (2026-11-16): opened straight after approving — { kind, branch, ref } filled in, ready to pay
+export function PayModal({ onClose, onSaved, preset = null }) {
   const { organization } = useAuth();
   const { branchId, branches } = useBranch();
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, organization?.currency_code);
-  const [br, setBr] = useState(branchId || '');
-  const [kind, setKind] = useState('supplier');
+  const [br, setBr] = useState(preset?.branch || branchId || '');
+  const [kind, setKind] = useState(preset?.kind || 'supplier');
   const [options, setOptions] = useState(null);   // what can be paid, for the kind and branch
   const [ref, setRef] = useState('');
   const [desc, setDesc] = useState('');
@@ -73,15 +75,24 @@ export function PayModal({ onClose, onSaved }) {
         setOptions((data || []).map(x => ({ id: x.id, who: x.description, owes: Math.max(Number(x.amount) - Number(x.amount_paid || 0), 0) || Number(x.amount),
           label: `${tableDate(x.expense_date)} · ${x.description ?? 'Expense'} · ${money(Number(x.amount))}` })));
       } else if (kind === 'weekly_cash') {
-        const { data } = await supabase.from('cash_requests').select('id, week_ending, status, lines:cash_request_lines(amount, approved_amount)').eq('branch_id', br).eq('status', 'approved').order('week_ending', { ascending: false });
+        const { data } = await supabase.from('cash_requests').select('id, week_ending, status, pay_bank, pay_account_no, pay_account_name, lines:cash_request_lines(amount, approved_amount)').eq('branch_id', br).eq('status', 'approved').order('week_ending', { ascending: false });
+        const bname = (branches || []).find(b => b.id === br)?.name ?? '';
         setOptions((data || []).map(x => { const a = (x.lines || []).reduce((t, l) => t + Number(l.approved_amount ?? l.amount), 0);
-          return { id: x.id, owes: a, label: `Week ending ${tableDate(x.week_ending)} · approved ${money(a)}` }; }));
+          // where the money goes, and a reference the branch will recognise on its statement
+          const payTo = x.pay_bank || x.pay_account_no || x.pay_account_name ? { bank: x.pay_bank, no: x.pay_account_no, name: x.pay_account_name } : null;
+          const reference = `WEEKLY CASH ${bname} ${tableDate(x.week_ending)}`.toUpperCase().replace(/\s+/g, ' ').trim();
+          return { id: x.id, owes: a, payTo, reference, label: `Week ending ${tableDate(x.week_ending)} · approved ${money(a)}` }; }));
       } else if (kind === 'salaries') {
         const { data } = await supabase.from('pay_sheets').select('id, cycle, period_start, period_end, total, status').eq('branch_id', br).eq('status', 'approved').order('period_end', { ascending: false });
         setOptions((data || []).map(x => ({ id: x.id, owes: Number(x.total), label: `${tableDate(x.period_start)} – ${tableDate(x.period_end)} · ${money(Number(x.total))}` })));
       } else setOptions([]);
     })();
   }, [kind, br]); // eslint-disable-line react-hooks/exhaustive-deps
+  // opened with a preset: pick it as soon as the list is in
+  useEffect(() => {
+    if (preset?.ref && !ref && (options || []).some(o => o.id === preset.ref)) pickRef(preset.ref);
+  }, [options]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = (options || []).find(o => o.id === ref);
   function pickRef(id) {
     setRef(id);
     const o = (options || []).find(x => x.id === id);
@@ -108,7 +119,7 @@ export function PayModal({ onClose, onSaved }) {
       // 1. the payment, through MOIS's own step
       let r = { error: null };
       if (kind === 'supplier') r = await supabase.rpc('record_purchase_payment', { p_purchase: ref, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null, method: accountId ? null : 'bank', reference: null } });
-      if (kind === 'weekly_cash') r = await supabase.rpc('cash_request_step', { p_id: ref, p_step: 'pay', p: { amount: num(amount), paid_on: paidOn, reference: null } });
+      if (kind === 'weekly_cash') r = await supabase.rpc('cash_request_step', { p_id: ref, p_step: 'pay', p: { amount: num(amount), paid_on: paidOn, reference: chosen?.reference ?? null } });
       if (kind === 'salaries') r = await supabase.rpc('pay_pay_sheet', { p_sheet: ref, p: { paid_on: paidOn, account_id: accountId || null } });
       if (r.error) throw r.error;
       // 2. the proof, kept with it
@@ -170,6 +181,7 @@ export function PayModal({ onClose, onSaved }) {
           )}
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} /></label>
         </div>
+        {chosen?.payTo && <PayTo payTo={chosen.payTo} amount={num(amount)} reference={chosen.reference} money={money} />}
         <ProofBox file={file} onFile={f => pick({ target: { files: f ? [f] : [], value: '' } })} text={sms} onText={setSms} />
       </div>
     </Modal>

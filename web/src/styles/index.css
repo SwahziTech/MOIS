@@ -3047,3 +3047,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .wc-doc-paper.is-reading .wc-doc-title { font-size: 15px; }
 /* the document's header rows never stick (the app's sticky headers would stack them in a scrolling view) */
 .wc-doc-page .wc-doc-table thead th { position: static; }
+/* the Pay window: where the money goes, with copy buttons (2026-11-16) */
+.payto { display: flex; flex-direction: column; gap: 10px; }
+.payto-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px 10px; background: var(--bg-soft); }
+.payto-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 36px; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--border); }
+.payto-row:last-child { border-bottom: 0; }
+.payto-val { overflow-wrap: anywhere; font-size: var(--text-md); }
+.payto-actions { display: flex; flex-wrap: wrap; gap: 8px; }

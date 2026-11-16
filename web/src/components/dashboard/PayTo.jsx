@@ -1,0 +1,86 @@
+import { useState } from 'react';
+import { Copy, Check, Phone } from 'lucide-react';
+
+/*
+ * Where the money goes, ready to pay (2026-11-16, the user: copy + open the app; one-tap payment through
+ * Snippe comes in the last phase). The director picks how they pay; each detail has a Copy button; for
+ * CRDB, NMB and mobile money a button opens the USSD menu on the phone. Then they pay in their bank or
+ * money app, come back and post the SMS or the screenshot as proof.
+ *   payTo: { bank, no, name }  amount: number  reference: text
+ */
+const MODES = [
+  ['crdb', 'CRDB'],
+  ['bank', 'Other bank'],
+  ['mobile', 'Mobile money'],
+];
+// USSD menus (dialled from a phone): the bank's or the network's own menu, where the person pays
+const USSD = { crdb: '*150*03#', nmb: '*150*66#', mpesa: '*150*00#', mixx: '*150*01#', airtel: '*150*60#', halopesa: '*150*88#' };
+const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
+
+const guessMode = bank => {
+  const b = String(bank ?? '').toLowerCase();
+  if (/crdb/.test(b)) return 'crdb';
+  if (/m-?pesa|vodacom|tigo|mixx|yas|airtel|halo/.test(b)) return 'mobile';
+  return b ? 'bank' : 'crdb';
+};
+const guessNet = bank => {
+  const b = String(bank ?? '').toLowerCase();
+  return /tigo|mixx|yas/.test(b) ? 'mixx' : /airtel/.test(b) ? 'airtel' : /halo/.test(b) ? 'halopesa' : 'mpesa';
+};
+
+export default function PayTo({ payTo, amount, reference, money }) {
+  const [mode, setMode] = useState(() => guessMode(payTo?.bank));
+  const [net, setNet] = useState(() => guessNet(payTo?.bank));
+  const [copied, setCopied] = useState('');
+  async function copy(key, text) {
+    try { await navigator.clipboard.writeText(String(text ?? '')); }
+    catch {
+      const t = document.createElement('textarea'); t.value = String(text ?? ''); document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); } catch { /* the person can still read it */ }
+      t.remove();
+    }
+    setCopied(key); setTimeout(() => setCopied(c => (c === key ? '' : c)), 1500);
+  }
+  const amt = Math.round(Number(amount) || 0);
+  const rows = [
+    [mode === 'mobile' ? 'Network' : 'Bank', mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : (payTo?.bank || (mode === 'crdb' ? 'CRDB' : '')), false],
+    [mode === 'mobile' ? 'Phone number' : 'Account number', payTo?.no, true],
+    ['Name', payTo?.name, true],
+    ['Amount', amt ? String(amt) : '', true, amt ? money(amt) : ''],
+    ['Reference', reference, true],
+  ];
+  const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : /nmb/i.test(payTo?.bank ?? '') ? USSD.nmb : null;
+  const all = rows.filter(r => r[1]).map(r => `${r[0]}: ${r[3] || r[1]}`).join('\n');
+  return (
+    <div className="payto">
+      <div className="pe-field"><span>Pay by</span>
+        <div className="filter-chips" role="radiogroup" aria-label="Pay by">
+          {MODES.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={mode === k} className={`filter-chip${mode === k ? ' is-on' : ''}`} onClick={() => setMode(k)}>{l}</button>)}
+        </div>
+      </div>
+      {mode === 'mobile' && (
+        <div className="filter-chips" role="radiogroup" aria-label="Network">
+          {NETWORKS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={net === k} className={`filter-chip${net === k ? ' is-on' : ''}`} onClick={() => setNet(k)}>{l}</button>)}
+        </div>
+      )}
+      <div className="payto-card">
+        {rows.map(([label, value, canCopy, shown]) => (
+          <div key={label} className="payto-row">
+            <span className="pl-help">{label}</span>
+            <strong className="payto-val">{shown || value || '—'}</strong>
+            {canCopy && value ? (
+              <button type="button" className="btn btn-ghost btn-sm" aria-label={`Copy ${label.toLowerCase()}`} title={`Copy ${label.toLowerCase()}`} onClick={() => copy(label, value)}>
+                {copied === label ? <Check size={14} /> : <Copy size={14} />}</button>
+            ) : <span />}
+          </div>
+        ))}
+      </div>
+      <div className="payto-actions">
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
+        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mobile'} ({ussd})</a>}
+      </div>
+      <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
+        Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
+    </div>
+  );
+}

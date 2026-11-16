@@ -12,6 +12,7 @@ import { readWeeklySheet, listWeeklySheets } from '../lib/weeklyCashExcel';
 import { guessCategory, fillCategories } from '../lib/expenseGuess';
 import WeeklyCashDocDialog from '../components/finance/WeeklyCashDocDialog';
 import WeeklyCashViewer from '../components/finance/WeeklyCashViewer';
+import { PayModal } from '../components/dashboard/DirectorPayments';
 import { useSearchParams } from 'react-router-dom';
 import { saveWeeklyCash } from '../components/purchases/PaidFrom';
 import PageShell from '../components/PageShell';
@@ -415,6 +416,17 @@ function RequestModal({ startView = false, request, newWeek, branchId, branchNam
     else await onRefresh?.();
     setTicking('');
   }
+  // approve as asked; then the approving director is asked "Pay now?" (2026-11-16, the user)
+  const [askPay, setAskPay] = useState(false);
+  const [paying, setPaying] = useState(false);
+  async function approveIt(n) {
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.rpc('cash_request_step', { p_id: request.id, p_step: 'approve', p: { note: n, lines: lines.map(l => ({ id: l.id, approved_amount: null })) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    setViewing(false);
+    if (canAt('finance.pay', branchId, null)) setAskPay(true); else onSaved();
+  }
   const step = async (name, p = {}) => {
     setError(''); setBusy(true);
     const { error: err } = await supabase.rpc('cash_request_step', { p_id: request.id, p_step: name, p });
@@ -608,10 +620,19 @@ function RequestModal({ startView = false, request, newWeek, branchId, branchNam
         </div>
       </Modal>
     )}
+    {askPay && !paying && (
+      <Modal title="Approved" onClose={onSaved}
+        footer={<>
+          <button type="button" className="btn btn-outline" onClick={onSaved}>Later</button>
+          <button type="button" className="btn btn-primary" onClick={() => setPaying(true)}>Pay now</button></>}>
+        <p className="text-sm">{money(total)} approved for {branchName} · {dateText(week)}. Pay it now?</p>
+      </Modal>
+    )}
+    {paying && <PayModal preset={{ kind: 'weekly_cash', branch: branchId, ref: request.id }} onClose={onSaved} onSaved={onSaved} />}
     {viewing && (
       <WeeklyCashViewer doc={docModel()} total={total} money={money} busy={busy} error={error}
         canDecide={!isNew && st === 'with_directors' && canAt('cash.approve', branchId)}
-        onApprove={() => step('approve', { note: '', lines: lines.map(l => ({ id: l.id, approved_amount: null })) })}
+        onApprove={() => approveIt('')}
         onSendBack={n => step('back_to_draft', { note: n })}
         onClose={() => setViewing(false)} />
     )}
@@ -634,7 +655,7 @@ function RequestModal({ startView = false, request, newWeek, branchId, branchNam
         {!isNew && st === 'with_directors' && canAt('cash.approve', branchId) && <>
           <button type="button" className="btn btn-ghost" disabled={busy || !note.trim()} onClick={() => step('reject', { note })}>Turn down</button>
           <button type="button" className="btn btn-outline" disabled={busy} onClick={() => step('back_to_draft', { note })}>Send back to change</button>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => step('approve', { note, lines: lines.map(l => ({ id: l.id, approved_amount: null })) })}>Approve {money(total)}</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => approveIt(note)}>Approve {money(total)}</button>
         </>}
         {!isNew && st === 'approved' && canAt('cash.approve', branchId) && <button type="button" className="btn btn-primary" disabled={busy || !(num(pay.amount) > 0)} onClick={() => step('pay', pay)}>Record payment</button>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>

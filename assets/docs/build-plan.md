@@ -393,6 +393,15 @@ Needed for the month of real use before AI and Billing.
 
 PRD section: 4.18 (Subscription & Billing), Snippe.sh integration.
 
+- **Snippe payouts — the last phase** (SwahziTech, 2026-11-16): one-tap payment from MOIS (weekly cash,
+  suppliers, salaries) through Snippe — payout to CRDB / other banks / mobile money, confirmed back to MOIS
+  and marked Paid automatically. Before that is built: SwahziTech opens a Snippe business account and
+  confirms CRDB support, fees and how the payout balance is funded; keys stay server-side; a director PIN
+  or one-time code and a daily limit on every payout. Until then (built 2026-11-16): Approve → "Pay now?"
+  → the directors' Pay window filled in (amount, bank, account, name, reference), Pay by CRDB / other bank
+  / mobile money with Copy buttons and the USSD menu, paid in the bank or money app, then the SMS or
+  screenshot posted as proof.
+
 - Org onboarding (PRD 5.1): pre-fill new org's timezone from browserTimeZone() at creation, editable after.
 
 Deliberately sequenced LAST within Phase 1, not first, despite the PRD
