@@ -91,6 +91,24 @@ export function downloadCsv(doc) {
 }
 
 export async function downloadPdf(doc, setup) { (await buildPdf(doc, setup)).save(`${doc.fileName}.pdf`); }
+
+/** On a phone: the PDF goes straight to the phone's "Open with / Share" list (a PDF reader, WhatsApp,
+ *  Drive…) — opened, not downloaded again (2026-11-16, the user). Elsewhere, or where the phone can't
+ *  share files: an ordinary download. → 'shared' | 'cancelled' | 'downloaded' */
+export const isPhone = () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+export async function openPdf(doc, setup) {
+  const pdf = await buildPdf(doc, setup);
+  const name = `${doc.fileName}.pdf`;
+  if (isPhone() && typeof File !== 'undefined' && navigator.canShare) {
+    const file = new File([pdf.output('blob')], name, { type: 'application/pdf' });
+    if (navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: doc.title }); return 'shared'; }
+      catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }   // closed the list: nothing to do
+    }
+  }
+  pdf.save(name);
+  return 'downloaded';
+}
 export async function printPdf(doc, setup) {
   const pdf = await buildPdf(doc, setup);
   pdf.autoPrint();

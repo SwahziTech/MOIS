@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, MessageSquare, Check } from 'lucide-react';
+import { X, Download, MessageSquare, Check, ExternalLink } from 'lucide-react';
 import { PagePreview } from './WeeklyCashDocDialog';
-import { pickPaper, downloadPdf } from '../../lib/weeklyCashDoc';
+import { pickPaper, openPdf, isPhone } from '../../lib/weeklyCashDoc';
 
 /*
  * The weekly cash report full screen, as the PDF page (2026-11-16, the user: directors open it on their
@@ -19,7 +19,7 @@ export default function WeeklyCashViewer({ doc, total, money, canDecide = false,
       <div className="wcv-bar">
         <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={onClose}><X size={18} /></button>
         <strong className="wcv-title">{doc.title}</strong>
-        <button type="button" className="btn btn-ghost btn-sm" title="Save as PDF" onClick={() => downloadPdf(doc, setup)}><Download size={16} /> PDF</button>
+        <button type="button" className="btn btn-ghost btn-sm" title={isPhone() ? 'Open the PDF with an app on this phone' : 'Save as PDF'} onClick={() => openPdf(doc, setup)}>{isPhone() ? <ExternalLink size={16} /> : <Download size={16} />} PDF</button>
       </div>
       <div className="wcv-page"><PagePreview doc={doc} setup={setup} fitWidth /></div>
       {canDecide && (
