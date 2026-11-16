@@ -3058,3 +3058,12 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .payto-input:hover { border-color: var(--border); }
 .payto-input:focus { outline: none; border-color: var(--accent); background: var(--bg-surface); }
 .payto-input.is-bad { border-color: var(--color-warning, #d4a017); }
+/* the Pay window on a phone: each detail under its label, full width (2026-11-16) */
+@media (max-width: 600px) {
+  .payto-row { grid-template-columns: minmax(0, 1fr) 36px; gap: 2px 6px; padding: 6px 0; }
+  .payto-row > .pl-help { grid-column: 1 / -1; }
+  .payto-input, .payto-val { font-size: 14px; letter-spacing: -0.01em; }
+  .payto-input { padding: 0 4px; }
+  .payto-actions .btn { flex: 1 1 100%; justify-content: center; }
+}
+.payto-input.payto-wrap { height: auto; min-height: 34px; padding-top: 6px; padding-bottom: 6px; resize: none; field-sizing: content; line-height: 1.3; white-space: pre-wrap; overflow-wrap: anywhere; }

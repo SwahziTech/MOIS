@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Phone } from 'lucide-react';
+import { Copy, Check, Phone, Smartphone } from 'lucide-react';
 
 /*
  * Where the money goes, ready to pay (2026-11-16, the user: copy + open the app; one-tap payment through
@@ -15,6 +15,22 @@ const MODES = [
 ];
 // USSD menus (dialled from a phone): the bank's or the network's own menu, where the person pays
 const USSD = { crdb: '*150*03#', nmb: '*150*66#', mpesa: '*150*00#', mixx: '*150*01#', airtel: '*150*60#', halopesa: '*150*88#' };
+// the bank's or network's own app on an Android phone (2026-11-16, the user: "bring the NMB app").
+// Play Store ids from public app listings (not confirmed with the banks): when one is wrong or the app is
+// not installed, the phone goes to the Play Store search for the app instead.
+const APPS = {
+  crdb: { pkg: 'apps.crdbbank.com.mobapp', name: 'CRDB SimBanking' },
+  nmb: { pkg: 'com.nmb10.eclectics', name: 'NMB Mkononi' },
+  mpesa: { pkg: 'com.vodafone.mpesa.tanzania', name: 'M-Pesa' },
+  mixx: { pkg: 'tz.tigo.mfsapp', name: 'Mixx by Yas' },
+  airtel: { pkg: null, name: 'Airtel Money' },
+  halopesa: { pkg: null, name: 'HaloPesa' },
+};
+const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+const appLink = a => {
+  const store = `https://play.google.com/store/search?q=${encodeURIComponent(a.name)}&c=apps`;
+  return a.pkg ? `intent://#Intent;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(store)};end` : store;
+};
 const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
 // banks in Tanzania other than CRDB, for the drop-down (2026-11-16, the user); "Another bank" lets one be typed
 const BANKS = ['NMB', 'NBC', 'Selcom Microfinance Bank', 'Exim Bank', 'Stanbic Bank', 'Absa Bank', 'Equity Bank', 'Azania Bank',
@@ -75,6 +91,7 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
     ['Reference', ref, true, null, setReference, 'Reference'],
   ];
   const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : bank === 'NMB' ? USSD.nmb : null;
+  const app = mode === 'crdb' ? APPS.crdb : mode === 'mobile' ? APPS[net] : bank === 'NMB' ? APPS.nmb : null;
   const all = rows.filter(r => r[1]).map(r => `${r[0]}: ${r[3] || r[1]}`).join('\n');
   return (
     <div className="payto">
@@ -103,7 +120,10 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
         {rows.map(([label, value, canCopy, shown, onEdit, placeholder]) => (
           <div key={label} className="payto-row">
             <span className="pl-help">{label}</span>
-            {onEdit
+            {onEdit && (label === 'Name' || label === 'Reference')
+              // long words wrap onto a second line instead of being cut (phones)
+              ? <textarea className="payto-input payto-wrap" rows={1} value={value ?? ''} placeholder={placeholder} aria-label={label} onChange={e => onEdit(e.target.value.replace(/\n/g, ' '))} />
+              : onEdit
               ? <input className={`payto-input${label === 'Phone number' && badPhone ? ' is-bad' : ''}`} value={value ?? ''} placeholder={placeholder} aria-label={label}
                   inputMode={label === 'Phone number' || label === 'Account number' ? 'numeric' : undefined} onChange={e => onEdit(e.target.value)} />
               : <strong className="payto-val">{shown || value || '—'}</strong>}
@@ -117,7 +137,8 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
       {mode === 'mobile' && (!phone.trim() || badPhone) && <p className="text-sm text-warning" style={{ margin: 0 }}>{phone.trim() ? 'That is not a valid phone number — e.g. 0712 345 678 or 255712345678.' : 'Enter the phone number to send to.'}</p>}
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
-        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mkononi'} ({ussd})</a>}
+        {app && isAndroid() && <a className="btn btn-primary btn-sm" href={appLink(app)} title={`Open the ${app.name} app on this phone`}><Smartphone size={14} /> Open {app.name} app</a>}
+        {ussd && <a className={`btn ${app && isAndroid() ? 'btn-outline' : 'btn-primary'} btn-sm`} href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Dial {ussd}</a>}
       </div>
       <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
         Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
