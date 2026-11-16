@@ -106,7 +106,10 @@ export async function loadInventoryRefs() {
 }
 
 /** Trim a numeric for display: 2.5000 → 2.5 */
-export const qtyText = n => (n == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(Number(n)));
+// quantities show at most 3 decimals, in the whole system (2026-11-16, the user): 13.158
+export const qtyText = n => (n == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(Number(n)));
+/** A quantity kept to 3 decimals */
+export const q3 = n => (n == null || Number.isNaN(Number(n)) ? n : Math.round(Number(n) * 1000) / 1000);
 
 /** Today's date (YYYY-MM-DD) in the organization's time zone */
 export function orgToday(timezone) {

@@ -7,7 +7,7 @@ import { files } from '../../lib/files';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
-import { qtyText, orgToday, stockFactor } from '../../lib/inventory';
+import { qtyText, q3, orgToday, stockFactor } from '../../lib/inventory';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
 import ProofBox from '../ProofBox';
@@ -445,7 +445,7 @@ function EditOrderModal({ po, refs, onClose, onSaved }) {
   async function save() {
     setError(''); setBusy(true);
     const { error: err } = await supabase.rpc('update_purchase_order', { p_id: po.id, p: { expected_on: expected || null, notes,
-      lines: ls.map(l => ({ id: l.id, quantity: num(l.quantity), ...(l.kind === 'expense' ? { amount: num(l.price) } : { unit_price: num(l.price) }) })) } });
+      lines: ls.map(l => ({ id: l.id, quantity: q3(num(l.quantity)), ...(l.kind === 'expense' ? { amount: num(l.price) } : { unit_price: num(l.price) }) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
@@ -527,8 +527,8 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
       const { error: err } = await supabase.rpc('submit_purchase_request', { p: { branch_id: branchId, needed_by: neededBy || null, notes,
         ...(!x ? {} : x.supplierId === '__new' ? { supplier_name: x.newSupplier.trim() } : { supplier_id: x.supplierId }),
         lines: g.lines.map(l => (l.kind === 'expense'
-          ? { kind: 'expense', category_id: l.categoryId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount) }
-          : { kind: 'material', material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
+          ? { kind: 'expense', category_id: l.categoryId, description: l.description, quantity: q3(num(l.quantity)), unit_text: l.unitText, amount: num(l.amount) }
+          : { kind: 'material', material_id: l.materialId, quantity: q3(num(l.quantity)), unit_id: l.unitId, unit_price: num(l.price) })) } });
       if (err) {
         setBusy(false);
         setError((done ? `${done} of ${groups.length} requests sent; the next failed: ` : '') + dbErrorMessage(err));
@@ -757,8 +757,8 @@ function OrderModal({ refs, branchId, request, approve = false, onClose, onSaved
     }
     const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, ...(isLuku ? (tanesco ? { supplier_id: tanesco.id } : { new_supplier_name: 'TANESCO' }) : supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : { supplier_id: supplierId }),
       request_id: request?.id ?? null, expected_on: expected || null, notes, sent_to_supplier: sent,
-      lines: [...lines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })),
-        ...expenseLines.map(l => ({ kind: 'expense', category_id: l.categoryId, meter_id: l.meterId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount), request_line_id: l.requestLineId }))] } });
+      lines: [...lines.map(l => ({ material_id: l.materialId, quantity: q3(num(l.quantity)), unit_id: l.unitId, unit_price: num(l.price) })),
+        ...expenseLines.map(l => ({ kind: 'expense', category_id: l.categoryId, meter_id: l.meterId, description: l.description, quantity: q3(num(l.quantity)), unit_text: l.unitText, amount: num(l.amount), request_line_id: l.requestLineId }))] } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();

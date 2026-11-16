@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
 import { formatMoney, formatAmount, dateText, tableDate } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
-import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
+import { loadInventoryRefs, warehouseLabel, qtyText, q3, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow, ListToolbar } from '../components/ListControls';
 import ProcTable, { STATUS as PROC_STATUS, STATUS_OPTIONS } from '../components/purchases/ProcTable';
@@ -142,7 +142,7 @@ export default function Purchases({ section = 'purchases' }) {
         loadInventoryRefs(),
         supabase.from('materials').select('id, name, status, branch_id, category:material_categories(display_order)').order('name'),
         byBranch(supabase.from('purchases').select(`id, branch_id, movement_id, warehouse_id, supplier_id, purchase_date, invoice_reference, transport_charge,
-          vat_amount, prices_include_vat, amount_paid, payment_method, paid_on, status, void_reason, notes, created_by,
+          vat_amount, prices_include_vat, amount_paid, payment_method, paid_on, status, void_reason, notes, created_by, purchase_order_id,
           lines:purchase_lines(id, transaction_id, unit_price, line_amount),
           items:purchase_items(id, line_no, material_id, unit_id, quantity, unit_price, line_amount),
           deliveries:purchase_deliveries(id, movement_id, delivered_on, received_by)`)).order('purchase_date', { ascending: false }).limit(300),
@@ -266,6 +266,8 @@ export default function Purchases({ section = 'purchases' }) {
   const [slips, setSlips] = useState({});   // purchase id → [director payment]
   const [slipOpen, setSlipOpen] = useState(null);
   const [expDetail, setExpDetail] = useState(null);   // the expense opened from the table
+  const [delivEdit, setDelivEdit] = useState(false);   // the purchase window: its deliveries being changed (133)
+  const [delivKey, setDelivKey] = useState(0);
   useEffect(() => {
     supabase.from('director_payments').select('*').in('kind', ['supplier', 'expense']).then(({ data }) => {
       const m = {}; for (const d of data || []) (m[d.ref_id] ||= []).push(d); setSlips(m);
@@ -486,15 +488,23 @@ export default function Purchases({ section = 'purchases' }) {
         const p = detail; const t = totals[p.id]; const st = purchaseStatus(p); const ds = deliv[p.id];
         const [label, cls, help] = PROC_STATUS[st];
         const can = p.status === 'recorded' && canRecordAt(p.branch_id);
-        const close = () => setDetail(null);
+        const close = () => { setDetail(null); setDelivEdit(false); };
+        // bought from an order and delivered in portions (133): Change changes only the deliveries
+        const fromOrder = !!p.purchase_order_id && (p.items || []).length > 0;
+        const bal = t ? Number(t.balance) : 0;
+        const roundingGap = t && bal >= 1 && Number(t.amount_paid) > 0 && bal <= Number(t.total) * 0.01;
         return (
           <Modal title={'Purchase · ' + dateText(p.purchase_date)} onClose={close}
             footer={<>
               {p.status === 'void' && isTechAdmin && <button type="button" className="btn btn-ghost" onClick={() => { close(); setDeleting(p); }}>Delete…</button>}
               {p.status === 'recorded' && p.movement_id && <button type="button" className="btn btn-ghost" onClick={() => window.open('/print/grn/' + p.movement_id, '_blank', 'noopener')}>Goods received note</button>}
-              {can && <button type="button" className="btn btn-outline" onClick={() => { close(); setEditing({ mode: 'edit', purchase: p }); }}>Change</button>}
+              {can && (fromOrder
+                ? <button type="button" className="btn btn-outline" onClick={() => setDelivEdit(v => !v)} title="Change the deliveries: their date and quantity">{delivEdit ? 'Done changing' : 'Change'}</button>
+                : <button type="button" className="btn btn-outline" onClick={() => { close(); setEditing({ mode: 'edit', purchase: p }); }}>Change</button>)}
               {can && delivOf(p) !== 'delivered' && <button type="button" className="btn btn-primary" onClick={() => { close(); setDelivering(p); }}>Record delivery</button>}
-              {can && t && Number(t.balance) > 0.004 && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
+              {can && roundingGap && <button type="button" className="btn btn-outline" title="What is left is only rounding — take it as paid in full"
+                onClick={async () => { const r = await supabase.rpc('settle_purchase', { p_id: p.id }); if (!r.error) { await load(); close(); } }}>Mark paid in full ({money(bal)} rounding)</button>}
+              {can && t && bal >= 1 && !roundingGap && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
             <div className="modal-form">
@@ -503,7 +513,7 @@ export default function Purchases({ section = 'purchases' }) {
               <div className="pd-grid">
                 <span className="pl-help">Supplier</span><strong>{supplierName(p.supplier_id)}{p.invoice_reference ? ' · ' + p.invoice_reference : ''}</strong>
                 <span className="pl-help">Total</span><strong>{t ? money(t.total) : '—'}</strong>
-                <span className="pl-help">Paid</span><strong>{t ? money(t.amount_paid) : '—'}{t && Number(t.balance) > 0.004 ? ' · ' + money(t.balance) + ' to pay' : ''}</strong>
+                <span className="pl-help">Paid</span><strong>{t ? money(t.amount_paid) : '—'}{t && bal >= 1 ? ' · ' + money(bal) + ' to pay' : ''}</strong>
               </div>
               <table className="pd-lines">
                 <thead><tr><th>Item</th><th className="num">Bought</th><th className="num">Price (TZS)</th><th className="num">Delivered</th></tr></thead>
@@ -514,6 +524,10 @@ export default function Purchases({ section = 'purchases' }) {
                     <td className="num">{p.status !== 'recorded' ? '—' : di ? qtyText(Math.round(Number(di.delivered) * 100) / 100) + ' ' + u : delivOf(p) === 'delivered' ? 'All' : '—'}</td></tr>;
                 })}</tbody>
               </table>
+              {p.status === 'recorded' && (p.items || []).length > 0 && (
+                <PurchaseDeliveries key={p.id + ':' + delivKey} purchase={p} refs={refs} editing={can && fromOrder && delivEdit} today={today}
+                  onChanged={async () => { setDelivKey(k => k + 1); await load(); }} />
+              )}
               {(slips[p.id] || []).length > 0 && (
                 <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
                   <span className="pl-help">Proof:</span>
@@ -636,6 +650,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   const [date,      setDate]      = useState(today);
   // the goods: arrived now (into stock with the purchase, as before) or coming later (120) — the person says which
   const [arrival,   setArrival]   = useState('');   // '' | now | later
+  const [settle, setSettle] = useState(false);   // a rounding gap taken as paid in full (133)
   const [orderAfter, setOrderAfter] = useState('');   // from an order, part of it bought: 'open' (the rest later) | 'close' (132)
   const [weekly,    setWeekly]    = useState(fromOrder?.paid > 0 ? false : null); // the money: weekly cash (true) or directors · bank (false) (121); a paid order: the directors (131)
   const later = isNew && arrival === 'later';
@@ -666,8 +681,8 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     ? newLines.map((l, i) => {
         const item = refs.items[`m:${l.materialId}`];
         const factor = item?.units.find(u => u.id === l.unitId)?.factor;
-        return { key: i, materialId: l.materialId, name: item?.name, qty: num(l.quantity), unitId: l.unitId,
-          stockQty: num(l.quantity) != null && factor ? num(l.quantity) * factor : null, stockUnitId: item?.stockUnitId, price: num(l.price) };
+        return { key: i, materialId: l.materialId, name: item?.name, qty: q3(num(l.quantity)), unitId: l.unitId,
+          stockQty: num(l.quantity) != null && factor ? q3(num(l.quantity)) * factor : null, stockUnitId: item?.stockUnitId, price: num(l.price) };
       })
     : itemMode
     ? [...purchase.items].sort((a, b) => a.line_no - b.line_no).map(i => {
@@ -678,11 +693,15 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
       })
     : receiptLines.map(t => ({ key: t.id, txId: t.id, name: refs.items[`m:${t.material_id}`]?.name, qty: Number(t.entered_quantity), unitId: t.entered_unit_id,
         stockQty: Number(t.quantity), stockUnitId: t.stock_unit_id, price: num(prices[t.id]) }));
-  const amount = l => (l.price != null && l.qty != null ? round2(l.price * l.qty) : null);
+  // quantity × price in whole shillings (2026-11-16, the user)
+  const amount = l => (l.price != null && l.qty != null ? Math.round(l.price * l.qty) : null);
   const subtotal = lines.reduce((s, l) => s + (amount(l) ?? 0), 0);
   const vat = vatShown ? round2(subtotal * vatRate / (100 + vatRate)) : 0;   // included in the goods amount
   const total = subtotal + (num(transport) ?? 0);
   const vatFactor = vatShown && subtotal > 0 ? (subtotal - vat) / subtotal : 1;
+  // what is left after the payment, in whole shillings; under 1% of the total it is a rounding gap (133)
+  const gap = num(paid) > 0 ? Math.round(total) - num(paid) : 0;
+  const smallGap = gap > 0 && gap <= Math.round(total) * 0.01;
   const landedPerUnit = l => (amount(l) != null && l.stockQty > 0 && subtotal > 0
     ? (amount(l) * vatFactor + (num(transport) ?? 0) * amount(l) / subtotal) / l.stockQty : null);
 
@@ -718,13 +737,13 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     } else if (later) {
       // coming later (120): the purchase and its payment now; the goods are recorded as they arrive
       res = await supabase.rpc('record_purchase', { p: { ...header, coming_later: true, warehouse_id: warehouseId, purchase_date: date,
-        items: newLines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
+        items: newLines.map(l => ({ material_id: l.materialId, quantity: q3(num(l.quantity)), unit_id: l.unitId, unit_price: num(l.price) })) } });
     } else if (mode === 'complete') {
       res = await supabase.rpc('record_purchase', { p: { ...header, movement_id: movementId, lines: lines.map(l => ({ transaction_id: l.txId, unit_price: l.price })) } });
     } else {
       const payload = { ...header,
         receipt: { type: 'receipt', warehouse_id: warehouseId, movement_date: date, reference: invoice.trim() || null,
-                   lines: newLines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId })) },
+                   lines: newLines.map(l => ({ material_id: l.materialId, quantity: q3(num(l.quantity)), unit_id: l.unitId })) },
         lines: newLines.map(l => ({ material_id: l.materialId, unit_price: num(l.price) })) };
       if (needsApproval) {
         const supplierLabel = supplierId ? refs.suppliers.find(s => s.id === supplierId)?.name : newSupplier.trim();
@@ -745,6 +764,10 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
       if (pid) { const r2 = await supabase.rpc('set_purchase_order', { p_purchase: pid, p_order: orderId || null }); if (r2.error) res = r2; }
     }
     if (!res.error && mode !== 'edit' && num(paid) > 0 && res.data) await saveWeeklyCash('purchase', res.data, weekly);
+    if (!res.error && settle && gap > 0) {
+      const sid = mode === 'edit' ? purchase.id : res.data;
+      if (sid) { const s2 = await supabase.rpc('settle_purchase', { p_id: sid }); if (s2.error) res = s2; }
+    }
     // from an order (132): closed when everything is bought, or when the person says the rest is not needed
     if (!res.error && isNew && fromOrder?.orderId && orderId === fromOrder.orderId && (!partOfOrder || orderAfter === 'close')) {
       const { data: o } = await supabase.from('purchase_orders').select('status').eq('id', orderId).maybeSingle();
@@ -875,7 +898,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
                       </select>
                       <NumberInput step="any" min="0" className="form-input" aria-label="Price per unit" placeholder="Price / unit" value={l.price} onChange={e => setNewLine(i, { price: e.target.value })} />
                       {/* the line's total, right by its qty and price (2026-11-16, the user) */}
-                      <span className="pu-line-total" title="Quantity × price">{num(l.quantity) != null && num(l.price) != null ? '= ' + formatAmount(round2(num(l.quantity) * num(l.price))) : ''}</span>
+                      <span className="pu-line-total" title="Quantity × price">{num(l.quantity) != null && num(l.price) != null ? '= ' + formatAmount(Math.round(q3(num(l.quantity)) * num(l.price))) : ''}</span>
                       <button type="button" className="icon-btn" aria-label="Remove line" disabled={newLines.length === 1} onClick={() => setNewLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
                     </div>
                     {l.materialId && pastHint(wh?.branch_id ?? branchId, l.materialId)}
@@ -973,8 +996,14 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
               <label className="form-label" htmlFor="pu-paid">Amount paid</label>
               <div className="flex gap-8">
                 <NumberInput id="pu-paid" step="any" min="0" className="form-input" placeholder="0 = not paid yet" value={paid} onChange={e => setPaid(e.target.value)} />
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPaid(String(round2(total)))}>Paid in full</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPaid(String(Math.round(total)))}>Paid in full</button>
               </div>
+              {gap > 0 && smallGap && (
+                <label className="text-sm flex items-center gap-8 mt-4" title="The amount is rounded; the small difference is not owed">
+                  <input type="checkbox" checked={settle} onChange={e => setSettle(e.target.checked)} />
+                  Take as paid in full — {money(gap)} left from rounding
+                </label>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="pu-method">How</label>
@@ -1127,6 +1156,71 @@ function DeletePurchase({ purchase, goods, onCancel, onDeleted }) {
         <button type="button" className={`btn btn-danger-outline btn-sm${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={remove}>Delete purchase</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Keep it</button>
       </div>
+    </div>
+  );
+}
+
+/*
+ * A purchase's deliveries (133, 2026-11-16, the user): each one's date, what came, who received it.
+ * For a purchase bought from an order, Change changes only these: a delivery's date and quantities
+ * (the old receipt is reversed and the delivery recorded again), or removes it.
+ */
+function PurchaseDeliveries({ purchase, refs, editing, today, onChanged }) {
+  const [rows, setRows] = useState(null);   // [{ id, date, by, items: [{ itemId, materialId, unitId, qty }] }]
+  const [drafts, setDrafts] = useState({});
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    (async () => {
+      const { data: ds } = await supabase.from('purchase_deliveries').select('id, delivered_on, received_by, movement_id').eq('purchase_id', purchase.id).order('delivered_on');
+      const mids = (ds || []).map(d => d.movement_id).filter(Boolean);
+      const [tx, pl] = await Promise.all([
+        mids.length ? supabase.from('inventory_transactions').select('id, movement_id, material_id, entered_quantity, entered_unit_id').in('movement_id', mids).not('material_id', 'is', null) : Promise.resolve({ data: [] }),
+        supabase.from('purchase_lines').select('transaction_id, item_id').eq('purchase_id', purchase.id),
+      ]);
+      const itemOfTx = Object.fromEntries((pl.data || []).map(x => [x.transaction_id, x.item_id]));
+      setRows((ds || []).map(d => ({ id: d.id, date: d.delivered_on, by: d.received_by ?? '',
+        items: (tx.data || []).filter(t => t.movement_id === d.movement_id).map(t => ({ itemId: itemOfTx[t.id], materialId: t.material_id, unitId: t.entered_unit_id, qty: Number(t.entered_quantity) })) })));
+    })();
+  }, [purchase.id]);
+  if (!rows) return <span className="skeleton" />;
+  if (!rows.length) return <p className="text-sm text-muted" style={{ margin: 0 }}>No delivery recorded yet.</p>;
+  const draftOf = r => drafts[r.id] ?? { date: r.date, qty: Object.fromEntries(r.items.map(i => [i.itemId, String(i.qty)])) };
+  const setDraft = (r, patch) => setDrafts(d => ({ ...d, [r.id]: { ...draftOf(r), ...patch } }));
+  async function save(r, remove = false) {
+    setError(''); setBusy(r.id);
+    const d = draftOf(r);
+    const { error: err } = await supabase.rpc('change_purchase_delivery', { p_delivery: r.id, p: { delivered_on: d.date,
+      lines: r.items.map(i => ({ item_id: i.itemId, quantity: remove ? 0 : q3(num(d.qty[i.itemId]) ?? 0) })) } });
+    setBusy('');
+    if (err) { setError(dbErrorMessage(err, "We couldn't change the delivery.")); return; }
+    onChanged();
+  }
+  return (
+    <div>
+      <h3 className="modal-section-title">Deliveries</h3>
+      <table className="pd-lines">
+        <thead><tr><th>Date</th><th>Came</th><th>Received by</th>{editing && <th aria-label="Actions" />}</tr></thead>
+        <tbody>{rows.map(r => {
+          const d = draftOf(r);
+          return (
+            <tr key={r.id}>
+              <td>{editing ? <input type="date" className="form-input" min={purchase.purchase_date} max={today} value={d.date} onChange={e => setDraft(r, { date: e.target.value })} /> : tableDate(r.date)}</td>
+              <td>{r.items.map(i => (
+                <div key={i.itemId}>{editing
+                  ? <><NumberInput step="any" min="0" className="form-input" style={{ width: 90, display: 'inline-block' }} value={d.qty[i.itemId] ?? ''} onChange={e => setDraft(r, { qty: { ...d.qty, [i.itemId]: e.target.value } })} /> {refs?.unitById[i.unitId]?.symbol ?? ''} {refs?.items['m:' + i.materialId]?.name ?? ''}</>
+                  : <>{qtyText(i.qty)} {refs?.unitById[i.unitId]?.symbol ?? ''} {refs?.items['m:' + i.materialId]?.name ?? ''}</>}</div>
+              ))}</td>
+              <td>{r.by || '—'}</td>
+              {editing && <td style={{ whiteSpace: 'nowrap' }}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy === r.id} onClick={() => save(r)}>Save</button>{' '}
+                <button type="button" className="btn btn-ghost btn-sm" disabled={busy === r.id} onClick={() => save(r, true)} title="Remove this delivery (its receipt is reversed)">Remove</button>
+              </td>}
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      {error && <p className="text-sm text-error">{error}</p>}
     </div>
   );
 }
