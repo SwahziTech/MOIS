@@ -1,6 +1,6 @@
 import SheetGrid from '../components/SheetGrid';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw, Trash2 } from 'lucide-react';
+import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw, Trash2, Maximize2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -11,6 +11,8 @@ import { dbErrorMessage } from '../lib/masterData';
 import { readWeeklySheet, listWeeklySheets } from '../lib/weeklyCashExcel';
 import { guessCategory, fillCategories } from '../lib/expenseGuess';
 import WeeklyCashDocDialog from '../components/finance/WeeklyCashDocDialog';
+import WeeklyCashViewer from '../components/finance/WeeklyCashViewer';
+import { useSearchParams } from 'react-router-dom';
 import { saveWeeklyCash } from '../components/purchases/PaidFrom';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -75,7 +77,11 @@ const approvedOf = r => (r.lines || []).reduce((t, l) => t + Number(l.approved_a
  */
 export default function WeeklyCash() {
   const { organization, canAt } = useAuth();
-  const { branchId, branchName } = useBranch();
+  const { branchId, branchName, setBranchId } = useBranch();
+  // opened from the director's card: ?open=<request>&branch=<branch>&view=1 → that request, full screen (2026-11-16)
+  const [params, setParams] = useSearchParams();
+  const wantOpen = params.get('open');
+  const wantView = params.get('view') === '1';
   const money = v => formatMoney(v, organization?.currency_code);
   const today = orgToday(organization?.timezone);
   const period = usePeriod(today);   // this week first; or a dashboard card's period
@@ -102,6 +108,12 @@ export default function WeeklyCash() {
     setData({ requests: rq.data || [], expenses: ex.data || [], payments: pp.data || [], cats: cats.data || [], refs, tx });
   }
   useEffect(() => { setData(null); load(); }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const b = params.get('branch'); if (b && b !== branchId) setBranchId(b); }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!wantOpen || !data) return;
+    const r = data.requests.find(x => x.id === wantOpen);
+    if (r) { setOpen({ ...r, __view: wantView }); setParams({}, { replace: true }); }
+  }, [wantOpen, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // money spent in a week (Sunday–Saturday) from the weekly cash: expenses paid and payments to
   // suppliers marked "Weekly cash (branch)" (121); others = paid by the directors · bank, to tick in
@@ -206,9 +218,9 @@ export default function WeeklyCash() {
           <div><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
           <div className="card"><div className="table-container">
             <table>
-              <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Approved (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
+              <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
               <tbody>
-                {shownWeeks.length === 0 ? <tr><td colSpan={8} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
+                {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
                 : shownWeeks.map(r => {
                   const w = ledger[r.week_ending];
                   return (
@@ -216,7 +228,6 @@ export default function WeeklyCash() {
                       <td>{tableDate(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
                       <td><span className={`badge ${STATUS[r.status][1]}`}>{STATUS[r.status][0]}</span></td>
                       <td className="num">{formatAmount(asked(r))}</td>
-                      <td className="num">{['approved', 'paid'].includes(r.status) ? formatAmount(approvedOf(r)) : ''}</td>
                       <td className="num">{r.status === 'paid' ? formatAmount(Number(r.paid_amount)) : ''}</td>
                       <td className="num">{w ? formatAmount(w.spent) : ''}</td>
                       <td className="num"><strong>{w ? formatAmount(w.closing) : ''}</strong></td>
@@ -240,13 +251,13 @@ export default function WeeklyCash() {
           <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
         </>
       )}
-      {open && <RequestModal request={open.new ? null : open} newWeek={newWeek} branchId={branchId} branchName={branchName} data={data} weekOf={weekOf} spentIn={spentIn} today={today} money={money}
+      {open && <RequestModal key={open.id ?? 'new'} startView={!!open.__view} request={open.new ? null : open} newWeek={newWeek} branchId={branchId} branchName={branchName} data={data} weekOf={weekOf} spentIn={spentIn} today={today} money={money}
         organization={organization} onRefresh={load} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />}
     </PageShell>
   );
 }
 
-function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, spentIn = () => [], today, money, organization, onRefresh, onClose, onSaved }) {
+function RequestModal({ startView = false, request, newWeek, branchId, branchName, data, weekOf, spentIn = () => [], today, money, organization, onRefresh, onClose, onSaved }) {
   const { canAt } = useAuth();
   const isNew = !request;
   const editable = isNew || request.status === 'draft';
@@ -304,6 +315,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [docMode, setDocMode] = useState(null);   // 'export' | 'review'
+  const [viewing, setViewing] = useState(startView);   // the report full screen (2026-11-16)
   const [savedId, setSavedId] = useState(null);   // a new request saved without closing the window
   const [payTouched, setPayTouched] = useState(false);   // bank details typed here win over the imported sheet's
   const fileRef = useRef(null);
@@ -535,7 +547,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
   }
   const copyLast = () => prevLive && setLines(cur => [...cur.filter(l => l.locked), ...[...prevLive.lines].filter(l => !l.pay_sheet_id).sort((a, b) => a.line_no - b.line_no).map(l => ({ description: l.description, quantity: l.quantity != null ? String(Number(l.quantity)) : '', unit: l.unit ?? '', amount: String(Number(l.approved_amount ?? l.amount)), categoryId: l.category_id ?? '' }))]);
   // the report as a document: what the directors see (PDF) or the sheet (Excel)
-  const showApproved = !isNew && st !== 'draft';
+  const showApproved = false;   // no Approved column anywhere (2026-11-16, the user): the directors approve or send back
   const docModel = () => ({
     company: organization?.name ?? '', branch: branchName ?? '', title: 'WEEKLY CASH REPORT', status: STATUS[st][0],
     lw: { title: lwTitle, rows: lwRows.map(r => ({ ...r, date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? tableDate(r.date) : r.date })) },
@@ -596,6 +608,13 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         </div>
       </Modal>
     )}
+    {viewing && (
+      <WeeklyCashViewer doc={docModel()} total={total} money={money} busy={busy} error={error}
+        canDecide={!isNew && st === 'with_directors' && canAt('cash.approve', branchId)}
+        onApprove={() => step('approve', { note: '', lines: lines.map(l => ({ id: l.id, approved_amount: null })) })}
+        onSendBack={n => step('back_to_draft', { note: n })}
+        onClose={() => setViewing(false)} />
+    )}
     {docMode && (
       <WeeklyCashDocDialog doc={docModel()} mode={docMode} note={docMode === 'review' ? postNote() : null} defaultFormat={docMode === 'review' || !editable ? 'pdf' : 'excel'} busy={busy}
         confirmLabel={primaryLabel} onClose={() => setDocMode(null)}
@@ -605,6 +624,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
       footer={<>
         <div className="wc-foot-left">
           <button type="button" className="btn btn-ghost" onClick={() => setDocMode('export')}><Download size={14} /> Export</button>
+          <button type="button" className="btn btn-ghost" title="Full screen, as the PDF page" aria-label="Full screen" onClick={() => setViewing(true)}><Maximize2 size={14} /></button>
           {!isNew && ['draft', 'with_directors'].includes(st) && canAt('cash.request', branchId) && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => step('cancel')}>Cancel request</button>}
         </div>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
@@ -614,7 +634,7 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
         {!isNew && st === 'with_directors' && canAt('cash.approve', branchId) && <>
           <button type="button" className="btn btn-ghost" disabled={busy || !note.trim()} onClick={() => step('reject', { note })}>Turn down</button>
           <button type="button" className="btn btn-outline" disabled={busy} onClick={() => step('back_to_draft', { note })}>Send back to change</button>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => step('approve', { note, lines: lines.map(l => ({ id: l.id, approved_amount: l.approved === '' ? null : num(l.approved) })) })}>Approve {money(approvedTotal)}</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => step('approve', { note, lines: lines.map(l => ({ id: l.id, approved_amount: null })) })}>Approve {money(total)}</button>
         </>}
         {!isNew && st === 'approved' && canAt('cash.approve', branchId) && <button type="button" className="btn btn-primary" disabled={busy || !(num(pay.amount) > 0)} onClick={() => step('pay', pay)}>Record payment</button>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
@@ -696,13 +716,11 @@ function RequestModal({ request, newWeek, branchId, branchName, data, weekOf, sp
               { key: 'quantity', label: 'Qty', type: 'number', width: 90, align: 'right', show: l => (l.quantity !== '' && l.quantity != null ? formatAmount(num(l.quantity)) : '') },
               { key: 'unit', label: 'Unit', type: 'text', width: 90 },
               { key: 'amount', label: 'Amount (TZS)', type: 'number', min: 0, width: 150, align: 'center', show: l => (num(l.amount) != null ? formatAmount(num(l.amount)) : '') },
-              ...(showApproved ? [{ key: 'approved', label: 'Approved (TZS)', type: 'number', min: 0, width: 150, align: 'center', ignoreLock: true,
-                editable: st === 'with_directors' && canAt('cash.approve', branchId), show: l => formatAmount(num(l.approved) ?? num(l.amount) ?? 0) }] : []),
               { key: 'categoryId', label: 'Category', type: 'select', width: 130,
                 options: data.cats.filter(c => c.status === 'active' || lines.some(l => l.categoryId === c.id)).map(c => ({ value: c.id, label: c.name })),
                 show: l => data.cats.find(c => c.id === l.categoryId)?.name ?? '' },
             ]}
-            totals={{ amount: money(total), ...(showApproved ? { approved: money(approvedTotal) } : {}) }} />
+            totals={{ amount: money(total) }} />
         </div>
         {editable && <p className="pl-help" style={{ margin: 0 }} title="Enter goes down, Tab across. Copy rows in Excel and paste them here (Ctrl+V) to fill several lines at once.">Type straight into the cells, or paste rows from Excel.</p>}
 

@@ -3016,3 +3016,34 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .xs-grid .xs-center { text-align: center; }
 .xs-grid .xs-labels th.xs-center { text-align: center; }
 .wc-doc-page .wc-doc-table .n { text-align: center; }
+/* weekly cash report full screen (2026-11-16): the PDF page on a phone */
+.wcv { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #1b1b1b; }
+.wcv-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
+.wcv-title { flex: 1; text-align: center; font-size: var(--text-sm); }
+.wcv-page { flex: 1; overflow: auto; padding: 10px; touch-action: pan-x pan-y pinch-zoom; }
+.wcv .wc-doc-paper-wrap { max-width: 900px; }
+.wcv-foot { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-surface); border-top: 1px solid var(--border); }
+.wcv-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.wcv-actions .btn { flex: 1; max-width: 260px; justify-content: center; }
+/* directors' "Needs you now", grouped (2026-11-16) */
+.nn-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; background: var(--accent); color: var(--accent-contrast, #111); font-weight: 700; font-size: 13px; }
+.nn-cards { display: flex; flex-direction: column; gap: 8px; }
+.nn-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface); }
+.nn-card.is-open { border-color: var(--accent); }
+.nn-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; background: none; border: 0; color: var(--text-primary); text-align: left; text-decoration: none; cursor: pointer; font: inherit; }
+.nn-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nn-card .dd-slips { margin: 0 10px 10px; }
+.nn-list { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; }
+.nn-item { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; }
+.nn-item-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; background: none; border: 0; padding: 0; color: var(--text-primary); text-align: left; cursor: pointer; font: inherit; }
+.nn-lines { display: flex; flex-direction: column; font-size: var(--text-xs); color: var(--text-secondary); }
+.nn-pdf { flex-shrink: 0; }
+/* full screen on a phone: the page at a readable size, wrapping to the screen (pinch to zoom) */
+.wc-doc-paper.is-reading { padding: 14px 10px; height: auto; }
+.wc-doc-paper.is-reading .wc-doc-page { width: 100%; transform: none; font-size: 13px; }
+.wc-doc-paper.is-reading .wc-doc-table th, .wc-doc-paper.is-reading .wc-doc-table td { padding: 4px 4px; font-size: 12px; word-break: break-word; }
+.wc-doc-paper.is-reading .wc-doc-table thead th { font-size: 11px; }
+.wc-doc-paper.is-reading .wc-doc-company { font-size: 18px; }
+.wc-doc-paper.is-reading .wc-doc-title { font-size: 15px; }
+/* the document's header rows never stick (the app's sticky headers would stack them in a scrolling view) */
+.wc-doc-page .wc-doc-table thead th { position: static; }

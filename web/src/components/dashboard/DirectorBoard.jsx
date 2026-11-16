@@ -9,7 +9,8 @@ import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
 import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
-import { loadProofs, WaitingSlips } from '../sales/PaymentProofs';
+import { loadProofs } from '../sales/PaymentProofs';
+import NeedsNow from './NeedsNow';
 import { PayModal, PaidList } from './DirectorPayments';
 import { PayPurchaseModal } from '../purchases/ProcurementPanels';
 import { supabase } from '../../lib/supabase';
@@ -141,13 +142,7 @@ export default function DirectorBoard() {
   return (
     <div className="dd">
       {needs === null ? null : needs.length > 0 ? (
-        <section className="dd-block dd-needs">
-          <div className="dd-head"><span>Needs you now</span><span className="pl-help">{needs.reduce((t, x) => t + x.count, 0)} items</span></div>
-          <div className="dd-needs-row">
-            {needs.filter(x => !(canConfirm && x.key === 'proofs')).map(x => <Link key={x.key} to={x.to} className="dd-need"><strong>{x.count}</strong><span>{x.label}</span></Link>)}
-          </div>
-          {canConfirm && <WaitingSlips inBranch={inBranch} onChanged={load} />}
-        </section>
+        <NeedsNow needs={needs} canConfirm={canConfirm} inBranch={inBranch} onChanged={load} />
       ) : <p className="pl-help">Nothing needs you right now.</p>}
 
       <div className="dd-pay">

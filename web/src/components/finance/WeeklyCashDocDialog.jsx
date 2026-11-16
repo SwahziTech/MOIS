@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Download, Printer, ChevronDown } from 'lucide-react';
 import Modal from '../Modal';
 import { PAPERS, pickPaper, lwCells, reqCells, downloadPdf, printPdf, downloadExcel, downloadCsv } from '../../lib/weeklyCashDoc';
@@ -58,25 +58,37 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
 }
 
 // the page, drawn at its real size and shrunk to fit one sheet of the chosen paper
-function PagePreview({ doc, setup }) {
+// fitWidth: the full-screen view — the page fills the screen's width and scrolls down (2026-11-16)
+export function PagePreview({ doc, setup, fitWidth = false }) {
   const [pw0, ph0] = PAPERS[setup.paper];
   const [pw, ph] = setup.orientation === 'landscape' ? [ph0, pw0] : [pw0, ph0];
   const box = useRef(null), page = useRef(null);
   const [scale, setScale] = useState(1);
   const [boxW, setBoxW] = useState(420);
+  const [pageH, setPageH] = useState(0);
   const natW = (pw - 20) * 3.78;   // printable width in px (10 mm margins)
+  // measured again whenever the space changes (a phone turned, a window resized)
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!box.current || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => setTick(t => t + 1));
+    ro.observe(box.current);
+    return () => ro.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const w = box.current?.clientWidth || 420;
     setBoxW(w);
     const h = page.current?.scrollHeight || 1;
     const usableH = (w * ph / pw) - (w * 20 / pw);
-    setScale(Math.min(1, (w - w * 20 / pw) / natW, usableH / h));
-  }, [doc, setup, natW, pw, ph]);
+    const sc = fitWidth ? (w - w * 20 / pw) / natW : Math.min(1, (w - w * 20 / pw) / natW, usableH / h);
+    setScale(sc);
+    setPageH(h * sc);
+  }, [doc, setup, natW, pw, ph, tick, fitWidth]);
   const pad = boxW * 10 / pw;
   return (
     <div className="wc-doc-paper-wrap" ref={box}>
-      <div className="wc-doc-paper" style={{ aspectRatio: `${pw} / ${ph}`, padding: pad }}>
-        <div ref={page} className="wc-doc-page" style={{ width: natW, transform: `scale(${scale})` }}>
+      <div className={`wc-doc-paper${fitWidth ? ' is-reading' : ''}`} style={fitWidth ? undefined : { aspectRatio: `${pw} / ${ph}`, padding: pad }}>
+        <div ref={page} className="wc-doc-page" style={fitWidth ? undefined : { width: natW, transform: `scale(${scale})` }}>
           {doc.company && <div className="wc-doc-company">{doc.company}</div>}
           {doc.branch && <div className="wc-doc-branch">{doc.branch}</div>}
           <div className="wc-doc-title"><strong>{doc.title}</strong>{doc.status && <span>{doc.status}</span>}</div>
