@@ -25,9 +25,9 @@ export function usePeriod(today, fallback = 'month') {
 }
 
 /** extra: [[key, label]] after the usual periods (keys periodRange knows: month, lastmonth, 30, 90, all) */
-export default function PeriodSelect({ period, today, extra = [] }) {
+export default function PeriodSelect({ period, today, extra = [], range = null, note = null }) {
   // the standard period bar (LOCKED 2026-11-09)
-  return <PeriodBar value={period.key} onChange={period.setKey} today={today} extra={extra} range={[period.from, period.to]} sentLabel={period.url?.label} />;
+  return <PeriodBar value={period.key} onChange={period.setKey} today={today} extra={extra} range={range ?? [period.from, period.to]} sentLabel={period.url?.label} note={note} />;
 }
 
 export const periodText = (period, today, extra = []) => weekLabel(period.key, today)

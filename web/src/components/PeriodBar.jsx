@@ -20,14 +20,15 @@ const STEPS_BACK = today => {
 };
 const LAST_OF = { week: 'lastweek', month: 'lastmonth' };
 
-export default function PeriodBar({ value, onChange, today, extra = [], range = null, sentLabel = null, className = '' }) {
+// note: the dates shown beside the name, when a page counts its own way (weekly cash: Saturday to Saturday)
+export default function PeriodBar({ value, onChange, today, extra = [], range = null, sentLabel = null, className = '', note: noteOverride = null }) {
   const steps = STEPS_BACK(today);
   const at = steps.indexOf(value);
   const earlier = at >= 0 ? steps[at + 1] : LAST_OF[value];
   const later = at >= 0 ? (at === 0 ? null : steps[at - 1]) : Object.keys(LAST_OF).find(k => LAST_OF[k] === value) ?? (value === 'week' || value === 'month' ? 'today' : null);
   const label = value === 'range' ? sentLabel : weekLabel(value, today) ?? extra.find(x => x[0] === value)?.[1] ?? '';
   const [from, to] = range ?? (value === 'range' ? [null, null] : periodRange(value, today));
-  const note = shortRange(from, to, today);
+  const note = noteOverride ?? shortRange(from, to, today);
   const usual = weekPeriods(today);
   return (
     <div className={`dd-period period-bar ${className}`}>

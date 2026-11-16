@@ -188,7 +188,16 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
   };
 
   const here = data?.requests || [];
-  const shownWeeks = here.filter(r => r.week_ending >= period.from && addDays(r.week_ending, -6) <= period.to);
+  // weekly cash counts Saturday to Saturday (2026-11-16, the user): "This week" is from the last Saturday,
+  // "Last week" the Saturday before up to Friday; a request shows in the period its report date falls in
+  const dm = d => dateText(d).replace(/^[A-Za-z]{3}, /, '').replace(/ \d{4}$/, '');
+  const lastSatOf = d => (saturdayOf(d) === d ? d : addDays(saturdayOf(d), -7));
+  const cp = period.key === 'week' ? { from: lastSatOf(today), to: today }
+    : period.key === 'lastweek' ? { from: addDays(lastSatOf(today), -7), to: addDays(lastSatOf(today), -1) }
+    : { from: period.from, to: period.to };
+  const cpNote = period.key === 'all' ? null : ['week', 'lastweek'].includes(period.key)
+    ? `Sat ${dm(cp.from)} – Sat ${dm(addDays(cp.from, 7))}` : `${dm(cp.from)} – ${dm(cp.to)}`;
+  const shownWeeks = here.filter(r => r.week_ending >= cp.from && r.week_ending <= cp.to);
   const lastSat = saturdayOf(today) === today ? today : addDays(saturdayOf(today), -7);
   const liveAt = w => here.find(r => r.week_ending === w && !['cancelled', 'rejected'].includes(r.status));
   const thisWeek = liveAt(addDays(saturdayOf(today), -7));   // the request whose week we are in
@@ -228,14 +237,15 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
             <div className="mm-stat"><span className="pl-label">With directors</span><strong className={here.some(r => r.status === 'with_directors') ? 'text-warning' : ''}>{here.filter(r => r.status === 'with_directors').length}</strong><span className="pl-help">waiting for approval</span></div>
             <div className="mm-stat"><span className="pl-label">Last week's balance</span><strong>{lastClosed ? money(lastClosed.closing) : '—'}</strong><span className="pl-help">{lastClosed ? `spent ${formatMoneyShort(lastClosed.spent, organization?.currency_code)}` : 'from the first request on'}</span></div>
           </div>
-          <div><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
+          <div><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} range={[cp.from, cp.to]} note={cpNote} /></div>
           <div className="card"><div className="table-container">
             <table>
-              <thead><tr><th>Week ending</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
+              <thead><tr><th title="The report date (a Saturday); its cash is for that week, Saturday to Saturday">Date</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
               <tbody>
                 {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
                 : shownWeeks.map(r => {
-                  const w = ledger[r.week_ending];
+                  // the week this request's money paid for (its report date to the next Saturday): spent there, balance after
+                  const w = r.week_ending <= saturdayOf(today) ? weekOf(addDays(r.week_ending, 7)) : null;
                   return (
                     <tr key={r.id} className="clickable-row" onClick={() => setOpen(r)}>
                       <td>{tableDate(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
