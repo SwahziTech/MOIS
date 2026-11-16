@@ -9,6 +9,7 @@ import { WaitingSlips } from '../sales/PaymentProofs';
 import { PayModal } from './DirectorPayments';
 import WeeklyCash from '../../pages/WeeklyCash';
 import { loadOrdersToPay } from '../../lib/directorBoard';
+import OrderDetail from '../purchases/OrderDetail';
 
 /*
  * "Needs you now" for the directors, grouped (2026-11-16, the user): one card a kind, with its number in
@@ -81,20 +82,24 @@ function OrderList({ rows, money, onPaid }) {
   const { branches } = useBranch();
   const { canAt } = useAuth();
   const [paying, setPaying] = useState(null);
+  const [viewing, setViewing] = useState(null);   // the order's details, in a popup (2026-11-16)
   if (!rows) return <span className="skeleton" />;
+  const branchName = id => branches.find(b => b.id === id)?.name ?? 'Branch';
   return (
     <div className="nn-list">
       {rows.map(r => (
         <div key={r.id} className="nn-item">
-          <Link to="/orders" className="nn-item-main" title="Open Orders">
+          <button type="button" className="nn-item-main" onClick={() => setViewing(r)} title="Open the order — each material, its price and what is in stock">
             <strong>{r.supplier?.name ?? 'Supplier'} · {money(r.amount)}</strong>
-            <span className="pl-help">Order #{r.po_no} · {branches.find(b => b.id === r.branch_id)?.name ?? 'Branch'} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
-          </Link>
+            <span className="pl-help">Order #{r.po_no} · {branchName(r.branch_id)} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
+          </button>
           {canAt('finance.pay', r.branch_id, null) && r.priced && (
             <button type="button" className="btn btn-primary btn-sm nn-pdf" onClick={() => setPaying(r)} title="Pay it now — the purchase is recorded as coming later, deliveries as they arrive">Pay</button>
           )}
         </div>
       ))}
+      {viewing && <OrderDetail order={viewing} branchName={branchName(viewing.branch_id)} money={money} canPay={canAt('finance.pay', viewing.branch_id, null)}
+        onPay={() => { setPaying(viewing); setViewing(null); }} onClose={() => setViewing(null)} />}
       {paying && <PayModal preset={{ kind: 'supplier', branch: paying.branch_id, ref: 'po:' + paying.id }} onClose={() => setPaying(null)} onSaved={() => { setPaying(null); onPaid?.(); }} />}
     </div>
   );

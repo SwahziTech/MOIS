@@ -11,6 +11,7 @@ import Modal from '../Modal';
 import NumberInput from '../NumberInput';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
+import { useStockNow, stockText } from './OrderDetail';
 
 const num = v => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const r2 = n => Math.round(n * 100) / 100;
@@ -240,6 +241,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
     setNote(''); onChanged();
   };
   const lineDone = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
+  const stock = useStockNow(r.branch_id);   // what the branch has now, beside what is asked (2026-11-16)
   const lines = [...(po?.lines || [])].sort((a, b) => a.line_no - b.line_no);
   const goodsLeft = po ? goodsLeftOf(po, got) : [];
   const nothingYet = po && !lines.some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0));
@@ -268,8 +270,9 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
         {!po && (r.supplier_id || r.supplier_name) && <p className="text-sm">Supplier: <strong>{r.supplier_id ? supplierName(r.supplier_id) : r.supplier_name + ' (new)'}</strong></p>}
         {!po && (
           <table className="rd-table">
-            <thead><tr><th>Asked for</th></tr></thead>
-            <tbody>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <tr key={l.id}><td>{lineText(refs, l, cats, money)}</td></tr>)}</tbody>
+            <thead><tr><th>Asked for</th><th className="num" title="What the branch has now, all its stores">In stock</th></tr></thead>
+            <tbody>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <tr key={l.id}><td>{lineText(refs, l, cats, money)}</td>
+              <td className="num">{l.kind === 'expense' ? '' : stock ? stockText(stock[l.material_id]) : '…'}</td></tr>)}</tbody>
           </table>
         )}
         {r.status === 'waiting' && canAt('procurement.approve', r.branch_id) && (
@@ -278,7 +281,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
         {po && <>
           <h3 className="modal-section-title">Order #{po.po_no} — {supplierName(po.supplier_id)}{po.expected_on ? ` · expected ${dateText(po.expected_on)}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
           <table className="rd-table">
-            <thead><tr><th>What</th><th className="num">Ordered</th><th className="num">Price (TZS)</th><th>Bought</th></tr></thead>
+            <thead><tr><th>What</th><th className="num">Ordered</th><th className="num">Price (TZS)</th><th className="num" title="What the branch has now, all its stores">In stock</th><th>Bought</th></tr></thead>
             <tbody>{lines.map(l => {
               const isExp = l.kind === 'expense'; const u = isExp ? l.unit_text ?? '' : refs?.unitById[l.unit_id]?.symbol ?? '';
               const f = isExp ? 1 : Number(l.stock_quantity) / Number(l.quantity);
@@ -287,6 +290,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
                   <td><strong>{isExp ? l.description : refs?.items[`m:${l.material_id}`]?.name ?? '—'}</strong></td>
                   <td className="num">{l.quantity != null ? `${qtyText(Number(l.quantity))} ${u}` : ''}</td>
                   <td className="num">{isExp ? (l.amount != null ? formatAmount(Number(l.amount)) : '') : l.unit_price != null ? formatAmount(Number(l.unit_price)) : ''}</td>
+                  <td className="num">{isExp ? '' : stock ? stockText(stock[l.material_id]) : '…'}</td>
                   <td>{lineDone(l)
                     ? <span className="badge badge-success">{isExp ? `Recorded ${money(paidFor[l.id])}` : 'Received'}</span>
                     : isExp
