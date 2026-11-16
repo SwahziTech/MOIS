@@ -202,7 +202,7 @@ export default function Sales() {
                   </div>
                   <div className="sk-total">
                     <span><strong>{money(Number(s.total))}</strong></span>
-                    <span className="sk-sub">{(s.lines || []).length} line{(s.lines || []).length === 1 ? '' : 's'} · with VAT</span>
+                    <span className="sk-sub">{(s.lines || []).length} line{(s.lines || []).length === 1 ? '' : 's'}{Number(s.vat) > 0 ? ' · with VAT' : ''}</span>
                   </div>
                   <div className="co-details">
                     <span><span className={`badge ${STAGE_BADGE[s.stage]}`}>{STAGES[s.stage]}</span></span>
@@ -1047,6 +1047,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
   const [efd, setEfd] = useState(sale.efd_receipt_no ?? '');
   const [askEfd, setAskEfd] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [handing, setHanding] = useState(false);   // a delivery or collection being recorded (065)
   const [correcting, setCorrecting] = useState(false);   // a correction (068): Technical admin at once, managers through Approvals
   const [reason, setReason] = useState('');
@@ -1096,6 +1097,9 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           <button type="button" className="btn btn-ghost" onClick={() => setCorrecting(true)}>Correct…</button>}
         {sale.stage !== 'cancelled' && paid === 0 && canAt('sales.create', br, null) && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) &&
           <button type="button" className="btn btn-ghost" onClick={() => setCancelling(true)}>Cancel sale</button>}
+        {/* a cancelled sale is deleted by the user (126, 2026-11-16) — whoever may cancel it */}
+        {sale.stage === 'cancelled' && paid === 0 && !(sale.deliveries || []).length && canAt('sales.create', br, null) &&
+          <button type="button" className="btn btn-ghost text-error" onClick={() => { setError(''); setDeleting(true); }}><Trash2 size={14} /> Delete</button>}
         {sale.stage === 'quotation' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
         {['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAskEfd(true)}>Invoice</button>}
         {canHand && <button type="button" className="btn btn-outline" onClick={() => setHanding(true)}>Deliver / collect</button>}
@@ -1257,6 +1261,14 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           footer={<><button type="button" className="btn btn-outline" onClick={() => setCancelling(false)}>Back</button>
             <button type="button" className="btn btn-primary" disabled={busy || !reason.trim()} onClick={async () => { if (await toStage('cancelled', { reason })) setCancelling(false); }}>Cancel the sale</button></>}>
           <label className="pe-field"><span>Why? (required)</span><input className="form-input" autoFocus value={reason} onChange={e => setReason(e.target.value)} /></label>
+        </Modal>
+      )}
+      {deleting && (
+        <Modal title={`Delete #${sale.sale_no} for good?`} onClose={() => setDeleting(false)}
+          footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+            <button type="button" className="btn btn-outline" onClick={() => setDeleting(false)}>Back</button>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={async () => { if (await run(() => supabase.rpc('delete_cancelled_sale', { p_id: sale.id }))) { setDeleting(false); onClose(); } }}>Delete</button></>}>
+          <p className="text-sm">The cancelled sale to {buyer} ({money(Number(sale.total))}) is removed from the list. This can't be undone.</p>
         </Modal>
       )}
       {confirming && <ConfirmDelivery delivery={confirming} who={buyer} branchId={sale.branch_id} onClose={() => setConfirming(null)} onDone={async () => { setConfirming(null); await onChanged(); }} />}

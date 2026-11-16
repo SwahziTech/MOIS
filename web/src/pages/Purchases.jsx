@@ -1018,7 +1018,8 @@ function DeliveryModal({ purchase, status, refs, organization, canAt, onClose, o
   const [who, setWho] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const canBackdate = canAt('inventory.adjust', purchase.branch_id, purchase.warehouse_id);
+  // for testing (126, 2026-11-16, the user): whoever receives may date a delivery back to the purchase day
+  const canBackdate = true;
   async function save() {
     setError('');
     const lines = items.map(i => ({ item_id: i.item_id, quantity: num(qty[i.item_id]) ?? 0 })).filter(l => l.quantity > 0);
