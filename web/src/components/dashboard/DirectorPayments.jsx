@@ -14,6 +14,7 @@ import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
 import { loadOrdersToPay } from '../../lib/directorBoard';
+import AddProofModal from '../purchases/AddProofModal';
 
 /*
  * What directors pay (106, 2026-11-04, the user): one Pay window — choose what
@@ -220,23 +221,57 @@ export function PayModal({ onClose, onSaved, preset = null }) {
 
 /* Paid by directors: each payment and its proof, newest first */
 export function PaidList({ days = 60 }) {
-  const { organization, session } = useAuth();
+  const { organization, session, canAt } = useAuth();
   const { inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
   const me = session?.user?.id;
   const [rows, setRows] = useState(null);
+  const [adding, setAdding] = useState(null);   // a payment with no proof yet, getting one (134)
   const [seen, setSeen] = useState([]);
   const [people, setPeople] = useState({});
   const [viewing, setViewing] = useState(null);
   const [error, setError] = useState('');
   async function load() {
     const since = new Date(new Date(`${today}T00:00:00Z`).getTime() - days * 864e5).toISOString().slice(0, 10);
-    const [d, s] = await Promise.all([
+    const [d, s, pp, ex, pf] = await Promise.all([
       supabase.from('director_payments').select('*').gte('paid_on', since).order('paid_on', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('director_payment_seen').select('payment_id, user_id, seen_at'),
+      // paid from the directors / bank, not the weekly cash (2026-11-16, the user: "even the 11th cement is paid by a
+      // director, just didn't post the proof") — shown here too, with Add proof
+      supabase.from('purchase_payments').select('purchase_id, paid_on, amount, from_weekly_cash, purchase:purchases(id, branch_id, status, purchase_date, supplier:suppliers(name))').gte('paid_on', since).eq('from_weekly_cash', false),
+      supabase.from('expenses').select('id, branch_id, description, amount_paid, paid_on, expense_date, from_weekly_cash, status').eq('from_weekly_cash', false).gt('amount_paid', 0).gte('expense_date', since),
+      supabase.from('procurement_proofs').select('*'),
     ]);
     if (d.error) { setRows([]); return; }
-    setRows(d.data || []); setSeen(s.data || []);
+    const dps = d.data || [];
+    const proofs = pf.data || [];
+    const covered = id => dps.filter(x => x.ref_id === id).reduce((t, x) => t + Number(x.amount || 0), 0)
+      + proofs.filter(x => x.ref_id === id).reduce((t, x) => t + Number(x.amount || 0), 0);
+    const extra = [];
+    // the branch's own proofs on what the directors paid
+    const dirPaid = new Set();
+    const byPurchase = {};
+    for (const x of pp.data || []) {
+      if (!x.purchase || x.purchase.status === 'void') continue;
+      const b = byPurchase[x.purchase_id] ||= { p: x.purchase, total: 0, last: x.paid_on };
+      b.total += Number(x.amount); if (x.paid_on > b.last) b.last = x.paid_on;
+      dirPaid.add(x.purchase_id);
+    }
+    for (const e of ex.data || []) if (e.status !== 'void') dirPaid.add(e.id);
+    for (const x of proofs) if (dirPaid.has(x.ref_id)) extra.push({ ...x, kind: x.kind === 'purchase' ? 'supplier' : 'expense', amount: x.amount ?? 0, bucket: 'payment-proofs',
+      description: x.kind === 'purchase' ? byPurchase[x.ref_id]?.p?.supplier?.name : (ex.data || []).find(e => e.id === x.ref_id)?.description });
+    for (const [pid, b] of Object.entries(byPurchase)) {
+      const left = Math.round(b.total - covered(pid));
+      if (left > 0) extra.push({ id: 'np:' + pid, missing: { kind: 'purchase', id: pid, branch: b.p.branch_id, amount: left, paidOn: b.last, who: b.p.supplier?.name },
+        branch_id: b.p.branch_id, kind: 'supplier', description: b.p.supplier?.name, amount: left, paid_on: b.last });
+    }
+    for (const e of ex.data || []) {
+      if (e.status === 'void') continue;
+      const left = Math.round(Number(e.amount_paid) - covered(e.id));
+      if (left > 0) extra.push({ id: 'ne:' + e.id, missing: { kind: 'expense', id: e.id, branch: e.branch_id, amount: left, paidOn: e.paid_on ?? e.expense_date, who: e.description },
+        branch_id: e.branch_id, kind: 'expense', description: e.description, amount: left, paid_on: e.paid_on ?? e.expense_date });
+    }
+    setRows([...dps, ...extra].sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on)))); setSeen(s.data || []);
     const ids = [...new Set((s.data || []).map(x => x.user_id))];
     if (ids.length) {
       const { data } = await supabase.from('profiles').select('id, first_name, last_name, email').in('id', ids);
@@ -267,7 +302,10 @@ export function PaidList({ days = 60 }) {
                   <td>{tableDate(r.paid_on)}</td>
                   <td>{KIND_LABEL[r.kind]}{r.description ? ` · ${r.description}` : ''}</td>
                   <td className="num">{Number(r.amount).toLocaleString('en-US')}</td>
-                  <td><button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewing(r)}><Eye size={13} /> {r.file_path ? 'Slip' : 'SMS'}</button></td>
+                  <td>{r.missing
+                    ? <><span className="badge badge-warning">No proof</span>{' '}
+                        {(canAt('finance.pay', r.branch_id, null) || canAt('procurement.receive', r.branch_id, null)) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(r.missing)}>Add proof</button>}</>
+                    : <button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewing(r)}><Eye size={13} /> {r.file_path ? 'Slip' : 'SMS'}</button>}</td>
                 </tr>
               );
             })}
@@ -275,6 +313,7 @@ export function PaidList({ days = 60 }) {
         </table>
       </div></div>
       {viewing && <ProofView row={viewing} onClose={() => setViewing(null)} />}
+      {adding && <AddProofModal x={adding} organization={organization} today={today} onClose={() => setAdding(null)} onSaved={() => { setAdding(null); load(); }} />}
     </>
   );
 }
