@@ -102,7 +102,7 @@ export async function loadMoneyData() {
   const [pa, mv, cr, pu, tot, ba, sa, ac] = await Promise.all([
     supabase.from('sale_payments').select('paid_on, amount, sale:sales!inner(branch_id)'),
     supabase.from('cash_movements').select('branch_id, day, direction, amount, kind'),
-    supabase.from('cash_requests').select('branch_id, week_ending, status, opening_balance'),
+    supabase.from('cash_requests').select('branch_id, week_ending, status, opening_balance, last_week'),
     supabase.from('purchases').select('id, branch_id, purchase_date, amount_paid, invoice_reference, supplier:suppliers(name), lines:purchase_lines(line_amount, unit_price, tx:inventory_transactions(entered_quantity, material:materials(name), unit:units!inventory_transactions_entered_unit_id_fkey(symbol)))').neq('status', 'void'),
     supabase.from('purchase_totals').select('purchase_id, total, amount_paid, balance'),
     supabase.from('production_batches').select('branch_id, batch_date, cement_bags, status, outputs:production_batch_outputs(is_primary), rejects:production_batch_rejects(pieces)').neq('status', 'void'),
@@ -179,6 +179,13 @@ export function productionFor(data, { from, to }, inBranch, today) {
   };
 }
 
+// "2026-10-31", "31 Oct 2026" or "Sat, 31 Oct 2026" → "2026-10-31"
+const parseDay = t => {
+  const v = String(t ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = v ? new Date(`${v.replace(/^[A-Za-z]{3},\s*/, '')} UTC`) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+};
 /** Rows for a card's detail page within a period, newest first. by: day | week | month */
 export function historyFor(data, card, by, inBranch, today, { from, to }) {
   // weekly cash runs Saturday to Saturday, as on the branch's sheet (2026-11-16, the user): the week of
@@ -186,12 +193,28 @@ export function historyFor(data, card, by, inBranch, today, { from, to }) {
   if (card === 'cash' && by === 'week') {
     const satOf = d => dayShift(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 1) % 7));
     const rows = {};
-    // a week shows whole when it touches the period (its spending from the Saturday before the month counts)
-    const add = (d, f) => { if (!d || d > today) return; const k = satOf(d); if (dayShift(k, 7) <= from || k > to) return; f(rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0 }); };
+    // a week shows whole when it touches the period; what is dated before the period is shown faint beside
+    // the figure (aOut / bOut), not counted in the period's totals (2026-11-16, the user)
+    const add = (d, col, amt) => {
+      if (!d || d > today) return; const k = satOf(d); if (dayShift(k, 7) <= from || k > to) return;
+      const r = rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0, aOut: 0, bOut: 0 };
+      r[d < from ? `${col}Out` : col] += n(amt);
+    };
     for (const x of data.moves) {
       if (!inBranch(x.branch_id)) continue;
-      if (x.kind === 'topup') add(x.day, r => { r.a += n(x.amount); });
-      if (SPENT.has(x.kind)) add(x.day, r => { r.b += n(x.amount); });
+      if (x.kind === 'topup') add(x.day, 'a', x.amount);
+      if (SPENT.has(x.kind)) add(x.day, 'b', x.amount);
+    }
+    // a week whose summary came from the branch's sheet (cash sent before MOIS): its CASH SENT, on its BALANCE date
+    for (const q of data.requests) {
+      const rs = q.last_week?.rows;
+      if (!rs?.length || !inBranch(q.branch_id)) continue;
+      const wStart = dayShift(q.week_ending, -7);
+      if (data.moves.some(x => x.kind === 'topup' && x.branch_id === q.branch_id && x.day >= wStart && x.day < q.week_ending)) continue;   // MOIS has it
+      const sent = n(rs.find(x => /cash\s*sent/i.test(x.description || ''))?.cash_in);
+      if (!(sent > 0)) continue;
+      const bd = parseDay(rs.find(x => /^\s*balance\s*$/i.test(x.description || ''))?.date);
+      add(bd && bd >= wStart && bd < q.week_ending ? bd : wStart, 'a', sent);
     }
     return Object.values(rows).sort((p, q) => (p.key < q.key ? 1 : -1));
   }
