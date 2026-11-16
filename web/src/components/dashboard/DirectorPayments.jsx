@@ -285,8 +285,9 @@ export function ProofView({ row, onClose }) {
   const [saveUrl, setSaveUrl] = useState('');
   useEffect(() => {
     if (!row.file_path) return;
-    files('director-proofs').createSignedUrl(row.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
-    files('director-proofs').createSignedUrl(row.file_path, 600, { download: row.file_name || `Paid_${row.paid_on}.jpg` })
+    const store = row.bucket || 'director-proofs';   // a purchase / expense proof added by the branch is in payment-proofs (134)
+    files(store).createSignedUrl(row.file_path, 600).then(({ data }) => setUrl(data?.signedUrl ?? ''));
+    files(store).createSignedUrl(row.file_path, 600, { download: row.file_name || `Paid_${row.paid_on}.jpg` })
       .then(({ data }) => setSaveUrl(data?.signedUrl ?? ''));
   }, [row.file_path]); // eslint-disable-line react-hooks/exhaustive-deps
   const isPdf = /\.pdf$/i.test(row.file_path ?? '');

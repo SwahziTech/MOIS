@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Plus, Trash2, Filter } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Filter, Paperclip } from 'lucide-react';
+import ProofBox from '../components/ProofBox';
+import { files } from '../lib/files';
+import { proofName, extOf } from '../lib/proofName';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -268,11 +271,21 @@ export default function Purchases({ section = 'purchases' }) {
   const [expDetail, setExpDetail] = useState(null);   // the expense opened from the table
   const [delivEdit, setDelivEdit] = useState(false);   // the purchase window: its deliveries being changed (133)
   const [delivKey, setDelivKey] = useState(0);
+  const [addProof, setAddProof] = useState(null);   // { kind, row } — a proof of payment being added (134)
+  const [proofKey, setProofKey] = useState(0);
   useEffect(() => {
-    supabase.from('director_payments').select('*').in('kind', ['supplier', 'expense']).then(({ data }) => {
-      const m = {}; for (const d of data || []) (m[d.ref_id] ||= []).push(d); setSlips(m);
+    Promise.all([
+      supabase.from('director_payments').select('*').in('kind', ['supplier', 'expense']),
+      // proofs the branch added to a purchase or an expense (134)
+      supabase.from('procurement_proofs').select('*'),
+    ]).then(([dp, pp]) => {
+      const m = {};
+      for (const d of dp.data || []) (m[d.ref_id] ||= []).push(d);
+      for (const d of pp.data || []) (m[d.ref_id] ||= []).push({ ...d, kind: d.kind === 'purchase' ? 'supplier' : 'expense', amount: d.amount ?? 0, bucket: 'payment-proofs' });
+      for (const k of Object.keys(m)) m[k].sort((a, b) => String(a.paid_on ?? '').localeCompare(String(b.paid_on ?? '')));
+      setSlips(m);
     });
-  }, [purchases.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [purchases.length, expenses.length, proofKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const delivOf = p => (p.status === 'recorded' ? deliv[p.id]?.delivery_status ?? 'delivered' : null);
   const payOf = p => totals[p.id]?.payment_status;
   const puState = p => (p.status !== 'recorded' ? 'void' : delivOf(p) !== 'delivered' ? 'delivery' : payOf(p) !== 'paid' ? 'payment' : 'done');
@@ -484,6 +497,7 @@ export default function Purchases({ section = 'purchases' }) {
       {tokenFor && <BuyModal q={tokenFor} meterName={tokenFor.meterName} today={orgToday(organization?.timezone)} money={money}
         onClose={() => setTokenFor(null)} onSaved={async () => { setTokenFor(null); setOrdersKey(k => k + 1); await load(); }} />}
       {slipOpen && <ProofView row={slipOpen} onClose={() => setSlipOpen(null)} />}
+      {addProof && <AddProofModal x={addProof} organization={organization} today={today} money={money} onClose={() => setAddProof(null)} onSaved={() => { setAddProof(null); setProofKey(k => k + 1); }} />}
       {detail && (() => {
         const p = detail; const t = totals[p.id]; const st = purchaseStatus(p); const ds = deliv[p.id];
         const [label, cls, help] = PROC_STATUS[st];
@@ -503,6 +517,7 @@ export default function Purchases({ section = 'purchases' }) {
               {can && delivOf(p) !== 'delivered' && <button type="button" className="btn btn-primary" onClick={() => { close(); setDelivering(p); }}>Record delivery</button>}
               {/* a rounding gap is settled when the purchase is recorded, not here (2026-11-16, the user) */}
               {can && t && bal >= 1 && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
+              {can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'purchase', id: p.id, branch: p.branch_id, amount: t?.amount_paid, paidOn: p.paid_on, who: supplierName(p.supplier_id) })}><Paperclip size={14} /> Add proof</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
             <div className="modal-form">
@@ -546,6 +561,7 @@ export default function Purchases({ section = 'purchases' }) {
         return (
           <Modal title={'Expense · ' + dateText(e.expense_date)} onClose={close}
             footer={<>
+              {can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'expense', id: e.id, branch: e.branch_id, amount: e.amount_paid, paidOn: e.paid_on ?? e.expense_date, who: e.description })}><Paperclip size={14} /> Add proof</button>}
               {can && <button type="button" className="btn btn-outline" onClick={() => { close(); setEditingExpense(e); }}>Change</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
@@ -1220,5 +1236,48 @@ function PurchaseDeliveries({ purchase, refs, editing, today, onChanged }) {
       </table>
       {error && <p className="text-sm text-error">{error}</p>}
     </div>
+  );
+}
+
+/* A proof of payment added to a purchase or an expense (134, 2026-11-16, the user): photo, PDF or the SMS */
+function AddProofModal({ x, organization, today, money, onClose, onSaved }) {
+  const [file, setFile] = useState(null);
+  const [sms, setSms] = useState('');
+  const [paidOn, setPaidOn] = useState(x.paidOn || today);
+  const [amount, setAmount] = useState(x.amount > 0 ? String(Math.round(Number(x.amount))) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    setError('');
+    if (!file && !sms.trim()) { setError('Add the proof: a photo, a PDF or the SMS.'); return; }
+    setBusy(true);
+    try {
+      let path = null;
+      if (file) {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+        path = `${organization.id}/${x.branch}/procurement/${Date.now()}.${ext}`;
+        const up = await files('payment-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
+        if (up.error) throw up.error;
+      }
+      const { error: err } = await supabase.rpc('add_procurement_proof', { p: { kind: x.kind, ref_id: x.id, paid_on: paidOn || null, amount: num(amount),
+        file_path: path, file_name: file ? proofName({ kind: x.kind === 'purchase' ? 'Paid-Supplier' : 'Paid-Expense', who: x.who, amount: num(amount), date: paidOn }, extOf(file)) : null,
+        sms_text: sms.trim() || null } });
+      if (err) throw err;
+      onSaved();
+    } catch (e) { setError(dbErrorMessage(e, "We couldn't keep the proof.")); } finally { setBusy(false); }
+  }
+  return (
+    <Modal title={`Proof of payment · ${x.who ?? ''}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Keep the proof</button></>}>
+      <div className="modal-form">
+        <div className="form-row">
+          <label className="pe-field"><span>Paid on</span><input type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} /></label>
+          <label className="pe-field"><span>Amount (optional)</span><NumberInput className="form-input" min="0" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+        </div>
+        <ProofBox file={file} onFile={f => setFile(f && f.size > 10 * 1024 * 1024 ? file : f)} text={sms} onText={setSms} />
+      </div>
+    </Modal>
   );
 }
