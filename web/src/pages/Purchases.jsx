@@ -10,6 +10,7 @@ import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, 
 import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import { PaidFrom, saveWeeklyCash } from '../components/purchases/PaidFrom';
+import MoneyOutPanel from '../components/purchases/MoneyOutPanel';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
 import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
@@ -248,7 +249,7 @@ export default function Purchases() {
 
   const purchaseTabs = (
     <PageTabs value={tab} onChange={setTab}
-      tabs={[['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['requests', 'Orders'], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Goods received (${waitingHere.length})`]]} />
+      tabs={[...(expReady ? [['all', 'All']] : []), ['purchases', `Purchases${pendingHere.length ? ` (${pendingHere.length} waiting for approval)` : ''}`], ['requests', 'Orders'], ...(expReady ? [['expenses', 'Expenses'], ['electricity', 'Electricity']] : []), ['costs', 'Material costs'], ['waiting', `Goods received (${waitingHere.length})`]]} />
   );
 
   return (
@@ -271,6 +272,7 @@ export default function Purchases() {
           onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })}
           onRecordExpense={prefill => { setExpensePrefill(prefill); setEditingExpense('new'); }}
           onRecordToken={q => setTokenFor(q)} />
+      : tab === 'all' ? <MoneyOutPanel branchId={branchId} inBranch={inBranch} period={period} today={today} expenses={expenses} expCats={expCats} suppliers={refs?.suppliers || []} money={money} />
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
