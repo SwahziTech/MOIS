@@ -109,7 +109,7 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
     ]);
     if (rq.error) { console.error(rq.error); setError("We couldn't load the weekly cash requests."); return; }
     // what was bought with each purchase payment: its materials, from the receipt
-    const moveIds = [...new Set((pp.data || []).map(p => p.purchase.movement_id))];
+    const moveIds = [...new Set((pp.data || []).map(p => p.purchase?.movement_id))].filter(Boolean);   // coming-later purchases have none yet
     const tx = moveIds.length ? (await supabase.from('inventory_transactions').select('movement_id, material_id, entered_quantity, entered_unit_id').in('movement_id', moveIds)).data || [] : [];
     setData({ requests: rq.data || [], expenses: ex.data || [], payments: pp.data || [], cats: cats.data || [], refs, tx });
   }

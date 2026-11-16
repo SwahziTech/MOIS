@@ -76,9 +76,9 @@ export function PayModal({ onClose, onSaved, preset = null }) {
         const up = t => t.toUpperCase().replace(/\s+/g, ' ').trim();
         // pay first (129): an approved order, paid before the goods come — its purchase is made on paying
         const orders = po.filter(x => x.branch_id === br && x.priced)
-          .map(x => ({ id: 'po:' + x.id, who: x.supplier?.name, owes: x.amount, supplierId: x.supplier?.id, saved: x.supplier, payTo: payToOf(x.supplier),
+          .map(x => ({ id: 'po:' + x.id, who: x.supplier?.name, owes: x.toPay, supplierId: x.supplier?.id, saved: x.supplier, payTo: payToOf(x.supplier),
             reference: up(`ORDER ${x.po_no} ${(x.lines || []).map(l => `${l.material?.name ?? ''} ${Number(l.quantity)} ${l.unit?.symbol ?? ''}`).join(' ')}`),
-            label: `Order #${x.po_no} · ${x.supplier?.name ?? 'Supplier'} · to pay ${money(x.amount)}` }));
+            label: `Order #${x.po_no} · ${x.supplier?.name ?? 'Supplier'} · to pay ${money(x.toPay)}${x.paid > 0 ? ` (paid ${money(x.paid)})` : ''}` }));
         setOptions([...orders, ...(p.data || []).filter(x => x.status !== 'void' && Number(bal[x.id]?.balance) > 0.004)
           .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), supplierId: x.supplier_id, saved: supRow[x.supplier_id], payTo: payToOf(supRow[x.supplier_id]),
             reference: up(`PURCHASE ${tableDate(x.purchase_date)}${x.invoice_reference ? ' ' + x.invoice_reference : ''}`),
@@ -134,14 +134,14 @@ export function PayModal({ onClose, onSaved, preset = null }) {
     try {
       // 1. the payment, through MOIS's own step
       let r = { error: null };
-      // an order paid first (129): its purchase is made now, coming later; the payment and proof go on it
+      // an order paid first (131): the payment is kept on the order, which stays on Orders as Paid until the
+      // branch records the purchase — the proof then moves onto the purchase
       let target = ref;
-      if (kind === 'supplier' && ref.startsWith('po:')) {
-        const mk = await supabase.rpc('purchase_from_order', { p_order: ref.slice(3) });
-        if (mk.error) throw mk.error;
-        target = mk.data;
-      }
-      if (kind === 'supplier') r = await supabase.rpc('record_purchase_payment', { p_purchase: target, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null, method: accountId ? null : 'bank', reference: null } });
+      const isOrder = kind === 'supplier' && ref.startsWith('po:');
+      if (isOrder) {
+        target = ref.slice(3);
+        r = await supabase.rpc('pay_purchase_order', { p_order: target, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null } });
+      } else if (kind === 'supplier') r = await supabase.rpc('record_purchase_payment', { p_purchase: target, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null, method: accountId ? null : 'bank', reference: null } });
       if (kind === 'weekly_cash') r = await supabase.rpc('cash_request_step', { p_id: ref, p_step: 'pay', p: { amount: num(amount), paid_on: paidOn, reference: (payRef ?? chosen?.reference ?? '').trim() || null } });
       if (kind === 'salaries') r = await supabase.rpc('pay_pay_sheet', { p_sheet: ref, p: { paid_on: paidOn, account_id: accountId || null } });
       if (r.error) throw r.error;

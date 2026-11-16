@@ -160,7 +160,8 @@ export default function Purchases({ section = 'purchases' }) {
       }
       const err = mat.error || pu.error || tot.error || aw.error || pr.error;
       if (err) throw err;
-      const moveIds = [...new Set([...(pu.data || []).map(p => p.movement_id), ...(aw.data || []).map(a => a.movement_id)])];
+      // a purchase coming later has no receipt yet (120, 129): no movement to look up
+      const moveIds = [...new Set([...(pu.data || []).map(p => p.movement_id), ...(aw.data || []).map(a => a.movement_id)])].filter(Boolean);
       const tx = moveIds.length
         ? await supabase.from('inventory_transactions')
             .select('id, movement_id, material_id, product_id, quantity, stock_unit_id, entered_quantity, entered_unit_id, warehouse_id')
@@ -627,15 +628,15 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   const [invoice,   setInvoice]   = useState(purchase?.invoice_reference ?? receipt?.reference ?? '');
   const [transport, setTransport] = useState(purchase?.transport_charge ? String(purchase.transport_charge) : '');
   const [vatShown,  setVatShown]  = useState(purchase?.vat_amount != null);
-  const [paid,      setPaid]      = useState(purchase ? String(purchase.amount_paid) : '');
+  const [paid,      setPaid]      = useState(purchase ? String(purchase.amount_paid) : fromOrder?.paid > 0 ? String(fromOrder.paid) : '');
   const [method,    setMethod]    = useState(purchase?.payment_method ?? firstPast?.[0].method ?? '');
-  const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? receipt?.movement_date ?? today);
-  const [paidOnSet, setPaidOnSet] = useState(!!purchase?.paid_on);   // until set by hand, it follows the purchase date
+  const [paidOn,    setPaidOn]    = useState(purchase?.paid_on ?? fromOrder?.paidOn ?? receipt?.movement_date ?? today);
+  const [paidOnSet, setPaidOnSet] = useState(!!purchase?.paid_on || !!fromOrder?.paidOn);   // until set by hand, it follows the purchase date
   const [notes,     setNotes]     = useState(purchase?.notes ?? '');
   const [date,      setDate]      = useState(today);
   // the goods: arrived now (into stock with the purchase, as before) or coming later (120) — the person says which
   const [arrival,   setArrival]   = useState('');   // '' | now | later
-  const [weekly,    setWeekly]    = useState(null); // the money: weekly cash (true) or directors · bank (false) (121)
+  const [weekly,    setWeekly]    = useState(fromOrder?.paid > 0 ? false : null); // the money: weekly cash (true) or directors · bank (false) (121); a paid order: the directors (131)
   const later = isNew && arrival === 'later';
   const itemMode = mode === 'edit' && purchase?.items?.length > 0;   // a purchase coming later, opened
   const [submitted, setSubmitted] = useState(false);

@@ -59,7 +59,8 @@ export default function OrderDetail({ order, branchName, money, canPay, onPay, o
               <td className="num">{stock ? stockText(stock[l.material_id]) : '…'}</td>
             </tr>
           ))}</tbody>
-          <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{money(order.amount)}</strong></td><td /></tr></tfoot>
+          <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{money(order.amount)}</strong></td><td /></tr>
+            {order.paid > 0 && <tr><td colSpan={3}>Paid · to pay</td><td className="num">{money(order.paid)} · <strong>{money(order.toPay)}</strong></td><td /></tr>}</tfoot>
         </table>
         <div className="pd-grid">
           <span className="pl-help">Supplier</span><strong>{order.supplier?.name ?? '—'}</strong>

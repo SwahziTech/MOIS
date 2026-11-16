@@ -79,12 +79,15 @@ export function periodSteps(today) {
 /** Open material orders with no purchase yet, each with its supplier and what it costs (129) */
 export async function loadOrdersToPay() {
   const [o, p] = await Promise.all([
-    supabase.from('purchase_orders').select('id, po_no, branch_id, order_date, request_id, supplier:suppliers(id, name, phone, pay_bank, pay_account_no, pay_account_name), lines:purchase_order_lines(line_no, kind, quantity, unit_price, unit_id, material_id, material:materials(name), unit:units(symbol))').eq('status', 'open'),
+    supabase.from('purchase_orders').select('id, po_no, branch_id, order_date, request_id, amount_paid, paid_on, supplier:suppliers(id, name, phone, pay_bank, pay_account_no, pay_account_name), lines:purchase_order_lines(line_no, kind, quantity, unit_price, unit_id, material_id, material:materials(name), unit:units(symbol))').eq('status', 'open'),
     supabase.from('purchases').select('purchase_order_id').eq('status', 'recorded').not('purchase_order_id', 'is', null),
   ]);
   const bought = new Set((p.data || []).map(x => x.purchase_order_id));
   return (o.data || []).filter(x => !bought.has(x.id) && (x.lines || []).length && (x.lines || []).every(l => l.kind !== 'expense'))
-    .map(x => ({ ...x, amount: (x.lines || []).reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0), priced: (x.lines || []).every(l => l.unit_price != null) }))
+    .map(x => { const amount = (x.lines || []).reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0);
+      return { ...x, amount, paid: Number(x.amount_paid || 0), toPay: Math.round((amount - Number(x.amount_paid || 0)) * 100) / 100, priced: (x.lines || []).every(l => l.unit_price != null) }; })
+    // paid in full: off the directors' list; it waits on Orders for the branch to record the purchase (131)
+    .filter(x => x.toPay > 0.01)
     .sort((a, b) => (a.order_date < b.order_date ? 1 : -1));
 }
 

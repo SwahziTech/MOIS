@@ -125,7 +125,14 @@ const goodsLeftOf = (po, got) => [...(po.lines || [])].filter(l => l.kind !== 'e
     const f = Number(l.stock_quantity) / Number(l.quantity);
     return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
   });
-const purchaseFromOrder = (po, got) => ({ orderId: po.id, supplierId: po.supplier_id, branchId: po.branch_id, lines: goodsLeftOf(po, got) });
+const purchaseFromOrder = (po, got) => ({ orderId: po.id, supplierId: po.supplier_id, branchId: po.branch_id, lines: goodsLeftOf(po, got),
+  // paid by the directors first (131): the purchase carries that payment
+  paid: Number(po.amount_paid || 0), paidOn: po.paid_on ?? null });
+// an order's payment status (131): Paid · Part paid · not yet
+const orderValue = po => (po?.lines || []).filter(l => l.kind !== 'expense').reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0);
+const orderPaidBadge = po => (!po || !(Number(po.amount_paid) > 0) ? null
+  : Number(po.amount_paid) >= orderValue(po) - 0.01 ? ['Paid', 'badge-success', 'The directors paid it — record the purchase']
+  : ['Part paid', 'badge-warning', 'The directors paid part of it']);
 
 /*
  * One flow for every request (2026-10-28, migration 084), from its row:
@@ -190,7 +197,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
                 <td>{people[r.requested_by] ?? ''}</td>
                 <td>{tableDate(r.needed_by) ?? ''}</td>
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
-                <td><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
+                <td>{(() => { const pb = orderPaidBadge(orders[r.id]); return pb
+                  ? <span className={`badge ${pb[1]}`} title={pb[2]}>{pb[0]}</span>
+                  : <span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>; })()}{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                   {orders[r.id] && canBuy(r.branch_id) && goodsLeftOf(orders[r.id], gotAll).length > 0 && (
                     <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive?.(purchaseFromOrder(orders[r.id], gotAll))}>Record purchase</button>

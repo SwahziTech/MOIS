@@ -57,7 +57,7 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
           const summary = x.key === 'orders' && orders?.length
             // what is asked, each item: Dust · 20 Trip/Truck · Tsh 3,040,000 (2026-11-16, the user)
             ? orders.flatMap(r => (r.lines || []).map(l => [l.material?.name ?? 'Material', `${formatAmount(Number(l.quantity))} ${l.unit?.symbol ?? ''}`.trim(),
-                l.unit_price != null ? money(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : 'no price'].join(' · '))).join('  ·  ')
+                l.unit_price != null ? money(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : 'no price'].join(' · ')).concat(r.paid > 0 ? [`paid ${money(r.paid)}, ${money(r.toPay)} to pay`] : [])).join('  ·  ')
             : x.key === 'cash' && cash?.length
             ? [toApprove.length ? `${toApprove.length} to approve · ${money(toApprove.reduce((t, r) => t + asked(r), 0))}` : null,
                toPay.length ? `${toPay.length} to pay · ${money(toPay.reduce((t, r) => t + asked(r), 0))}` : null].filter(Boolean).join(' · ') : null;
@@ -96,7 +96,7 @@ function OrderList({ rows, money, onPaid }) {
           <button type="button" className="nn-item-main" onClick={() => setViewing(r)} title="Open the order — each material, its price and what is in stock">
             <strong>{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => l.material?.name ?? 'Material').join(', ')} · {money(r.amount)}</strong>
             <span className="nn-lines">{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map((l, k) => <span key={k}>{l.material?.name} · {formatAmount(Number(l.quantity))} {l.unit?.symbol ?? ''} × {l.unit_price != null ? formatAmount(Number(l.unit_price)) : '—'} = {l.unit_price != null ? formatAmount(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : '—'}</span>)}</span>
-            <span className="pl-help">{r.supplier?.name ?? 'Supplier'} · order #{r.po_no} · {branchName(r.branch_id)} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
+            <span className="pl-help">{r.paid > 0 && <span className="badge badge-warning">Part paid · {money(r.toPay)} to pay</span>} {r.supplier?.name ?? 'Supplier'} · order #{r.po_no} · {branchName(r.branch_id)} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
           </button>
           {canAt('finance.pay', r.branch_id, null) && r.priced && (
             <button type="button" className="btn btn-primary btn-sm nn-pdf" onClick={() => setPaying(r)} title="Pay it now — the purchase is recorded as coming later, deliveries as they arrive">Pay</button>
