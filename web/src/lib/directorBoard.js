@@ -88,7 +88,7 @@ async function loadNeeds({ inBranch, today }) {
   ]);
   const pay = (ps.data || []).filter(x => inBranch(x.branch_id));
   return [
-    { key: 'requests', count: (pr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'purchase requests waiting', to: '/purchases?tab=requests' },
+    { key: 'requests', count: (pr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'purchase requests waiting', to: '/orders' },
     { key: 'cash', count: (cr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'weekly cash requests', to: '/weekly-cash' },
     { key: 'proofs', count: (pp.data || []).filter(x => inBranch(x.branch_id)).length, label: 'payments to confirm', to: '/approvals?tab=payments' },
     { key: 'approvals', count: (ch.data || []).filter(x => !x.branch_id || inBranch(x.branch_id)).length, label: 'approvals waiting', to: '/approvals' },

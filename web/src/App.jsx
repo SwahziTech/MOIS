@@ -81,7 +81,9 @@ export default function App() {
             <Route path="/suppliers"   element={<Suppliers />} />
             <Route path="/stock"       element={<Stock />} />
             <Route path="/movements"   element={<Movements />} />
-            <Route path="/purchases"   element={<Purchases />} />
+            <Route path="/purchases"   element={<Purchases key="purchases" />} />
+            <Route path="/expenses"    element={<Purchases key="expenses" section="expenses" />} />
+            <Route path="/orders"      element={<Purchases key="orders" section="orders" />} />
             <Route path="/production"  element={<Production />} />
             <Route path="/production/ledger" element={<ProductionLedger />} />
             <Route path="/costing" element={<Costing />} />

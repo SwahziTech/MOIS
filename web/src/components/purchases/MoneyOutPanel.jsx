@@ -12,7 +12,8 @@ import { ChipRow } from '../ListControls';
  */
 const TYPES = [['', 'All'], ['purchase', 'Purchases'], ['expense', 'Expenses'], ['pay', 'Salaries & wages'], ['power', 'Electricity']];
 
-export default function MoneyOutPanel({ branchId, inBranch, period, today, expenses, expCats, suppliers, money }) {
+// types: false when the page shows its own All, Purchases, Expenses, Wages chips
+export default function MoneyOutPanel({ types = true, branchId, inBranch, period, today, expenses, expCats, suppliers, money }) {
   const [pays, setPays] = useState(null);
   const [type, setType] = useState('');
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function MoneyOutPanel({ branchId, inBranch, period, today, expen
   return (
     <div className="card">
       <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
-      <div className="card-body" style={{ paddingBottom: 0 }}><ChipRow value={type} onChange={setType} items={TYPES.slice(1).map(([id, label]) => ({ id, label }))} /></div>
+      {types && <div className="card-body" style={{ paddingBottom: 0 }}><ChipRow value={type} onChange={setType} items={TYPES.slice(1).map(([id, label]) => ({ id, label }))} /></div>}
       <div className="table-container">
         <table>
           <thead><tr><th>Date</th><th>What</th><th>Type</th><th>From</th><th className="num">Amount (TZS)</th></tr></thead>

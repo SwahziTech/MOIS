@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useEmbedded } from '../lib/urlTab';
-import { groupOf, atEntry, NAV, navActive, hrefOf } from './Sidebar';
+import { groupOf, atEntry, NAV, navActive, hrefOf, mayOpen } from './Sidebar';
 import { useOpenTabs } from '../lib/crumbs';
 import { dateText } from '../lib/format';
 import { orgToday } from '../lib/inventory';
@@ -23,7 +23,7 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   const embedded = useEmbedded();
   const { can, organization } = useAuth();
   const group = groupOf(loc);
-  const siblings = (group?.group || []).filter(g => !g.perm || can(g.perm));
+  const siblings = (group?.group || []).filter(g => mayOpen(g, can));
   // the top menu (2026-11-10, the user): Back and "Home › section › this page" sit in its bar; each step can be clicked
   const [barEl, setBarEl] = useState(() => (document.body.classList.contains('menu-top') ? document.getElementById('tm-crumbs') : null));
   useEffect(() => {

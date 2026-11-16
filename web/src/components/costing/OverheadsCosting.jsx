@@ -50,7 +50,7 @@ export default function OverheadsCosting({ branchId, currency }) {
       </div>
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <PageTabs nested tabs={[['months', 'By month'], ['expenses', 'Expenses counted']]} value={view} onChange={setView} />
-        <Link to="/purchases?tab=expenses" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}>Expenses ›</Link>
+        <Link to="/expenses" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}>Expenses ›</Link>
       </div>
       {data.months.length === 0 ? (
         <div className="card"><EmptyState icon={Wrench} title="No production overheads yet" description="Tick the expense categories that are production costs under Purchases ⚙, then record those expenses — naming the machine when it is for one." /></div>

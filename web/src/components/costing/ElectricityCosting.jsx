@@ -101,7 +101,7 @@ export default function ElectricityCosting({ branchId, refs, currency, tabs }) {
       <div className="flex items-center gap-8" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <PageTabs nested tabs={[['days', 'By day'], ['products', 'By product']]} value={view} onChange={setView} />
         <PeriodBar value={period} onChange={setPeriod} today={today} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['365', 'Last 12 months']]} />
-        <Link to="/purchases?tab=electricity" className="btn btn-ghost btn-sm">Readings & tokens ›</Link>
+        <Link to="/expenses?tab=electricity" className="btn btn-ghost btn-sm">Readings & tokens ›</Link>
       </div>
       <div className="card"><div className="table-container">
         {view === 'days' ? (

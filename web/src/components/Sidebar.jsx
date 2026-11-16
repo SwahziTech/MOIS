@@ -2,6 +2,7 @@ import {
   LayoutDashboard, Package, Layers, DollarSign,
   Building2, Users, Settings, LogOut, LayoutGrid, Flag, Boxes, ArrowLeftRight, ShoppingCart, Factory, BookOpen,
   Calculator, Receipt, Contact, Wallet, HardHat, FileText, BarChart3, Landmark, CalendarClock, CalendarCheck, Files, ScrollText, FolderOpen, Printer,
+  ClipboardList, Banknote,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { dateText } from '../lib/format';
@@ -36,28 +37,46 @@ export const NAV = [
       ] },
     ],
   },
+  // menus redesigned (2026-11-16, the user): Master Data = Docs · Materials · Products (Pricing inside);
+  // Inventory and Procurement each their own menu
   {
     section: 'Master Data',
     items: [
+      // everything the Document Center had: find and print documents, reports, A4 lists
+      { label: 'Docs',          to: '/documents', icon: FolderOpen, group: [
+        { label: 'Documents',   to: '/documents',   perms: ['sales.view', 'procurement.view', 'staff.view'] },
+        { label: 'Reports',     to: '/reports',     perm: 'products.manage' },
+        { label: 'Print lists', to: '/print-lists', perms: ['inventory.view', 'products.view', 'staff.view', 'procurement.view'] },
+      ] },
       { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
       { label: 'Products',      to: '/products',  icon: Package, group: [
         { label: 'Products',      to: '/products',   perm: 'products.view' },
         { label: 'Categories',    to: '/categories', perm: 'products.view' },
         { label: 'Colours',       to: '/colours',    perm: 'products.view' },
         { label: 'Recipe / BOM',  to: '/recipes',    perm: 'products.view' },
+        { label: 'Pricing',       to: '/pricing',    perm: 'products.view' },
       ] },
-      { label: 'Pricing',       to: '/pricing',   icon: DollarSign, perm: 'products.view'  },
     ],
   },
   {
-    section: 'Inventory & Procurement',
+    section: 'Inventory',
     items: [
       { label: 'Stock',         to: '/stock',     icon: Boxes,          perm: 'inventory.view' },
       { label: 'Movements',     to: '/movements', icon: ArrowLeftRight, perm: 'inventory.view' },
-      { label: 'Procurement',   to: '/purchases', icon: ShoppingCart, group: [
+    ],
+  },
+  {
+    section: 'Procurement',
+    items: [
+      // all money out, purchases only, expenses only or wages only; suppliers as before
+      { label: 'Purchases',     to: '/purchases', icon: ShoppingCart, group: [
         { label: 'Purchases', to: '/purchases', perm: 'procurement.view' },
         { label: 'Suppliers', to: '/suppliers', perm: 'materials.view' },
       ] },
+      // electricity, salaries & wages, other
+      { label: 'Expenses',      to: '/expenses',  icon: Banknote,      perm: 'procurement.view' },
+      // only what is still to buy; bought ones move to Purchases / Expenses
+      { label: 'Orders',        to: '/orders',    icon: ClipboardList, perm: 'procurement.view' },
     ],
   },
   {
@@ -107,16 +126,6 @@ export const NAV = [
     ],
   },
   {
-    section: 'Document Center',
-    items: [
-      // production, sales, spending, materials, profit, branches for a date range (PRD 4.15) — managers
-      { label: 'Reports',       to: '/reports', icon: BarChart3, perm: 'products.manage' },
-      // find and print any document again; A4 lists of a branch (2026-10-30)
-      { label: 'Documents',     to: '/documents', icon: FolderOpen, perms: ['sales.view', 'procurement.view', 'staff.view'] },
-      { label: 'Print lists',   to: '/print-lists', icon: Printer, perms: ['inventory.view', 'products.view', 'staff.view', 'procurement.view'] },
-    ],
-  },
-  {
     section: 'Organization',
     items: [
       { label: 'Branches',      to: '/branches',  icon: Building2,  perm: 'branches.manage' },
@@ -144,9 +153,11 @@ export function atEntry(entry, loc) {
   return !CLAIMS.some(c => c.path === path && c.tabs.includes(cur));
 }
 /** may this person open the entry (any page of a group) */
-export const canSee = (item, can) => (item.group ? item.group.some(g => !g.perm || can(g.perm)) : item.perms ? item.perms.some(p => can(p)) : !item.perm || can(item.perm));
+// one entry: perm, or perms (any one of them) — group entries too (Docs, 2026-11-16)
+export const mayOpen = (g, can) => (g.perms ? g.perms.some(p => can(p)) : !g.perm || can(g.perm));
+export const canSee = (item, can) => (item.group ? item.group.some(g => mayOpen(g, can)) : mayOpen(item, can));
 /** where the entry goes: a group's first page this person may open */
-export const hrefOf = (item, can) => (item.group ? (item.group.find(g => !g.perm || can(g.perm))?.to ?? item.to) : item.to);
+export const hrefOf = (item, can) => (item.group ? (item.group.find(g => mayOpen(g, can))?.to ?? item.to) : item.to);
 /** is the entry the page open now (a group's pages; a page's tabs split between entries) */
 export const navActive = (item, loc) => (item.group ? item.group.some(g => atEntry(g, loc)) : atEntry(item, loc));
 /** the group the open page belongs to, for the tabs under its heading */

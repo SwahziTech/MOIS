@@ -71,14 +71,14 @@ export async function loadAlerts({ can, inBranch, today }) {
     jobs.push((async () => {
       const r = await supabase.from('purchase_orders').select('branch_id').eq('status', 'open').lt('expected_on', today);
       const n = ok(r).filter(x => inBranch(x.branch_id)).length;
-      add('late-po', n, 'warn', `${n} purchase order${n === 1 ? '' : 's'} past the expected date`, '/purchases?tab=requests');
+      add('late-po', n, 'warn', `${n} purchase order${n === 1 ? '' : 's'} past the expected date`, '/orders');
     })());
   }
   if (can('procurement.approve')) {
     jobs.push((async () => {
       const r = await supabase.from('purchase_requests').select('branch_id').eq('status', 'waiting');
       const n = ok(r).filter(x => inBranch(x.branch_id)).length;
-      add('requests', n, 'info', `${n} purchase request${n === 1 ? '' : 's'} waiting for a decision`, '/purchases?tab=requests');
+      add('requests', n, 'info', `${n} purchase request${n === 1 ? '' : 's'} waiting for a decision`, '/orders');
     })());
   }
   if (can('payroll.approve')) {

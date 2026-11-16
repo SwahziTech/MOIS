@@ -54,7 +54,7 @@ export default function MeterReadingsTask({ branchId }) {
       })}
       <span className="mr-actions">
         {data && (due ? <span className="badge badge-warning">{due} due</span> : <span className="badge badge-success">Up to date</span>)}
-        <Link to="/purchases?tab=electricity" className="btn btn-ghost btn-sm">Electricity ›</Link>
+        <Link to="/expenses?tab=electricity" className="btn btn-ghost btn-sm">Electricity ›</Link>
         <button type="button" className="btn btn-primary btn-sm" disabled={!data} onClick={() => setOpen(true)}>Record readings</button>
       </span>
       {open && <ReadingsModal meters={data.meters} readings={data.readings} today={today} onClose={() => setOpen(false)} onSaved={async () => { setOpen(false); await load(); }} />}

@@ -139,7 +139,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
   }
   useEffect(() => { load(); }, []);
   const canBuy = b => canAt('procurement.receive', b) || canAt('cash.approve', b);
-  const here = (rows || []).filter(r => inBranch(r.branch_id));
+  // only what is still to buy (2026-11-16, the user): waiting, approved, or ordered with its order still open;
+  // bought ones are in Purchases / Expenses, cancelled ones are deleted
+  const here = (rows || []).filter(r => inBranch(r.branch_id) && (['waiting', 'approved'].includes(r.status) || (r.status === 'ordered' && orders[r.id])));
   const canAsk = !!branchId && canAt('procurement.request', branchId);
   const open = here.find(r => r.id === openId);
   return (
@@ -159,7 +161,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
           <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>What</th><th>Status</th><th aria-label="Actions" /></tr></thead>
           <tbody>
             {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
-            : here.length === 0 ? <tr><td colSpan={7} className="text-muted">No purchase requests yet.</td></tr>
+            : here.length === 0 ? <tr><td colSpan={7} className="text-muted">Nothing waiting to be bought.</td></tr>
             : here.map(r => (
               <tr key={r.id} className="clickable-row" onClick={() => setOpenId(r.id)} title="Open the request">
                 <td>#{r.request_no}</td>
@@ -389,7 +391,9 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
   }
   useEffect(() => { load(); }, []);
   useEffect(() => { if (fromRequest) { setMaking({ request: fromRequest }); onUsedRequest(); } }, [fromRequest]); // eslint-disable-line react-hooks/exhaustive-deps
-  const here = (rows || []).filter(r => inBranch(r.branch_id));
+  // only what is still to buy (2026-11-16, the user): waiting, approved, or ordered with its order still open;
+  // bought ones are in Purchases / Expenses, cancelled ones are deleted
+  const here = (rows || []).filter(r => inBranch(r.branch_id) && (['waiting', 'approved'].includes(r.status) || (r.status === 'ordered' && orders[r.id])));
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const lineIn = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
   const fullyIn = po => (po.lines || []).every(lineIn);

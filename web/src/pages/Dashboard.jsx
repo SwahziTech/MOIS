@@ -157,7 +157,7 @@ function RoleDashboard({ keys, role, arranged = false, isOwner, isSecretary = fa
     d.low.rows.length && { text: `${d.low.rows.length} product(s) below their reorder level`, to: '/stock', warn: true },
     d.waiting.payToApprove && { text: `${d.waiting.payToApprove} pay sheet(s) to approve`, to: '/staff' },
     d.waiting.payToPay && { text: `${d.waiting.payToPay} approved pay sheet(s) to pay`, to: '/staff' },
-    d.waiting.requests && { text: `${d.waiting.requests} purchase request(s) waiting for a decision`, to: '/purchases?tab=requests' },
+    d.waiting.requests && { text: `${d.waiting.requests} purchase request(s) waiting for a decision`, to: '/orders' },
     d.waiting.flags && { text: `${d.waiting.flags} open review flag(s)`, to: '/review' },
     d.waiting.followUps && { text: `${d.waiting.followUps} lead follow-up(s) due`, to: '/customers' },
   ].filter(Boolean) : [];
