@@ -34,7 +34,8 @@ export function guessCategory(description, categories, history = []) {
     const c = live.find(x => norm(x.name) === norm(name));
     if (c) return c.id;
   }
-  return '';
+  // anything else is Other (2026-11-16, the user: only Electricity, Salaries, Wages and Other are kept)
+  return live.find(x => norm(x.name) === 'other')?.id ?? '';
 }
 
 /** Fill the lines that have no category yet; lines someone chose stay as they are */
