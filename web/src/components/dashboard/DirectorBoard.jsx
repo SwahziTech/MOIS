@@ -313,7 +313,7 @@ function CardHistory({ card, data, inBranch, today, short, full, period, periodK
                 <td>{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{i.name}</div>)}</td>
                 <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{qtyText(i.qty)} {i.unit}</div>)}</td>
                 <td className="num">{its.map(i => <div key={`${i.name}|${i.unit}`} className="dd-item">{fmt(i.amount)}</div>)}</td>
-              </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}{r[`${k}Out`] > 0 && <div className="dd-out" title="Dated before this period: shown here, not counted in the totals">+ {fmt(r[`${k}Out`])} before {tableDate(period.from)}</div>}</td>)}</tr>)}
+              </>; })()}{cols.map(k => <td key={k} className="num">{fmt(r[k])}{r[`${k}Out`] > 0 && <div className="dd-out" title="Dated before this period: shown here, not counted in the totals">+ {fmt(r[`${k}Out`])} before {tableDate(period.from)}</div>}{r[`${k}After`] > 0 && <div className="dd-out" title="Dated after this period: shown here, not counted in the totals">+ {fmt(r[`${k}After`])} after {tableDate(period.to)}</div>}</td>)}</tr>)}
           </tbody>
           {rows.length > 0 && <tfoot><tr><td><strong>Total</strong></td>{cfg.showItems && <><td /><td /><td /></>}{cols.map(k => <td key={k} className="num"><strong>{full(rows.reduce((t, r) => t + r[k], 0))}</strong></td>)}</tr></tfoot>}
         </table>

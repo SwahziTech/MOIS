@@ -99,7 +99,7 @@ async function loadNeeds({ inBranch, today }) {
 
 /** Everything the cards and their detail pages count, once; a period is then only a filter */
 export async function loadMoneyData() {
-  const [pa, mv, cr, pu, tot, ba, sa, ac] = await Promise.all([
+  const [pa, mv, cr, pu, tot, ba, sa, ac, wx, wp] = await Promise.all([
     supabase.from('sale_payments').select('paid_on, amount, sale:sales!inner(branch_id)'),
     supabase.from('cash_movements').select('branch_id, day, direction, amount, kind'),
     supabase.from('cash_requests').select('branch_id, week_ending, status, opening_balance, last_week'),
@@ -109,6 +109,10 @@ export async function loadMoneyData() {
     // the sales made (2026-11-03: the Sales card counts these, as the Sales book lists them)
     supabase.from('sales').select('id, sale_no, branch_id, sale_date, total, lines:sale_lines(line_no, product_id, item_name, color_id, quantity, total), payments:sale_payments(id, account_id, amount, paid_on)').in('stage', ['order', 'invoice']),
     supabase.from('payment_accounts').select('id, name'),
+    // what was paid out of the weekly cash only (121) — the Weekly cash card counts these, not all spending
+    // (2026-11-16, the user: "this is not all purchases, only the weekly cash")
+    supabase.from('expenses').select('branch_id, paid_on, amount_paid').eq('status', 'recorded').eq('from_weekly_cash', true).gt('amount_paid', 0),
+    supabase.from('purchase_payments').select('paid_on, amount, purchase:purchases!inner(branch_id, status)').eq('from_weekly_cash', true).eq('purchase.status', 'recorded'),
   ]);
   const err = pa.error || mv.error || cr.error || pu.error;
   if (err) throw err;
@@ -124,6 +128,10 @@ export async function loadMoneyData() {
       paid: sum(x.payments || [], p => p.amount), payments: (x.payments || []).map(p => ({ id: p.id, paid_on: p.paid_on })), accounts: [...new Set((x.payments || []).map(p => p.account_id).filter(Boolean))],
       lines: (x.lines || []).sort((a, b) => a.line_no - b.line_no).map(l => ({ product_id: l.product_id, item_name: l.item_name, color_id: l.color_id, quantity: n(l.quantity), total: n(l.total) })) })),
     accountName: Object.fromEntries((ac.data || []).map(a => [a.id, a.name])),
+    weeklySpent: [
+      ...(wx.data || []).map(e => ({ branch_id: e.branch_id, day: e.paid_on, amount: n(e.amount_paid) })),
+      ...(wp.data || []).map(p => ({ branch_id: p.purchase.branch_id, day: p.paid_on, amount: n(p.amount) })),
+    ].filter(x => x.day),
   };
 }
 
@@ -134,7 +142,7 @@ export function cardsFor(data, { from, to, compare }, inBranch) {
   const made = (a, b) => sum(data.sales.filter(x => inBranch(x.branch_id) && inRange(x.day, a, b)), x => x.total);
   const moves = data.moves.filter(x => inBranch(x.branch_id));
   const sentIn = (a, b) => sum(moves.filter(x => x.kind === 'topup' && inRange(x.day, a, b)), x => x.amount);
-  const spentIn = (a, b) => sum(moves.filter(x => SPENT.has(x.kind) && inRange(x.day, a, b)), x => x.amount);
+  const spentIn = (a, b) => sum((data.weeklySpent || []).filter(x => inBranch(x.branch_id) && inRange(x.day, a, b)), x => x.amount);
   const bought = data.purchases.filter(x => inBranch(x.branch_id) && inRange(x.day, from, to));
   return {
     sales: made(from, to),
@@ -162,9 +170,11 @@ function weeklyCashLeft(data, upTo, inBranch) {
     const started = sorted.filter(r => dayShift(r.week_ending, -6) <= upTo);
     if (!started.length) continue;
     const base = [...started].reverse().find(r => r.opening_balance != null) ?? started[0];
-    const start = dayShift(base.week_ending, -6);
-    const moves = data.moves.filter(x => x.branch_id === branch && inRange(x.day, start, upTo));
-    left += n(base.opening_balance) + sum(moves, x => (x.kind === 'topup' ? n(x.amount) : SPENT.has(x.kind) ? -n(x.amount) : 0));
+    // the first report's balance is what was left on its date; then cash sent in, weekly-cash spending out
+    const start = base.week_ending;
+    const sent = sum(data.moves.filter(x => x.branch_id === branch && x.kind === 'topup' && inRange(x.day, start, upTo)), x => x.amount);
+    const out = sum((data.weeklySpent || []).filter(x => x.branch_id === branch && inRange(x.day, start, upTo)), x => x.amount);
+    left += n(base.opening_balance) + sent - out;
   }
   return left;
 }
@@ -197,14 +207,11 @@ export function historyFor(data, card, by, inBranch, today, { from, to }) {
     // the figure (aOut / bOut), not counted in the period's totals (2026-11-16, the user)
     const add = (d, col, amt) => {
       if (!d || d > today) return; const k = satOf(d); if (dayShift(k, 7) <= from || k > to) return;
-      const r = rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0, aOut: 0, bOut: 0 };
-      r[d < from ? `${col}Out` : col] += n(amt);
+      const r = rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0, aOut: 0, bOut: 0, aAfter: 0, bAfter: 0 };
+      r[d < from ? `${col}Out` : d > to ? `${col}After` : col] += n(amt);
     };
-    for (const x of data.moves) {
-      if (!inBranch(x.branch_id)) continue;
-      if (x.kind === 'topup') add(x.day, 'a', x.amount);
-      if (SPENT.has(x.kind)) add(x.day, 'b', x.amount);
-    }
+    for (const x of data.moves) if (inBranch(x.branch_id) && x.kind === 'topup') add(x.day, 'a', x.amount);
+    for (const x of data.weeklySpent || []) if (inBranch(x.branch_id)) add(x.day, 'b', x.amount);
     // a week whose summary came from the branch's sheet (cash sent before MOIS): its CASH SENT, on its BALANCE date
     for (const q of data.requests) {
       const rs = q.last_week?.rows;
