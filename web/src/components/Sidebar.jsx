@@ -37,24 +37,24 @@ export const NAV = [
       ] },
     ],
   },
-  // menus redesigned (2026-11-16, the user): Master Data = Docs · Materials · Products (Pricing inside);
+  // menus redesigned (2026-11-16, the user): Master Data = Products (Pricing inside) · Materials · Docs;
   // Inventory and Procurement each their own menu
   {
     section: 'Master Data',
     items: [
-      // everything the Document Center had: find and print documents, reports, A4 lists
-      { label: 'Docs',          to: '/documents', icon: FolderOpen, group: [
-        { label: 'Documents',   to: '/documents',   perms: ['sales.view', 'procurement.view', 'staff.view'] },
-        { label: 'Reports',     to: '/reports',     perm: 'products.manage' },
-        { label: 'Print lists', to: '/print-lists', perms: ['inventory.view', 'products.view', 'staff.view', 'procurement.view'] },
-      ] },
-      { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
       { label: 'Products',      to: '/products',  icon: Package, group: [
         { label: 'Products',      to: '/products',   perm: 'products.view' },
         { label: 'Categories',    to: '/categories', perm: 'products.view' },
         { label: 'Colours',       to: '/colours',    perm: 'products.view' },
         { label: 'Recipe / BOM',  to: '/recipes',    perm: 'products.view' },
         { label: 'Pricing',       to: '/pricing',    perm: 'products.view' },
+      ] },
+      { label: 'Materials',     to: '/materials', icon: Layers,     perm: 'materials.view' },
+      // everything the Document Center had: find and print documents, reports, A4 lists
+      { label: 'Docs',          to: '/documents', icon: FolderOpen, group: [
+        { label: 'Documents',   to: '/documents',   perms: ['sales.view', 'procurement.view', 'staff.view'] },
+        { label: 'Reports',     to: '/reports',     perm: 'products.manage' },
+        { label: 'Print lists', to: '/print-lists', perms: ['inventory.view', 'products.view', 'staff.view', 'procurement.view'] },
       ] },
     ],
   },

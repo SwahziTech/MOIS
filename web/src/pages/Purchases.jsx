@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -317,13 +317,21 @@ export default function Purchases({ section = 'purchases' }) {
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            {(tab === 'purchases' || tab === 'expenses') && <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>}
-            {/* paid and delivered are two tracks (120, 2026-11-13) */}
-            {tab === 'purchases' && (
-              <div className="card-body filter-chips" style={{ paddingBottom: 0 }} role="radiogroup" aria-label="Show">
-                {[['', 'All'], ['delivery', `Waiting delivery${waitingDelivery ? ` (${waitingDelivery})` : ''}`], ['payment', 'Waiting payment'], ['done', 'Done']].map(([k, l]) => (
-                  <button key={k} type="button" role="radio" aria-checked={puFilter === k} className={`filter-chip${puFilter === k ? ' is-on' : ''}`} onClick={() => setPuFilter(k)}>{l}</button>
-                ))}
+            {/* the period, and for purchases a filter: paid and delivered are two tracks (120; a filter, not chips, 2026-11-16) */}
+            {(tab === 'purchases' || tab === 'expenses') && (
+              <div className="card-body pu-bar" style={{ paddingBottom: 0 }}>
+                <PeriodSelect period={period} today={today} extra={[['all', 'All time']]} />
+                {tab === 'purchases' && (
+                  <label className="pu-filter" title="Filter">
+                    <Filter size={15} aria-hidden="true" />
+                    <select className="form-input" aria-label="Filter" value={puFilter} onChange={e => setPuFilter(e.target.value)}>
+                      <option value="">All</option>
+                      <option value="delivery">Waiting delivery{waitingDelivery ? ' (' + waitingDelivery + ')' : ''}</option>
+                      <option value="payment">Waiting payment</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </label>
+                )}
               </div>
             )}
             {tab === 'waiting' && (

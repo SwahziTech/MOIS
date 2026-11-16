@@ -39,7 +39,7 @@ export default function MoneyOutPanel({ types = true, branchId, inBranch, period
       {types && <div className="card-body" style={{ paddingBottom: 0 }}><ChipRow value={type} onChange={setType} items={TYPES.slice(1).map(([id, label]) => ({ id, label }))} /></div>}
       <div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>What</th><th>Type</th><th>From</th><th className="num">Amount (TZS)</th></tr></thead>
+          <thead><tr><th>Date</th><th>Item</th><th>Type</th><th>From</th><th className="num">Amount (TZS)</th></tr></thead>
           <tbody>
             {pays === null ? <tr><td colSpan={5}><span className="skeleton" /></td></tr>
             : rows.length === 0 ? <tr><td colSpan={5} className="text-muted">No money out in this period.</td></tr>
