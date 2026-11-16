@@ -341,6 +341,22 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
   const [newSupplier, setNewSupplier] = useState('');
   const active = (refs?.suppliers || []).filter(x => x.status === 'active').sort((a, b) => a.name.localeCompare(b.name));
   const hasMaterial = lines.some(l => l.kind === 'material');
+  // the materials decide the supplier (2026-11-16, the user): who supplied them before, filled in
+  // until a supplier is picked by hand — most purchases first, the latest breaking a tie
+  const [supTouched, setSupTouched] = useState(false);
+  const [past, setPast] = useState({});   // material id → [{ s: supplier, d: date }]
+  useEffect(() => {
+    supabase.from('purchases').select('supplier_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material_id))').eq('status', 'recorded').eq('branch_id', branchId)
+      .then(({ data }) => {
+        const m = {};
+        for (const x of data || []) for (const l of x.lines || []) if (l.tx?.material_id && x.supplier_id) (m[l.tx.material_id] ||= []).push({ s: x.supplier_id, d: x.purchase_date });
+        setPast(m);
+      });
+  }, [branchId]);
+  const score = {};
+  for (const l of lines) if (l.kind === 'material') for (const h of past[l.materialId] || []) { const x = score[h.s] ||= { n: 0, d: '' }; x.n += 1; if (h.d > x.d) x.d = h.d; }
+  const suggested = Object.entries(score).sort((a, b) => b[1].n - a[1].n || (a[1].d < b[1].d ? 1 : -1)).map(([id]) => id).filter(id => active.some(x => x.id === id));
+  useEffect(() => { if (!supTouched) setSupplierId(suggested[0] ?? ''); }, [suggested.join(','), supTouched]); // eslint-disable-line react-hooks/exhaustive-deps
   const [neededBy, setNeededBy] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -367,16 +383,19 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send for approval</button></>}>
       <div className="modal-form">
+        <RequestLines refs={refs} branchId={branchId} cats={cats} lines={lines} setLines={setLines} />
+        {/* the supplier under the materials, filled from who supplied them before (2026-11-16) */}
         <div className="form-row">
-          <label className="pe-field"><span>Supplier{hasMaterial ? '' : ' (optional)'}</span>
-            <select className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+          <label className="pe-field"><span>Supplier{hasMaterial ? '' : ' (optional)'}{!supTouched && suggested[0] && supplierId === suggested[0] ? <span className="pl-help"> · supplied these before</span> : null}</span>
+            <select className="form-input" value={supplierId} onChange={e => { setSupTouched(true); setSupplierId(e.target.value); }}>
               <option value="">Choose…</option>
-              {active.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {suggested.length > 0 && <optgroup label="Supplied these before">{suggested.map(id => active.find(x => x.id === id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>}
+              <optgroup label={suggested.length ? 'Other suppliers' : 'Suppliers'}>{active.filter(x => !suggested.includes(x.id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
               <option value="__new">New supplier…</option>
             </select>
             {supplierId === '__new' && <input className="form-input mt-4" placeholder="The supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
+          <span className="pe-field" style={{ flex: 1 }} />
         </div>
-        <RequestLines refs={refs} branchId={branchId} cats={cats} lines={lines} setLines={setLines} />
         <div className="form-row">
           <label className="pe-field"><span>Needed by (optional)</span><input type="date" className="form-input" value={neededBy} onChange={e => setNeededBy(e.target.value)} /></label>
           <label className="pe-field" style={{ flex: 2 }}><span>Why / notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
