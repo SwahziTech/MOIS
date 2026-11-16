@@ -13,6 +13,7 @@ import NumberInput from '../NumberInput';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
+import { loadOrdersToPay } from '../../lib/directorBoard';
 
 /*
  * What directors pay (106, 2026-11-04, the user): one Pay window — choose what
@@ -61,15 +62,19 @@ export function PayModal({ onClose, onSaved, preset = null }) {
     if (!br) return;
     (async () => {
       if (kind === 'supplier') {
-        const [p, t, s] = await Promise.all([
+        const [p, t, s, po] = await Promise.all([
           supabase.from('purchases').select('id, purchase_date, invoice_reference, supplier_id, status').eq('branch_id', br).order('purchase_date', { ascending: false }).limit(200),
           supabase.from('purchase_totals').select('purchase_id, total, balance'),
           supabase.from('suppliers').select('id, name'),
+          loadOrdersToPay(),
         ]);
         const bal = Object.fromEntries((t.data || []).map(x => [x.purchase_id, x]));
         const sup = Object.fromEntries((s.data || []).map(x => [x.id, x.name]));
-        setOptions((p.data || []).filter(x => x.status !== 'void' && Number(bal[x.id]?.balance) > 0.004)
-          .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` })));
+        // pay first (129): an approved order, paid before the goods come — its purchase is made on paying
+        const orders = po.filter(x => x.branch_id === br && x.priced)
+          .map(x => ({ id: 'po:' + x.id, who: x.supplier?.name, owes: x.amount, label: `Order #${x.po_no} · ${x.supplier?.name ?? 'Supplier'} · to pay ${money(x.amount)}` }));
+        setOptions([...orders, ...(p.data || []).filter(x => x.status !== 'void' && Number(bal[x.id]?.balance) > 0.004)
+          .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` }))]);
       } else if (kind === 'expense') {
         const { data } = await supabase.from('expenses').select('id, expense_date, description, amount, amount_paid, status').eq('branch_id', br).neq('status', 'void').order('expense_date', { ascending: false }).limit(100);
         setOptions((data || []).map(x => ({ id: x.id, who: x.description, owes: Math.max(Number(x.amount) - Number(x.amount_paid || 0), 0) || Number(x.amount),
@@ -120,7 +125,14 @@ export function PayModal({ onClose, onSaved, preset = null }) {
     try {
       // 1. the payment, through MOIS's own step
       let r = { error: null };
-      if (kind === 'supplier') r = await supabase.rpc('record_purchase_payment', { p_purchase: ref, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null, method: accountId ? null : 'bank', reference: null } });
+      // an order paid first (129): its purchase is made now, coming later; the payment and proof go on it
+      let target = ref;
+      if (kind === 'supplier' && ref.startsWith('po:')) {
+        const mk = await supabase.rpc('purchase_from_order', { p_order: ref.slice(3) });
+        if (mk.error) throw mk.error;
+        target = mk.data;
+      }
+      if (kind === 'supplier') r = await supabase.rpc('record_purchase_payment', { p_purchase: target, p: { amount: num(amount), paid_on: paidOn, account_id: accountId || null, method: accountId ? null : 'bank', reference: null } });
       if (kind === 'weekly_cash') r = await supabase.rpc('cash_request_step', { p_id: ref, p_step: 'pay', p: { amount: num(amount), paid_on: paidOn, reference: (payRef ?? chosen?.reference ?? '').trim() || null } });
       if (kind === 'salaries') r = await supabase.rpc('pay_pay_sheet', { p_sheet: ref, p: { paid_on: paidOn, account_id: accountId || null } });
       if (r.error) throw r.error;
@@ -133,7 +145,7 @@ export function PayModal({ onClose, onSaved, preset = null }) {
           const up = await files('director-proofs').upload(path, file, { contentType: file.type || undefined, upsert: false });
           if (up.error) throw up.error;
         }
-        const { error: err } = await supabase.rpc('post_director_payment', { p: { branch_id: br, kind, ref_id: ref || null, description: desc.trim() || null,
+        const { error: err } = await supabase.rpc('post_director_payment', { p: { branch_id: br, kind, ref_id: target || null, description: desc.trim() || null,
           amount: num(amount), account_id: accountId || null, paid_on: paidOn, file_path: path, file_name: file ? proofName({ kind: `Paid-${{ supplier: 'Supplier', expense: 'Expense', weekly_cash: 'WeeklyCash', salaries: 'Salaries', other: 'Other' }[kind]}`,
           who: (options || []).find(o => o.id === ref)?.who || desc.trim() || (branches || []).find(b => b.id === br)?.name, amount: num(amount), date: paidOn }, extOf(file)) : null, sms_text: sms.trim() || null } });
         if (err) throw err;

@@ -76,8 +76,20 @@ export function periodSteps(today) {
   return ['today', ...(days >= 1 ? ['yesterday'] : []), ...Array.from({ length: Math.max(days - 1, 0) }, (_, i) => `day-${i + 2}`), 'lastweek', 'lastmonth'];
 }
 
+/** Open material orders with no purchase yet, each with its supplier and what it costs (129) */
+export async function loadOrdersToPay() {
+  const [o, p] = await Promise.all([
+    supabase.from('purchase_orders').select('id, po_no, branch_id, order_date, request_id, supplier:suppliers(name), lines:purchase_order_lines(kind, quantity, unit_price, unit_id, material_id)').eq('status', 'open'),
+    supabase.from('purchases').select('purchase_order_id').eq('status', 'recorded').not('purchase_order_id', 'is', null),
+  ]);
+  const bought = new Set((p.data || []).map(x => x.purchase_order_id));
+  return (o.data || []).filter(x => !bought.has(x.id) && (x.lines || []).length && (x.lines || []).every(l => l.kind !== 'expense'))
+    .map(x => ({ ...x, amount: (x.lines || []).reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0), priced: (x.lines || []).every(l => l.unit_price != null) }))
+    .sort((a, b) => (a.order_date < b.order_date ? 1 : -1));
+}
+
 async function loadNeeds({ inBranch, today }) {
-  const [ch, cr, ps, pr, pp] = await Promise.all([
+  const [ch, cr, ps, pr, pp, po] = await Promise.all([
     supabase.from('pending_changes').select('branch_id').eq('status', 'pending'),
     // approved is not paid: it stays here until it is paid (2026-11-16, the user)
     supabase.from('cash_requests').select('branch_id').in('status', ['with_directors', 'approved']),
@@ -85,10 +97,13 @@ async function loadNeeds({ inBranch, today }) {
     supabase.from('purchase_requests').select('branch_id').eq('status', 'waiting'),
     // proofs of payment waiting for a director (105)
     supabase.from('sale_payment_proofs').select('branch_id').eq('status', 'waiting'),
+    // pay first (129): an approved order goes to the directors to pay
+    loadOrdersToPay(),
   ]);
   const pay = (ps.data || []).filter(x => inBranch(x.branch_id));
   return [
     { key: 'requests', count: (pr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'purchase requests waiting', to: '/orders' },
+    { key: 'orders', count: po.filter(x => inBranch(x.branch_id)).length, label: 'orders to pay', to: '/orders' },
     { key: 'cash', count: (cr.data || []).filter(x => inBranch(x.branch_id)).length, label: 'weekly cash requests', to: '/weekly-cash' },
     { key: 'proofs', count: (pp.data || []).filter(x => inBranch(x.branch_id)).length, label: 'payments to confirm', to: '/approvals?tab=payments' },
     { key: 'approvals', count: (ch.data || []).filter(x => !x.branch_id || inBranch(x.branch_id)).length, label: 'approvals waiting', to: '/approvals' },

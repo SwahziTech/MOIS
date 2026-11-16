@@ -8,6 +8,7 @@ import { formatMoney, formatAmount, dateText } from '../../lib/format';
 import { WaitingSlips } from '../sales/PaymentProofs';
 import { PayModal } from './DirectorPayments';
 import WeeklyCash from '../../pages/WeeklyCash';
+import { loadOrdersToPay } from '../../lib/directorBoard';
 
 /*
  * "Needs you now" for the directors, grouped (2026-11-16, the user): one card a kind, with its number in
@@ -15,7 +16,7 @@ import WeeklyCash from '../../pages/WeeklyCash';
  * to show each request; its document icon opens the report full screen as the PDF page, where the
  * director comments changes or approves it for payment. Other kinds go to their page.
  */
-const LABEL = { proofs: 'Payment slips to confirm', cash: 'Weekly cash requests' };
+const LABEL = { proofs: 'Payment slips to confirm', cash: 'Weekly cash requests', orders: 'Orders to pay' };
 
 export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
   const { organization } = useAuth();
@@ -34,6 +35,13 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
       .then(({ data }) => setCash((data || []).filter(r => inBranch(r.branch_id))));
   }, [hasCash, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const asked = r => (r.lines || []).reduce((t, l) => t + Number(l.amount || 0), 0);
+  // pay first (129): approved orders, paid before the goods come
+  const [orders, setOrders] = useState(null);
+  const hasOrders = needs.some(x => x.key === 'orders');
+  useEffect(() => {
+    if (!hasOrders) { setOrders([]); return; }
+    loadOrdersToPay().then(rows => setOrders(rows.filter(r => inBranch(r.branch_id))));
+  }, [hasOrders, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = needs.reduce((t, x) => t + x.count, 0);
 
   return (
@@ -41,10 +49,11 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
       <div className="dd-head"><span>Needs you now</span><span className="nn-badge" aria-label={`${total} items`}>{total}</span></div>
       <div className="nn-cards">
         {needs.map(x => {
-          const expandable = (x.key === 'proofs' && canConfirm) || x.key === 'cash';
+          const expandable = (x.key === 'proofs' && canConfirm) || x.key === 'cash' || x.key === 'orders';
           const on = openKey === x.key;
           const toApprove = (cash || []).filter(r => r.status === 'with_directors'), toPay = (cash || []).filter(r => r.status === 'approved');
-          const summary = x.key === 'cash' && cash?.length
+          const summary = x.key === 'orders' && orders?.length ? money(orders.reduce((t, r) => t + r.amount, 0))
+            : x.key === 'cash' && cash?.length
             ? [toApprove.length ? `${toApprove.length} to approve · ${money(toApprove.reduce((t, r) => t + asked(r), 0))}` : null,
                toPay.length ? `${toPay.length} to pay · ${money(toPay.reduce((t, r) => t + asked(r), 0))}` : null].filter(Boolean).join(' · ') : null;
           const head = <>
@@ -58,12 +67,36 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
                 ? <button type="button" className="nn-head" aria-expanded={on} onClick={() => setOpenKey(on ? null : x.key)}>{head}</button>
                 : <Link to={x.to} className="nn-head">{head}</Link>}
               {on && x.key === 'proofs' && <WaitingSlips inBranch={inBranch} onChanged={onChanged} />}
+              {on && x.key === 'orders' && <OrderList rows={orders} money={money} onPaid={() => { setReloadKey(k => k + 1); onChanged?.(); }} />}
               {on && x.key === 'cash' && <CashList rows={cash} asked={asked} money={money} onPaid={() => { setReloadKey(k => k + 1); onChanged?.(); }} />}
             </div>
           );
         })}
       </div>
     </section>
+  );
+}
+
+function OrderList({ rows, money, onPaid }) {
+  const { branches } = useBranch();
+  const { canAt } = useAuth();
+  const [paying, setPaying] = useState(null);
+  if (!rows) return <span className="skeleton" />;
+  return (
+    <div className="nn-list">
+      {rows.map(r => (
+        <div key={r.id} className="nn-item">
+          <Link to="/orders" className="nn-item-main" title="Open Orders">
+            <strong>{r.supplier?.name ?? 'Supplier'} · {money(r.amount)}</strong>
+            <span className="pl-help">Order #{r.po_no} · {branches.find(b => b.id === r.branch_id)?.name ?? 'Branch'} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
+          </Link>
+          {canAt('finance.pay', r.branch_id, null) && r.priced && (
+            <button type="button" className="btn btn-primary btn-sm nn-pdf" onClick={() => setPaying(r)} title="Pay it now — the purchase is recorded as coming later, deliveries as they arrive">Pay</button>
+          )}
+        </div>
+      ))}
+      {paying && <PayModal preset={{ kind: 'supplier', branch: paying.branch_id, ref: 'po:' + paying.id }} onClose={() => setPaying(null)} onSaved={() => { setPaying(null); onPaid?.(); }} />}
+    </div>
   );
 }
 
