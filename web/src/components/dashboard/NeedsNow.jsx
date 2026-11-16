@@ -55,7 +55,9 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
           const toApprove = (cash || []).filter(r => r.status === 'with_directors'), toPay = (cash || []).filter(r => r.status === 'approved');
           // the items first, even on the closed card (2026-11-16, the user): Dust 20 Trip/Truck · Tsh …
           const summary = x.key === 'orders' && orders?.length
-            ? [...orders.flatMap(r => (r.lines || []).map(l => `${l.material?.name ?? 'Material'} ${formatAmount(Number(l.quantity))} ${l.unit?.symbol ?? ''}`.trim())), money(orders.reduce((t, r) => t + r.amount, 0))].join(' · ')
+            // what is asked, each item: Dust · 20 Trip/Truck · Tsh 3,040,000 (2026-11-16, the user)
+            ? orders.flatMap(r => (r.lines || []).map(l => [l.material?.name ?? 'Material', `${formatAmount(Number(l.quantity))} ${l.unit?.symbol ?? ''}`.trim(),
+                l.unit_price != null ? money(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : 'no price'].join(' · '))).join('  ·  ')
             : x.key === 'cash' && cash?.length
             ? [toApprove.length ? `${toApprove.length} to approve · ${money(toApprove.reduce((t, r) => t + asked(r), 0))}` : null,
                toPay.length ? `${toPay.length} to pay · ${money(toPay.reduce((t, r) => t + asked(r), 0))}` : null].filter(Boolean).join(' · ') : null;
