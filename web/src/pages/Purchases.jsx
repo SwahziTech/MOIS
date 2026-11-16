@@ -492,7 +492,6 @@ export default function Purchases({ section = 'purchases' }) {
         // bought from an order and delivered in portions (133): Change changes only the deliveries
         const fromOrder = !!p.purchase_order_id && (p.items || []).length > 0;
         const bal = t ? Number(t.balance) : 0;
-        const roundingGap = t && bal >= 1 && Number(t.amount_paid) > 0 && bal <= Number(t.total) * 0.01;
         return (
           <Modal title={'Purchase · ' + dateText(p.purchase_date)} onClose={close}
             footer={<>
@@ -502,9 +501,8 @@ export default function Purchases({ section = 'purchases' }) {
                 ? <button type="button" className="btn btn-outline" onClick={() => setDelivEdit(v => !v)} title="Change the deliveries: their date and quantity">{delivEdit ? 'Done changing' : 'Change'}</button>
                 : <button type="button" className="btn btn-outline" onClick={() => { close(); setEditing({ mode: 'edit', purchase: p }); }}>Change</button>)}
               {can && delivOf(p) !== 'delivered' && <button type="button" className="btn btn-primary" onClick={() => { close(); setDelivering(p); }}>Record delivery</button>}
-              {can && roundingGap && <button type="button" className="btn btn-outline" title="What is left is only rounding — take it as paid in full"
-                onClick={async () => { const r = await supabase.rpc('settle_purchase', { p_id: p.id }); if (!r.error) { await load(); close(); } }}>Mark paid in full ({money(bal)} rounding)</button>}
-              {can && t && bal >= 1 && !roundingGap && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
+              {/* a rounding gap is settled when the purchase is recorded, not here (2026-11-16, the user) */}
+              {can && t && bal >= 1 && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
             <div className="modal-form">
