@@ -68,11 +68,8 @@ export const NAV = [
   {
     section: 'Procurement',
     items: [
-      // all money out, purchases only, expenses only or wages only; suppliers as before
-      { label: 'Purchases',     to: '/purchases', icon: ShoppingCart, group: [
-        { label: 'Purchases', to: '/purchases', perm: 'procurement.view' },
-        { label: 'Suppliers', to: '/suppliers', perm: 'materials.view' },
-      ] },
+      // one Procurement page, tabs All · Purchases · Expenses · Suppliers; each entry opens its own tab
+      { label: 'Purchases',     to: '/purchases', icon: ShoppingCart,  perm: 'procurement.view' },
       // electricity, salaries & wages, other
       { label: 'Expenses',      to: '/expenses',  icon: Banknote,      perm: 'procurement.view' },
       // only what is still to buy; bought ones move to Purchases / Expenses

@@ -11,6 +11,8 @@ import PageShell from '../components/PageShell';
 import { PageTabs, ChipRow } from '../components/ListControls';
 import { PaidFrom, saveWeeklyCash } from '../components/purchases/PaidFrom';
 import MoneyOutPanel from '../components/purchases/MoneyOutPanel';
+import Suppliers from './Suppliers';
+import { Embedded } from '../lib/urlTab';
 import ExpenseModal from '../components/purchases/ExpenseModal';
 import PowerMetersCard from '../components/settings/PowerMetersCard';
 import OverheadCategoriesCard from '../components/settings/OverheadCategoriesCard';
@@ -60,19 +62,25 @@ export default function Purchases({ section = 'purchases' }) {
   const canRecordAt = id => !!id && canAt('procurement.receive', id, null);
 
   const navigate = useNavigate();
-  const [pTab, setPTab] = useState(null);     // Purchases page: buy | costs | waiting (null until loaded)
-  const [view, setView] = useState('all');    // its list: all | purchases | expenses | wages
-  const [eTab, setETab] = useState(() => { const t = new URLSearchParams(window.location.search).get('tab'); return ['electricity', 'wages', 'other'].includes(t) ? t : 'all'; });   // Expenses page
+  // Procurement is one thing, four tabs (2026-11-16, the user): All (both) · Purchases · Expenses · Suppliers.
+  // The menu's Purchases opens Purchases, its Expenses opens Expenses; the other tabs are a click away.
+  const startTab = new URLSearchParams(window.location.search).get('tab');
+  const [top, setTop] = useState(section === 'expenses' ? 'expenses' : 'purchases');
+  const [pTab, setPTab] = useState(null);     // Purchases: buy | costs | waiting (null until loaded)
+  const [eTab, setETab] = useState(startTab === 'electricity' ? 'electricity' : 'list');   // Expenses: list | electricity
+  const [expFilter, setExpFilter] = useState(startTab === 'wages' ? 'wages' : '');      // '' | wages | salaries | transport | expense
   const tab = section === 'orders' ? 'requests'
-    : section === 'expenses' ? (eTab === 'electricity' ? 'electricity' : 'expenses')
-    : pTab === 'buy' ? (view === 'all' ? 'all' : view === 'purchases' ? 'purchases' : 'expenses') : pTab;
+    : top === 'all' ? 'all' : top === 'suppliers' ? 'suppliers'
+    : top === 'expenses' ? (eTab === 'electricity' ? 'electricity' : 'expenses')
+    : pTab === 'buy' ? 'purchases' : pTab;
   // buttons and older links that name a tab: each goes to where it now lives
   const setTab = t => {
     if (t === 'requests') { if (section !== 'orders') navigate('/orders'); return; }
-    if (t === 'electricity') { if (section === 'expenses') setETab('electricity'); else navigate('/expenses?tab=electricity'); return; }
-    if (t === 'expenses') { if (section === 'expenses') setETab('all'); else { setPTab('buy'); setView('expenses'); } return; }
-    if (t === 'all' || t === 'purchases') { setPTab('buy'); setView(t); return; }
-    setPTab(t);
+    if (t === 'electricity') { setTop('expenses'); setETab('electricity'); return; }
+    if (t === 'expenses') { setTop('expenses'); setETab('list'); return; }
+    if (t === 'all') { setTop('all'); return; }
+    if (t === 'purchases') { setTop('purchases'); setPTab('buy'); return; }
+    setTop('purchases'); setPTab(t);
   };
   const today = orgToday(organization?.timezone);
   const period = usePeriod(today);   // this week first; or a dashboard card's period   // null until loaded: opens on "Waiting" only when something waits
@@ -171,8 +179,8 @@ export default function Purchases({ section = 'purchases' }) {
       setTxByMove(byMove);
       // ?tab= from other pages: an old link to orders or expenses goes to its own page now
       const want = params.get('tab');
-      if (section === 'purchases' && ['requests', 'expenses', 'electricity'].includes(want)) { navigate(want === 'requests' ? '/orders' : ('/expenses' + (want === 'electricity' ? '?tab=electricity' : '')), { replace: true }); return; }
-      if (want === 'purchases') setView('purchases');
+      if (want === 'requests') { navigate('/orders', { replace: true }); return; }
+      if (section === 'purchases' && ['expenses', 'electricity'].includes(want)) { setTop('expenses'); if (want === 'electricity') setETab('electricity'); }
       setPTab(t => t ?? (['costs', 'waiting'].includes(want) ? want : want === 'purchases' ? 'buy' : (aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'buy'));
       // Branch VAT rates and expenses (041): the page still works without them
       const [vr, ec, ex] = await Promise.all([
@@ -263,12 +271,9 @@ export default function Purchases({ section = 'purchases' }) {
       : puState(p) === 'done')));
   const vatRateOf = b => vatRates[b] ?? DEFAULT_VAT;
   const catName = id => expCats.find(c => c.id === id)?.name ?? '—';
-  // expense groups (2026-11-16): salaries & wages, electricity, other
+  // the expense filter (2026-11-16): Wages · Salaries · Transport · Expense — by category
   const catLow = id => (expCats.find(c => c.id === id)?.name ?? '').toLowerCase();
-  const isPay = e => /^(salaries|wages|statutory)/.test(catLow(e.category_id));
-  const isPower = e => /^electricity/.test(catLow(e.category_id));
-  const expGroup = section === 'expenses' ? eTab : view === 'wages' ? 'wages' : 'all';
-  const expensesHere = expenses.filter(e => inBranch(e.branch_id) && (expGroup === 'wages' ? isPay(e) : expGroup === 'other' ? !isPay(e) && !isPower(e) : true));
+  const expensesHere = expenses.filter(e => inBranch(e.branch_id) && (!expFilter || catLow(e.category_id).startsWith(expFilter)));
   const expensesShown = expensesHere.filter(e => period.has(e.expense_date));
   const expensePay = e => (e.status === 'void' ? 'void' : Number(e.amount_paid) >= Number(e.amount) ? 'paid' : Number(e.amount_paid) > 0 ? 'part_paid' : 'unpaid');
   const pendingHere = pendingReq.filter(p => inBranch(p.branch_id));
@@ -277,24 +282,29 @@ export default function Purchases({ section = 'purchases' }) {
   const describeLines = lines => (lines || []).filter(t => t.material_id)
     .map(t => `${qtyText(t.entered_quantity)} ${refs?.unitById[t.entered_unit_id]?.symbol ?? ''} ${refs?.items[`m:${t.material_id}`]?.name ?? ''}`).join(', ');
 
-  const purchaseTabs = section === 'orders' ? null : section === 'expenses' ? (
-    <PageTabs value={eTab} onChange={setETab} tabs={[['all', 'All'], ['electricity', 'Electricity'], ['wages', 'Salaries & wages'], ['other', 'Other']]} />
-  ) : (
+  const purchaseTabs = section === 'orders' ? null : (
     <>
-      <PageTabs value={pTab} onChange={setPTab}
-        tabs={[['buy', 'Purchases' + (pendingHere.length ? ' (' + pendingHere.length + ' waiting for approval)' : '')], ['costs', 'Material costs'], ['waiting', 'Goods received (' + waitingHere.length + ')']]} />
-      {pTab === 'buy' && expReady && (
-        <div className="filter-chips mb-8" role="radiogroup" aria-label="Show">
-          {[['all', 'All'], ['purchases', 'Purchases'], ['expenses', 'Expenses'], ['wages', 'Wages']].map(([k, l]) => (
-            <button key={k} type="button" role="radio" aria-checked={view === k} className={'filter-chip' + (view === k ? ' is-on' : '')} onClick={() => setView(k)}>{l}</button>
+      <PageTabs value={top} onChange={setTop} tabs={[['all', 'All'], ['purchases', 'Purchases' + (pendingHere.length ? ' (' + pendingHere.length + ' waiting for approval)' : '')], ['expenses', 'Expenses'], ['suppliers', 'Suppliers']]} />
+      {top === 'purchases' && (
+        <div className="filter-chips mb-8" role="tablist" aria-label="Purchases">
+          {[['buy', 'Purchases'], ['costs', 'Material costs'], ['waiting', 'Goods received (' + waitingHere.length + ')']].map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={pTab === k} className={'filter-chip' + (pTab === k ? ' is-on' : '')} onClick={() => setPTab(k)}>{l}</button>
+          ))}
+        </div>
+      )}
+      {top === 'expenses' && (
+        <div className="filter-chips mb-8" role="tablist" aria-label="Expenses">
+          {[['list', 'Expenses'], ['electricity', 'Electricity']].map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={eTab === k} className={'filter-chip' + (eTab === k ? ' is-on' : '')} onClick={() => setETab(k)}>{l}</button>
           ))}
         </div>
       )}
     </>
   );
 
+
   return (
-    <PageShell title={{ purchases: 'Purchases', expenses: 'Expenses', orders: 'Orders' }[section]} subtitle="Procurement" onSettings={() => setExpSettings(true)}
+    <PageShell title={section === 'orders' ? 'Orders' : top === 'expenses' ? 'Expenses' : top === 'suppliers' ? 'Suppliers' : 'Purchases'} subtitle="Procurement" onSettings={() => setExpSettings(true)}
       actions={expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
         <button type="button" className="btn btn-outline" onClick={() => setEditingExpense('new')}>
           <Plus size={14} /> Record expense
@@ -313,6 +323,7 @@ export default function Purchases({ section = 'purchases' }) {
           onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })}
           onRecordExpense={prefill => { setExpensePrefill(prefill); setEditingExpense('new'); }}
           onRecordToken={q => setTokenFor(q)} />
+      : tab === 'suppliers' ? <Embedded param="sv"><Suppliers /></Embedded>
       : tab === 'all' ? <MoneyOutPanel types={false} branchId={branchId} inBranch={inBranch} period={period} today={today} expenses={expenses} expCats={expCats} suppliers={refs?.suppliers || []} money={money} />
       : tab === 'electricity' ? <ElectricityPanel branchId={branchId} onOrder={q => { setOrderFrom(q); setTab('requests'); }} /> : <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
@@ -321,6 +332,18 @@ export default function Purchases({ section = 'purchases' }) {
             {(tab === 'purchases' || tab === 'expenses') && (
               <div className="card-body pu-bar" style={{ paddingBottom: 0 }}>
                 <PeriodSelect period={period} today={today} extra={[['all', 'All time']]} />
+                {tab === 'expenses' && (
+                  <label className="pu-filter" title="Filter">
+                    <Filter size={15} aria-hidden="true" />
+                    <select className="form-input" aria-label="Filter" value={expFilter} onChange={e => setExpFilter(e.target.value)}>
+                      <option value="">All</option>
+                      <option value="wages">Wages</option>
+                      <option value="salaries">Salaries</option>
+                      <option value="transport">Transport</option>
+                      <option value="expense">Expense</option>
+                    </select>
+                  </label>
+                )}
                 {tab === 'purchases' && (
                   <label className="pu-filter" title="Filter">
                     <Filter size={15} aria-hidden="true" />
