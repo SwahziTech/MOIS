@@ -197,7 +197,29 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
     : { from: period.from, to: period.to };
   const cpNote = period.key === 'all' ? null : ['week', 'lastweek'].includes(period.key)
     ? `Sat ${dm(cp.from)} – Sat ${dm(addDays(cp.from, 7))}` : `${dm(cp.from)} – ${dm(cp.to)}`;
-  const shownWeeks = here.filter(r => r.week_ending >= cp.from && r.week_ending <= cp.to);
+  // every week touching the period is listed (weeks don't end with months): a request's own week (its report
+  // date to the next Saturday), and the week before the first one, as on its imported sheet (2026-11-16)
+  const inP = d => !cp.from || period.key === 'all' || (d >= cp.from && d <= cp.to);
+  const touches = (start) => period.key === 'all' || (start <= cp.to && addDays(start, 7) > cp.from);
+  const sheetDay = t => { const v = String(t ?? '').trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; const d = v ? new Date(`${v.replace(/^[A-Za-z]{3},\s*/, '')} UTC`) : null; return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null; };
+  const listRows = [
+    ...here.filter(r => touches(r.week_ending)).map(r => {
+      const w = r.week_ending <= saturdayOf(today) ? weekOf(addDays(r.week_ending, 7)) : null;
+      const sent = r.status === 'paid' ? [{ day: r.paid_on || r.week_ending, amount: Number(r.paid_amount) }] : [];
+      return { key: r.id, start: r.week_ending, r, sent, spent: (w?.lines || []).map(l => ({ day: l.date, amount: l.amount })), closing: w?.closing ?? null };
+    }),
+    ...here.filter(r => r.last_week?.rows?.length && !['cancelled', 'rejected'].includes(r.status) && touches(addDays(r.week_ending, -7))).map(r => {
+      const rs = r.last_week.rows, start = addDays(r.week_ending, -7);
+      const bd = sheetDay(rs.find(x => /^\s*balance\s*$/i.test(x.description || ''))?.date);
+      const day = bd && bd >= start && bd < r.week_ending ? bd : start;
+      const sums = sheetSums(rs);
+      return { key: `sheet-${r.id}`, start, sheetOf: r, sent: sums.sent ? [{ day, amount: sums.sent }] : [], spent: sums.spent ? [{ day, amount: sums.spent }] : [], closing: sums.closing };
+    }),
+  ].sort((a, b) => (a.start < b.start ? 1 : -1));
+  // a figure: what falls in the period, and beside it, small and faint, what falls outside (not in any total)
+  const split = xs => ({ in: xs.filter(x => inP(x.day)).reduce((t, x) => t + x.amount, 0), before: xs.filter(x => !inP(x.day) && x.day < cp.from).reduce((t, x) => t + x.amount, 0), after: xs.filter(x => !inP(x.day) && x.day > cp.to).reduce((t, x) => t + x.amount, 0) });
+  const fig = xs => { const p = split(xs); return <>{formatAmount(p.in)}{p.before > 0 && <div className="dd-out" title="Dated before this period: shown here, not counted">+ {formatAmount(p.before)} before {dm(cp.from)}</div>}{p.after > 0 && <div className="dd-out" title="Dated after this period: shown here, not counted">+ {formatAmount(p.after)} after {dm(cp.to)}</div>}</>; };
+  const shownWeeks = listRows;
   const lastSat = saturdayOf(today) === today ? today : addDays(saturdayOf(today), -7);
   const liveAt = w => here.find(r => r.week_ending === w && !['cancelled', 'rejected'].includes(r.status));
   const thisWeek = liveAt(addDays(saturdayOf(today), -7));   // the request whose week we are in
@@ -243,17 +265,28 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
               <thead><tr><th title="The report date (a Saturday); its cash is for that week, Saturday to Saturday">Date</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
               <tbody>
                 {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>
-                : shownWeeks.map(r => {
-                  // the week this request's money paid for (its report date to the next Saturday): spent there, balance after
-                  const w = r.week_ending <= saturdayOf(today) ? weekOf(addDays(r.week_ending, 7)) : null;
+                : shownWeeks.map(row => {
+                  if (row.sheetOf) return (
+                    // the week before MOIS, from the first report's imported sheet
+                    <tr key={row.key} className="clickable-row" onClick={() => setOpen(row.sheetOf)} title={`From the imported sheet of the report dated ${dateText(row.sheetOf.week_ending)}`}>
+                      <td>{tableDate(row.start)}<div className="pl-help">from the sheet</div></td>
+                      <td><span className="badge badge-neutral">Before MOIS</span></td>
+                      <td className="num" />
+                      <td className="num">{fig(row.sent)}</td>
+                      <td className="num">{fig(row.spent)}</td>
+                      <td className="num"><strong>{row.closing != null ? formatAmount(row.closing) : ''}</strong></td>
+                      <td />
+                    </tr>
+                  );
+                  const r = row.r;
                   return (
                     <tr key={r.id} className="clickable-row" onClick={() => setOpen(r)}>
                       <td>{tableDate(r.week_ending)}{r.source === 'excel' && <div className="pl-help">from Excel</div>}</td>
                       <td><span className={`badge ${STATUS[r.status][1]}`}>{STATUS[r.status][0]}</span></td>
                       <td className="num">{formatAmount(asked(r))}</td>
-                      <td className="num">{r.status === 'paid' ? formatAmount(Number(r.paid_amount)) : ''}</td>
-                      <td className="num">{w ? formatAmount(w.spent) : ''}</td>
-                      <td className="num"><strong>{w ? formatAmount(w.closing) : ''}</strong></td>
+                      <td className="num">{r.status === 'paid' ? fig(row.sent) : ''}</td>
+                      <td className="num">{row.closing != null ? fig(row.spent) : ''}</td>
+                      <td className="num"><strong>{row.closing != null ? formatAmount(row.closing) : ''}</strong></td>
                       <td className="wc-row-act" onClick={e => e.stopPropagation()}>
                         {askDel === r.id ? <span className="flex items-center gap-8">
                           <span className="text-sm">Delete?</span>
