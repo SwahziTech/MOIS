@@ -125,8 +125,10 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
   const spentIn = useMemo(() => (weekEnding, which = 'weekly') => {
     if (!data) return [];
     const pick = r => (which === 'others' ? r.from_weekly_cash === false : r.from_weekly_cash !== false);
-    const from = addDays(weekEnding, -6);
-    const inWeek = d => d && d >= from && d <= weekEnding;
+    // the sheet's week: from the Saturday before up to the day before the report date — Saturday to
+    // Saturday, as the branch counts it (2026-11-16, the user); cash sent on the report date is the next week's
+    const from = addDays(weekEnding, -7);
+    const inWeek = d => d && d >= from && d < weekEnding;
     const supplier = id => data.refs.suppliers.find(s => s.id === id)?.name ?? '';
     const goods = mid => data.tx.filter(t => t.movement_id === mid && t.material_id)
       .map(t => `${data.refs.items[`m:${t.material_id}`]?.name ?? ''}`).join(', ');
@@ -259,7 +261,7 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
             </table>
           </div></div>
           {actionError && <p className="text-sm text-error" role="alert" style={{ marginTop: 8 }}>{actionError}</p>}
-          <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Sunday to Saturday. Spent = expenses and payments to suppliers recorded as paid that week (Purchases). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
+          <p className="pl-help" style={{ marginTop: 8 }} title={"A week runs Saturday to Saturday, as on the branch sheet. Spent = what was paid from the weekly cash that week (expenses and payments to suppliers). Balance = brought forward + cash sent − spent, carried into the next week."}>Balance = brought forward + sent − spent.</p>
         </>
       )}
       {open && <RequestModal key={open.id ?? 'new'} startView={!!open.__view} request={open.new ? null : open} newWeek={newWeek} branchId={branchId} branchName={branchName} data={data} weekOf={weekOf} spentIn={spentIn} today={today} money={money}
@@ -469,15 +471,14 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     // date of its own is put on the sheet's first day, not the report date (2026-11-16, the user: the spending
     // belongs to the older week, before the cash sent on the report date)
     const from = addDays(week, -7);
-    const start = (() => { const b = isoOf((rows || []).find(r => /^\s*balance\s*$/i.test(r.description || ''))?.date); return b && b >= from && b <= week ? b : from; })();
-    const existing = [...spentIn(week), ...spentIn(week, 'others'), ...[...spentIn(from), ...spentIn(from, 'others')].filter(x => x.date === from)]
-      .map(x => ({ ...x, used: false }));
+    const start = (() => { const b = isoOf((rows || []).find(r => /^\s*balance\s*$/i.test(r.description || ''))?.date); return b && b >= from && b < week ? b : from; })();
+    const existing = [...spentIn(week), ...spentIn(week, 'others')].map(x => ({ ...x, used: false }));
     const out = { record: [], already: [] };
     (rows || []).forEach((r, i) => {
       if (FORMULA_ROW.test(r.description || '') || !(num(r.cash_out) > 0) || !String(r.description ?? '').trim()) return;
       if (r.expense_id || r.record_id) { out.already.push({ r, i }); return; }
       const d = isoOf(r.date);
-      const day = d && d >= from && d <= week ? d : start;
+      const day = d && d >= from && d < week ? d : start;
       const first = nw(r.description).split(' ')[0];
       const m = existing.find(x => !x.used && Math.abs(x.amount - num(r.cash_out)) < 1
         && (nw(x.description) === nw(r.description) || (first && nw(x.description).split(' ').includes(first)) || x.date === day));

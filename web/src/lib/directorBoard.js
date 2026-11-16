@@ -181,6 +181,20 @@ export function productionFor(data, { from, to }, inBranch, today) {
 
 /** Rows for a card's detail page within a period, newest first. by: day | week | month */
 export function historyFor(data, card, by, inBranch, today, { from, to }) {
+  // weekly cash runs Saturday to Saturday, as on the branch's sheet (2026-11-16, the user): the week of
+  // "Sat, 31 Oct – Sat, 7 Nov" holds what was spent from 31 Oct; cash sent on Sat 7 Nov is the next week's
+  if (card === 'cash' && by === 'week') {
+    const satOf = d => dayShift(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 1) % 7));
+    const rows = {};
+    // a week shows whole when it touches the period (its spending from the Saturday before the month counts)
+    const add = (d, f) => { if (!d || d > today) return; const k = satOf(d); if (dayShift(k, 7) <= from || k > to) return; f(rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0 }); };
+    for (const x of data.moves) {
+      if (!inBranch(x.branch_id)) continue;
+      if (x.kind === 'topup') add(x.day, r => { r.a += n(x.amount); });
+      if (SPENT.has(x.kind)) add(x.day, r => { r.b += n(x.amount); });
+    }
+    return Object.values(rows).sort((p, q) => (p.key < q.key ? 1 : -1));
+  }
   const keyOf = d => (by === 'day' ? d : by === 'week' ? weekStartOf(d) : by === 'month' ? d.slice(0, 7)
     : by === 'quarter' ? `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : d.slice(0, 4));
   const label = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k < from ? from : k)} – ${tableDate(dayShift(k, 5) > to ? to : dayShift(k, 6))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
