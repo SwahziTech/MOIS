@@ -3054,3 +3054,7 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .payto-row:last-child { border-bottom: 0; }
 .payto-val { overflow-wrap: anywhere; font-size: var(--text-md); }
 .payto-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.payto-input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-primary); font: inherit; font-weight: 700; font-size: var(--text-md); }
+.payto-input:hover { border-color: var(--border); }
+.payto-input:focus { outline: none; border-color: var(--accent); background: var(--bg-surface); }
+.payto-input.is-bad { border-color: var(--color-warning, #d4a017); }

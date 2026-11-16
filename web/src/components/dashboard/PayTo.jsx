@@ -35,12 +35,24 @@ const guessNet = bank => {
   return /tigo|mixx|yas/.test(b) ? 'mixx' : /airtel/.test(b) ? 'airtel' : /halo/.test(b) ? 'halopesa' : 'mpesa';
 };
 
-export default function PayTo({ payTo, amount, reference, money }) {
+// a Tanzanian mobile number: 0[67]xxxxxxxx, 255[67]xxxxxxxx or +255… (spaces allowed)
+const phoneOk = v => /^(0|255|\+255)[67]\d{8}$/.test(String(v ?? '').replace(/[\s-]/g, ''));
+const isPhoneLike = v => phoneOk(v);
+
+// the details can be changed here before paying (2026-11-16, the user); onReference: the reference posted with the payment
+export default function PayTo({ payTo, amount, reference, money, onReference }) {
   const [mode, setMode] = useState(() => guessMode(payTo?.bank));
   const [net, setNet] = useState(() => guessNet(payTo?.bank));
   const [bank, setBank] = useState(() => bankOf(payTo?.bank) || (payTo?.bank && !/crdb/i.test(payTo.bank) ? '__other' : 'NMB'));
   const [otherBank, setOtherBank] = useState(() => (bankOf(payTo?.bank) ? '' : payTo?.bank && !/crdb/i.test(payTo.bank) ? payTo.bank : ''));
   const bankName = bank === '__other' ? otherBank : bank;
+  const [acct, setAcct] = useState(() => (isPhoneLike(payTo?.no) ? '' : payTo?.no ?? ''));
+  const [phone, setPhone] = useState(() => (isPhoneLike(payTo?.no) ? payTo.no : ''));
+  const [name, setName] = useState(payTo?.name ?? '');
+  const [ref, setRef] = useState(reference ?? '');
+  const setReference = v => { setRef(v); onReference?.(v); };
+  const no = mode === 'mobile' ? phone : acct;
+  const badPhone = mode === 'mobile' && phone.trim() && !phoneOk(phone);
   const [copied, setCopied] = useState('');
   async function copy(key, text) {
     try { await navigator.clipboard.writeText(String(text ?? '')); }
@@ -52,12 +64,15 @@ export default function PayTo({ payTo, amount, reference, money }) {
     setCopied(key); setTimeout(() => setCopied(c => (c === key ? '' : c)), 1500);
   }
   const amt = Math.round(Number(amount) || 0);
+  // [label, value, copy?, shown, onEdit, placeholder]
   const rows = [
     [mode === 'mobile' ? 'Network' : 'Bank', mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB' : bankName, false],
-    [mode === 'mobile' ? 'Phone number' : 'Account number', payTo?.no, true],
-    ['Name', payTo?.name, true],
+    mode === 'mobile'
+      ? ['Phone number', phone, true, null, setPhone, 'e.g. 0712 345 678']
+      : ['Account number', acct, true, null, setAcct, 'Account number'],
+    ['Name', name, true, null, setName, 'Name on the account'],
     ['Amount', amt ? String(amt) : '', true, amt ? money(amt) : ''],
-    ['Reference', reference, true],
+    ['Reference', ref, true, null, setReference, 'Reference'],
   ];
   const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : bank === 'NMB' ? USSD.nmb : null;
   const all = rows.filter(r => r[1]).map(r => `${r[0]}: ${r[3] || r[1]}`).join('\n');
@@ -85,10 +100,13 @@ export default function PayTo({ payTo, amount, reference, money }) {
         </div>
       )}
       <div className="payto-card">
-        {rows.map(([label, value, canCopy, shown]) => (
+        {rows.map(([label, value, canCopy, shown, onEdit, placeholder]) => (
           <div key={label} className="payto-row">
             <span className="pl-help">{label}</span>
-            <strong className="payto-val">{shown || value || '—'}</strong>
+            {onEdit
+              ? <input className={`payto-input${label === 'Phone number' && badPhone ? ' is-bad' : ''}`} value={value ?? ''} placeholder={placeholder} aria-label={label}
+                  inputMode={label === 'Phone number' || label === 'Account number' ? 'numeric' : undefined} onChange={e => onEdit(e.target.value)} />
+              : <strong className="payto-val">{shown || value || '—'}</strong>}
             {canCopy && value ? (
               <button type="button" className="btn btn-ghost btn-sm" aria-label={`Copy ${label.toLowerCase()}`} title={`Copy ${label.toLowerCase()}`} onClick={() => copy(label, value)}>
                 {copied === label ? <Check size={14} /> : <Copy size={14} />}</button>
@@ -96,6 +114,7 @@ export default function PayTo({ payTo, amount, reference, money }) {
           </div>
         ))}
       </div>
+      {mode === 'mobile' && (!phone.trim() || badPhone) && <p className="text-sm text-warning" style={{ margin: 0 }}>{phone.trim() ? 'That is not a valid phone number — e.g. 0712 345 678 or 255712345678.' : 'Enter the phone number to send to.'}</p>}
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
         {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mkononi'} ({ussd})</a>}
