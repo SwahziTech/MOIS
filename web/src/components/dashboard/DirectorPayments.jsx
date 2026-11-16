@@ -7,8 +7,8 @@ import ShareButton from '../ShareButton';
 import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { dbErrorMessage } from '../../lib/masterData';
-import { orgToday } from '../../lib/inventory';
-import { formatMoney, dateText, tableDate } from '../../lib/format';
+import { orgToday, qtyText } from '../../lib/inventory';
+import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import NumberInput from '../NumberInput';
 import Modal from '../Modal';
 import ProofBox from '../ProofBox';
@@ -271,7 +271,36 @@ export function PaidList({ days = 60 }) {
       if (left > 0) extra.push({ id: 'ne:' + e.id, missing: { kind: 'expense', id: e.id, branch: e.branch_id, amount: left, paidOn: e.paid_on ?? e.expense_date, who: e.description },
         branch_id: e.branch_id, kind: 'expense', description: e.description, amount: left, paid_on: e.paid_on ?? e.expense_date });
     }
-    setRows([...dps, ...extra].sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on)))); setSeen(s.data || []);
+    const all = [...dps, ...extra];
+    // each payment's items (2026-11-16, the user: Date · Item · Qty · Price · Amount · Source · Proof) —
+    // from the purchase, the order or the expense it paid
+    const refOf = r => r.missing?.id ?? r.ref_id;
+    const refIds = [...new Set(all.map(refOf).filter(Boolean))];
+    const [pu, po, xp, cr, mt, un] = refIds.length ? await Promise.all([
+      supabase.from('purchases').select('id, supplier:suppliers(name), items:purchase_items(material_id, quantity, unit_id, unit_price), lines:purchase_lines(unit_price, item_id, tx:inventory_transactions(material_id, entered_quantity, entered_unit_id))').in('id', refIds),
+      supabase.from('purchase_orders').select('id, supplier:suppliers(name), lines:purchase_order_lines(material_id, quantity, unit_id, unit_price, kind, description, amount)').in('id', refIds),
+      supabase.from('expenses').select('id, description, quantity, unit_price, amount, supplier:suppliers(name), category:expense_categories(name)').in('id', refIds),
+      supabase.from('cash_requests').select('id, week_ending, branch:branches(name)').in('id', refIds),
+      supabase.from('materials').select('id, name'),
+      supabase.from('units').select('id, symbol'),
+    ]) : [{}, {}, {}, {}, {}, {}];
+    const mat = Object.fromEntries((mt.data || []).map(x => [x.id, x.name]));
+    const sym = Object.fromEntries((un.data || []).map(x => [x.id, x.symbol]));
+    const detail = {};
+    for (const p of pu.data || []) detail[p.id] = { source: p.supplier?.name, items: (p.items || []).length
+      ? p.items.map(i => ({ name: mat[i.material_id], qty: Number(i.quantity), unit: sym[i.unit_id], price: i.unit_price }))
+      : (p.lines || []).filter(l => !l.item_id && l.tx?.material_id).map(l => ({ name: mat[l.tx.material_id], qty: Number(l.tx.entered_quantity), unit: sym[l.tx.entered_unit_id], price: l.unit_price })) };
+    for (const o of po.data || []) detail[o.id] = { source: o.supplier?.name, items: (o.lines || []).map(l => (l.kind === 'expense'
+      ? { name: l.description, qty: l.quantity != null ? Number(l.quantity) : null, price: null }
+      : { name: mat[l.material_id], qty: Number(l.quantity), unit: sym[l.unit_id], price: l.unit_price })) };
+    for (const e of xp.data || []) detail[e.id] = { source: e.supplier?.name ?? e.category?.name, items: [{ name: e.description, qty: e.quantity != null ? Number(e.quantity) : null, price: e.unit_price }] };
+    for (const c of cr.data || []) detail[c.id] = { source: c.branch?.name, items: [{ name: `Weekly cash · ${tableDate(c.week_ending)}`, qty: null, price: null }] };
+    for (const r of all) {
+      const dd = detail[refOf(r)];
+      r.items = dd?.items?.length ? dd.items : [{ name: r.description || KIND_LABEL[r.kind], qty: null, price: null }];
+      r.source = dd?.source ?? (r.kind === 'salaries' ? 'Staff' : r.kind === 'weekly_cash' ? 'Weekly cash' : '');
+    }
+    setRows(all.sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on)))); setSeen(s.data || []);
     const ids = [...new Set((s.data || []).map(x => x.user_id))];
     if (ids.length) {
       const { data } = await supabase.from('profiles').select('id, first_name, last_name, email').in('id', ids);
@@ -292,16 +321,19 @@ export function PaidList({ days = 60 }) {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="card"><div className="table-container">
         <table>
-          <thead><tr><th>Date</th><th>For</th><th className="num">Amount (TZS)</th><th>Proof</th></tr></thead>
+          <thead><tr><th>Date</th><th>Item</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th><th>Source</th><th>Proof</th></tr></thead>
           <tbody>
-            {rows === null ? <tr><td colSpan={4}><span className="skeleton" /></td></tr>
-            : shown.length === 0 ? <tr><td colSpan={4} className="text-muted">No payments yet.</td></tr>
+            {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
+            : shown.length === 0 ? <tr><td colSpan={7} className="text-muted">No payments yet.</td></tr>
             : shown.map(r => {
               return (
                 <tr key={r.id}>
                   <td>{tableDate(r.paid_on)}</td>
-                  <td>{KIND_LABEL[r.kind]}{r.description ? ` · ${r.description}` : ''}</td>
-                  <td className="num">{Number(r.amount).toLocaleString('en-US')}</td>
+                  <td>{r.items.map((x, i) => <div key={i} style={{ fontWeight: 500 }}>{x.name ?? '—'}</div>)}<div className="text-xs text-muted">{KIND_LABEL[r.kind]}</div></td>
+                  <td className="num">{r.items.map((x, i) => <div key={i}>{x.qty != null ? <>{qtyText(x.qty)} <span className="text-xs text-muted">{x.unit ?? ''}</span></> : '—'}</div>)}</td>
+                  <td className="num">{r.items.map((x, i) => <div key={i}>{x.price != null ? formatAmount(Number(x.price)) : '—'}</div>)}</td>
+                  <td className="num">{formatAmount(Math.round(Number(r.amount)))}</td>
+                  <td>{r.source || '—'}</td>
                   <td>{r.missing
                     ? <><span className="badge badge-warning">No proof</span>{' '}
                         {(canAt('finance.pay', r.branch_id, null) || canAt('procurement.receive', r.branch_id, null)) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(r.missing)}>Add proof</button>}</>
