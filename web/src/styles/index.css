@@ -3095,3 +3095,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .ord-steps li { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
 .ord-steps li.is-done { border-color: var(--color-success, #3a9d5d); color: var(--color-success, #3a9d5d); }
 .ord-steps li.is-part { border-color: var(--color-warning, #d4a017); color: var(--color-warning, #d4a017); }
+
+/* purchase form: each goods line shows its total by the qty and price (2026-11-16) */
+.ingredient-row.pu-goods-row { grid-template-columns: minmax(0, 2fr) 90px minmax(0, 1fr) minmax(0, 1fr) minmax(110px, auto) auto; }
+.pu-line-total { font-weight: 600; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .ingredient-row.pu-goods-row { grid-template-columns: 1fr 80px; }
+}

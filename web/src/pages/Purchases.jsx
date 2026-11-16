@@ -4,7 +4,7 @@ import { ShoppingCart, Plus, Trash2, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { formatMoney, dateText, tableDate } from '../lib/format';
+import { formatMoney, formatAmount, dateText, tableDate } from '../lib/format';
 import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, warehouseLabel, qtyText, orgToday, byMaterialOrder, materialStockValue } from '../lib/inventory';
 import PageShell from '../components/PageShell';
@@ -863,7 +863,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
                   const item = refs.items[`m:${l.materialId}`];
                   return (
                     <div key={i}>
-                    <div className="ingredient-row">
+                    <div className="ingredient-row pu-goods-row">
                       <select className="form-input" aria-label="Material" value={l.materialId} onChange={e => pickMaterial(i, e.target.value)}>
                         <option value="" disabled>Material…</option>
                         {materials.filter(usable).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -874,6 +874,8 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
                         {(item?.units || []).map(u => <option key={u.id} value={u.id}>{refs.unitById[u.id]?.symbol}</option>)}
                       </select>
                       <NumberInput step="any" min="0" className="form-input" aria-label="Price per unit" placeholder="Price / unit" value={l.price} onChange={e => setNewLine(i, { price: e.target.value })} />
+                      {/* the line's total, right by its qty and price (2026-11-16, the user) */}
+                      <span className="pu-line-total" title="Quantity × price">{num(l.quantity) != null && num(l.price) != null ? '= ' + formatAmount(round2(num(l.quantity) * num(l.price))) : ''}</span>
                       <button type="button" className="icon-btn" aria-label="Remove line" disabled={newLines.length === 1} onClick={() => setNewLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
                     </div>
                     {l.materialId && pastHint(wh?.branch_id ?? branchId, l.materialId)}
