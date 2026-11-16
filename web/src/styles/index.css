@@ -3067,11 +3067,3 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
   .payto-actions .btn { flex: 1 1 100%; justify-content: center; }
 }
 .payto-input.payto-wrap { height: auto; min-height: 34px; padding-top: 6px; padding-bottom: 6px; resize: none; field-sizing: content; line-height: 1.3; white-space: pre-wrap; overflow-wrap: anywhere; }
-/* the Pay window's "Open with" list (2026-11-16): like the phone's own, at the bottom */
-.ow-back { position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
-.ow-sheet { width: 100%; max-width: 520px; background: var(--bg-surface); border-radius: 18px 18px 0 0; padding: 14px 16px 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 -6px 24px rgba(0,0,0,.4); }
-.ow-head { display: flex; align-items: center; justify-content: space-between; }
-.ow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.ow-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 14px; background: var(--bg-soft); color: var(--text-primary); text-decoration: none; text-align: center; font-size: 13px; }
-.ow-tile:active, .ow-tile:hover { background: var(--border); }
-.ow-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-contrast, #111); }

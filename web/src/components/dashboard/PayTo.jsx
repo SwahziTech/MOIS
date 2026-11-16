@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Phone, Smartphone, Store, X } from 'lucide-react';
+import { Copy, Check, Phone } from 'lucide-react';
 
 /*
  * Where the money goes, ready to pay (2026-11-16, the user: copy + open the app; one-tap payment through
@@ -15,26 +15,8 @@ const MODES = [
 ];
 // USSD menus (dialled from a phone): the bank's or the network's own menu, where the person pays
 const USSD = { crdb: '*150*03#', nmb: '*150*66#', mpesa: '*150*00#', mixx: '*150*01#', airtel: '*150*60#', halopesa: '*150*88#' };
-// the bank's or network's own app on an Android phone (2026-11-16, the user: "bring the NMB app").
-// Play Store ids from public app listings (not confirmed with the banks): when one is wrong or the app is
-// not installed, the phone goes to the Play Store search for the app instead.
-const APPS = {
-  crdb: { pkg: 'apps.crdbbank.com.mobapp', name: 'CRDB SimBanking' },
-  nmb: { pkg: 'com.nmb10.eclectics', name: 'NMB Mkononi' },
-  mpesa: { pkg: 'com.vodafone.mpesa.tanzania', name: 'M-Pesa' },
-  mixx: { pkg: 'tz.tigo.mfsapp', name: 'Mixx by Yas' },
-  airtel: { pkg: null, name: 'Airtel Money' },
-  halopesa: { pkg: null, name: 'HaloPesa' },
-};
-const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-// launch the app's start screen (MAIN + LAUNCHER — with only the package, Android finds nothing to open and
-// falls back, 2026-11-16: NMB Mkononi installed but the Play Store opened); if it can't, the app's own Play
-// Store page, which shows "Open" when it is installed
-const appLink = a => {
-  if (!a.pkg) return `https://play.google.com/store/search?q=${encodeURIComponent(a.name)}&c=apps`;
-  const store = `https://play.google.com/store/apps/details?id=${a.pkg}`;
-  return `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(store)};end`;
-};
+// Opening the bank's own app from a web page did not work on the phone (2026-11-16): the button dials
+// the menu instead. A Flutter app could find and open installed apps — for when the mobile app is built.
 const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
 // banks in Tanzania other than CRDB, for the drop-down (2026-11-16, the user); "Another bank" lets one be typed
 const BANKS = ['NMB', 'NBC', 'Selcom Microfinance Bank', 'Exim Bank', 'Stanbic Bank', 'Absa Bank', 'Equity Bank', 'Azania Bank',
@@ -74,7 +56,6 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
   const no = mode === 'mobile' ? phone : acct;
   const badPhone = mode === 'mobile' && phone.trim() && !phoneOk(phone);
   const [copied, setCopied] = useState('');
-  const [choosing, setChoosing] = useState(false);   // the "Open with" list
   async function copy(key, text) {
     try { await navigator.clipboard.writeText(String(text ?? '')); }
     catch {
@@ -96,7 +77,6 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
     ['Reference', ref, true, null, setReference, 'Reference'],
   ];
   const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : bank === 'NMB' ? USSD.nmb : null;
-  const app = mode === 'crdb' ? APPS.crdb : mode === 'mobile' ? APPS[net] : bank === 'NMB' ? APPS.nmb : null;
   const all = rows.filter(r => r[1]).map(r => `${r[0]}: ${r[3] || r[1]}`).join('\n');
   return (
     <div className="payto">
@@ -142,23 +122,8 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
       {mode === 'mobile' && (!phone.trim() || badPhone) && <p className="text-sm text-warning" style={{ margin: 0 }}>{phone.trim() ? 'That is not a valid phone number — e.g. 0712 345 678 or 255712345678.' : 'Enter the phone number to send to.'}</p>}
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
-        {(app || ussd) && <button type="button" className="btn btn-primary btn-sm" onClick={() => { copy('all', all); setChoosing(true); }}><Smartphone size={14} /> Pay in app</button>}
+        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mkononi'} ({ussd})</a>}
       </div>
-      {choosing && (
-        // one button, every way to pay (2026-11-16, the user): the bank's or network's app, its USSD menu, the
-        // Play Store — a web page can't ask Android for its own "Open with" list or see what is installed
-        <div className="ow-back" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setChoosing(false); }}>
-          <div className="ow-sheet" role="dialog" aria-modal="true" aria-label="Open with">
-            <div className="ow-head"><strong>Open with</strong><button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setChoosing(false)}><X size={16} /></button></div>
-            <div className="ow-grid">
-              {app && isAndroid() && app.pkg && <a className="ow-tile" href={appLink(app)} onClick={() => setChoosing(false)}><span className="ow-icon"><Smartphone size={22} /></span><span>{app.name}</span><span className="pl-help">app</span></a>}
-              {ussd && <a className="ow-tile" href={`tel:${ussd.replace(/#/g, '%23')}`} onClick={() => setChoosing(false)}><span className="ow-icon"><Phone size={22} /></span><span>Dial {ussd}</span><span className="pl-help">menu</span></a>}
-              {app && <a className="ow-tile" href={app.pkg ? `https://play.google.com/store/apps/details?id=${app.pkg}` : `https://play.google.com/store/search?q=${encodeURIComponent(app.name)}&c=apps`} target="_blank" rel="noreferrer" onClick={() => setChoosing(false)}><span className="ow-icon"><Store size={22} /></span><span>{app.name}</span><span className="pl-help">Play Store</span></a>}
-            </div>
-            <p className="pl-help" style={{ margin: 0 }}>The details are copied — paste them in the app.</p>
-          </div>
-        </div>
-      )}
       <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
         Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
     </div>
