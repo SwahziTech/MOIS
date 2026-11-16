@@ -58,13 +58,13 @@ const lineText = (refs, l, cats = [], money = v => v) => (l.kind === 'expense'
   : `${qtyText(Number(l.quantity))} ${refs?.unitById[l.unit_id]?.symbol ?? ''} ${refs?.items[`m:${l.material_id}`]?.name ?? '—'}${l.unit_price != null ? ` × ${formatAmount(Number(l.unit_price))} = ${money(r2(Number(l.quantity) * Number(l.unit_price)))}` : ''}`);
 
 /* A request's lines: each a material (quantity in its units) or an expense of a kind (description, quantity, about how much) */
-function RequestLines({ refs, branchId, cats, lines, setLines }) {
+function RequestLines({ refs, branchId, cats, lines, setLines, active = [], suggestFor = () => [] }) {
   const mats = useMemo(() => Object.values(refs?.items || {}).filter(i => i.kind === 'material' && i.status === 'active' && (!i.branchId || i.branchId === branchId))
     .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name)), [refs, branchId]);
   const set = (i, patch) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   return (
     <table className="rd-table">
-      <thead><tr><th>Kind</th><th>What</th><th className="num">Quantity</th><th>Unit</th><th className="num">Price a unit / amount (TZS)</th><th className="num">Total (TZS)</th><th /></tr></thead>
+      <thead><tr><th>Kind</th><th>What</th><th>Supplier</th><th className="num">Quantity</th><th>Unit</th><th className="num">Price a unit / amount (TZS)</th><th className="num">Total (TZS)</th><th /></tr></thead>
       <tbody>
         {lines.map((l, i) => {
           const it = refs?.items[`m:${l.materialId}`];
@@ -73,13 +73,27 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
               <td><select className="form-input" value={l.kind} onChange={e => set(i, { kind: e.target.value })}>
                 <option value="material">Material</option><option value="expense">Expense</option></select></td>
               <td>{l.kind === 'material'
-                ? <select className="form-input" value={l.materialId} onChange={e => { const m = refs.items[`m:${e.target.value}`]; set(i, { materialId: e.target.value, unitId: m?.mainUnitId || m?.stockUnitId || '' }); }}>
+                ? <select className="form-input" value={l.materialId} onChange={e => { const m = refs.items[`m:${e.target.value}`];
+                    // each material its own supplier (2026-11-16): who supplied it before, unless picked by hand
+                    set(i, { materialId: e.target.value, unitId: m?.mainUnitId || m?.stockUnitId || '', ...(l.supTouched ? {} : { supplierId: suggestFor(e.target.value)[0] ?? '' }) }); }}>
                     <option value="">Choose the material…</option>{mats.map(m => <option key={m.id} value={m.id}>{m.materialCategory ? `${m.materialCategory} · ` : ''}{m.name}</option>)}</select>
                 : <div className="flex items-center gap-8">
                     <select className="form-input" style={{ maxWidth: 190 }} value={l.categoryId} onChange={e => set(i, { categoryId: e.target.value })}>
                       <option value="">What kind…</option>{cats.filter(c => c.status === 'active').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                     <input className="form-input" placeholder="e.g. LUKU for Makina" value={l.description} onChange={e => set(i, { description: e.target.value })} />
                   </div>}</td>
+              <td>{(() => {
+                const sug = l.kind === 'material' ? suggestFor(l.materialId) : [];
+                return <>
+                  <select className="form-input" style={{ minWidth: 150 }} aria-label="Supplier" value={l.supplierId} onChange={e => set(i, { supplierId: e.target.value, supTouched: true })}>
+                    <option value="">{l.kind === 'expense' ? 'Optional…' : 'Choose…'}</option>
+                    {sug.length > 0 && <optgroup label="Supplied this before">{sug.map(id => active.find(x => x.id === id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>}
+                    <optgroup label={sug.length ? 'Other suppliers' : 'Suppliers'}>{active.filter(x => !sug.includes(x.id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
+                    <option value="__new">New supplier…</option>
+                  </select>
+                  {l.supplierId === '__new' && <input className="form-input mt-4" placeholder="The supplier's name" value={l.newSupplier ?? ''} onChange={e => set(i, { newSupplier: e.target.value })} />}
+                </>;
+              })()}</td>
               <td className="num"><NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} placeholder={l.kind === 'expense' ? 'optional' : ''} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /></td>
               <td>{l.kind === 'material'
                 ? <select className="form-input" value={l.unitId} onChange={e => set(i, { unitId: e.target.value })} disabled={!it}>
@@ -95,13 +109,13 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
         })}
       </tbody>
       <tfoot>
-        {lines.length > 1 && <tr><td colSpan={5} style={{ textAlign: 'right' }}><strong>Total</strong></td><td className="num"><strong>{formatAmount(r2(lines.reduce((t, l) => t + (l.kind === 'expense' ? num(l.amount) ?? 0 : (num(l.quantity) ?? 0) * (num(l.price) ?? 0)), 0)))}</strong></td><td /></tr>}
-        <tr><td colSpan={7}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => [...ls, { ...EMPTY_LINE, kind: ls[ls.length - 1]?.kind ?? 'material' }])}><Plus size={13} /> Add a line</button></td></tr>
+        {lines.length > 1 && <tr><td colSpan={6} style={{ textAlign: 'right' }}><strong>Total</strong></td><td className="num"><strong>{formatAmount(r2(lines.reduce((t, l) => t + (l.kind === 'expense' ? num(l.amount) ?? 0 : (num(l.quantity) ?? 0) * (num(l.price) ?? 0)), 0)))}</strong></td><td /></tr>}
+        <tr><td colSpan={8}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => [...ls, { ...EMPTY_LINE, kind: ls[ls.length - 1]?.kind ?? 'material' }])}><Plus size={13} /> Add a line</button></td></tr>
       </tfoot>
     </table>
   );
 }
-const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '', price: '', categoryId: '', description: '', unitText: '', amount: '' };
+const EMPTY_LINE = { kind: 'material', materialId: '', supplierId: '', newSupplier: '', supTouched: false, quantity: '', unitId: '', price: '', categoryId: '', description: '', unitText: '', amount: '' };
 
 /* ---------- Requests ---------- */
 /** An order's material lines still to come, in their own units, ready for the purchase form */
@@ -336,14 +350,10 @@ function EditOrderModal({ po, refs, onClose, onSaved }) {
 
 function AskModal({ refs, branchId, cats, onClose, onSaved }) {
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
-  // the supplier and prices (128, 2026-11-16): what the purchase needs, so nobody types it again
-  const [supplierId, setSupplierId] = useState('');
-  const [newSupplier, setNewSupplier] = useState('');
-  const active = (refs?.suppliers || []).filter(x => x.status === 'active').sort((a, b) => a.name.localeCompare(b.name));
-  const hasMaterial = lines.some(l => l.kind === 'material');
-  // the materials decide the supplier (2026-11-16, the user): who supplied them before, filled in
-  // until a supplier is picked by hand — most purchases first, the latest breaking a tie
-  const [supTouched, setSupTouched] = useState(false);
+  // the supplier and prices (128, 2026-11-16): what the purchase needs, so nobody types it again.
+  // Each material line has its own supplier, filled from who supplied that material before
+  // (most purchases first, the latest breaking a tie) until picked by hand.
+  const active = (refs?.suppliers || []).filter(x => x.status === 'active').sort((x, y) => x.name.localeCompare(y.name));
   const [past, setPast] = useState({});   // material id → [{ s: supplier, d: date }]
   useEffect(() => {
     supabase.from('purchases').select('supplier_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material_id))').eq('status', 'recorded').eq('branch_id', branchId)
@@ -353,49 +363,67 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
         setPast(m);
       });
   }, [branchId]);
-  const score = {};
-  for (const l of lines) if (l.kind === 'material') for (const h of past[l.materialId] || []) { const x = score[h.s] ||= { n: 0, d: '' }; x.n += 1; if (h.d > x.d) x.d = h.d; }
-  const suggested = Object.entries(score).sort((a, b) => b[1].n - a[1].n || (a[1].d < b[1].d ? 1 : -1)).map(([id]) => id).filter(id => active.some(x => x.id === id));
-  useEffect(() => { if (!supTouched) setSupplierId(suggested[0] ?? ''); }, [suggested.join(','), supTouched]); // eslint-disable-line react-hooks/exhaustive-deps
+  const suggestFor = materialId => {
+    const score = {};
+    for (const h of past[materialId] || []) { const x = score[h.s] ||= { n: 0, d: '' }; x.n += 1; if (h.d > x.d) x.d = h.d; }
+    return Object.entries(score).sort((x, y) => y[1].n - x[1].n || (x[1].d < y[1].d ? 1 : -1)).map(([id]) => id).filter(id => active.some(x => x.id === id));
+  };
+  // history arriving after a material was chosen: fill the lines not picked by hand
+  useEffect(() => {
+    setLines(ls => ls.map(l => (l.kind === 'material' && l.materialId && !l.supTouched && !l.supplierId ? { ...l, supplierId: suggestFor(l.materialId)[0] ?? '' } : l)));
+  }, [past]); // eslint-disable-line react-hooks/exhaustive-deps
   const [neededBy, setNeededBy] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const supKey = l => (l.supplierId === '__new' ? 'n:' + (l.newSupplier || '').trim().toLowerCase() : l.supplierId || '');
   async function save() {
     setError('');
     if (lines.some(l => l.kind === 'material' && (!l.materialId || !(num(l.quantity) > 0) || !l.unitId))) { setError('Each material line needs the material, a quantity above zero and a unit.'); return; }
     if (lines.some(l => l.kind === 'expense' && (!l.categoryId || !l.description.trim()))) { setError('Each expense line needs its kind and what it is.'); return; }
-    if (hasMaterial && (!supplierId || (supplierId === '__new' && !newSupplier.trim()))) { setError('Choose the supplier, or name a new one.'); return; }
+    if (lines.some(l => l.kind === 'material' && (!l.supplierId || (l.supplierId === '__new' && !(l.newSupplier || '').trim())))) { setError('Choose the supplier for each material, or name a new one.'); return; }
+    if (lines.some(l => l.kind === 'expense' && l.supplierId === '__new' && !(l.newSupplier || '').trim())) { setError('Name the new supplier.'); return; }
     if (lines.some(l => l.kind === 'material' && num(l.price) == null)) { setError('Enter the price a unit for each material.'); return; }
+    // one request per supplier: each is approved and ordered on its own; expense lines with no
+    // supplier go with the first one
+    const groups = [];
+    for (const l of lines) {
+      const k = supKey(l);
+      let g = k ? groups.find(x => x.key === k) : null;
+      if (!g && k) { g = { key: k, sample: l, lines: [] }; groups.push(g); }
+      if (g) g.lines.push(l);
+    }
+    const loose = lines.filter(l => !supKey(l));
+    if (loose.length) { if (groups.length) groups[0].lines.push(...loose); else groups.push({ key: '', sample: null, lines: loose }); }
     setBusy(true);
-    const { error: err } = await supabase.rpc('submit_purchase_request', { p: { branch_id: branchId, needed_by: neededBy || null, notes,
-      ...(supplierId === '__new' ? { supplier_name: newSupplier.trim() } : supplierId ? { supplier_id: supplierId } : {}),
-      lines: lines.map(l => (l.kind === 'expense'
-        ? { kind: 'expense', category_id: l.categoryId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount) }
-        : { kind: 'material', material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
+    let done = 0;
+    for (const g of groups) {
+      const x = g.sample;
+      const { error: err } = await supabase.rpc('submit_purchase_request', { p: { branch_id: branchId, needed_by: neededBy || null, notes,
+        ...(!x ? {} : x.supplierId === '__new' ? { supplier_name: x.newSupplier.trim() } : { supplier_id: x.supplierId }),
+        lines: g.lines.map(l => (l.kind === 'expense'
+          ? { kind: 'expense', category_id: l.categoryId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount) }
+          : { kind: 'material', material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
+      if (err) {
+        setBusy(false);
+        setError((done ? `${done} of ${groups.length} requests sent; the next failed: ` : '') + dbErrorMessage(err));
+        if (done) setLines(ls => ls.filter(l => !groups.slice(0, done).some(gg => gg.lines.includes(l))));
+        return;
+      }
+      done += 1;
+    }
     setBusy(false);
-    if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
   }
+  const suppliersUsed = new Set(lines.map(supKey).filter(Boolean)).size;
   return (
     <Modal title="Ask for materials or expenses" onClose={onClose} size="xl"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {suppliersUsed > 1 && <span className="pl-help">{suppliersUsed} suppliers: one request for each</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send for approval</button></>}>
       <div className="modal-form">
-        <RequestLines refs={refs} branchId={branchId} cats={cats} lines={lines} setLines={setLines} />
-        {/* the supplier under the materials, filled from who supplied them before (2026-11-16) */}
-        <div className="form-row">
-          <label className="pe-field"><span>Supplier{hasMaterial ? '' : ' (optional)'}{!supTouched && suggested[0] && supplierId === suggested[0] ? <span className="pl-help"> · supplied these before</span> : null}</span>
-            <select className="form-input" value={supplierId} onChange={e => { setSupTouched(true); setSupplierId(e.target.value); }}>
-              <option value="">Choose…</option>
-              {suggested.length > 0 && <optgroup label="Supplied these before">{suggested.map(id => active.find(x => x.id === id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>}
-              <optgroup label={suggested.length ? 'Other suppliers' : 'Suppliers'}>{active.filter(x => !suggested.includes(x.id)).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
-              <option value="__new">New supplier…</option>
-            </select>
-            {supplierId === '__new' && <input className="form-input mt-4" placeholder="The supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
-          <span className="pe-field" style={{ flex: 1 }} />
-        </div>
+        <RequestLines refs={refs} branchId={branchId} cats={cats} lines={lines} setLines={setLines} active={active} suggestFor={suggestFor} />
         <div className="form-row">
           <label className="pe-field"><span>Needed by (optional)</span><input type="date" className="form-input" value={neededBy} onChange={e => setNeededBy(e.target.value)} /></label>
           <label className="pe-field" style={{ flex: 2 }}><span>Why / notes (optional)</span><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
