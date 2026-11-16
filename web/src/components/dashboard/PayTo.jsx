@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Phone, Smartphone } from 'lucide-react';
+import { Copy, Check, Phone, Smartphone, Store, X } from 'lucide-react';
 
 /*
  * Where the money goes, ready to pay (2026-11-16, the user: copy + open the app; one-tap payment through
@@ -74,6 +74,7 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
   const no = mode === 'mobile' ? phone : acct;
   const badPhone = mode === 'mobile' && phone.trim() && !phoneOk(phone);
   const [copied, setCopied] = useState('');
+  const [choosing, setChoosing] = useState(false);   // the "Open with" list
   async function copy(key, text) {
     try { await navigator.clipboard.writeText(String(text ?? '')); }
     catch {
@@ -141,9 +142,23 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
       {mode === 'mobile' && (!phone.trim() || badPhone) && <p className="text-sm text-warning" style={{ margin: 0 }}>{phone.trim() ? 'That is not a valid phone number — e.g. 0712 345 678 or 255712345678.' : 'Enter the phone number to send to.'}</p>}
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
-        {app && isAndroid() && <a className="btn btn-primary btn-sm" href={appLink(app)} title={`Open the ${app.name} app on this phone`}><Smartphone size={14} /> Open {app.name} app</a>}
-        {ussd && <a className={`btn ${app && isAndroid() ? 'btn-outline' : 'btn-primary'} btn-sm`} href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Dial {ussd}</a>}
+        {(app || ussd) && <button type="button" className="btn btn-primary btn-sm" onClick={() => { copy('all', all); setChoosing(true); }}><Smartphone size={14} /> Pay in app</button>}
       </div>
+      {choosing && (
+        // one button, every way to pay (2026-11-16, the user): the bank's or network's app, its USSD menu, the
+        // Play Store — a web page can't ask Android for its own "Open with" list or see what is installed
+        <div className="ow-back" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setChoosing(false); }}>
+          <div className="ow-sheet" role="dialog" aria-modal="true" aria-label="Open with">
+            <div className="ow-head"><strong>Open with</strong><button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setChoosing(false)}><X size={16} /></button></div>
+            <div className="ow-grid">
+              {app && isAndroid() && app.pkg && <a className="ow-tile" href={appLink(app)} onClick={() => setChoosing(false)}><span className="ow-icon"><Smartphone size={22} /></span><span>{app.name}</span><span className="pl-help">app</span></a>}
+              {ussd && <a className="ow-tile" href={`tel:${ussd.replace(/#/g, '%23')}`} onClick={() => setChoosing(false)}><span className="ow-icon"><Phone size={22} /></span><span>Dial {ussd}</span><span className="pl-help">menu</span></a>}
+              {app && <a className="ow-tile" href={app.pkg ? `https://play.google.com/store/apps/details?id=${app.pkg}` : `https://play.google.com/store/search?q=${encodeURIComponent(app.name)}&c=apps`} target="_blank" rel="noreferrer" onClick={() => setChoosing(false)}><span className="ow-icon"><Store size={22} /></span><span>{app.name}</span><span className="pl-help">Play Store</span></a>}
+            </div>
+            <p className="pl-help" style={{ margin: 0 }}>The details are copied — paste them in the app.</p>
+          </div>
+        </div>
+      )}
       <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
         Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
     </div>
