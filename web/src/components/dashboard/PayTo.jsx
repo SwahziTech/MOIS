@@ -27,9 +27,13 @@ const APPS = {
   halopesa: { pkg: null, name: 'HaloPesa' },
 };
 const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+// launch the app's start screen (MAIN + LAUNCHER — with only the package, Android finds nothing to open and
+// falls back, 2026-11-16: NMB Mkononi installed but the Play Store opened); if it can't, the app's own Play
+// Store page, which shows "Open" when it is installed
 const appLink = a => {
-  const store = `https://play.google.com/store/search?q=${encodeURIComponent(a.name)}&c=apps`;
-  return a.pkg ? `intent://#Intent;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(store)};end` : store;
+  if (!a.pkg) return `https://play.google.com/store/search?q=${encodeURIComponent(a.name)}&c=apps`;
+  const store = `https://play.google.com/store/apps/details?id=${a.pkg}`;
+  return `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(store)};end`;
 };
 const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
 // banks in Tanzania other than CRDB, for the drop-down (2026-11-16, the user); "Another bank" lets one be typed
