@@ -67,6 +67,7 @@ export default function Purchases({ section = 'purchases' }) {
   // The menu's Purchases opens Purchases, its Expenses opens Expenses; the other tabs are a click away.
   const startTab = new URLSearchParams(window.location.search).get('tab');
   const [top, setTop] = useState(section === 'expenses' ? 'expenses' : 'purchases');
+  const [supTick, setSupTick] = useState(0);   // the New Supplier button up top → the Suppliers tab opens a new one
   const [pTab, setPTab] = useState(null);     // Purchases: buy | costs | waiting (null until loaded)
   const [eTab, setETab] = useState(startTab === 'electricity' ? 'electricity' : 'list');   // Expenses: list | electricity
   const [expFilter, setExpFilter] = useState(startTab === 'wages' ? 'wages' : '');      // '' | wages | salaries | transport | expense
@@ -343,6 +344,18 @@ export default function Purchases({ section = 'purchases' }) {
   const purchaseTabs = section === 'orders' ? null : (
     <>
       <PageTabs value={top} onChange={setTop} tabs={[['all', 'All'], ['purchases', 'Purchases' + (pendingHere.length ? ' (' + pendingHere.length + ' waiting for approval)' : '')], ['expenses', 'Expenses'], ['suppliers', 'Suppliers']]} />
+      {/* the search, just under the tabs, above the sub-tabs (swapped 2026-11-16, the user); Sort / Filter on its right (2026-11-16, the user) */}
+      {['all', 'purchases', 'expenses'].includes(tab) && (
+        <div className="mb-8">
+          <ListToolbar search={q} onSearch={setQ} placeholder={tab === 'expenses' ? 'Search expenses…' : tab === 'purchases' ? 'Search purchases…' : 'Search purchases and expenses…'}
+            sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'amount', label: 'Amount, highest first' }, { value: 'item', label: 'Item, A to Z' }] }}
+            filters={[
+              { key: 'status', label: 'Status', value: stFilter, onChange: setStFilter, options: STATUS_OPTIONS.filter(o => !o.value || (tab === 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].includes(o.value) : tab === 'purchases' ? o.value !== 'not_paid' : true)) },
+              ...(tab === 'all' ? [{ key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [{ value: '', label: 'All' }, { value: 'purchase', label: 'Purchases' }, { value: 'expense', label: 'Expenses' }] }] : []),
+              ...(tab !== 'purchases' ? [{ key: 'cat', label: 'Expense', value: expFilter, onChange: setExpFilter, options: [{ value: '', label: 'All' }, { value: 'wages', label: 'Wages' }, { value: 'salaries', label: 'Salaries' }, { value: 'transport', label: 'Transport' }, { value: 'electricity', label: 'Electricity' }, { value: 'expense', label: 'Expense' }] }] : []),
+            ]} />
+        </div>
+      )}
       {top === 'purchases' && (
         <div className="filter-chips mb-8" role="tablist" aria-label="Purchases">
           {[['buy', 'Purchases'], ['costs', 'Material costs'], ['waiting', 'Goods received (' + waitingHere.length + ')']].map(([k, l]) => (
@@ -357,18 +370,6 @@ export default function Purchases({ section = 'purchases' }) {
           ))}
         </div>
       )}
-      {/* the search, just under the tabs; Sort / Filter on its right (2026-11-16, the user) */}
-      {['all', 'purchases', 'expenses'].includes(tab) && (
-        <div className="mb-8">
-          <ListToolbar search={q} onSearch={setQ} placeholder={tab === 'expenses' ? 'Search expenses…' : tab === 'purchases' ? 'Search purchases…' : 'Search purchases and expenses…'}
-            sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'amount', label: 'Amount, highest first' }, { value: 'item', label: 'Item, A to Z' }] }}
-            filters={[
-              { key: 'status', label: 'Status', value: stFilter, onChange: setStFilter, options: STATUS_OPTIONS.filter(o => !o.value || (tab === 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].includes(o.value) : tab === 'purchases' ? o.value !== 'not_paid' : true)) },
-              ...(tab === 'all' ? [{ key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [{ value: '', label: 'All' }, { value: 'purchase', label: 'Purchases' }, { value: 'expense', label: 'Expenses' }] }] : []),
-              ...(tab !== 'purchases' ? [{ key: 'cat', label: 'Expense', value: expFilter, onChange: setExpFilter, options: [{ value: '', label: 'All' }, { value: 'wages', label: 'Wages' }, { value: 'salaries', label: 'Salaries' }, { value: 'transport', label: 'Transport' }, { value: 'electricity', label: 'Electricity' }, { value: 'expense', label: 'Expense' }] }] : []),
-            ]} />
-        </div>
-      )}
     </>
   );
 
@@ -376,7 +377,9 @@ export default function Purchases({ section = 'purchases' }) {
   return (
     <PageShell title={section === 'orders' ? 'Orders' : top === 'expenses' ? 'Expenses' : top === 'suppliers' ? 'Suppliers' : 'Purchases'} subtitle="Procurement" onSettings={() => setExpSettings(true)}
       // one golden button, following the open tab (2026-11-16): expenses → Record expense, else Record purchase
-      primaryAction={section !== 'orders' && top !== 'suppliers' && (top === 'expenses'
+      primaryAction={section !== 'orders' && (top === 'suppliers'
+        ? canManage('materials.manage') && <button type="button" className="btn btn-primary" onClick={() => setSupTick(t => t + 1)}><Plus size={14} /> New Supplier</button>
+        : top === 'expenses'
         ? expReady && expCats.length > 0 && (branchId ? canRecordAt(branchId) : true) && (
           <button type="button" className="btn btn-primary" onClick={() => setEditingExpense('new')}><Plus size={14} /> Record expense</button>)
         : canRecordAt(branchId) && (
@@ -389,12 +392,13 @@ export default function Purchases({ section = 'purchases' }) {
           onReceive={fromOrder => setEditing({ mode: 'new', fromOrder })}
           onRecordExpense={prefill => { setExpensePrefill(prefill); setEditingExpense('new'); }}
           onRecordToken={q => setTokenFor(q)} />
-      : tab === 'suppliers' ? <Embedded param="sv"><Suppliers /></Embedded>
+      : tab === 'suppliers' ? <Embedded param="sv"><Suppliers inTab newTick={supTick} /></Embedded>
       : ['all', 'purchases', 'expenses'].includes(tab) ? (
         <div className="card">
           {error ? <ErrorState message={error} onRetry={load} /> : (
             <div className="table-container">
-              <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
+              {/* a slim period bar (2026-11-16, the user) */}
+              <div className="pu-period"><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
               <ProcTable rows={procRows} loading={loading} money={money} />
             </div>
           )}

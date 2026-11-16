@@ -3082,3 +3082,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pd-lines .num { text-align: right; }
 .proc-table td { vertical-align: top; }
 .list-toolbar.is-filter-first .sortfilter-menu { left: 0; right: auto; }
+
+/* Procurement: a slim period bar above the table (2026-11-16, the user) */
+.pu-period { padding: 6px 12px; border-bottom: 1px solid var(--border); }
+.pu-period .period-bar { margin: 0; }
+.pu-period .dd-step { width: 28px; height: 28px; }
+.pu-period .dd-select { padding-top: 4px; padding-bottom: 4px; min-height: 0; height: 32px; font-size: var(--text-sm); }
+.pu-period .dd-reset { padding: 3px 10px; }

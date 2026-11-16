@@ -24,7 +24,9 @@ const FIELDS = [
  * fixed on a material (031): it comes from the purchases recorded with
  * them (035) — what was bought, where, when, and what is still to pay.
  */
-export default function Suppliers() {
+// inTab: shown as Procurement's Suppliers tab — its New Supplier button sits up with the page's other
+// golden buttons (2026-11-16, the user); each newTick opens a new supplier
+export default function Suppliers({ inTab = false, newTick = 0 } = {}) {
   const { organization, canManage } = useAuth();
   const { branchId, branchName, inBranch } = useBranch();
   const canWrite = canManage('materials.manage');
@@ -37,6 +39,7 @@ export default function Suppliers() {
   const [showInactive, setShowInactive] = useState(false);
   const [sortBy, setSortBy] = useState('name');   // name | purchases | owed
   const [editing, setEditing] = useState(null);
+  useEffect(() => { if (newTick > 0) setEditing({}); }, [newTick]);
 
   async function load() {
     setError('');
@@ -87,7 +90,7 @@ export default function Suppliers() {
     <PageShell
       title="Suppliers"
       subtitle="Master Data"
-      primaryAction={canWrite && (
+      primaryAction={canWrite && !inTab && (
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><Plus size={14} /> New Supplier</button>
       )}
     >
