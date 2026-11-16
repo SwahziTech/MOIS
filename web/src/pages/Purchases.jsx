@@ -357,6 +357,18 @@ export default function Purchases({ section = 'purchases' }) {
           ))}
         </div>
       )}
+      {/* the search, just under the tabs; Sort / Filter on its right (2026-11-16, the user) */}
+      {['all', 'purchases', 'expenses'].includes(tab) && (
+        <div className="mb-8">
+          <ListToolbar search={q} onSearch={setQ} placeholder={tab === 'expenses' ? 'Search expenses…' : tab === 'purchases' ? 'Search purchases…' : 'Search purchases and expenses…'}
+            sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'amount', label: 'Amount, highest first' }, { value: 'item', label: 'Item, A to Z' }] }}
+            filters={[
+              { key: 'status', label: 'Status', value: stFilter, onChange: setStFilter, options: STATUS_OPTIONS.filter(o => !o.value || (tab === 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].includes(o.value) : tab === 'purchases' ? o.value !== 'not_paid' : true)) },
+              ...(tab === 'all' ? [{ key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [{ value: '', label: 'All' }, { value: 'purchase', label: 'Purchases' }, { value: 'expense', label: 'Expenses' }] }] : []),
+              ...(tab !== 'purchases' ? [{ key: 'cat', label: 'Expense', value: expFilter, onChange: setExpFilter, options: [{ value: '', label: 'All' }, { value: 'wages', label: 'Wages' }, { value: 'salaries', label: 'Salaries' }, { value: 'transport', label: 'Transport' }, { value: 'electricity', label: 'Electricity' }, { value: 'expense', label: 'Expense' }] }] : []),
+            ]} />
+        </div>
+      )}
     </>
   );
 
@@ -383,15 +395,6 @@ export default function Purchases({ section = 'purchases' }) {
           {error ? <ErrorState message={error} onRetry={load} /> : (
             <div className="table-container">
               <div className="card-body" style={{ paddingBottom: 0 }}><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} /></div>
-              <div className="card-body" style={{ paddingBottom: 0 }}>
-                <ListToolbar filterFirst search={q} onSearch={setQ} placeholder={tab === 'expenses' ? 'Search expenses…' : tab === 'purchases' ? 'Search purchases…' : 'Search purchases and expenses…'}
-                  sort={{ value: sortBy, onChange: setSortBy, options: [{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'amount', label: 'Amount, highest first' }, { value: 'item', label: 'Item, A to Z' }] }}
-                  filters={[
-                    { key: 'status', label: 'Status', value: stFilter, onChange: setStFilter, options: STATUS_OPTIONS.filter(o => !o.value || (tab === 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].includes(o.value) : tab === 'purchases' ? o.value !== 'not_paid' : true)) },
-                    ...(tab === 'all' ? [{ key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [{ value: '', label: 'All' }, { value: 'purchase', label: 'Purchases' }, { value: 'expense', label: 'Expenses' }] }] : []),
-                    ...(tab !== 'purchases' ? [{ key: 'cat', label: 'Expense', value: expFilter, onChange: setExpFilter, options: [{ value: '', label: 'All' }, { value: 'wages', label: 'Wages' }, { value: 'salaries', label: 'Salaries' }, { value: 'transport', label: 'Transport' }, { value: 'electricity', label: 'Electricity' }, { value: 'expense', label: 'Expense' }] }] : []),
-                  ]} />
-              </div>
               <ProcTable rows={procRows} loading={loading} money={money} />
             </div>
           )}
