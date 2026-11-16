@@ -196,18 +196,36 @@ const parseDay = t => {
   const d = v ? new Date(`${v.replace(/^[A-Za-z]{3},\s*/, '')} UTC`) : null;
   return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
 };
+// the Saturday a weekly cash week starts on (weeks run Saturday to Saturday, as on the branch's sheet)
+export const satOf = d => dayShift(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 1) % 7));
+/** Weekly cash's own "This week" / "Last week": Saturday to Saturday (2026-11-16, the user) */
+export function cashWeekPeriod(p, today) {
+  const dm = d => `${Number(d.slice(8))} ${utc(d).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
+  if (!p) return p;
+  // its bar shows the exact dates (a month from the 1st; weeks Saturday to Saturday)
+  if (!['week', 'lastweek'].includes(p.key)) return { ...p, cashNote: p.from && p.to ? `${dm(p.from)} – ${dm(p.to)}` : null };
+  const sat = satOf(today);
+  const from = p.key === 'week' ? sat : dayShift(sat, -7);
+  const to = p.key === 'week' ? today : dayShift(sat, -1);
+  return { ...p, from, to, cashNote: `Sat ${dm(from)} – Sat ${dm(dayShift(from, 7))}`,
+    compare: { from: dayShift(from, -7), to: dayShift(to, -7), label: p.key === 'week' ? 'last week' : 'the week before' } };
+}
 /** Rows for a card's detail page within a period, newest first. by: day | week | month */
 export function historyFor(data, card, by, inBranch, today, { from, to }) {
   // weekly cash runs Saturday to Saturday, as on the branch's sheet (2026-11-16, the user): the week of
   // "Sat, 31 Oct – Sat, 7 Nov" holds what was spent from 31 Oct; cash sent on Sat 7 Nov is the next week's
-  if (card === 'cash' && by === 'week') {
-    const satOf = d => dayShift(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 1) % 7));
+  if (card === 'cash') {
+    // every view counts only the weekly cash: what was sent, and what was paid out of it (2026-11-16, the user)
+    const keyC = d => (by === 'day' ? d : by === 'week' ? satOf(d) : by === 'month' ? d.slice(0, 7)
+      : by === 'quarter' ? `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : d.slice(0, 4));
+    const labelC = k => (by === 'day' ? tableDate(k) : by === 'week' ? `${tableDate(k)} – ${tableDate(dayShift(k, 7))}` : by === 'month' ? monthLong(k) : k.replace('-Q', ' Q'));
     const rows = {};
-    // a week shows whole when it touches the period; what is dated before the period is shown faint beside
-    // the figure (aOut / bOut), not counted in the period's totals (2026-11-16, the user)
+    // a week shows whole when it touches the period (weeks don't end with months); what is dated outside the
+    // period is shown faint beside the figure (…Out before, …After after), not counted in the totals
     const add = (d, col, amt) => {
-      if (!d || d > today) return; const k = satOf(d); if (dayShift(k, 7) <= from || k > to) return;
-      const r = rows[k] ||= { key: k, label: `${tableDate(k)} – ${tableDate(dayShift(k, 7))}`, a: 0, b: 0, c: 0, aOut: 0, bOut: 0, aAfter: 0, bAfter: 0 };
+      if (!d || d > today) return; const k = keyC(d);
+      if (by === 'week' ? (dayShift(k, 7) <= from || k > to) : (d < from || d > to)) return;
+      const r = rows[k] ||= { key: k, label: labelC(k), a: 0, b: 0, c: 0, aOut: 0, bOut: 0, aAfter: 0, bAfter: 0 };
       r[d < from ? `${col}Out` : d > to ? `${col}After` : col] += n(amt);
     };
     for (const x of data.moves) if (inBranch(x.branch_id) && x.kind === 'topup') add(x.day, 'a', x.amount);

@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useBranch } from '../../hooks/useBranch';
 import { formatAmount, formatMoney, formatMoneyShort, dateText, tableDate } from '../../lib/format';
 import { loadInventoryRefs, orgToday, qtyText } from '../../lib/inventory';
-import { loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
+import { cashWeekPeriod, loadDirectorBoard, loadStockBlock, periodsFor, periodSteps, grainOf, cardsFor, productionFor, trendFrom, historyFor, monthShort } from '../../lib/directorBoard';
 import ErrorState from '../ErrorState';
 import { loadProofs } from '../sales/PaymentProofs';
 import NeedsNow from './NeedsNow';
@@ -34,7 +34,7 @@ function PeriodBar({ period, periods, periodKey, setPeriodKey, today }) {
     <div className="dd-period">
       <button type="button" className="dd-step" aria-label="Earlier" disabled={!earlier} onClick={() => setPeriodKey(earlier)}><ChevronLeft size={18} /></button>
       <button type="button" className="dd-step" aria-label="Later" disabled={!later} onClick={() => setPeriodKey(later)}><ChevronRight size={18} /></button>
-      <span><strong>{period.label}</strong> · {shortRange(period.from, period.to, today)}</span>
+      <span><strong>{period.label}</strong> · {period.cashNote ?? shortRange(period.from, period.to, today)}</span>
       {periodKey !== 'month' && <button type="button" className="btn btn-outline btn-sm dd-reset" onClick={() => setPeriodKey('month')}>This month</button>}
       <select className="form-input dd-select" aria-label="Period" value={periodKey} onChange={e => setPeriodKey(e.target.value)}>
         {DROPDOWN.slice(0, 1).map(([group, opts]) => <optgroup key={group} label={group}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>)}
@@ -97,7 +97,8 @@ export default function DirectorBoard() {
   const [error, setError] = useState('');
   const [periodKey, setPeriodKey] = useSessionPeriod('director-view');   // this month first (2026-11-09)
   const periods = useMemo(() => periodsFor(today), [today]);
-  const period = periods.find(p => p.key === periodKey);
+  // the Weekly cash card's weeks run Saturday to Saturday (2026-11-16)
+  const period = (CARD[params.get('card')] && params.get('card') === 'cash') ? cashWeekPeriod(periods.find(p => p.key === periodKey), today) : periods.find(p => p.key === periodKey);
 
   async function load() {
     setError(''); setD(null); setStock(undefined);
