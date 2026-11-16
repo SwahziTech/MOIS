@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Plus, Trash2, Filter, Paperclip } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Filter, Paperclip, Eye } from 'lucide-react';
 import ProofBox from '../components/ProofBox';
 import { files } from '../lib/files';
 import { proofName, extOf } from '../lib/proofName';
@@ -518,7 +518,10 @@ export default function Purchases({ section = 'purchases' }) {
               {can && delivOf(p) !== 'delivered' && <button type="button" className="btn btn-primary" onClick={() => { close(); setDelivering(p); }}>Record delivery</button>}
               {/* a rounding gap is settled when the purchase is recorded, not here (2026-11-16, the user) */}
               {can && t && bal >= 1 && <button type="button" className="btn btn-primary" onClick={() => { close(); setPaying({ purchase: p, total: t.total }); }}>Pay</button>}
-              {can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'purchase', id: p.id, branch: p.branch_id, amount: t?.amount_paid, paidOn: p.paid_on, who: supplierName(p.supplier_id) })}><Paperclip size={14} /> Add proof</button>}
+              {/* a proof there: View proof; none yet: Add proof (2026-11-16, the user) */}
+              {(slips[p.id] || []).length > 0
+                ? <button type="button" className="btn btn-ghost" title="Open the proof of payment" onClick={() => setSlipOpen(slips[p.id][slips[p.id].length - 1])}><Eye size={14} /> View proof</button>
+                : can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'purchase', id: p.id, branch: p.branch_id, amount: t?.amount_paid, paidOn: p.paid_on, who: supplierName(p.supplier_id) })}><Paperclip size={14} /> Add proof</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
             <div className="modal-form">
@@ -562,7 +565,9 @@ export default function Purchases({ section = 'purchases' }) {
         return (
           <Modal title={'Expense · ' + dateText(e.expense_date)} onClose={close}
             footer={<>
-              {can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'expense', id: e.id, branch: e.branch_id, amount: e.amount_paid, paidOn: e.paid_on ?? e.expense_date, who: e.description })}><Paperclip size={14} /> Add proof</button>}
+              {(slips[e.id] || []).length > 0
+                ? <button type="button" className="btn btn-ghost" title="Open the proof of payment" onClick={() => setSlipOpen(slips[e.id][slips[e.id].length - 1])}><Eye size={14} /> View proof</button>
+                : can && <button type="button" className="btn btn-ghost" title="Add a proof of payment: a photo, PDF or the SMS" onClick={() => setAddProof({ kind: 'expense', id: e.id, branch: e.branch_id, amount: e.amount_paid, paidOn: e.paid_on ?? e.expense_date, who: e.description })}><Paperclip size={14} /> Add proof</button>}
               {can && <button type="button" className="btn btn-outline" onClick={() => { close(); setEditingExpense(e); }}>Change</button>}
               <button type="button" className="btn btn-outline" onClick={close}>Close</button>
             </>}>
