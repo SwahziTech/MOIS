@@ -16,6 +16,13 @@ const MODES = [
 // USSD menus (dialled from a phone): the bank's or the network's own menu, where the person pays
 const USSD = { crdb: '*150*03#', nmb: '*150*66#', mpesa: '*150*00#', mixx: '*150*01#', airtel: '*150*60#', halopesa: '*150*88#' };
 const NETWORKS = [['mpesa', 'M-Pesa'], ['mixx', 'Mixx by Yas'], ['airtel', 'Airtel Money'], ['halopesa', 'HaloPesa']];
+// banks in Tanzania other than CRDB, for the drop-down (2026-11-16, the user); "Another bank" lets one be typed
+const BANKS = ['NMB', 'NBC', 'Selcom Microfinance Bank', 'Exim Bank', 'Stanbic Bank', 'Absa Bank', 'Equity Bank', 'Azania Bank',
+  'DTB (Diamond Trust Bank)', 'TCB (Tanzania Commercial Bank)', 'KCB Bank', 'I&M Bank', 'Access Bank', 'Akiba Commercial Bank',
+  'Amana Bank', 'Mkombozi Commercial Bank', 'Mwalimu Commercial Bank', 'Bank of Africa', 'Ecobank', 'Standard Chartered',
+  'Citibank', 'Letshego Bank', 'Maendeleo Bank', 'DCB Commercial Bank', 'Uchumi Commercial Bank', 'Yetu Microfinance Bank',
+  'Mwanga Hakika Bank', 'China Dasheng Bank', 'Bank of Baroda', 'Bank of India', 'Habib African Bank', 'UBA'];
+const bankOf = name => BANKS.find(b => b.toLowerCase().split(/[ (]/)[0] === String(name ?? '').toLowerCase().trim().split(/[ (]/)[0]) ?? '';
 
 const guessMode = bank => {
   const b = String(bank ?? '').toLowerCase();
@@ -31,6 +38,9 @@ const guessNet = bank => {
 export default function PayTo({ payTo, amount, reference, money }) {
   const [mode, setMode] = useState(() => guessMode(payTo?.bank));
   const [net, setNet] = useState(() => guessNet(payTo?.bank));
+  const [bank, setBank] = useState(() => bankOf(payTo?.bank) || (payTo?.bank && !/crdb/i.test(payTo.bank) ? '__other' : 'NMB'));
+  const [otherBank, setOtherBank] = useState(() => (bankOf(payTo?.bank) ? '' : payTo?.bank && !/crdb/i.test(payTo.bank) ? payTo.bank : ''));
+  const bankName = bank === '__other' ? otherBank : bank;
   const [copied, setCopied] = useState('');
   async function copy(key, text) {
     try { await navigator.clipboard.writeText(String(text ?? '')); }
@@ -43,13 +53,13 @@ export default function PayTo({ payTo, amount, reference, money }) {
   }
   const amt = Math.round(Number(amount) || 0);
   const rows = [
-    [mode === 'mobile' ? 'Network' : 'Bank', mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : (payTo?.bank || (mode === 'crdb' ? 'CRDB' : '')), false],
+    [mode === 'mobile' ? 'Network' : 'Bank', mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB' : bankName, false],
     [mode === 'mobile' ? 'Phone number' : 'Account number', payTo?.no, true],
     ['Name', payTo?.name, true],
     ['Amount', amt ? String(amt) : '', true, amt ? money(amt) : ''],
     ['Reference', reference, true],
   ];
-  const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : /nmb/i.test(payTo?.bank ?? '') ? USSD.nmb : null;
+  const ussd = mode === 'crdb' ? USSD.crdb : mode === 'mobile' ? USSD[net] : bank === 'NMB' ? USSD.nmb : null;
   const all = rows.filter(r => r[1]).map(r => `${r[0]}: ${r[3] || r[1]}`).join('\n');
   return (
     <div className="payto">
@@ -59,8 +69,19 @@ export default function PayTo({ payTo, amount, reference, money }) {
         </div>
       </div>
       {mode === 'mobile' && (
-        <div className="filter-chips" role="radiogroup" aria-label="Network">
-          {NETWORKS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={net === k} className={`filter-chip${net === k ? ' is-on' : ''}`} onClick={() => setNet(k)}>{l}</button>)}
+        <label className="pe-field"><span>Network</span>
+          <select className="form-input" value={net} onChange={e => setNet(e.target.value)}>
+            {NETWORKS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select></label>
+      )}
+      {mode === 'bank' && (
+        <div className="form-row">
+          <label className="pe-field"><span>Bank</span>
+            <select className="form-input" value={bank} onChange={e => setBank(e.target.value)}>
+              {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+              <option value="__other">Another bank…</option>
+            </select></label>
+          {bank === '__other' && <label className="pe-field"><span>Bank name</span><input className="form-input" value={otherBank} onChange={e => setOtherBank(e.target.value)} /></label>}
         </div>
       )}
       <div className="payto-card">
@@ -77,7 +98,7 @@ export default function PayTo({ payTo, amount, reference, money }) {
       </div>
       <div className="payto-actions">
         <button type="button" className="btn btn-outline btn-sm" onClick={() => copy('all', all)}>{copied === 'all' ? <Check size={14} /> : <Copy size={14} />} Copy all</button>
-        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mobile'} ({ussd})</a>}
+        {ussd && <a className="btn btn-primary btn-sm" href={`tel:${ussd.replace(/#/g, '%23')}`} title={`Dial ${ussd} on this phone`}><Phone size={14} /> Open {mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] : mode === 'crdb' ? 'CRDB SimBanking' : 'NMB Mkononi'} ({ussd})</a>}
       </div>
       <p className="pl-help" style={{ margin: 0 }} title="Copy each detail, pay in your bank or money app (or the menu above), then come back and post the SMS or a screenshot below.">
         Pay in your {mode === 'mobile' ? 'money' : 'bank'} app, then post the SMS or screenshot below.</p>
