@@ -55,7 +55,7 @@ function MaterialLines({ refs, branchId, lines, setLines, withPrice }) {
 
 const lineText = (refs, l, cats = [], money = v => v) => (l.kind === 'expense'
   ? `${cats.find(c => c.id === l.category_id)?.name ?? 'Expense'}: ${l.description}${l.quantity != null ? ` · ${qtyText(Number(l.quantity))} ${l.unit_text ?? ''}` : ''}${l.amount != null ? ` · ${money(Number(l.amount))}` : ''}`
-  : `${qtyText(Number(l.quantity))} ${refs?.unitById[l.unit_id]?.symbol ?? ''} ${refs?.items[`m:${l.material_id}`]?.name ?? '—'}`);
+  : `${qtyText(Number(l.quantity))} ${refs?.unitById[l.unit_id]?.symbol ?? ''} ${refs?.items[`m:${l.material_id}`]?.name ?? '—'}${l.unit_price != null ? ` × ${formatAmount(Number(l.unit_price))} = ${money(r2(Number(l.quantity) * Number(l.unit_price)))}` : ''}`);
 
 /* A request's lines: each a material (quantity in its units) or an expense of a kind (description, quantity, about how much) */
 function RequestLines({ refs, branchId, cats, lines, setLines }) {
@@ -64,7 +64,7 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
   const set = (i, patch) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   return (
     <table className="rd-table">
-      <thead><tr><th>Kind</th><th>What</th><th className="num">Quantity</th><th>Unit</th><th className="num">About (TZS)</th><th /></tr></thead>
+      <thead><tr><th>Kind</th><th>What</th><th className="num">Quantity</th><th>Unit</th><th className="num">Price a unit / amount (TZS)</th><th className="num">Total (TZS)</th><th /></tr></thead>
       <tbody>
         {lines.map((l, i) => {
           const it = refs?.items[`m:${l.materialId}`];
@@ -85,17 +85,23 @@ function RequestLines({ refs, branchId, cats, lines, setLines }) {
                 ? <select className="form-input" value={l.unitId} onChange={e => set(i, { unitId: e.target.value })} disabled={!it}>
                     {(it?.units || []).map(u => <option key={u.id} value={u.id}>{refs.unitById[u.id]?.symbol ?? '—'}</option>)}</select>
                 : <input className="form-input" style={{ width: 80 }} placeholder="units" value={l.unitText} onChange={e => set(i, { unitText: e.target.value })} />}</td>
-              <td className="num">{l.kind === 'expense' && <NumberInput step="any" min="0" className="form-input" style={{ width: 110 }} placeholder="optional" value={l.amount} onChange={e => set(i, { amount: e.target.value })} />}</td>
+              <td className="num">{l.kind === 'expense'
+                ? <NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} placeholder="optional" value={l.amount} onChange={e => set(i, { amount: e.target.value })} />
+                : <NumberInput step="any" min="0" className="form-input" style={{ width: 120 }} aria-label="Price a unit" value={l.price ?? ''} onChange={e => set(i, { price: e.target.value })} />}</td>
+              <td className="num">{(() => { const t = l.kind === 'expense' ? num(l.amount) : num(l.quantity) != null && num(l.price) != null ? num(l.quantity) * num(l.price) : null; return t != null ? formatAmount(r2(t)) : ''; })()}</td>
               <td>{lines.length > 1 && <button type="button" className="btn btn-ghost btn-sm" aria-label="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}><Trash2 size={13} /></button>}</td>
             </tr>
           );
         })}
       </tbody>
-      <tfoot><tr><td colSpan={6}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => [...ls, { ...EMPTY_LINE, kind: ls[ls.length - 1]?.kind ?? 'material' }])}><Plus size={13} /> Add a line</button></td></tr></tfoot>
+      <tfoot>
+        {lines.length > 1 && <tr><td colSpan={5} style={{ textAlign: 'right' }}><strong>Total</strong></td><td className="num"><strong>{formatAmount(r2(lines.reduce((t, l) => t + (l.kind === 'expense' ? num(l.amount) ?? 0 : (num(l.quantity) ?? 0) * (num(l.price) ?? 0)), 0)))}</strong></td><td /></tr>}
+        <tr><td colSpan={7}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines(ls => [...ls, { ...EMPTY_LINE, kind: ls[ls.length - 1]?.kind ?? 'material' }])}><Plus size={13} /> Add a line</button></td></tr>
+      </tfoot>
     </table>
   );
 }
-const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '', categoryId: '', description: '', unitText: '', amount: '' };
+const EMPTY_LINE = { kind: 'material', materialId: '', quantity: '', unitId: '', price: '', categoryId: '', description: '', unitText: '', amount: '' };
 
 /* ---------- Requests ---------- */
 /** An order's material lines still to come, in their own units, ready for the purchase form */
@@ -231,7 +237,8 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
         {['waiting', 'approved'].includes(r.status) && (r.requested_by === undefined || canAt('procurement.request', r.branch_id)) && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => decide('cancelled')}>Cancel request</button>}
         {r.status === 'waiting' && canAt('procurement.approve', r.branch_id) && <>
           <button type="button" className="btn btn-outline" disabled={busy || !note.trim()} onClick={() => decide('rejected')}>Turn down</button>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => decide('approved')}>Approve</button>
+          {/* approve makes the order (128): the order opens filled from the request, to check and confirm */}
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => (canAt('procurement.order', r.branch_id) ? setMode('approve') : decide('approved'))}>Approve</button>
         </>}
         {r.status === 'approved' && canAt('procurement.order', r.branch_id) && <button type="button" className="btn btn-primary" onClick={() => setMode('order')}>Make order</button>}
         {r.status === 'ordered' && po?.status === 'open' && <>
@@ -244,6 +251,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
       <div className="modal-form">
         <p className="text-sm"><span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span> · asked {dateText(r.requested_on)}{people[r.requested_by] ? ` by ${people[r.requested_by]}` : ''}{r.needed_by ? ` · needed by ${dateText(r.needed_by)}` : ''}{r.decision_note ? ` · ${r.decision_note}` : ''}</p>
         {r.notes && <p className="pl-help">{r.notes}</p>}
+        {!po && (r.supplier_id || r.supplier_name) && <p className="text-sm">Supplier: <strong>{r.supplier_id ? supplierName(r.supplier_id) : r.supplier_name + ' (new)'}</strong></p>}
         {!po && (
           <table className="rd-table">
             <thead><tr><th>Asked for</th></tr></thead>
@@ -279,7 +287,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
           {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive(purchaseFromOrder(po, got))}>Record purchase</button>}
         </>}
       </div>
-      {mode === 'order' && <OrderModal refs={refs} branchId={r.branch_id} request={r} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}
+      {(mode === 'order' || mode === 'approve') && <OrderModal refs={refs} branchId={r.branch_id} request={r} approve={mode === 'approve'} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}
       {mode === 'edit' && po && <EditOrderModal po={po} refs={refs} onClose={() => setMode(null)} onSaved={async () => { setMode(null); await loadOrder(); }} />}
       {mode === 'close' && po && <CloseModal po={po} cancel={nothingYet} onClose={() => setMode(null)} onDone={async () => { setMode(null); onChanged(); await loadOrder(); }} />}
     </Modal>
@@ -328,6 +336,11 @@ function EditOrderModal({ po, refs, onClose, onSaved }) {
 
 function AskModal({ refs, branchId, cats, onClose, onSaved }) {
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
+  // the supplier and prices (128, 2026-11-16): what the purchase needs, so nobody types it again
+  const [supplierId, setSupplierId] = useState('');
+  const [newSupplier, setNewSupplier] = useState('');
+  const active = (refs?.suppliers || []).filter(x => x.status === 'active').sort((a, b) => a.name.localeCompare(b.name));
+  const hasMaterial = lines.some(l => l.kind === 'material');
   const [neededBy, setNeededBy] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -336,11 +349,14 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
     setError('');
     if (lines.some(l => l.kind === 'material' && (!l.materialId || !(num(l.quantity) > 0) || !l.unitId))) { setError('Each material line needs the material, a quantity above zero and a unit.'); return; }
     if (lines.some(l => l.kind === 'expense' && (!l.categoryId || !l.description.trim()))) { setError('Each expense line needs its kind and what it is.'); return; }
+    if (hasMaterial && (!supplierId || (supplierId === '__new' && !newSupplier.trim()))) { setError('Choose the supplier, or name a new one.'); return; }
+    if (lines.some(l => l.kind === 'material' && num(l.price) == null)) { setError('Enter the price a unit for each material.'); return; }
     setBusy(true);
     const { error: err } = await supabase.rpc('submit_purchase_request', { p: { branch_id: branchId, needed_by: neededBy || null, notes,
+      ...(supplierId === '__new' ? { supplier_name: newSupplier.trim() } : supplierId ? { supplier_id: supplierId } : {}),
       lines: lines.map(l => (l.kind === 'expense'
         ? { kind: 'expense', category_id: l.categoryId, description: l.description, quantity: num(l.quantity), unit_text: l.unitText, amount: num(l.amount) }
-        : { kind: 'material', material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId })) } });
+        : { kind: 'material', material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
@@ -351,6 +367,15 @@ function AskModal({ refs, branchId, cats, onClose, onSaved }) {
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
         <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Send for approval</button></>}>
       <div className="modal-form">
+        <div className="form-row">
+          <label className="pe-field"><span>Supplier{hasMaterial ? '' : ' (optional)'}</span>
+            <select className="form-input" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+              <option value="">Choose…</option>
+              {active.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              <option value="__new">New supplier…</option>
+            </select>
+            {supplierId === '__new' && <input className="form-input mt-4" placeholder="The supplier's name" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} />}</label>
+        </div>
         <RequestLines refs={refs} branchId={branchId} cats={cats} lines={lines} setLines={setLines} />
         <div className="form-row">
           <label className="pe-field"><span>Needed by (optional)</span><input type="date" className="form-input" value={neededBy} onChange={e => setNeededBy(e.target.value)} /></label>
@@ -510,12 +535,12 @@ function OrderView({ po, refs, got, money, supplierName, state, canReceive, onRe
   );
 }
 
-function OrderModal({ refs, branchId, request, onClose, onSaved }) {
-  const [supplierId, setSupplierId] = useState('');
-  const [newSupplier, setNewSupplier] = useState('');
+function OrderModal({ refs, branchId, request, approve = false, onClose, onSaved }) {
+  const [supplierId, setSupplierId] = useState(request?.supplier_id ?? (request?.supplier_name ? '__new' : ''));
+  const [newSupplier, setNewSupplier] = useState(request?.supplier_name ?? '');
   const reqMaterials = [...(request?.lines || [])].filter(l => l.kind !== 'expense').sort((a, b) => a.line_no - b.line_no);
   const [lines, setLines] = useState(() => (reqMaterials.length
-    ? reqMaterials.map(l => ({ materialId: l.material_id, quantity: String(Number(l.quantity)), unitId: l.unit_id, price: '' }))
+    ? reqMaterials.map(l => ({ materialId: l.material_id, quantity: String(Number(l.quantity)), unitId: l.unit_id, price: l.unit_price != null ? String(Number(l.unit_price)) : '' }))
     : request ? [] : [{ materialId: '', quantity: '', unitId: '', price: '' }]));
   // the request's expense lines (LUKU top-up, tools…): what it is and about how much
   const [expenseLines, setExpenseLines] = useState(() => [...(request?.lines || [])].filter(l => l.kind === 'expense').sort((a, b) => a.line_no - b.line_no)
@@ -554,6 +579,10 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
     if (lines.some(l => !l.materialId || !(num(l.quantity) > 0) || !l.unitId)) { setError('Each material line needs a material, a quantity above zero and a unit.'); return; }
     if (!lines.length && !expenseLines.length) { setError('Add what is ordered.'); return; }
     setBusy(true);
+    if (approve && request?.status === 'waiting') {
+      const { error: e1 } = await supabase.rpc('decide_purchase_request', { p_id: request.id, p_decision: 'approved', p_note: null });
+      if (e1) { setBusy(false); setError(dbErrorMessage(e1)); return; }
+    }
     const { error: err } = await supabase.rpc('create_purchase_order', { p: { branch_id: branchId, ...(isLuku ? (tanesco ? { supplier_id: tanesco.id } : { new_supplier_name: 'TANESCO' }) : supplierId === '__new' ? { new_supplier_name: newSupplier.trim() } : { supplier_id: supplierId }),
       request_id: request?.id ?? null, expected_on: expected || null, notes, sent_to_supplier: sent,
       lines: [...lines.map(l => ({ material_id: l.materialId, quantity: num(l.quantity), unit_id: l.unitId, unit_price: num(l.price) })),
@@ -566,7 +595,7 @@ function OrderModal({ refs, branchId, request, onClose, onSaved }) {
     <Modal title={request ? `Purchase order for request #${request.request_no}` : 'New purchase order'} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>Make order</button></>}>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={save}>{approve ? 'Approve & make order' : 'Make order'}</button></>}>
       <div className="modal-form">
         <div className="form-row">
           {isLuku ? (
