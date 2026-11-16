@@ -189,7 +189,7 @@ export default function Purchases({ section = 'purchases' }) {
       const want = params.get('tab');
       if (want === 'requests') { navigate('/orders', { replace: true }); return; }
       if (section === 'purchases' && ['expenses', 'electricity'].includes(want)) { setTop('expenses'); if (want === 'electricity') setETab('electricity'); }
-      setPTab(t => t ?? (['costs', 'waiting'].includes(want) ? want : want === 'purchases' ? 'buy' : (aw.data || []).some(a => inBranch(a.branch_id)) ? 'waiting' : 'buy'));
+      setPTab(t => t ?? (['costs', 'waiting'].includes(want) ? want : 'buy'));   // Purchases opens first, even with goods waiting (2026-11-16, the user)
       // Branch VAT rates and expenses (041): the page still works without them
       const [vr, ec, ex] = await Promise.all([
         supabase.from('branches').select('id, vat_rate'),
