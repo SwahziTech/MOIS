@@ -53,7 +53,9 @@ export default function NeedsNow({ needs, canConfirm, inBranch, onChanged }) {
           const expandable = (x.key === 'proofs' && canConfirm) || x.key === 'cash' || x.key === 'orders';
           const on = openKey === x.key;
           const toApprove = (cash || []).filter(r => r.status === 'with_directors'), toPay = (cash || []).filter(r => r.status === 'approved');
-          const summary = x.key === 'orders' && orders?.length ? money(orders.reduce((t, r) => t + r.amount, 0))
+          // the items first, even on the closed card (2026-11-16, the user): Dust 20 Trip/Truck · Tsh …
+          const summary = x.key === 'orders' && orders?.length
+            ? [...orders.flatMap(r => (r.lines || []).map(l => `${l.material?.name ?? 'Material'} ${formatAmount(Number(l.quantity))} ${l.unit?.symbol ?? ''}`.trim())), money(orders.reduce((t, r) => t + r.amount, 0))].join(' · ')
             : x.key === 'cash' && cash?.length
             ? [toApprove.length ? `${toApprove.length} to approve · ${money(toApprove.reduce((t, r) => t + asked(r), 0))}` : null,
                toPay.length ? `${toPay.length} to pay · ${money(toPay.reduce((t, r) => t + asked(r), 0))}` : null].filter(Boolean).join(' · ') : null;
@@ -90,8 +92,9 @@ function OrderList({ rows, money, onPaid }) {
       {rows.map(r => (
         <div key={r.id} className="nn-item">
           <button type="button" className="nn-item-main" onClick={() => setViewing(r)} title="Open the order — each material, its price and what is in stock">
-            <strong>{r.supplier?.name ?? 'Supplier'} · {money(r.amount)}</strong>
-            <span className="pl-help">Order #{r.po_no} · {branchName(r.branch_id)} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
+            <strong>{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map(l => l.material?.name ?? 'Material').join(', ')} · {money(r.amount)}</strong>
+            <span className="nn-lines">{[...(r.lines || [])].sort((a, b) => a.line_no - b.line_no).map((l, k) => <span key={k}>{l.material?.name} · {formatAmount(Number(l.quantity))} {l.unit?.symbol ?? ''} × {l.unit_price != null ? formatAmount(Number(l.unit_price)) : '—'} = {l.unit_price != null ? formatAmount(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : '—'}</span>)}</span>
+            <span className="pl-help">{r.supplier?.name ?? 'Supplier'} · order #{r.po_no} · {branchName(r.branch_id)} · {dateText(r.order_date)}{r.priced ? '' : ' · a price is missing'}</span>
           </button>
           {canAt('finance.pay', r.branch_id, null) && r.priced && (
             <button type="button" className="btn btn-primary btn-sm nn-pdf" onClick={() => setPaying(r)} title="Pay it now — the purchase is recorded as coming later, deliveries as they arrive">Pay</button>

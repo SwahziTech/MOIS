@@ -39,24 +39,20 @@ export default function OrderDetail({ order, branchName, money, canPay, onPay, o
     Promise.all([supabase.from('materials').select('id, name'), supabase.from('units').select('id, symbol')])
       .then(([m, u]) => setNames({ mat: Object.fromEntries((m.data || []).map(x => [x.id, x.name])), unit: Object.fromEntries((u.data || []).map(x => [x.id, x.symbol])) }));
   }, []);
-  const lines = order.lines || [];
+  const lines = [...(order.lines || [])].sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0));
+  const nameOf = l => l.material?.name ?? names.mat[l.material_id] ?? '—';
   return (
-    <Modal title={`Order #${order.po_no} · ${order.supplier?.name ?? 'Supplier'}`} onClose={onClose} size="lg"
+    <Modal title={`${lines.map(nameOf).join(', ')} · ${money(order.amount)}`} onClose={onClose} size="lg"
       footer={<>
         <button type="button" className="btn btn-outline" onClick={onClose}>Close</button>
         {canPay && order.priced && <button type="button" className="btn btn-primary" onClick={onPay}>Pay</button>}
       </>}>
       <div className="modal-form">
-        <div className="pd-grid">
-          <span className="pl-help">Supplier</span><strong>{order.supplier?.name ?? '—'}</strong>
-          <span className="pl-help">Branch</span><strong>{branchName}</strong>
-          <span className="pl-help">Ordered</span><strong>{dateText(order.order_date)}</strong>
-        </div>
         <table className="pd-lines">
           <thead><tr><th>Material</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th><th className="num" title="What the branch has now, all its stores">In stock</th></tr></thead>
           <tbody>{lines.map((l, i) => (
             <tr key={i}>
-              <td>{names.mat[l.material_id] ?? '—'}</td>
+              <td><strong>{nameOf(l)}</strong></td>
               <td className="num">{qtyText(Number(l.quantity))} <span className="pl-help">{names.unit[l.unit_id] ?? ''}</span></td>
               <td className="num">{l.unit_price != null ? formatAmount(Number(l.unit_price)) : '—'}</td>
               <td className="num">{l.unit_price != null ? formatAmount(Math.round(Number(l.quantity) * Number(l.unit_price) * 100) / 100) : '—'}</td>
@@ -65,6 +61,11 @@ export default function OrderDetail({ order, branchName, money, canPay, onPay, o
           ))}</tbody>
           <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{money(order.amount)}</strong></td><td /></tr></tfoot>
         </table>
+        <div className="pd-grid">
+          <span className="pl-help">Supplier</span><strong>{order.supplier?.name ?? '—'}</strong>
+          <span className="pl-help">Branch</span><span>{branchName}</span>
+          <span className="pl-help">Order</span><span>#{order.po_no} · {dateText(order.order_date)}</span>
+        </div>
         {!order.priced && <p className="text-sm text-warning">A price is missing — the branch manager adds it on the order before it can be paid.</p>}
       </div>
     </Modal>

@@ -79,7 +79,7 @@ export function periodSteps(today) {
 /** Open material orders with no purchase yet, each with its supplier and what it costs (129) */
 export async function loadOrdersToPay() {
   const [o, p] = await Promise.all([
-    supabase.from('purchase_orders').select('id, po_no, branch_id, order_date, request_id, supplier:suppliers(name), lines:purchase_order_lines(kind, quantity, unit_price, unit_id, material_id)').eq('status', 'open'),
+    supabase.from('purchase_orders').select('id, po_no, branch_id, order_date, request_id, supplier:suppliers(name), lines:purchase_order_lines(line_no, kind, quantity, unit_price, unit_id, material_id, material:materials(name), unit:units(symbol))').eq('status', 'open'),
     supabase.from('purchases').select('purchase_order_id').eq('status', 'recorded').not('purchase_order_id', 'is', null),
   ]);
   const bought = new Set((p.data || []).map(x => x.purchase_order_id));
