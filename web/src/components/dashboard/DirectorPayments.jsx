@@ -65,16 +65,24 @@ export function PayModal({ onClose, onSaved, preset = null }) {
         const [p, t, s, po] = await Promise.all([
           supabase.from('purchases').select('id, purchase_date, invoice_reference, supplier_id, status').eq('branch_id', br).order('purchase_date', { ascending: false }).limit(200),
           supabase.from('purchase_totals').select('purchase_id, total, balance'),
-          supabase.from('suppliers').select('id, name'),
+          supabase.from('suppliers').select('id, name, phone, pay_bank, pay_account_no, pay_account_name'),
           loadOrdersToPay(),
         ]);
         const bal = Object.fromEntries((t.data || []).map(x => [x.purchase_id, x]));
         const sup = Object.fromEntries((s.data || []).map(x => [x.id, x.name]));
+        // where a supplier is paid (130): its saved details, else its phone and name
+        const supRow = Object.fromEntries((s.data || []).map(x => [x.id, x]));
+        const payToOf = x => (x ? { bank: x.pay_bank ?? '', no: x.pay_account_no ?? x.phone ?? '', name: x.pay_account_name ?? x.name ?? '' } : null);
+        const up = t => t.toUpperCase().replace(/\s+/g, ' ').trim();
         // pay first (129): an approved order, paid before the goods come — its purchase is made on paying
         const orders = po.filter(x => x.branch_id === br && x.priced)
-          .map(x => ({ id: 'po:' + x.id, who: x.supplier?.name, owes: x.amount, label: `Order #${x.po_no} · ${x.supplier?.name ?? 'Supplier'} · to pay ${money(x.amount)}` }));
+          .map(x => ({ id: 'po:' + x.id, who: x.supplier?.name, owes: x.amount, supplierId: x.supplier?.id, saved: x.supplier, payTo: payToOf(x.supplier),
+            reference: up(`ORDER ${x.po_no} ${(x.lines || []).map(l => `${l.material?.name ?? ''} ${Number(l.quantity)} ${l.unit?.symbol ?? ''}`).join(' ')}`),
+            label: `Order #${x.po_no} · ${x.supplier?.name ?? 'Supplier'} · to pay ${money(x.amount)}` }));
         setOptions([...orders, ...(p.data || []).filter(x => x.status !== 'void' && Number(bal[x.id]?.balance) > 0.004)
-          .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` }))]);
+          .map(x => ({ id: x.id, who: sup[x.supplier_id], owes: Number(bal[x.id].balance), supplierId: x.supplier_id, saved: supRow[x.supplier_id], payTo: payToOf(supRow[x.supplier_id]),
+            reference: up(`PURCHASE ${tableDate(x.purchase_date)}${x.invoice_reference ? ' ' + x.invoice_reference : ''}`),
+            label: `${tableDate(x.purchase_date)} · ${sup[x.supplier_id] ?? 'Supplier'}${x.invoice_reference ? ` · ${x.invoice_reference}` : ''} · owes ${money(Number(bal[x.id].balance))}` }))]);
       } else if (kind === 'expense') {
         const { data } = await supabase.from('expenses').select('id, expense_date, description, amount, amount_paid, status').eq('branch_id', br).neq('status', 'void').order('expense_date', { ascending: false }).limit(100);
         setOptions((data || []).map(x => ({ id: x.id, who: x.description, owes: Math.max(Number(x.amount) - Number(x.amount_paid || 0), 0) || Number(x.amount),
@@ -99,6 +107,7 @@ export function PayModal({ onClose, onSaved, preset = null }) {
   }, [options]); // eslint-disable-line react-hooks/exhaustive-deps
   const chosen = (options || []).find(o => o.id === ref);
   const [payRef, setPayRef] = useState(null);   // the reference as the director edited it (2026-11-16)
+  const [payDetails, setPayDetails] = useState(null);   // where the money went, as paid (130)
   useEffect(() => { setPayRef(null); }, [ref]);
   function pickRef(id) {
     setRef(id);
@@ -136,6 +145,13 @@ export function PayModal({ onClose, onSaved, preset = null }) {
       if (kind === 'weekly_cash') r = await supabase.rpc('cash_request_step', { p_id: ref, p_step: 'pay', p: { amount: num(amount), paid_on: paidOn, reference: (payRef ?? chosen?.reference ?? '').trim() || null } });
       if (kind === 'salaries') r = await supabase.rpc('pay_pay_sheet', { p_sheet: ref, p: { paid_on: paidOn, account_id: accountId || null } });
       if (r.error) throw r.error;
+      // the supplier keeps the details paid to, for next time (130)
+      if (kind === 'supplier' && chosen?.supplierId && payDetails) {
+        const s0 = chosen.saved || {};
+        if ((payDetails.bank || '') !== (s0.pay_bank || '') || (payDetails.no || '') !== (s0.pay_account_no || '') || (payDetails.name || '') !== (s0.pay_account_name || '')) {
+          await supabase.rpc('set_supplier_pay_to', { p_id: chosen.supplierId, p_bank: payDetails.bank || null, p_no: payDetails.no || null, p_name: payDetails.name || null });
+        }
+      }
       // 2. the proof, kept with it
       let path = null;
       try {
@@ -195,7 +211,7 @@ export function PayModal({ onClose, onSaved, preset = null }) {
           )}
           <label className="pe-field"><span>Date</span><input type="date" className="form-input" max={today} value={paidOn} onChange={e => setPaidOn(e.target.value)} /></label>
         </div>
-        {chosen?.payTo && <PayTo key={chosen.id} payTo={chosen.payTo} amount={num(amount)} reference={chosen.reference} money={money} onReference={setPayRef} />}
+        {chosen?.payTo && <PayTo key={chosen.id} payTo={chosen.payTo} amount={num(amount)} reference={chosen.reference} money={money} onReference={setPayRef} onDetails={setPayDetails} />}
         <ProofBox file={file} onFile={f => pick({ target: { files: f ? [f] : [], value: '' } })} text={sms} onText={setSms} />
       </div>
     </Modal>

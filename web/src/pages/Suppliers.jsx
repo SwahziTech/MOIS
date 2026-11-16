@@ -16,7 +16,10 @@ import { EntityFlags, EntityHistory } from '../components/master/EntityPanels';
 const LOAD_ERROR = "We couldn't load suppliers. Please try again.";
 const FIELDS = [
   ['contact_person', 'Contact person'], ['phone', 'Phone'], ['email', 'Email'],
-  ['tax_id', 'Tax ID (TIN)'], ['address', 'Address'], ['notes', 'Notes'],
+  ['tax_id', 'Tax ID (TIN)'], ['address', 'Address'],
+  // where it is paid (130): filled in the Pay window too
+  ['pay_bank', 'Paid by: bank or network'], ['pay_account_no', 'Account or phone number'], ['pay_account_name', 'Account name'],
+  ['notes', 'Notes'],
 ];
 
 /*

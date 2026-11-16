@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Check, Phone } from 'lucide-react';
 
 /*
@@ -55,7 +55,7 @@ const phoneOk = v => /^(0|255|\+255)[67]\d{8}$/.test(String(v ?? '').replace(/[\
 const isPhoneLike = v => phoneOk(v);
 
 // the details can be changed here before paying (2026-11-16, the user); onReference: the reference posted with the payment
-export default function PayTo({ payTo, amount, reference, money, onReference }) {
+export default function PayTo({ payTo, amount, reference, money, onReference, onDetails }) {
   const [mode, setMode] = useState(() => guessMode(payTo?.bank));
   const [net, setNet] = useState(() => guessNet(payTo?.bank));
   const [bank, setBank] = useState(() => bankOf(payTo?.bank) || (payTo?.bank && !/crdb/i.test(payTo.bank) ? '__other' : 'NMB'));
@@ -67,6 +67,10 @@ export default function PayTo({ payTo, amount, reference, money, onReference }) 
   const [ref, setRef] = useState(reference ?? '');
   const setReference = v => { setRef(v); onReference?.(v); };
   const no = mode === 'mobile' ? phone : acct;
+  // where the money goes, as it stands now (130: kept on the supplier when paid)
+  useEffect(() => {
+    onDetails?.({ bank: mode === 'mobile' ? NETWORKS.find(n => n[0] === net)?.[1] ?? '' : mode === 'crdb' ? 'CRDB' : bankName, no, name });
+  }, [mode, net, bankName, no, name]); // eslint-disable-line react-hooks/exhaustive-deps
   const badPhone = mode === 'mobile' && phone.trim() && !phoneOk(phone);
   const [copied, setCopied] = useState('');
   async function copy(key, text) {
