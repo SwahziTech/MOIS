@@ -264,8 +264,9 @@ export default function Purchases({ section = 'purchases' }) {
   // the proofs of what directors paid on each purchase (106), shown on the purchase itself
   const [slips, setSlips] = useState({});   // purchase id → [director payment]
   const [slipOpen, setSlipOpen] = useState(null);
+  const [expDetail, setExpDetail] = useState(null);   // the expense opened from the table
   useEffect(() => {
-    supabase.from('director_payments').select('*').eq('kind', 'supplier').then(({ data }) => {
+    supabase.from('director_payments').select('*').in('kind', ['supplier', 'expense']).then(({ data }) => {
       const m = {}; for (const d of data || []) (m[d.ref_id] ||= []).push(d); setSlips(m);
     });
   }, [purchases.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -327,7 +328,8 @@ export default function Purchases({ section = 'purchases' }) {
       items: [{ name: e.description, qty: e.quantity != null ? Number(e.quantity) : null, unit: '', price: e.unit_price }], amount: e.amount,
       source: e.supplier_id ? supplierName(e.supplier_id) : '', status: st, muted: st === 'void',
       sub: st === 'void' ? e.void_reason : st === 'part_paid' ? money(round2(e.amount - e.amount_paid)) + ' to pay' : '',
-      onOpen: () => { if (e.status === 'recorded' && canRecordAt(e.branch_id)) setEditingExpense(e); } };
+      // a click always opens the expense (2026-11-16: the sheet's expenses opened nothing); Change sits inside
+      onOpen: () => setExpDetail(e) };
   });
   const words = r => [r.ref, r.source, r.kindLabel, ...r.items.map(x => x.name)].filter(Boolean).join(' ').toLowerCase();
   const procRows = (tab === 'all' ? [...purchaseRows, ...expenseRows] : tab === 'purchases' ? purchaseRows : tab === 'expenses' ? expenseRows : [])
@@ -515,6 +517,42 @@ export default function Purchases({ section = 'purchases' }) {
                 <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
                   <span className="pl-help">Proof:</span>
                   {(slips[p.id] || []).map(d => <button key={d.id} type="button" className="btn btn-ghost btn-sm" onClick={() => setSlipOpen(d)}>{d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)}</button>)}
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
+      {expDetail && (() => {
+        const e = expDetail; const st = expenseStatus(e);
+        const [label, cls, help0] = PROC_STATUS[st];
+        const help = st === 'done' ? 'Paid in full — nothing left to do' : help0;
+        const can = e.status === 'recorded' && canRecordAt(e.branch_id);
+        const close = () => setExpDetail(null);
+        const due = round2(Number(e.amount) - Number(e.amount_paid));
+        return (
+          <Modal title={'Expense · ' + dateText(e.expense_date)} onClose={close}
+            footer={<>
+              {can && <button type="button" className="btn btn-outline" onClick={() => { close(); setEditingExpense(e); }}>Change</button>}
+              <button type="button" className="btn btn-outline" onClick={close}>Close</button>
+            </>}>
+            <div className="modal-form">
+              <p className="text-sm" style={{ margin: 0 }}><span className={'badge ' + cls}>{label}</span> <span className="text-muted">{help}</span></p>
+              {e.status === 'void' && e.void_reason && <p className="text-sm text-muted" style={{ margin: 0 }}>{e.void_reason}</p>}
+              <div className="pd-grid">
+                <span className="pl-help">Item</span><strong>{e.description}</strong>
+                <span className="pl-help">Category</span><strong>{catName(e.category_id) || '—'}</strong>
+                {e.quantity != null && <><span className="pl-help">Qty × price</span><strong>{qtyText(Number(e.quantity))}{e.unit_price != null ? ' × ' + money(e.unit_price) : ''}</strong></>}
+                <span className="pl-help">Amount</span><strong>{money(e.amount)}{Number(e.vat_amount) > 0 ? ' · VAT ' + money(e.vat_amount) : ''}</strong>
+                <span className="pl-help">Paid</span><strong>{money(e.amount_paid)}{due > 0.004 ? ' · ' + money(due) + ' to pay' : ''}{e.paid_on ? ' · ' + dateText(e.paid_on) : ''}</strong>
+                <span className="pl-help">Paid from</span><strong>{e.from_weekly_cash ? 'Weekly cash' : (e.payment_method || '—')}</strong>
+                {e.supplier_id && <><span className="pl-help">Supplier</span><strong>{supplierName(e.supplier_id)}</strong></>}
+                {e.notes && <><span className="pl-help">Notes</span><span>{e.notes}</span></>}
+              </div>
+              {(slips[e.id] || []).length > 0 && (
+                <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                  <span className="pl-help">Proof:</span>
+                  {(slips[e.id] || []).map(d => <button key={d.id} type="button" className="btn btn-ghost btn-sm" onClick={() => setSlipOpen(d)}>{d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)}</button>)}
                 </div>
               )}
             </div>
