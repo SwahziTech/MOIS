@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer, Upload } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, FileCheck } from 'lucide-react';
+import { ProofView } from '../dashboard/DirectorPayments';
 import { supabase } from '../../lib/supabase';
 import { PaidFrom, saveWeeklyCash } from './PaidFrom';
 import { files } from '../../lib/files';
@@ -145,6 +146,27 @@ function boughtOf(buy, refs) {
   }
   return { bought, came };
 }
+/** The directors' proofs of payment for orders (2026-11-16): on the order until its purchase is recorded, then on the purchase */
+async function loadOrderSlips(orderIds, buys) {
+  const pids = Object.values(buys || {}).flatMap(b => (b.purchases || []).map(p => p.id));
+  const ids = [...orderIds, ...pids];
+  if (!ids.length) return {};
+  const { data } = await supabase.from('director_payments').select('*').eq('kind', 'supplier').in('ref_id', ids).order('paid_on');
+  const orderOf = Object.fromEntries(Object.entries(buys || {}).flatMap(([oid, b]) => (b.purchases || []).map(p => [p.id, oid])));
+  const out = {};
+  for (const d of data || []) (out[orderOf[d.ref_id] ?? d.ref_id] ||= []).push(d);
+  return out;
+}
+/** The proof buttons: one a payment, opening the slip or SMS */
+function SlipButtons({ slips, onOpen, compact = false }) {
+  if (!slips?.length) return null;
+  return slips.map(d => (
+    <button key={d.id} type="button" className={`btn btn-ghost btn-sm${compact ? ' icon-btn' : ''}`} onClick={e => { e.stopPropagation(); onOpen(d); }}
+      title={`Proof of payment · ${dateText(d.paid_on)} · ${formatAmount(Number(d.amount))}`} aria-label="Open the proof of payment">
+      <FileCheck size={14} />{compact ? null : <> {d.file_path ? 'Slip' : 'SMS'} · {tableDate(d.paid_on)} · {formatAmount(Number(d.amount))}</>}
+    </button>
+  ));
+}
 const matLines = po => [...(po?.lines || [])].filter(l => l.kind !== 'expense').sort((a, b) => a.line_no - b.line_no);
 /** An order's material lines still to buy, in their own units, ready for the purchase form */
 const goodsLeftOf = (po, buy, refs) => { const { bought } = boughtOf(buy, refs); return matLines(po).map(l => {
@@ -190,6 +212,8 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
   const [cats, setCats] = useState([]);
   const [orders, setOrders] = useState({});   // request id → its open order
   const [buys, setBuys] = useState({});   // order id → its purchases (132)
+  const [slips, setSlips] = useState({});   // order id → the directors' proofs of payment
+  const [slipOpen, setSlipOpen] = useState(null);
   const [openId, setOpenId] = useState(openFirst ?? null);   // a request opened from elsewhere (Electricity › Top-ups)
   useEffect(() => { if (openFirst) onOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function load() {
@@ -202,7 +226,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
     setRows(q.data || []);
     setCats(c.data || []);
     setOrders(Object.fromEntries((po.data || []).map(o => [o.request_id, o])));
-    setBuys(await loadOrderBuys((po.data || []).map(o => o.id)));
+    const b = await loadOrderBuys((po.data || []).map(o => o.id));
+    setBuys(b);
+    setSlips(await loadOrderSlips((po.data || []).map(o => o.id), b));
   }
   useEffect(() => { load(); }, []);
   const canBuy = b => canAt('procurement.receive', b) || canAt('cash.approve', b);
@@ -238,7 +264,9 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
                 <td>{(() => { const pb = orders[r.id] && orderState(orders[r.id], buys[orders[r.id].id], refs).badge; return pb
                   ? <span className={`badge ${pb[1]}`} title={pb[2]}>{pb[0]}</span>
-                  : <span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>; })()}{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
+                  : <span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>; })()}
+                  {orders[r.id] && <SlipButtons compact slips={slips[orders[r.id].id]} onOpen={setSlipOpen} />}
+                  {r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                   {orders[r.id] && canBuy(r.branch_id) && goodsLeftOf(orders[r.id], buys[orders[r.id].id], refs).length > 0 && (
                     <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive?.(purchaseFromOrder(orders[r.id], buys[orders[r.id].id], refs))}>Record purchase</button>
@@ -249,6 +277,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
           </tbody>
         </table>
       </div></div>
+      {slipOpen && <ProofView row={slipOpen} onClose={() => setSlipOpen(null)} />}
       {asking && <AskModal refs={refs} branchId={branchId} cats={cats} onClose={() => setAsking(false)} onSaved={async () => { setAsking(false); await load(); }} />}
       {open && <RequestView r={open} refs={refs} cats={cats} people={people} money={money} onChanged={load} onClose={() => setOpenId(null)}
         onReceive={x => { setOpenId(null); onReceive?.(x); }} onRecordExpense={x => { setOpenId(null); onRecordExpense?.(x); }} onRecordToken={x => { setOpenId(null); onRecordToken?.(x); }} />}
@@ -264,6 +293,8 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
   const [paidFor, setPaidFor] = useState({});
   const [buy, setBuy] = useState(null);         // the purchases recorded from the order (132)
   const [accName, setAccName] = useState('');   // the account the directors paid from
+  const [slips, setSlips] = useState([]);       // the directors' proofs of payment
+  const [slipOpen, setSlipOpen] = useState(null);
   const [mode, setMode] = useState(null);       // 'order' | 'edit' | 'close'
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -279,7 +310,9 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
       ]);
       setGot(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
       setPaidFor((ex.data || []).reduce((m, x) => ({ ...m, [x.order_line_id]: (m[x.order_line_id] || 0) + Number(x.amount) }), {}));
-      setBuy((await loadOrderBuys([o.id]))[o.id] ?? { purchases: [] });
+      const b = (await loadOrderBuys([o.id]))[o.id] ?? { purchases: [] };
+      setBuy(b);
+      setSlips((await loadOrderSlips([o.id], { [o.id]: b }))[o.id] ?? []);
       if (o.paid_account_id) supabase.from('payment_accounts').select('name').eq('id', o.paid_account_id).maybeSingle().then(({ data: a }) => setAccName(a?.name ?? ''));
     }
   }
@@ -374,6 +407,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
               <span className="pl-help">Supplier</span><strong>{supplierName(po.supplier_id)}</strong>
               <span className="pl-help">Required</span><strong>{money(st.value)}</strong>
               <span className="pl-help">Paid</span><strong>{money(st.paid)}{st.paid > 0 && po.paid_on ? <span className="pl-help"> · {dateText(po.paid_on)}</span> : null}</strong>
+              {slips.length > 0 && <><span className="pl-help">Proof</span><span className="flex gap-8" style={{ flexWrap: 'wrap' }}><SlipButtons slips={slips} onOpen={setSlipOpen} /></span></>}
               <span className="pl-help">Remaining</span><strong className={st.remaining > 0.004 ? 'text-warning' : ''}>{money(st.remaining)}</strong>
               <span className="pl-help">Source</span><span>{st.paid > 0 ? `Directors${accName ? ' · ' + accName : ''}` : 'Not paid yet — the directors pay it'}</span>
             </div>
@@ -391,6 +425,7 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
           {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive(purchaseFromOrder(po, buy, refs))}>Record purchase</button>}
         </>}
       </div>
+      {slipOpen && <ProofView row={slipOpen} onClose={() => setSlipOpen(null)} />}
       {(mode === 'order' || mode === 'approve') && <OrderModal refs={refs} branchId={r.branch_id} request={r} approve={mode === 'approve'} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}
       {mode === 'edit' && po && <EditOrderModal po={po} refs={refs} onClose={() => setMode(null)} onSaved={async () => { setMode(null); await loadOrder(); }} />}
       {mode === 'close' && po && <CloseModal po={po} cancel={nothingYet} onClose={() => setMode(null)} onDone={async () => { setMode(null); onChanged(); await loadOrder(); }} />}
