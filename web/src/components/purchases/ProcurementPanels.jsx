@@ -6,7 +6,7 @@ import { files } from '../../lib/files';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney, formatAmount, dateText, tableDate } from '../../lib/format';
 import { dbErrorMessage } from '../../lib/masterData';
-import { qtyText, orgToday } from '../../lib/inventory';
+import { qtyText, orgToday, stockFactor } from '../../lib/inventory';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
 import ProofBox from '../ProofBox';
@@ -119,20 +119,60 @@ function RequestLines({ refs, branchId, cats, lines, setLines, active = [], sugg
 const EMPTY_LINE = { kind: 'material', materialId: '', supplierId: '', newSupplier: '', supTouched: false, quantity: '', unitId: '', price: '', categoryId: '', description: '', unitText: '', amount: '' };
 
 /* ---------- Requests ---------- */
-/** An order's material lines still to come, in their own units, ready for the purchase form */
-const goodsLeftOf = (po, got) => [...(po.lines || [])].filter(l => l.kind !== 'expense' && (got[l.id] ?? 0) < Number(l.stock_quantity) - 1e-9)
-  .sort((a, b) => a.line_no - b.line_no).map(l => {
+/*
+ * An order paid and bought in parts (132, 2026-11-16, the user): the purchases recorded against each order —
+ * what they bought (items coming later, or goods received with the purchase) and what they paid.
+ */
+async function loadOrderBuys(orderIds) {
+  if (!orderIds.length) return {};
+  const { data } = await supabase.from('purchases')
+    .select('id, purchase_order_id, purchase_date, amount_paid, items:purchase_items(material_id, quantity, unit_id), lines:purchase_lines(item_id, tx:inventory_transactions(material_id, quantity))')
+    .in('purchase_order_id', orderIds).eq('status', 'recorded').order('purchase_date');
+  const out = {};
+  for (const p of data || []) (out[p.purchase_order_id] ||= { purchases: [] }).purchases.push(p);
+  return out;
+}
+/** Per material, in stock units: bought against the order, and delivered so far */
+function boughtOf(buy, refs) {
+  const bought = {}; const came = {};
+  for (const p of buy?.purchases || []) {
+    for (const i of p.items || []) bought[i.material_id] = (bought[i.material_id] || 0) + Number(i.quantity) * (stockFactor(refs, i.material_id, i.unit_id) ?? 1);
+    for (const l of p.lines || []) {
+      if (!l.tx?.material_id) continue;
+      came[l.tx.material_id] = (came[l.tx.material_id] || 0) + Number(l.tx.quantity);
+      if (!l.item_id) bought[l.tx.material_id] = (bought[l.tx.material_id] || 0) + Number(l.tx.quantity);   // received with the purchase
+    }
+  }
+  return { bought, came };
+}
+const matLines = po => [...(po?.lines || [])].filter(l => l.kind !== 'expense').sort((a, b) => a.line_no - b.line_no);
+/** An order's material lines still to buy, in their own units, ready for the purchase form */
+const goodsLeftOf = (po, buy, refs) => { const { bought } = boughtOf(buy, refs); return matLines(po).map(l => {
     const f = Number(l.stock_quantity) / Number(l.quantity);
-    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(r2(Math.max(Number(l.stock_quantity) - (got[l.id] ?? 0), 0) / f)), price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
-  });
-const purchaseFromOrder = (po, got) => ({ orderId: po.id, supplierId: po.supplier_id, branchId: po.branch_id, lines: goodsLeftOf(po, got),
-  // paid by the directors first (131): the purchase carries that payment
-  paid: Number(po.amount_paid || 0), paidOn: po.paid_on ?? null });
-// an order's payment status (131): Paid · Part paid · not yet
-const orderValue = po => (po?.lines || []).filter(l => l.kind !== 'expense').reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0);
-const orderPaidBadge = po => (!po || !(Number(po.amount_paid) > 0) ? null
-  : Number(po.amount_paid) >= orderValue(po) - 0.01 ? ['Paid', 'badge-success', 'The directors paid it — record the purchase']
-  : ['Part paid', 'badge-warning', 'The directors paid part of it']);
+    const left = r2(Math.max(Number(l.stock_quantity) - (bought[l.material_id] || 0), 0) / f);
+    return { materialId: l.material_id, unitId: l.unit_id, quantity: String(left), left, price: l.unit_price != null ? String(Number(l.unit_price)) : '' };
+  }).filter(x => x.left > 1e-9); };
+const orderValue = po => matLines(po).reduce((t, l) => t + Number(l.quantity) * Number(l.unit_price ?? 0), 0);
+const recordedPaid = buy => (buy?.purchases || []).reduce((t, p) => t + Number(p.amount_paid || 0), 0);
+// the purchase form from an order: what is still to buy, and what the directors paid that is not yet recorded
+const purchaseFromOrder = (po, buy, refs) => { const lines = goodsLeftOf(po, buy, refs); return { orderId: po.id, supplierId: po.supplier_id, branchId: po.branch_id, lines,
+  left: Object.fromEntries(lines.map(l => [l.materialId, l.left])),
+  paid: Math.max(r2(Number(po.amount_paid || 0) - recordedPaid(buy)), 0), paidOn: po.paid_on ?? null }; };
+/** Where an order stands: Ordered · Part paid · Paid · Part bought · Bought */
+function orderState(po, buy, refs) {
+  const value = r2(orderValue(po)); const paid = Number(po?.amount_paid || 0);
+  const { bought, came } = boughtOf(buy, refs);
+  const ls = matLines(po);
+  const boughtAny = ls.some(l => (bought[l.material_id] || 0) > 1e-9);
+  const boughtAll = ls.length > 0 && ls.every(l => (bought[l.material_id] || 0) >= Number(l.stock_quantity) - 1e-9);
+  const cameAny = ls.some(l => (came[l.material_id] || 0) > 1e-9);
+  const cameAll = ls.length > 0 && ls.every(l => (came[l.material_id] || 0) >= Number(l.stock_quantity) - 1e-9);
+  const badge = boughtAll ? ['Bought', 'badge-success', 'Everything ordered is recorded as a purchase']
+    : boughtAny ? ['Part bought', 'badge-info', 'Part of the order is recorded as a purchase; the rest is still open']
+    : paid >= value - 0.01 && paid > 0 ? ['Paid', 'badge-success', 'The directors paid it — record the purchase']
+    : paid > 0 ? ['Part paid', 'badge-warning', 'The directors paid part of it'] : null;
+  return { value, paid, remaining: Math.max(r2(value - paid), 0), bought, came, boughtAny, boughtAll, cameAny, cameAll, badge };
+}
 
 /*
  * One flow for every request (2026-10-28, migration 084), from its row:
@@ -149,21 +189,20 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
   const [asking, setAsking] = useState(false);
   const [cats, setCats] = useState([]);
   const [orders, setOrders] = useState({});   // request id → its open order
-  const [gotAll, setGotAll] = useState({});   // order line id → received
+  const [buys, setBuys] = useState({});   // order id → its purchases (132)
   const [openId, setOpenId] = useState(openFirst ?? null);   // a request opened from elsewhere (Electricity › Top-ups)
   useEffect(() => { if (openFirst) onOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function load() {
-    const [q, c, po, rc] = await Promise.all([
+    const [q, c, po] = await Promise.all([
       supabase.from('purchase_requests').select('*, lines:purchase_request_lines(*)').order('requested_on', { ascending: false }).order('request_no', { ascending: false }),
       supabase.from('expense_categories').select('id, name, status').order('display_order').order('name'),
       supabase.from('purchase_orders').select('*, lines:purchase_order_lines(*)').eq('status', 'open').not('request_id', 'is', null),
-      supabase.from('purchase_order_receipts').select('order_line_id, received'),
     ]);
     if (q.error) { console.error(q.error); setError("We couldn't load purchase requests."); return; }
     setRows(q.data || []);
     setCats(c.data || []);
     setOrders(Object.fromEntries((po.data || []).map(o => [o.request_id, o])));
-    setGotAll(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
+    setBuys(await loadOrderBuys((po.data || []).map(o => o.id)));
   }
   useEffect(() => { load(); }, []);
   const canBuy = b => canAt('procurement.receive', b) || canAt('cash.approve', b);
@@ -197,12 +236,12 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
                 <td>{people[r.requested_by] ?? ''}</td>
                 <td>{tableDate(r.needed_by) ?? ''}</td>
                 <td>{[...(r.lines || [])].sort((x, y) => x.line_no - y.line_no).map(l => <div key={l.id}>{lineText(refs, l, cats, money)}</div>)}</td>
-                <td>{(() => { const pb = orderPaidBadge(orders[r.id]); return pb
+                <td>{(() => { const pb = orders[r.id] && orderState(orders[r.id], buys[orders[r.id].id], refs).badge; return pb
                   ? <span className={`badge ${pb[1]}`} title={pb[2]}>{pb[0]}</span>
                   : <span className={`badge ${REQ[r.status][1]}`}>{REQ[r.status][0]}</span>; })()}{r.decision_note && <div className="pl-help">{r.decision_note}</div>}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                  {orders[r.id] && canBuy(r.branch_id) && goodsLeftOf(orders[r.id], gotAll).length > 0 && (
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive?.(purchaseFromOrder(orders[r.id], gotAll))}>Record purchase</button>
+                  {orders[r.id] && canBuy(r.branch_id) && goodsLeftOf(orders[r.id], buys[orders[r.id].id], refs).length > 0 && (
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive?.(purchaseFromOrder(orders[r.id], buys[orders[r.id].id], refs))}>Record purchase</button>
                   )}
                 </td>
               </tr>
@@ -223,6 +262,8 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
   const [po, setPo] = useState(null);           // the request's order (latest, not cancelled)
   const [got, setGot] = useState({});
   const [paidFor, setPaidFor] = useState({});
+  const [buy, setBuy] = useState(null);         // the purchases recorded from the order (132)
+  const [accName, setAccName] = useState('');   // the account the directors paid from
   const [mode, setMode] = useState(null);       // 'order' | 'edit' | 'close'
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -238,6 +279,8 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
       ]);
       setGot(Object.fromEntries((rc.data || []).map(x => [x.order_line_id, Number(x.received)])));
       setPaidFor((ex.data || []).reduce((m, x) => ({ ...m, [x.order_line_id]: (m[x.order_line_id] || 0) + Number(x.amount) }), {}));
+      setBuy((await loadOrderBuys([o.id]))[o.id] ?? { purchases: [] });
+      if (o.paid_account_id) supabase.from('payment_accounts').select('name').eq('id', o.paid_account_id).maybeSingle().then(({ data: a }) => setAccName(a?.name ?? ''));
     }
   }
   useEffect(() => { loadOrder(); }, [r.id, r.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -252,8 +295,9 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
   const lineDone = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
   const stock = useStockNow(r.branch_id);   // what the branch has now, beside what is asked (2026-11-16)
   const lines = [...(po?.lines || [])].sort((a, b) => a.line_no - b.line_no);
-  const goodsLeft = po ? goodsLeftOf(po, got) : [];
-  const nothingYet = po && !lines.some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0));
+  const goodsLeft = po ? goodsLeftOf(po, buy, refs) : [];
+  const st = po ? orderState(po, buy, refs) : null;
+  const nothingYet = po && !(Number(po.amount_paid) > 0) && !(buy?.purchases || []).length && !lines.some(l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) > 0));
   const canConfirm = po && po.status === 'open' && (canAt('procurement.receive', r.branch_id) || canAt('cash.approve', r.branch_id));
   return (
     <Modal title={`Request #${r.request_no}`} onClose={onClose} size="lg"
@@ -288,9 +332,18 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
           <label className="pe-field"><span>Note (needed to turn down)</span><input className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
         )}
         {po && <>
-          <h3 className="modal-section-title">Order #{po.po_no} — {supplierName(po.supplier_id)}{po.expected_on ? ` · expected ${dateText(po.expected_on)}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
+          {/* where the order stands (132): asked → approved → ordered → paid → recorded → delivered */}
+          {st && matLines(po).length > 0 && (() => {
+            const fullPaid = st.paid >= st.value - 0.01 && st.paid > 0;
+            const steps = [['Asked', 'done'], ['Approved', 'done'], ['Ordered', 'done'],
+              [fullPaid ? 'Paid' : st.paid > 0 ? 'Part paid' : 'Paid', fullPaid ? 'done' : st.paid > 0 ? 'part' : ''],
+              [st.boughtAll ? 'Recorded' : st.boughtAny ? 'Part recorded' : 'Recorded', st.boughtAll ? 'done' : st.boughtAny ? 'part' : ''],
+              [st.cameAll ? 'Delivered' : st.cameAny ? 'Part delivered' : 'Delivered', st.cameAll ? 'done' : st.cameAny ? 'part' : '']];
+            return <ol className="ord-steps" aria-label="Where the order stands">{steps.map(([l, c]) => <li key={l} className={c ? 'is-' + c : ''}>{l}</li>)}</ol>;
+          })()}
+          <h3 className="modal-section-title">Order #{po.po_no}{po.expected_on ? ` · expected ${dateText(po.expected_on)}` : ''}{po.status !== 'open' ? ` · ${po.status}` : ''}</h3>
           <table className="rd-table">
-            <thead><tr><th>What</th><th className="num">Ordered</th><th className="num">Price (TZS)</th><th className="num" title="What the branch has now, all its stores">In stock</th><th>Bought</th></tr></thead>
+            <thead><tr><th>Item</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th><th className="num" title="What the branch has now, all its stores">In stock</th><th>Bought</th></tr></thead>
             <tbody>{lines.map(l => {
               const isExp = l.kind === 'expense'; const u = isExp ? l.unit_text ?? '' : refs?.unitById[l.unit_id]?.symbol ?? '';
               const f = isExp ? 1 : Number(l.stock_quantity) / Number(l.quantity);
@@ -298,9 +351,14 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
                 <tr key={l.id}>
                   <td><strong>{isExp ? l.description : refs?.items[`m:${l.material_id}`]?.name ?? '—'}</strong></td>
                   <td className="num">{l.quantity != null ? `${qtyText(Number(l.quantity))} ${u}` : ''}</td>
-                  <td className="num">{isExp ? (l.amount != null ? formatAmount(Number(l.amount)) : '') : l.unit_price != null ? formatAmount(Number(l.unit_price)) : ''}</td>
+                  <td className="num">{isExp ? '' : l.unit_price != null ? formatAmount(Number(l.unit_price)) : ''}</td>
+                  <td className="num">{isExp ? (l.amount != null ? formatAmount(Number(l.amount)) : '') : l.unit_price != null ? formatAmount(r2(Number(l.quantity) * Number(l.unit_price))) : ''}</td>
                   <td className="num">{isExp ? '' : stock ? stockText(stock[l.material_id]) : '…'}</td>
-                  <td>{lineDone(l)
+                  <td>{!isExp && st
+                    ? (() => { const b = r2((st.bought[l.material_id] || 0) / f); return b >= Number(l.quantity) - 1e-9
+                        ? <span className="badge badge-success">Bought</span>
+                        : <span className="pl-help">{qtyText(b)} of {qtyText(Number(l.quantity))} {u}</span>; })()
+                    : lineDone(l)
                     ? <span className="badge badge-success">{isExp ? `Recorded ${money(paidFor[l.id])}` : 'Received'}</span>
                     : isExp
                       ? canConfirm && <button type="button" className="btn btn-primary btn-sm" onClick={() => (l.meter_id
@@ -311,7 +369,26 @@ function RequestView({ r, refs, cats, people, money, onChanged, onClose, onRecei
               );
             })}</tbody>
           </table>
-          {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive(purchaseFromOrder(po, got))}>Record purchase</button>}
+          {st && matLines(po).length > 0 && (
+            <div className="pd-grid">
+              <span className="pl-help">Supplier</span><strong>{supplierName(po.supplier_id)}</strong>
+              <span className="pl-help">Required</span><strong>{money(st.value)}</strong>
+              <span className="pl-help">Paid</span><strong>{money(st.paid)}{st.paid > 0 && po.paid_on ? <span className="pl-help"> · {dateText(po.paid_on)}</span> : null}</strong>
+              <span className="pl-help">Remaining</span><strong className={st.remaining > 0.004 ? 'text-warning' : ''}>{money(st.remaining)}</strong>
+              <span className="pl-help">Source</span><span>{st.paid > 0 ? `Directors${accName ? ' · ' + accName : ''}` : 'Not paid yet — the directors pay it'}</span>
+            </div>
+          )}
+          {(buy?.purchases || []).length > 0 && (
+            <table className="rd-table">
+              <thead><tr><th>Recorded as purchase</th><th className="num">Paid (TZS)</th></tr></thead>
+              <tbody>{buy.purchases.map(p => {
+                const what = [...(p.items || []).map(i => `${qtyText(Number(i.quantity))} ${refs?.unitById[i.unit_id]?.symbol ?? ''} ${refs?.items['m:' + i.material_id]?.name ?? ''}`),
+                  ...(p.lines || []).filter(x => !x.item_id && x.tx?.material_id).map(x => `${qtyText(Number(x.tx.quantity))} ${refs?.unitById[refs?.items['m:' + x.tx.material_id]?.stockUnitId]?.symbol ?? ''} ${refs?.items['m:' + x.tx.material_id]?.name ?? ''}`)].join(', ');
+                return <tr key={p.id}><td>{dateText(p.purchase_date)} · {what}</td><td className="num">{formatAmount(Number(p.amount_paid || 0))}</td></tr>;
+              })}</tbody>
+            </table>
+          )}
+          {canConfirm && goodsLeft.length > 0 && <button type="button" className="btn btn-primary btn-sm" onClick={() => onReceive(purchaseFromOrder(po, buy, refs))}>Record purchase</button>}
         </>}
       </div>
       {(mode === 'order' || mode === 'approve') && <OrderModal refs={refs} branchId={r.branch_id} request={r} approve={mode === 'approve'} onClose={() => setMode(null)} onSaved={async () => { setMode(null); onChanged(); }} />}

@@ -636,8 +636,12 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   const [date,      setDate]      = useState(today);
   // the goods: arrived now (into stock with the purchase, as before) or coming later (120) — the person says which
   const [arrival,   setArrival]   = useState('');   // '' | now | later
+  const [orderAfter, setOrderAfter] = useState('');   // from an order, part of it bought: 'open' (the rest later) | 'close' (132)
   const [weekly,    setWeekly]    = useState(fromOrder?.paid > 0 ? false : null); // the money: weekly cash (true) or directors · bank (false) (121); a paid order: the directors (131)
   const later = isNew && arrival === 'later';
+  // from an order, bought only in part (132): less than what is left of a line, or a line left out
+  const partOfOrder = isNew && !!fromOrder?.left && orderId === fromOrder.orderId
+    && Object.entries(fromOrder.left).some(([m, left]) => (newLines.filter(l => l.materialId === m).reduce((t, l) => t + (num(l.quantity) ?? 0), 0)) < left - 1e-9);
   const itemMode = mode === 'edit' && purchase?.items?.length > 0;   // a purchase coming later, opened
   const [submitted, setSubmitted] = useState(false);
   const [voiding,   setVoiding]   = useState(false);
@@ -697,6 +701,7 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     if (num(paid) != null && num(paid) > round2(total)) { setError('Amount paid is more than the total.'); return; }
     if (mode !== 'edit' && num(paid) > 0 && weekly == null) { setError('Say where the money came from: the weekly cash, or the directors · bank.'); return; }
     if (isNew && (!date || date > today)) { setError('Choose a date up to today.'); return; }
+    if (partOfOrder && !orderAfter) { setError('Say whether the order stays open for the rest, or is closed.'); return; }
     const header = {
       ...(supplierId ? { supplier_id: supplierId } : { new_supplier_name: newSupplier.trim() }),
       invoice_reference: invoice.trim() || null, transport_charge: num(transport) ?? 0,
@@ -740,6 +745,14 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
       if (pid) { const r2 = await supabase.rpc('set_purchase_order', { p_purchase: pid, p_order: orderId || null }); if (r2.error) res = r2; }
     }
     if (!res.error && mode !== 'edit' && num(paid) > 0 && res.data) await saveWeeklyCash('purchase', res.data, weekly);
+    // from an order (132): closed when everything is bought, or when the person says the rest is not needed
+    if (!res.error && isNew && fromOrder?.orderId && orderId === fromOrder.orderId && (!partOfOrder || orderAfter === 'close')) {
+      const { data: o } = await supabase.from('purchase_orders').select('status').eq('id', orderId).maybeSingle();
+      if (o?.status === 'open') {
+        const c = await supabase.rpc('close_purchase_order', { p_id: orderId, p_cancel: false, p_reason: partOfOrder ? 'Closed: the rest is not needed' : 'Bought in full' });
+        if (c.error) res = c;
+      }
+    }
     setBusy(false);
     if (res.error) { setError(dbErrorMessage(res.error, "We couldn't save the purchase. Nothing was recorded.")); return; }
     onSaved();
@@ -906,6 +919,15 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
               </select>
             )}
           </div>
+          {partOfOrder && (
+            <div className="form-group">
+              <span className="form-label">Part of the order — the rest:</span>
+              <div className="filter-chips" role="radiogroup" aria-label="The rest of the order">
+                <button type="button" role="radio" aria-checked={orderAfter === 'open'} className={`filter-chip${orderAfter === 'open' ? ' is-on' : ''}`} onClick={() => setOrderAfter('open')} title="The order stays on Orders for what is left">Keep the order open</button>
+                <button type="button" role="radio" aria-checked={orderAfter === 'close'} className={`filter-chip${orderAfter === 'close' ? ' is-on' : ''}`} onClick={() => setOrderAfter('close')} title="The rest is not needed: the order is closed">Close the order</button>
+              </div>
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label" htmlFor="pu-inv">Supplier's invoice / receipt no.</label>
             <input id="pu-inv" className="form-input" placeholder="Optional" value={invoice} onChange={e => setInvoice(e.target.value)} />

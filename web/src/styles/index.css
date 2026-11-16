@@ -3089,3 +3089,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pu-period .dd-step { width: 28px; height: 28px; }
 .pu-period .dd-select { padding-top: 4px; padding-bottom: 4px; min-height: 0; height: 32px; font-size: var(--text-sm); }
 .pu-period .dd-reset { padding: 3px 10px; }
+
+/* an order's steps (132): asked → approved → ordered → paid → recorded → delivered */
+.ord-steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 4px; padding: 0; font-size: var(--text-sm); }
+.ord-steps li { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+.ord-steps li.is-done { border-color: var(--color-success, #3a9d5d); color: var(--color-success, #3a9d5d); }
+.ord-steps li.is-part { border-color: var(--color-warning, #d4a017); color: var(--color-warning, #d4a017); }
