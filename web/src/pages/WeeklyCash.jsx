@@ -36,7 +36,7 @@ function sheetParts(rows) {
   const bal = rows.find(r => /^\s*balance\s*$/i.test(r.description || ''));
   const sent = rows.find(r => /cash\s*sent/i.test(r.description || ''));
   return { date: bal?.date ?? '', opening: bal?.cash_in ?? '', sent: sent?.cash_in ?? '',
-    items: rows.filter(r => !FORMULA_ROW.test(r.description || '')).map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id ?? '' })) };
+    items: rows.filter(r => !FORMULA_ROW.test(r.description || '')).map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id ?? '', ...(r.expense_id ? { expense_id: r.expense_id } : {}), ...(r.record_id ? { record_id: r.record_id } : {}) })) };
 }
 // the parts → the sheet, every formula worked out
 function sheetRows(p) {
@@ -55,7 +55,8 @@ function sheetRows(p) {
 }
 // rows kept in the database: plain values
 const storeRows = p => sheetRows({ ...p, items: p.items.filter(i => [i.date, i.description, i.qty, i.cash_out].some(v => String(v ?? '').trim())) })
-  .map(({ date, description, qty, cash_in, cash_out, balance, category_id }) => ({ date: String(date ?? '').trim(), description: String(description ?? '').trim(), qty: String(qty ?? '').trim(), cash_in: num(cash_in), cash_out: num(cash_out), balance: num(balance), category_id: category_id || null }));
+  .map(({ date, description, qty, cash_in, cash_out, balance, category_id, expense_id, record_id }) => ({ date: String(date ?? '').trim(), description: String(description ?? '').trim(), qty: String(qty ?? '').trim(), cash_in: num(cash_in), cash_out: num(cash_out), balance: num(balance), category_id: category_id || null,
+    ...(expense_id ? { expense_id } : {}), ...(record_id ? { record_id } : {}) }));
 // a summary as written → its figures
 function sheetSums(rows) {
   const rs = sheetRows(sheetParts(rows));
@@ -413,7 +414,7 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
   const editRows = lwEdit ? sheetRows(lwEdit.parts) : [];
   function onEditRows(next) {
     const [o, sn] = next;
-    const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id || (String(r.description ?? '').trim() ? guessCategory(r.description, data.cats, catHistory) : '') })) };
+    const parts = { date: o.date ?? '', opening: o.cash_in ?? '', sent: sn.cash_in ?? '', items: next.slice(3).filter(r => r.kind !== 'total_out' && r.kind !== 'close').map(r => ({ ...(r.expense_id ? { expense_id: r.expense_id } : {}), ...(r.record_id ? { record_id: r.record_id } : {}), date: r.date ?? '', description: r.description ?? '', qty: r.qty ?? '', cash_out: r.cash_out ?? '', category_id: r.category_id || (String(r.description ?? '').trim() ? guessCategory(r.description, data.cats, catHistory) : '') })) };
     const now = Date.now();
     if (now - lwEdit.at > 800) setLwHist(h => [...h, lwEdit.parts].slice(-200));   // a typed word is one step back
     setLwEdit({ parts, dirty: true, at: now });
@@ -433,8 +434,20 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     return () => clearTimeout(saveTimer.current);
   }, [lwEdit?.parts]); // eslint-disable-line react-hooks/exhaustive-deps
   const withCats = rows => rows && rows.map(r => (FORMULA_ROW.test(r.description || '') || r.category_id ? r : { ...r, category_id: guessCategory(r.description, data.cats, catHistory) || null }));
+  // an item's Date changed here moves the expense it recorded to that day (124, 2026-11-16, the user)
+  async function syncDates(prev, next) {
+    const before = Object.fromEntries((prev || []).filter(r => r.expense_id).map(r => [r.expense_id, String(r.date ?? '')]));
+    for (const r of next || []) {
+      if (!r.expense_id || before[r.expense_id] === undefined || before[r.expense_id] === String(r.date ?? '')) continue;
+      const d = isoOf(r.date);
+      if (!d) continue;
+      const { error: err } = await supabase.rpc('set_expense_date', { p_id: r.expense_id, p_date: d });
+      if (err) setError(/set_expense_date/.test(err.message || '') ? 'The dates were saved on the sheet; moving the expenses needs the latest database update (124).' : dbErrorMessage(err));
+    }
+  }
   async function persistSheet(rows) {
     rows = withCats(rows);
+    await syncDates(sheetLW, rows);
     setSheetLW(rows);
     if (!request && !savedId) return;
     setLwSaved('saving');
@@ -449,7 +462,7 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
   async function saveBoth() {
     clearTimeout(saveTimer.current);
     let rows = sheetLW;
-    if (lwEdit) { rows = withCats(storeRows(lwEdit.parts)); setSheetLW(rows); setLwEdit(e => ({ ...e, dirty: false })); }
+    if (lwEdit) { rows = withCats(storeRows(lwEdit.parts)); await syncDates(sheetLW, rows); setSheetLW(rows); setLwEdit(e => ({ ...e, dirty: false })); }
     const id = await save({ keepOpen: true, lastWeek: rows });
     if (id !== null) setLwSaved('saved');
   }
