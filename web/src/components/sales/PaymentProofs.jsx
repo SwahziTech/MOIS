@@ -232,13 +232,16 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
   }, [proof?.id, proof?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const [url, setUrl] = useState('');
   const [siblings, setSiblings] = useState([]);   // other sales the same slip covers
-  const [sharedLines, setSharedLines] = useState({});   // sale id → its items, for a shared slip
+  const [sharedLines, setSharedLines] = useState({});   // sale id → its items (every slip, 2026-11-17)
+  const [saleTotals, setSaleTotals] = useState({});     // sale id → the sale's total
   useEffect(() => {
-    if (!siblings.length) return;
     const ids = [sale.id, ...siblings.map(x => x.payment.sale.id)].filter(Boolean);
-    supabase.from('sale_lines').select('sale_id, line_no, item_name, quantity, product:products(canonical_name)').in('sale_id', ids).order('line_no')
+    if (!ids.length) return;
+    supabase.from('sale_lines').select('sale_id, line_no, item_name, quantity, price, total, unit:units(symbol), product:products(canonical_name)').in('sale_id', ids).order('line_no')
       .then(({ data }) => { const m = {}; for (const l of data || []) (m[l.sale_id] ||= []).push(l); setSharedLines(m); });
-  }, [siblings]); // eslint-disable-line react-hooks/exhaustive-deps
+    supabase.from('sales').select('id, total').in('id', ids)
+      .then(({ data }) => setSaleTotals(Object.fromEntries((data || []).map(x => [x.id, Number(x.total)]))));
+  }, [sale.id, siblings]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadSlipSiblings(proof).then(setSiblings); }, [proof?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saveUrl, setSaveUrl] = useState('');   // the same file, as a download (kept on the device)
   const [note, setNote] = useState('');
@@ -318,11 +321,11 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
         {asking && !stamp && <button type="button" className={`btn btn-danger${busy ? ' btn-loading' : ''}`} disabled={busy || (isPhoto && !strokes.length)} onClick={() => act('query')}>Send query</button>}</>}>
       <div className="modal-form">
         <p className="pl-help">{siblings.length ? '' : `Sale #${sale.sale_no} · ${buyer} · `}paid {dateText(payment.paid_on)} into {account}{payment.receipt_no ? ` · #${payment.receipt_no}` : ''}</p>
-        {siblings.length > 0 && (
+        {(
           <div className="pp-shared" role="note">
-            <strong>One slip for {siblings.length + 1} sales</strong>
+            {siblings.length > 0 && <strong>One slip for {siblings.length + 1} sales</strong>}
             <table className="pp-shared-table">
-              <thead><tr><th>Name</th><th>Items</th><th className="num">Qty</th><th className="num">Amount (TZS)</th></tr></thead>
+              <thead><tr><th>Name</th><th>Item</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th></tr></thead>
               <tbody>
                 {[{ key: 'me', no: sale.sale_no, id: sale.id, who: buyer, amount: Number(payment.amount), done: false },
                   ...siblings.map(x => ({ key: x.id, no: x.payment.sale.sale_no, id: x.payment.sale.id, who: x.payment.sale.customer?.name ?? x.payment.sale.walk_in_name ?? 'Walk-in', amount: Number(x.payment.amount), done: x.status === 'confirmed' }))]
@@ -330,17 +333,18 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
                     const ls = sharedLines[r.id] || [];
                     return (
                       <tr key={r.key}>
-                        <td><strong>{r.who}</strong><div className="pl-help">#{r.no}{r.done ? ' · confirmed' : ''}</div></td>
+                        <td><strong>{r.who}</strong><div className="pl-help">#{r.no} · paid {formatAmount(r.amount)}{saleTotals[r.id] != null && Math.abs(saleTotals[r.id] - r.amount) > 0.5 ? ` of ${formatAmount(saleTotals[r.id])}` : ''}{r.done ? ' · confirmed' : ''}</div></td>
                         <td>{ls.length ? ls.map(l => <div key={l.line_no}>{l.product?.canonical_name ?? l.item_name}</div>) : '…'}</td>
-                        <td className="num">{ls.map(l => <div key={l.line_no}>{l.product ? Number(l.quantity).toLocaleString('en-US') : '—'}</div>)}</td>
-                        <td className="num">{formatAmount(r.amount)}</td>
+                        <td className="num">{ls.map(l => <div key={l.line_no}>{l.quantity != null ? <>{Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 3 })} <span className="text-xs text-muted">{l.unit?.symbol ?? ''}</span></> : '—'}</div>)}</td>
+                        <td className="num">{ls.map(l => <div key={l.line_no}>{l.price != null ? formatAmount(Number(l.price)) : '—'}</div>)}</td>
+                        <td className="num">{ls.map(l => <div key={l.line_no}>{formatAmount(Math.round(Number(l.total)))}</div>)}</td>
                       </tr>
                     );
                   })}
               </tbody>
-              <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num"><strong>{money(siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)))}</strong></td></tr></tfoot>
+              <tfoot><tr><td colSpan={4}><strong>This slip</strong></td><td className="num"><strong>{money(siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)))}</strong></td></tr></tfoot>
             </table>
-            <span className="pl-help">Your mark applies to all of them.</span>
+            {siblings.length > 0 && <span className="pl-help">Your mark applies to all of them.</span>}
           </div>
         )}
         {proof?.status === 'queried' && <div className="alert alert-error" role="note">Queried: {proof.note}</div>}
