@@ -3102,3 +3102,12 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 @media (max-width: 560px) {
   .ingredient-row.pu-goods-row { grid-template-columns: 1fr 80px; }
 }
+
+/* sale window: paid and delivered as one-line cards (2026-11-19, the user) */
+.sv-cards { display: flex; flex-direction: column; gap: 6px; }
+.sv-card { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface); font-size: var(--text-sm); }
+.sv-card-label { font-weight: 600; min-width: 74px; }
+.sv-card-amt { margin-left: auto; }
+.sv-card-act { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* sales book: the unit red until the goods have all left */
+.sb-unit-due { color: var(--color-error); font-size: var(--text-xs); font-weight: 600; }

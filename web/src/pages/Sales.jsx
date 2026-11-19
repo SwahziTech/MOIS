@@ -1174,22 +1174,21 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
 
         {sale.stage !== 'quotation' && sale.stage !== 'cancelled' && (
           <section>
-            <h3 className="modal-section-title">Paid {money(paid)}{owed > 0 ? <span className="text-warning"> · {money(owed)} owed</span> : ''}</h3>
-            {(sale.payments || []).length === 0 ? <p className="pl-help">No payment yet.</p> : (
-              <table className="rd-table"><tbody>
+            {(sale.payments || []).length === 0 ? <div className="sv-card"><span className="sv-card-label">Paid</span><span className="pl-help">No payment yet</span></div> : (
+              <div className="sv-cards">
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
-                  <tr key={p.id}><td>{tableDate(p.paid_on)}</td><td>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · #${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</td><td style={{ textAlign: 'right' }}><strong>{money(Number(p.amount))}</strong></td>
-                    <td><ProofBadge state={proofState(p, proofs[p.id], today)} />{proofs[p.id]?.status === 'queried' && <div className="pl-help text-error">{proofs[p.id].note}</div>}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <div key={p.id} className="sv-card"><span className="sv-card-label">Paid</span><span>{tableDate(p.paid_on)}</span><span>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · #${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</span><strong className="sv-card-amt">{money(Number(p.amount))}</strong>
+                    <span><ProofBadge state={proofState(p, proofs[p.id], today)} />{proofs[p.id]?.status === 'queried' && <span className="pl-help text-error"> {proofs[p.id].note}</span>}</span>
+                    <span className="sv-card-act">
                       {proofs[p.id] && (proofs[p.id].status !== 'confirmed' && canAt('sales.confirm_payments', sale.branch_id, null)
                         ? <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewFor(p)}>Check</button>
                         : <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReviewFor(p)}>View</button>)}
                       {proofs[p.id]?.status !== 'confirmed' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setProofFor(p)}>{proofs[p.id] ? 'Replace proof' : 'Add proof'}</button>}
-                      <button type="button" className="icon-btn" aria-label="Print receipt" title="Print receipt" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={15} /></button></td></tr>
+                      <button type="button" className="icon-btn" aria-label="Print receipt" title="Print receipt" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={15} /></button></span></div>
                 ))}
-              </tbody></table>
+                {owed > 0 && <div className="sv-card"><span className="sv-card-label">Owed</span><strong className="sv-card-amt text-warning">{money(owed)}</strong></div>}
+              </div>
             )}
-            {goodsLeft && <p className="pl-help" title="Goods leave up to the value paid">Can leave now: {money(r2(Math.max(paid - given, 0)))}</p>}
           </section>
         )}
         {proofFor && <ProofModal payment={proofFor} sale={sale} proof={proofs[proofFor.id]} buyer={buyer} money={money} onClose={() => setProofFor(null)} onSaved={() => { setProofFor(null); onChanged(); }} />}
@@ -1198,29 +1197,24 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           onClose={() => setReviewFor(null)} onSaved={() => { setReviewFor(null); onChanged(); }} />}
         {deliveries.length > 0 && (
           <section>
-            <h3 className="modal-section-title">Delivered {money(r2(deliveries.reduce((t, d) => t + Number(d.value), 0)))}</h3>
-            <table className="rd-table"><tbody>
+            <div className="sv-cards">
               {deliveries.map(d => (
-                <tr key={d.id}>
-                  <td>{tableDate(d.delivered_on)}</td>
-                  <td>{d.kind === 'collection' || d.status === 'on_the_way' ? 'Collected' : 'Delivered'} DN-{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
+                <div key={d.id} className="sv-card" title={(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}>
+                  <span className="sv-card-label">{d.kind === 'collection' || d.status === 'on_the_way' ? 'Collected' : 'Delivered'}</span>
+                  <span>{tableDate(d.delivered_on)}</span>
+                  <span>DN-{d.delivery_no}{d.driver ? ` · ${d.driver}` : ''}{d.vehicle ? ` · ${d.vehicle}` : ''}
                     {d.status === 'on_the_way' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>to confirm delivered</span>}
-                    {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <div className="pl-help">Received by {d.pod_received_by || d.received_by}{d.delivered_at ? ` · ${tableDateTime(d.delivered_at)}` : ''}{d.pod_note ? ` · ${d.pod_note}` : ''}</div>}
-                    <div className="pl-help">{(d.lines || []).map(x => `${qtyText(Number(x.quantity))} ${per(lineById[x.sale_line_id]?.product_id)} ${refs.items[`p:${lineById[x.sale_line_id]?.product_id}`]?.name ?? ''}`).join(', ')}</div></td>
-                  <td style={{ textAlign: 'right' }}><strong>{money(Number(d.value))}</strong></td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {d.kind === 'delivery' && d.status === 'delivered' && (d.pod_received_by || d.received_by) && <span className="pl-help"> · received by {d.pod_received_by || d.received_by}</span>}</span>
+                  <strong className="sv-card-amt">{money(Number(d.value))}</strong>
+                  <span className="sv-card-act">
                     {d.status === 'on_the_way' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-primary btn-sm" onClick={() => setConfirming(d)}>Delivered…</button>}
-                    <button type="button" className="icon-btn" aria-label="Print delivery note" title="Print delivery note" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={15} /></button></td>
-                </tr>
+                    <button type="button" className="icon-btn" aria-label="Print delivery note" title="Print delivery note" onClick={() => openDoc('delivery', `&delivery=${d.id}`)}><Printer size={15} /></button></span>
+                </div>
               ))}
-            </tbody></table>
-            <p className="text-sm" title={`Without VAT ${money(r2(delivered.ex))} · cost ${money(r2(delivered.cost))}${delivered.est > 0.5 ? ` (${money(r2(delivered.est))} estimated at price)` : ''}${delivered.unknown ? ' · part with no cost known' : ''}`}>
-              Margin <strong className={delivered.ex - delivered.cost < 0 ? 'text-error' : ''}>{money(r2(delivered.ex - delivered.cost))}</strong>
-              {(delivered.est > 0.5 || delivered.unknown) && <span className="pl-help"> · estimated</span>}
-            </p>
+            </div>
           </section>
         )}
-        {sale.stage === 'invoice' && canAt('invoices.create', br, null) && (
+        {sale.stage === 'invoice' && Number(sale.vat) > 0 && canAt('invoices.create', br, null) && (
           <div className="flex items-center gap-8">
             <span className="text-sm">EFD{Number(sale.vat) > 0 && !sale.efd_receipt_no ? <strong className="text-warning"> (required)</strong> : null}</span>
             <input className="form-input" style={{ maxWidth: 200 }} value={efd} onChange={e => setEfd(e.target.value)} placeholder="Number" />
@@ -1278,7 +1272,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           </div>
         </Modal>
       )}
-      {handing && <DeliveryModal sale={sale} refs={refs} money={money} doneOf={doneOf} canLeave={r2(Math.max(paid - given, 0))} per={per}
+      {handing && <DeliveryModal sale={sale} refs={refs} money={money} today={today} doneOf={doneOf} canLeave={r2(Math.max(paid - given, 0))} per={per}
         onClose={() => setHanding(false)} onSaved={async () => { setHanding(false); await onChanged(); }} />}
       {correcting && <CorrectModal sale={sale} refs={refs} accounts={accounts} money={money} today={today} per={per} direct={canAt('system.manage', br, null)}
         onClose={() => setCorrecting(false)} onDone={async () => { setCorrecting(false); await onChanged(); }} />}
@@ -1303,11 +1297,15 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
 }
 
 /** Hand goods over: line by line what leaves, up to what is still to deliver and the value paid */
-function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSaved }) {
+function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClose, onSaved }) {
   // what is in the finished-goods store now, per product and colour (2026-10-26)
   // the store the goods leave from (135): must be chosen when the branch has several (yard, shop) — 2026-11-19, the user
-  const stores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === sale.branch_id && w.type === 'finished_goods');
-  const [storeId, setStoreId] = useState(stores.length === 1 ? stores[0].id : '');
+  // the yard first and filled in; the shop below it (2026-11-19, the user)
+  const stores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === sale.branch_id && w.type === 'finished_goods')
+    .sort((a, b) => (b.receives_production !== false) - (a.receives_production !== false) || a.name.localeCompare(b.name));
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? '');
+  // the day they left (136): today unless dated back — never before the sale
+  const [leftOn, setLeftOn] = useState(today);
   const [inStore, setInStore] = useState(null);
   useEffect(() => {
     if (!storeId) { setInStore(null); return; }
@@ -1359,13 +1357,14 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     setError('');
     if (!storeId) { setError('Choose the store the goods leave from.'); return; }
     if (value <= 0) { setError('Enter what leaves.'); return; }
+    if (!leftOn || leftOn > today || leftOn < sale.sale_date) { setError(`The date is from the sale (${tableDate(sale.sale_date)}) to today.`); return; }
     if (tooMuch.length) { setError(`Not enough in the store: ${tooMuch.map(x => `${x.name} — ${qtyText(x.q)} leaving, ${qtyText(x.store)} in store`).join('; ')}.`); return; }
     if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
     if (needEfd && !efdNo.trim()) { setError('This sale carries VAT — enter the EFD receipt number.'); return; }
     if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
     setBusy(true);
     // a delivery: who receives it is asked when it is confirmed delivered, not now
-    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, warehouse_id: storeId, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
+    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, warehouse_id: storeId, delivered_on: leftOn, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
       lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
@@ -1383,14 +1382,17 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
           <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>We deliver</button>
           <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
         </div>
+        <div className="form-row">
+        <label className="pe-field" style={{ maxWidth: 200 }}><span>Date</span>
+          <input type="date" className="form-input" min={sale.sale_date} max={today} value={leftOn} onChange={e => setLeftOn(e.target.value)} /></label>
         {stores.length > 1 && (
-          <label className="pe-field" style={{ maxWidth: 260 }}><span>Leaving from (required)</span>
-            <select className={`form-input${!storeId ? ' is-invalid' : ''}`} value={storeId} onChange={e => { setStoreId(e.target.value); setError(''); }}>
-              <option value="">Choose the store…</option>
+          <label className="pe-field" style={{ maxWidth: 260 }}><span>Leaving from</span>
+            <select className="form-input" value={storeId} onChange={e => { setStoreId(e.target.value); setError(''); }}>
               {stores.map(w => <option key={w.id} value={w.id}>{w.name}{w.id === sale.warehouse_id ? ' (sold from)' : ''}</option>)}
             </select>
           </label>
         )}
+        </div>
         <table className="rd-table">
           <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>In store</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
           <tbody>
@@ -1412,7 +1414,6 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
         )}
         <div className="flex items-center gap-8">
           <button type="button" className="btn btn-ghost btn-sm" onClick={fillPaid}>Fill what is paid for</button>
-          <span style={{ marginLeft: 'auto' }}><strong>{money(r2(value))}</strong> leaving</span>
         </div>
         <div className="form-row">
           {needEfd && (
@@ -1626,7 +1627,8 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
                   {/* only what needs doing shows: a proof to add, or waiting for a director (2026-11-08) */}
                   {(() => { const a = saleApproval(x, proofs, today); return ['proof', 'waiting'].includes(a.state) ? <div><span className={`badge ${a.badge} sb-approval`}>{a.label}</span></div> : null; })()}</td>}
                 <td>{nameOf(l)}{!l.product_id && <span className="pl-help"> · other item</span>}</td>
-                <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className="pl-help">{per(l.product_id)}</span></> : ''}</td>
+                {/* the unit red until the goods have all left — spotted at a glance (2026-11-19, the user) */}
+                <td className="num">{l.product_id ? <>{qtyText(Number(l.quantity))} <span className={['done', 'collected'].includes(stateOf(x, l)) ? 'pl-help' : 'sb-unit-due'} title={['done', 'collected'].includes(stateOf(x, l)) ? undefined : 'Not all delivered yet'}>{per(l.product_id)}</span></> : ''}</td>
                 <td className="num">{formatAmount(r2(Number(l.total) / Number(l.quantity)))}</td>
                 <td className="num">{formatAmount(Number(l.total))}</td>
                 <td className="num">{vatOn(l) ? formatAmount(Number(l.total)) : ''}</td>
