@@ -25,14 +25,15 @@ export default function ProductionTeamsCard() {
 
   async function load() {
     if (!branch) return;
-    const [t, m, mp, bp] = await Promise.all([
+    const [t, m, mp, bp, wh] = await Promise.all([
       supabase.from('production_teams').select('id, name, status').eq('branch_id', branch).order('name'),
       supabase.from('machines').select('*').eq('branch_id', branch).order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
       supabase.from('branch_products').select('product_id, product:products(canonical_name)').eq('branch_id', branch).eq('status', 'active'),
+      supabase.from('warehouses').select('id, name').eq('branch_id', branch).eq('type', 'wip').eq('status', 'active').order('name'),
     ]);
     if (t.error || m.error) { setData({ ready: false }); return; }
-    setData({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [],
+    setData({ ready: true, teams: t.data || [], machines: m.data || [], links: mp.data || [], curing: wh.data || [],
       products: (bp.data || []).map(x => ({ id: x.product_id, name: x.product?.canonical_name ?? '—' })).sort((a, b) => a.name.localeCompare(b.name)) });
   }
   useEffect(() => { setData(null); load(); }, [branch]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -121,6 +122,16 @@ export default function ProductionTeamsCard() {
                         }} />
                     </span>
                   ))}
+                  {/* where its batches cure (135) — the batch form takes it; blank = asked on the form */}
+                  {'curing_warehouse_id' in m && data.curing.length > 0 && (
+                    <span className="ptc-crew">cures in
+                      <select className="form-input ptc-sel" aria-label={`Where ${m.name} batches cure`} disabled={!canEdit || busy} value={m.curing_warehouse_id ?? ''}
+                        onChange={e => run(supabase.from('machines').update({ curing_warehouse_id: e.target.value || null }).eq('id', m.id))}>
+                        <option value="">Ask on the form</option>
+                        {data.curing.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </span>
+                  )}
                   <div className="ptc-chips">
                     {made.length === 0 && <span className="text-xs text-muted">Makes any product</span>}
                     {made.map(p => (

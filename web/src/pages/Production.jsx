@@ -138,7 +138,8 @@ export default function Production() {
     const failed = [];
     setBulk({ running: true, done: 0, total: list.length, failed });
     for (const b of list) {
-      const fg = refs.warehouses.find(w => w.status === 'active' && w.type === 'finished_goods' && w.branch_id === b.branch_id);
+      // the store production goes into (135): not a shop
+      const fg = fgStoresOf(refs, b.branch_id)[0];
       const { error: err } = await supabase.rpc('release_production_batch', { p_batch: b.id, p: {
         fg_warehouse_id: fg?.id ?? null, release_date: today, note: minCuring == null && b.curing_until > today ? bulkNote.trim() : null,
         outputs: (b.outputs || []).map(o => ({ output_id: o.id, pieces_passed: o.pieces_cast, rejects: [] })),
@@ -320,8 +321,12 @@ export default function Production() {
  * entered as a reject (with its reason) — passed = cast − rejects, worked out
  * here, never typed (SwahziTech, 2026-10-22).
  */
+// a branch's ready-goods stores that take production — the yard, not the shop (135)
+const fgStoresOf = (refs, branchId) => refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId
+  && w.type === 'finished_goods' && w.receives_production !== false);
+
 function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClose, onSaved }) {
-  const fgStores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === batch.branch_id && w.type === 'finished_goods');
+  const fgStores = fgStoresOf(refs, batch.branch_id);
   const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
   const [date, setDate] = useState(today);

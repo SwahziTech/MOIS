@@ -18,10 +18,10 @@ const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const round = (n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 const draftKey = (org, branch) => `mois.production.day.${org}.${branch}`;
 const emptyForm = () => ({ productId: '', colorId: '', bags: '', pieces: '', leftovers: [], edits: {}, allowOther: false, notes: '', orderPick: {},
-  teamId: '', workerIds: null, machineId: '' });   // production tracking (056)
+  teamId: '', workerIds: null, machineId: '', curingId: '' });   // production tracking (056); curingId: where it cures when not the machine's place (135)
 // a new batch keeps who made it and on what — the same crew usually casts the next one
 // the next batch keeps the machine; the team is chosen afresh for every batch (user rule, 2026-10-30)
-const nextForm = f => ({ ...emptyForm(), machineId: f.machineId ?? '' });
+const nextForm = f => ({ ...emptyForm(), machineId: f.machineId ?? '', curingId: f.curingId ?? '' });
 
 /**
  * Log a day's batches (migration 043), the way the factory works: each mix
@@ -35,7 +35,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const { organization, canAt, canManage } = useAuth();
   const stores = refs.warehouses.filter(w => w.status === 'active' && w.branch_id === branchId);
   const rawStores = stores.filter(w => w.type === 'raw_materials' || w.type === 'general');
-  const curingStore = stores.find(w => w.type === 'wip');
+  const curingStores = stores.filter(w => w.type === 'wip');
   const canBackdate = canAt('inventory.adjust', branchId, null);
   // may allow other products for one batch: the manager, and the secretary (127, 2026-11-16)
   const isManager = canAt('products.manage', branchId, null) || canAt('production.other_products', branchId, null);
@@ -69,6 +69,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   const [error, setError] = useState('');
   const [addError, setAddError] = useState('');
   const [lists, reloadLists] = useProductionLists(branchId);   // teams and machines (056)
+  // where this batch cures (135): picked on the form, else the machine's place, else the branch's only curing store
+  const machineCure = lists?.machines?.find(m => m.id === form.machineId)?.curing_warehouse_id ?? '';
+  const cureId = [form.curingId, machineCure].find(id => id && curingStores.some(w => w.id === id)) ?? (curingStores.length === 1 ? curingStores[0].id : '');
   const [sentNote, setSentNote] = useState('');
   const [editingId, setEditingId] = useState(null);   // a staged batch loaded back into the form
   const [previewing, setPreviewing] = useState(null); // a staged batch shown in full
@@ -326,8 +329,9 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     if (tracked && !form.teamId) { setAddError('Choose the team that made this batch (or + New team).'); return; }
     if (tracked && !form.machineId) { setAddError('Choose the machine it was made on (or + New machine).'); return; }
     if (tracked && !form.workerIds?.length) { setAddError('Tick who worked on this batch (the people chip).'); return; }
+    if (!cureId) { setAddError('Choose where this batch cures.'); return; }
     const payload = {
-      batch_date: date, raw_warehouse_id: rawId, curing_warehouse_id: curingStore.id, color_id: form.colorId || null,
+      batch_date: date, raw_warehouse_id: rawId, curing_warehouse_id: cureId, color_id: form.colorId || null,
       recipe_version_id: recipe.id, cement_bags: bags, notes: form.notes.trim() || null, allow_other_products: form.allowOther,
       ...(tracked ? { team_id: form.teamId, machine_id: form.machineId, ...(form.workerIds ? { worker_ids: form.workerIds } : {}) } : {}),
       outputs: outputs.map(o => ({ product_id: o.productId, pieces: o.pieces, primary: o.primary, ...(o.primary ? {} : { color_id: o.colorId || null }),
@@ -443,7 +447,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     return () => ro.disconnect();
   });
 
-  if (!curingStore) return <div className="card"><div className="card-body"><p className="text-sm">{branchName} has no curing store yet.</p></div></div>;
+  if (!curingStores.length) return <div className="card"><div className="card-body"><p className="text-sm">{branchName} has no curing store yet.</p></div></div>;
 
   const colourName = form.colorId ? refs.colorById[form.colorId]?.name : '';
   const mainPieces = num(form.pieces);
@@ -677,7 +681,16 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         <div className="pl-batch-notes">
           <BatchNotes branchId={branchId} organizationId={organization?.id} productId={form.productId} date={date} lists={lists} reload={reloadLists}
             value={{ teamId: form.teamId ?? '', workerIds: form.workerIds ?? null, machineId: form.machineId ?? '', notes: form.notes }}
-            onChange={v => set(v)} />
+            onChange={v => set(v.machineId !== undefined && v.machineId !== form.machineId ? { ...v, curingId: '' } : v)} />
+          {/* where it cures (135): the machine's curing place; asked only when the branch has several and the machine has none */}
+          {curingStores.length > 1 && (
+            <label className="pl-cures text-sm">Cures in{' '}
+              <select className="form-input form-input-sm" value={cureId} onChange={e => set({ curingId: e.target.value })}>
+                {!cureId && <option value="">Choose…</option>}
+                {curingStores.map(w => <option key={w.id} value={w.id}>{w.name}{w.id === machineCure ? ' (machine)' : ''}</option>)}
+              </select>
+            </label>
+          )}
         </div>
       </section>
       <div className="pl-actions">

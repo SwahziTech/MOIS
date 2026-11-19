@@ -61,7 +61,7 @@ export function productColorIds(product, catColors = [], ownColors = []) {
 /** Reference data every inventory screen needs, in one round trip */
 export async function loadInventoryRefs() {
   const [wh, mat, prod, units, sup, cats, catRows, colors, bp, own] = await Promise.all([
-    supabase.from('warehouses').select('id, name, type, status, branch_id, branch:branches(id, name, status)').order('name'),
+    supabase.from('warehouses').select('*, branch:branches(id, name, status)').order('name'),   // * : receives_production (135) once live
     supabase.from('materials')
       .select('*, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)')
       .order('name'),

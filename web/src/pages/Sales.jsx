@@ -357,6 +357,16 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const [prices, setPrices] = useState({});        // `${product}|${colour}` → { ex, rate, source }
   const [listPrices, setListPrices] = useState({}); // product id → the price list's prices as the customer pays them (the picker)
   const [avail, setAvail] = useState({});          // `${product}|${colour}` → available
+  // the store it is sold from (135): yard or shop — kept per branch on this device; asked only when the branch has several
+  const saleStores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === branchId && w.type === 'finished_goods')
+    .sort((a, b) => (b.receives_production !== false) - (a.receives_production !== false) || a.name.localeCompare(b.name));
+  const storeKey = `mois.saleStore.${branchId}`;
+  const [store, setStore] = useState(() => {
+    let last = ''; try { last = localStorage.getItem(storeKey) || ''; } catch { /* storage off */ }
+    return [sale?.warehouse_id, prefill?.warehouse_id, last].find(id => id && saleStores.some(w => w.id === id)) ?? saleStores[0]?.id ?? '';
+  });
+  const storeOn = saleStores.length > 1 && 'receives_production' in saleStores[0];
+  const pickStore = id => { setStore(id); try { localStorage.setItem(storeKey, id); } catch { /* storage off */ } };
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -436,9 +446,9 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       });
   }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    supabase.rpc('sales_availability', { p_branch_id: branchId }).then(({ data }) =>
+    supabase.rpc('sales_availability', { p_branch_id: branchId, ...(storeOn && store ? { p_warehouse_id: store } : {}) }).then(({ data }) =>
       setAvail(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.available)]))));
-  }, [branchId]);
+  }, [branchId, store, storeOn]);
   // the price list's price (without VAT) and its VAT rate for each product and colour on the sale
   useEffect(() => {
     for (const l of lines) {
@@ -543,6 +553,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       payload.site = site; payload.efd_receipt_no = efd;
       payload.payments = ps.map(x => ({ account_id: x.accountId || null, amount: x.value, receipt_no: x.receiptNo, ...(x.accountId ? {} : { method: 'cash' }) }));
     } else payload.site = site;
+    if (storeOn && store) payload.warehouse_id = store;   // set with set_sale_store after saving (135)
     if (toList) { addToDay(payload, cust); return; }
     setBusy(true);
     const { data, error: err } = book
@@ -550,6 +561,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       : await supabase.rpc('save_sale', { p: payload });
     if (!err && !book && site !== (sale?.site ?? '') && sale?.id) await supabase.rpc('set_sale_site', { p_sale: sale.id, p_site: site });
     if (!err && !book && !sale?.id && site) await supabase.rpc('set_sale_site', { p_sale: data, p_site: site });
+    if (!err && storeOn && store && store !== (sale?.warehouse_id ?? '')) await supabase.rpc('set_sale_store', { p_sale: sale?.id ?? data, p_warehouse: store });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't save this sale. Please try again.")); return; }
     if (book && data) {
@@ -617,6 +629,8 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       setBusy(false);
       return;
     }
+    // the store each was sold from (135)
+    for (const [k, x] of dayList.entries()) if (x.payload.warehouse_id && ids?.[k]) await supabase.rpc('set_sale_store', { p_sale: ids[k], p_warehouse: x.payload.warehouse_id });
     // the sales are saved: now their proofs
     let failed = 0;
     for (const [k, x] of dayList.entries()) {
@@ -737,9 +751,18 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
       </>}>
       <div className="modal-form">
         {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
-        <div className="flex items-center gap-8" role="group" aria-label="Buyer">
-          <button type="button" className={`filter-chip${buyer === 'walkin' ? ' is-on' : ''}`} onClick={() => setBuyer('walkin')}>Walk-in buyer</button>
-          <button type="button" className={`filter-chip${buyer === 'customer' ? ' is-on' : ''}`} onClick={() => setBuyer('customer')}>Customer</button>
+        <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+          <div className="flex items-center gap-8" role="group" aria-label="Buyer">
+            <button type="button" className={`filter-chip${buyer === 'walkin' ? ' is-on' : ''}`} onClick={() => setBuyer('walkin')}>Walk-in buyer</button>
+            <button type="button" className={`filter-chip${buyer === 'customer' ? ' is-on' : ''}`} onClick={() => setBuyer('customer')}>Customer</button>
+          </div>
+          {storeOn && (
+            <label className="text-sm flex items-center gap-8" style={{ marginLeft: 'auto' }} title="The store the goods come from — what can be sold is counted from its stock">Sold from
+              <select className="form-input form-input-sm" style={{ width: 'auto' }} value={store} onChange={e => pickStore(e.target.value)}>
+                {saleStores.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </label>
+          )}
         </div>
         {buyer === 'walkin' ? (
           <div className="form-row sl-buyer-row">
@@ -1281,7 +1304,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   // what is in the finished-goods store now, per product and colour (2026-10-26)
   const [inStore, setInStore] = useState(null);
   useEffect(() => {
-    supabase.rpc('sales_availability', { p_branch_id: sale.branch_id }).then(({ data }) =>
+    supabase.rpc('sales_availability', { p_branch_id: sale.branch_id, ...(sale.warehouse_id ? { p_warehouse_id: sale.warehouse_id } : {}) }).then(({ data }) =>
       setInStore(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.on_hand)]))));
   }, [sale.branch_id]);
   const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => l.product_id).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
