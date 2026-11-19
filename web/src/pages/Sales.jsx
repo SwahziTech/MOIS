@@ -1313,8 +1313,8 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
   const stores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === sale.branch_id && w.type === 'finished_goods')
     .sort((a, b) => (b.receives_production !== false) - (a.receives_production !== false) || a.name.localeCompare(b.name));
   const [storeId, setStoreId] = useState(stores[0]?.id ?? '');
-  // the day they left (136): today unless dated back — never before the sale
-  const [leftOn, setLeftOn] = useState(today);
+  // the day they left (136): starts on the sale's day (2026-11-19, the user) — never before it, never after today
+  const [leftOn, setLeftOn] = useState(sale.sale_date && sale.sale_date <= today ? sale.sale_date : today);
   const [inStore, setInStore] = useState(null);
   useEffect(() => {
     if (!storeId) { setInStore(null); return; }
