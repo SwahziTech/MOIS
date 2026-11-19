@@ -305,7 +305,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     setAsking(kind === 'query');
   };
   return (
-    <Modal title={`Payment proof · ${money(siblings.length ? siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)) : Number(payment.amount))}`} onClose={onClose}
+    <Modal size="lg" title={`Payment proof · ${money(siblings.length ? siblings.reduce((t, x) => t + Number(x.payment.amount), Number(payment.amount)) : Number(payment.amount))}`} onClose={onClose}
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         {(url || saveUrl) && <ShareButton deps={[url, stamp?.at, strokes.length]} name={(proof?.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'jpg')).replace(/\.[^.]+$/, '') + (stamp && strokes.length && isPhoto ? '_marked' : '')}
           text={`Sale #${sale.sale_no} · ${buyer} · ${money(Number(payment.amount))} · paid ${dateText(payment.paid_on)} into ${account}`}
@@ -333,7 +333,7 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
                     const ls = sharedLines[r.id] || [];
                     return (
                       <tr key={r.key}>
-                        <td><strong>{r.who}</strong><div className="pl-help">#{r.no} · paid {formatAmount(r.amount)}{saleTotals[r.id] != null && Math.abs(saleTotals[r.id] - r.amount) > 0.5 ? ` of ${formatAmount(saleTotals[r.id])}` : ''}{r.done ? ' · confirmed' : ''}</div></td>
+                        <td><strong>{r.who}</strong><div className="pl-help">#{r.no}{saleTotals[r.id] != null && Math.abs(saleTotals[r.id] - r.amount) > 0.5 ? ` · part paid: ${formatAmount(r.amount)} of ${formatAmount(saleTotals[r.id])}` : ''}{r.done ? ' · confirmed' : ''}</div></td>
                         <td>{ls.length ? ls.map(l => <div key={l.line_no}>{l.product?.canonical_name ?? l.item_name}</div>) : '…'}</td>
                         <td className="num">{ls.map(l => <div key={l.line_no}>{l.quantity != null ? <>{Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 3 })} <span className="text-xs text-muted">{l.unit?.symbol ?? ''}</span></> : '—'}</div>)}</td>
                         <td className="num">{ls.map(l => <div key={l.line_no}>{l.price != null ? formatAmount(Number(l.price)) : '—'}</div>)}</td>

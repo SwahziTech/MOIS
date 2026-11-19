@@ -3111,3 +3111,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sv-card-act { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 /* sales book: the unit red until the goods have all left */
 .sb-unit-due { color: var(--color-error); font-size: var(--text-xs); font-weight: 600; }
+
+/* payment proof: the slip's sales fit the window (2026-11-19, the user) */
+.pp-shared { overflow-x: auto; }
+.pp-shared-table th, .pp-shared-table td.num { white-space: nowrap; }
+.pp-shared-table td:nth-child(2) { min-width: 9em; }

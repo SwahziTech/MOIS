@@ -1095,6 +1095,14 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
   const canHand = ['order', 'invoice'].includes(sale.stage) && (canAt('sales.create', br, null) || canAt('inventory.issue', br, null))
     && (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
   const goodsLeft = (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
+  // the status, not the stage (2026-11-19, the user): is it paid, and have the goods left?
+  const live = ['order', 'invoice'].includes(sale.stage);
+  const payBadge = !live ? null : owed <= 0.01 ? ['badge-success', 'Paid'] : paid > 0 ? ['badge-warning', 'Part paid'] : ['badge-error', 'Not paid'];
+  const anyOut = deliveries.length > 0;
+  const goodsBadge = !live || !(sale.lines || []).some(l => l.product_id) ? null
+    : deliveries.some(d => d.status === 'on_the_way') ? ['badge-warning', 'On the way']
+    : !goodsLeft ? ['badge-success', deliveries.some(d => d.kind === 'delivery') ? 'Delivered' : 'Collected']
+    : anyOut ? ['badge-warning', 'Part collected'] : ['badge-error', 'Not collected'];
 
   async function run(fn) {
     setError(''); setBusy(true);
@@ -1133,11 +1141,12 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
       </>}>
       <div className="modal-form">
         <p className="text-sm text-muted">
-          <span className={`badge ${STAGE_BADGE[sale.stage]}`}>{STAGES[sale.stage]}</span> {dateText(sale.sale_date)}
+          {live ? <>{payBadge && <span className={`badge ${payBadge[0]}`}>{payBadge[1]}</span>}{goodsBadge && <> <span className={`badge ${goodsBadge[0]}`}>{goodsBadge[1]}</span></>}</>
+            : <span className={`badge ${STAGE_BADGE[sale.stage]}`}>{STAGES[sale.stage]}</span>} {dateText(sale.sale_date)}
           {customer ? ` · ${customer.phone ?? ''}${customer.tin ? ` · TIN ${customer.tin}` : ''}` : sale.walk_in_phone ? ` · ${sale.walk_in_phone}` : ''}
           {sale.valid_until && sale.stage === 'quotation' ? ` · valid until ${dateText(sale.valid_until)}` : ''}{sale.site ? ` · site: ${sale.site}` : ''}
-          {sale.invoiced_on ? ` · invoiced ${dateText(sale.invoiced_on)}` : ''}{sale.efd_receipt_no ? ` · EFD ${sale.efd_receipt_no}` : ''}
-          {sale.due_date && ['order', 'invoice'].includes(sale.stage) && (
+          {sale.efd_receipt_no ? ` · EFD ${sale.efd_receipt_no}` : ''}
+          {sale.due_date && live && owed > 0.01 && (
             <> · <span className={owed > 0.01 && sale.due_date < today ? 'text-error' : ''}>due {dateText(sale.due_date)}{owed > 0.01 && sale.due_date < today ? ` — ${Math.round((new Date(today) - new Date(sale.due_date)) / 864e5)} days overdue` : ''}</span>
               {canAt('sales.create', sale.branch_id, null) && dueEdit === null && <button type="button" className="link-btn" style={{ marginLeft: 6 }} onClick={() => setDueEdit(sale.due_date)}>change</button>}
               {dueEdit !== null && <>
