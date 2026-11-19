@@ -6,6 +6,18 @@ const AuthContext = createContext(null);
 
 const EMPTY_SET = new Set();
 
+// A dropped connection makes the browser wait ~20 s before failing (2026-11-19, the user: "the system loads longer"):
+// give each sign-in read 8 s, then try again on a fresh connection — up to 4 tries
+const isNetErr = e => !!e && !e.code && /abort|fetch|network|timed? ?out/i.test(`${e.name ?? ''} ${e.message ?? ''} ${e.details ?? ''}`);
+async function patient(makeQuery) {
+  let res;
+  for (let i = 0; i < 4; i++) {
+    res = await makeQuery().abortSignal(AbortSignal.timeout(8000));
+    if (!isNetErr(res.error)) return res;
+  }
+  return res;
+}
+
 export function AuthProvider({ children }) {
   const [session,      setSession]      = useState(undefined); // undefined = resolving
   const [profile,      setProfile]      = useState(null);
@@ -21,7 +33,7 @@ export function AuthProvider({ children }) {
     loadedFor.current = userId;
     setProfileReady(false);
 
-    const readProfile = () => supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const readProfile = () => patient(() => supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
     let { data: profileData, error: profileErr } = await readProfile();
     // an expired sign-in (e.g. the tab sat closed overnight): renew it once; if that fails, back to the sign-in page —
     // never read it as "no organization" (2026-10-26)
@@ -37,12 +49,12 @@ export function AuthProvider({ children }) {
     let roles = [];
     if (profileData?.organization_id) {
       const [orgRes, rolesRes] = await Promise.all([
-        supabase
+        patient(() => supabase
           .from('organizations')
           .select('id, name, legal_name, logo_url, brand_config, status, currency_code, timezone, default_branch_id, yield_tolerance')
           .eq('id', profileData.organization_id)
-          .maybeSingle(),
-        supabase
+          .maybeSingle()),
+        patient(() => supabase
           .from('user_roles')
           .select(`
             id, branch_id, warehouse_id,
@@ -53,7 +65,7 @@ export function AuthProvider({ children }) {
             )
           `)
           .eq('user_id', userId)
-          .eq('organization_id', profileData.organization_id),
+          .eq('organization_id', profileData.organization_id)),
       ]);
       if (orgRes.error)   console.error('organization load failed', orgRes.error);
       if (rolesRes.error) console.error('roles load failed', rolesRes.error);
