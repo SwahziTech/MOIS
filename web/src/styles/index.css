@@ -3116,5 +3116,3 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pp-shared { overflow-x: auto; }
 .pp-shared-table th, .pp-shared-table td.num { white-space: nowrap; }
 .pp-shared-table td:nth-child(2) { min-width: 9em; }
-/* goods leaving: the yard shown first, waiting to be tapped (2026-11-19) */
-.filter-chip.sl-store-ask { border-style: dashed; border-color: var(--color-error); }

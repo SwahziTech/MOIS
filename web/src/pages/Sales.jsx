@@ -1313,7 +1313,7 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
   const stores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === sale.branch_id && w.type === 'finished_goods')
     .sort((a, b) => (b.receives_production !== false) - (a.receives_production !== false) || a.name.localeCompare(b.name));
   const [storeId, setStoreId] = useState(stores[0]?.id ?? '');
-  // the yard is shown first and its stock counted, but the store is tapped every time (2026-11-19, the user)
+  // the yard first in the dropdown, but the store is chosen every time (2026-11-19, the user)
   const [storePicked, setStorePicked] = useState(stores.length <= 1);
   // the day they left (136): starts on the sale's day (2026-11-19, the user) — never before it, never after today
   const [leftOn, setLeftOn] = useState(sale.sale_date && sale.sale_date <= today ? sale.sale_date : today);
@@ -1366,7 +1366,7 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
   }
   async function save() {
     setError('');
-    if (!storeId || !storePicked) { setError('Tap the store the goods leave from.'); return; }
+    if (!storeId || !storePicked) { setError('Choose the store the goods leave from.'); return; }
     if (value <= 0) { setError('Enter what leaves.'); return; }
     if (!leftOn || leftOn > today || leftOn < sale.sale_date) { setError(`The date is from the sale (${tableDate(sale.sale_date)}) to today.`); return; }
     if (tooMuch.length) { setError(`Not enough in the store: ${tooMuch.map(x => `${x.name} — ${qtyText(x.q)} leaving, ${qtyText(x.store)} in store`).join('; ')}.`); return; }
@@ -1397,14 +1397,13 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
         <label className="pe-field" style={{ maxWidth: 200 }}><span>Date</span>
           <input type="date" className="form-input" min={sale.sale_date} max={today} value={leftOn} onChange={e => setLeftOn(e.target.value)} /></label>
         {stores.length > 1 && (
-          <div className="pe-field"><span>Leaving from <span className={storePicked ? 'pl-help' : 'text-error'}>{storePicked ? '' : '(tap one)'}</span></span>
-            <div className="flex items-center gap-8" role="group" aria-label="Leaving from" style={{ minHeight: 40 }}>
-              {stores.map(w => (
-                <button key={w.id} type="button" className={`filter-chip${storePicked && w.id === storeId ? ' is-on' : ''}${!storePicked && w.id === storeId ? ' sl-store-ask' : ''}`}
-                  onClick={() => { setStoreId(w.id); setStorePicked(true); setError(''); }}>{w.name}{w.id === sale.warehouse_id ? ' (sold from)' : ''}</button>
-              ))}
-            </div>
-          </div>
+          <label className="pe-field" style={{ maxWidth: 260 }}><span>Leaving from {!storePicked && <span className="text-error">(choose)</span>}</span>
+            {/* a dropdown, Yard first; nothing chosen until the user picks (2026-11-19, the user) */}
+            <select className={`form-input${storePicked ? '' : ' is-invalid'}`} value={storePicked ? storeId : ''} onChange={e => { if (!e.target.value) return; setStoreId(e.target.value); setStorePicked(true); setError(''); }}>
+              {!storePicked && <option value="">Choose the store…</option>}
+              {stores.map(w => <option key={w.id} value={w.id}>{w.name}{w.id === sale.warehouse_id ? ' (sold from)' : ''}</option>)}
+            </select>
+          </label>
         )}
         </div>
         <table className="rd-table">
