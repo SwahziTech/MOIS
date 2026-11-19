@@ -1112,10 +1112,11 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
     <Modal title={`${STAGES[sale.stage]} #${sale.sale_no} — ${buyer}`} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
+        {/* print, correct, cancel and delete on the left; the next steps on the right (2026-11-19, the user) */}
+        <span className="flex items-center gap-8" style={{ marginRight: 'auto', flexWrap: 'wrap' }}>
         {sale.stage !== 'cancelled' && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
           <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
         {sale.stage === 'quotation' && <button type="button" className="btn btn-ghost" title="The quotation as a proforma invoice" onClick={() => openDoc('proforma')}><Printer size={14} /> Proforma</button>}
-        {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
         {!editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) &&
           <button type="button" className="btn btn-ghost" onClick={() => setCorrecting(true)}>Correct…</button>}
         {sale.stage !== 'cancelled' && paid === 0 && canAt('sales.create', br, null) && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) &&
@@ -1123,6 +1124,8 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
         {/* a cancelled sale is deleted by the user (126, 2026-11-16) — whoever may cancel it */}
         {sale.stage === 'cancelled' && paid === 0 && !(sale.deliveries || []).length && canAt('sales.create', br, null) &&
           <button type="button" className="btn btn-ghost text-error" onClick={() => { setError(''); setDeleting(true); }}><Trash2 size={14} /> Delete</button>}
+        </span>
+        {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
         {sale.stage === 'quotation' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
         {['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAskEfd(true)}>Invoice</button>}
         {canHand && <button type="button" className="btn btn-outline" onClick={() => setHanding(true)}>Deliver / collect</button>}
@@ -1302,11 +1305,16 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
 /** Hand goods over: line by line what leaves, up to what is still to deliver and the value paid */
 function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSaved }) {
   // what is in the finished-goods store now, per product and colour (2026-10-26)
+  // the store the goods leave from (135): must be chosen when the branch has several (yard, shop) — 2026-11-19, the user
+  const stores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === sale.branch_id && w.type === 'finished_goods');
+  const [storeId, setStoreId] = useState(stores.length === 1 ? stores[0].id : '');
   const [inStore, setInStore] = useState(null);
   useEffect(() => {
-    supabase.rpc('sales_availability', { p_branch_id: sale.branch_id, ...(sale.warehouse_id ? { p_warehouse_id: sale.warehouse_id } : {}) }).then(({ data }) =>
+    if (!storeId) { setInStore(null); return; }
+    setInStore(null);
+    supabase.rpc('sales_availability', { p_branch_id: sale.branch_id, p_warehouse_id: storeId }).then(({ data }) =>
       setInStore(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.on_hand)]))));
-  }, [sale.branch_id]);
+  }, [sale.branch_id, storeId]);
   const lines = [...(sale.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => l.product_id).map(l => ({ ...l, left: r2(Number(l.quantity) - doneOf(l.id)) })).filter(l => l.left > 0);
   const unitInc = l => Number(l.total) / Number(l.quantity);
   const [kind, setKind] = useState('collection');
@@ -1349,6 +1357,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
   }
   async function save() {
     setError('');
+    if (!storeId) { setError('Choose the store the goods leave from.'); return; }
     if (value <= 0) { setError('Enter what leaves.'); return; }
     if (tooMuch.length) { setError(`Not enough in the store: ${tooMuch.map(x => `${x.name} — ${qtyText(x.q)} leaving, ${qtyText(x.store)} in store`).join('; ')}.`); return; }
     if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
@@ -1356,7 +1365,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     if (needEfd && !checked) { setError('Check the EFD receipt shows these amounts, then tick the box.'); return; }
     setBusy(true);
     // a delivery: who receives it is asked when it is confirmed delivered, not now
-    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
+    const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, warehouse_id: storeId, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
       lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
@@ -1367,13 +1376,21 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
     <Modal title={`Goods leaving on #${sale.sale_no}`} onClose={onClose} size="lg"
       footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
         <button type="button" className="btn btn-outline" onClick={onClose}>Back</button>
-        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || tooMuch.length > 0 || inStore === null} onClick={save} title={kind === 'delivery' ? 'The goods leave the store; confirm Delivered on the sale when they arrive' : 'The goods leave the store'}>Confirm</button></>}>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || tooMuch.length > 0 || (!!storeId && inStore === null)} onClick={save} title={kind === 'delivery' ? 'The goods leave the store; confirm Delivered on the sale when they arrive' : 'The goods leave the store'}>Confirm</button></>}>
       <div className="modal-form">
         <div className="flex items-center gap-8" role="group" aria-label="How it leaves">
           <button type="button" className={`filter-chip${kind === 'collection' ? ' is-on' : ''}`} onClick={() => setKind('collection')}>Collected by the customer</button>
           <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>We deliver</button>
           <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
         </div>
+        {stores.length > 1 && (
+          <label className="pe-field" style={{ maxWidth: 260 }}><span>Leaving from (required)</span>
+            <select className={`form-input${!storeId ? ' is-invalid' : ''}`} value={storeId} onChange={e => { setStoreId(e.target.value); setError(''); }}>
+              <option value="">Choose the store…</option>
+              {stores.map(w => <option key={w.id} value={w.id}>{w.name}{w.id === sale.warehouse_id ? ' (sold from)' : ''}</option>)}
+            </select>
+          </label>
+        )}
         <table className="rd-table">
           <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>In store</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
           <tbody>
@@ -1381,7 +1398,7 @@ function DeliveryModal({ sale, refs, money, doneOf, canLeave, per, onClose, onSa
               <tr key={l.id}>
                 <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong></td>
                 <td style={{ textAlign: 'right' }}>{qtyText(l.left)} {per(l.product_id)}</td>
-                <td style={{ textAlign: 'right' }} className={tooMuch.some(x => x.k === stockKey(l)) ? 'text-error' : ''}>{inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} ${per(l.product_id)}` : '…'}</td>
+                <td style={{ textAlign: 'right' }} className={tooMuch.some(x => x.k === stockKey(l)) ? 'text-error' : ''}>{!storeId ? '—' : inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} ${per(l.product_id)}` : '…'}</td>
                 <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>
                 <td style={{ textAlign: 'right' }}>{num(qty[l.id]) > 0 ? money(r2(unitInc(l) * num(qty[l.id]))) : '—'}</td>
               </tr>
