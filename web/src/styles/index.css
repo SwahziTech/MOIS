@@ -3141,3 +3141,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sp-machines { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .sp-machine { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
 .sp-machine .form-input { width: auto; }
+.sp-zone-list { font-size: var(--text-sm); color: var(--text-secondary); }
+.sp-zone-list summary { cursor: pointer; }
+.sp-zone-list ul { margin: 6px 0 0; padding-left: 18px; columns: 3 180px; column-gap: 24px; color: var(--text-primary); }
+.sp-zone-list li { break-inside: avoid; padding: 1px 0; }
+.sp-zone { align-items: flex-start; }
+.sp-zone-list[open] { flex-basis: 100%; }

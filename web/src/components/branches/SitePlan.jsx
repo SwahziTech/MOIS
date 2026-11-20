@@ -265,7 +265,12 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
                     {Object.keys(ZONE_COLORS).map(c => <option key={c} value={c}>{c}</option>)}</select>
                   <button type="button" className="icon-btn" aria-label={`Remove zone ${z.name}`} onClick={() => change(() => { setZones(zs => zs.filter(x => keyOf(x) !== keyOf(z))); setAreas(as => as.map(a => (a.zone_id === keyOf(z) ? { ...a, zone_id: null } : a))); setMachines(ms => ms.map(m => (m.zone === keyOf(z) ? { ...m, zone: '' } : m))); })}><Trash2 size={14} /></button>
                 </> : <strong style={{ color: ZONE_COLORS[z.color] }}>{z.name}</strong>}
-                <span className="pl-help" title={here.map(p => p.name).join(', ')}>{here.length} product{here.length === 1 ? '' : 's'} kept here</span>
+                {/* the products kept in this zone, opened like a drop-down (2026-11-20, the user) */}
+                <details className="sp-zone-list">
+                  <summary>{here.length} product{here.length === 1 ? '' : 's'} kept here</summary>
+                  {here.length ? <ul>{here.map(p => <li key={p.id}>{p.name}{homes[p.id] ? <span className="pl-help"> · {areas.find(a => keyOf(a) === homes[p.id])?.name}</span> : null}</li>)}</ul>
+                    : <span className="pl-help">None yet — set a machine's zone below, or add products to an area of this zone.</span>}
+                </details>
               </div>
             );
           })}
