@@ -178,7 +178,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
   // consumables a bag (138): mafuta, sabuni — set in Costing, taken with the batch by the server; shown and checked here
   const [consumables, setConsumables] = useState([]);
   useEffect(() => {
-    supabase.from('production_consumables').select('material_id, unit_id, quantity_per_bag, category_ids').eq('branch_id', branchId).eq('status', 'active')
+    supabase.from('production_consumables').select('material_id, unit_id, quantity_per_bag, category_ids, status').eq('branch_id', branchId)
       .then(({ data, error }) => setConsumables(error ? [] : data || []));
   }, [branchId]);
   useEffect(() => {
@@ -250,7 +250,8 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       const f = factorOf(c.material_id, c.unit_id);
       const need = f != null ? quantity * f : quantity;
       const available = (stock[c.material_id] ?? 0) - (usedToday[c.material_id] ?? 0);
-      return { material_id: c.material_id, unit_id: c.unit_id, quantity, factor: f, need, available, short: need > available + 1e-9, consumable: true };
+      const on = c.status === 'active';   // an Off row shows, muted, but takes nothing and never blocks
+      return { material_id: c.material_id, unit_id: c.unit_id, quantity, factor: f, need: on ? need : 0, available, short: on && need > available + 1e-9, consumable: true, on };
     });
   const shortLines = [...lines, ...consLines].filter(l => l.short);
   // another store at the branch that holds everything this batch is short of
@@ -365,7 +366,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         pieces: o.pieces, sqm: sqmOf(o.productId, o.pieces), residual: !o.primary, wastani: bands[o.productId]?.average_yield_per_bag ?? null })),
       materials: lines.map(l => ({ materialId: l.material_id, name: refs.items[`m:${l.material_id}`]?.name, quantity: l.quantity ?? 0, unit: symOf(l.unit_id),
         stockQty: (l.quantity ?? 0) * (l.factor ?? 0), counted: l.source === 'counted' })),
-      consumables: consLines.map(c => ({ materialId: c.material_id, need: c.need })),   // counted against the store for the next batches (138)
+      consumables: consLines.filter(c => c.on).map(c => ({ materialId: c.material_id, need: c.need })),   // counted against the store for the next batches (138)
       factor: theoretical != null ? theoretical / bags : null, theoretical, outOfBand, expected, notes: form.notes.trim(),
       team: tracked ? teamLabel(lists, form.teamId, form.workerIds) : null, machine: tracked ? lists.machines.find(m => m.id === form.machineId)?.name : null };
     setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
@@ -598,14 +599,12 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                   </div>
                 )}
                 {/* consumables a bag (138): worked out from the bags — set in Costing › Cost inputs */}
+                {/* one small line (2026-11-20, the user): mafuta · sabuni from the bags — not in the recipe */}
                 {consLines.length > 0 && (
-                  <div className="pl-steel" title="Not in the recipe: taken from the store with each batch at the amount a bag set in Costing › Cost inputs › Materials">
-                    <span className="pl-label">Consumables</span>
-                    {consLines.map(c => (
-                      <span key={c.material_id} className={`pl-steel-item${c.short ? ' is-short' : ''}`}>
-                        <span className="pl-steel-name">{refs.items[`m:${c.material_id}`]?.name}</span> <strong>{qtyText(c.quantity)}</strong> <span className="pl-unit">{symOf(c.unit_id)}</span>
-                        {c.short && <span className="pl-stock text-error">Short {qtyText(round(c.factor ? (c.need - c.available) / c.factor : c.need - c.available, 2))} {symOf(c.unit_id)}</span>}
-                      </span>
+                  <div className="pl-cons" title="Not in the recipe: taken from the store with each batch at the amount a bag set in Costing › Cost inputs › Materials">
+                    {consLines.map((c, i) => (
+                      <span key={c.material_id} className={`${c.short ? 'text-error' : ''}${c.on ? '' : ' pl-cons-off'}`}>{i ? ' · ' : ''}{refs.items[`m:${c.material_id}`]?.name} <strong>{qtyText(c.quantity)}</strong> {symOf(c.unit_id)}
+                        {c.short && ` (short ${qtyText(round(c.factor ? (c.need - c.available) / c.factor : c.need - c.available, 2))})`}{!c.on && ' (off)'}</span>
                     ))}
                   </div>
                 )}
