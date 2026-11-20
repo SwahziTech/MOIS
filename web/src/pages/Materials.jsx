@@ -460,13 +460,18 @@ function MaterialModal({ material, organizationId, materials, categories, units,
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState('');
 
-  const unitById = Object.fromEntries(units.map(u => [u.id, u]));
+  // a unit added here (+ New unit…, 2026-11-20) is usable at once, before the page reloads its list
+  const [extraUnits, setExtraUnits] = useState([]);
+  const [newUnitFor, setNewUnitFor] = useState(false);
+  const allUnits = [...units, ...extraUnits.filter(x => !units.some(u => u.id === x.id))];
+  const unitById = Object.fromEntries(allUnits.map(u => [u.id, u]));
   const conversions = material.conversions ?? [];
   const sources = material.sources ?? [];
   // 021: the stock unit is fixed once anything is expressed relative to it
   const stockLocked = !!material.stock_unit_id && (conversions.length > 0 || sources.length > 0 || usage.any > 0);
   const branchName = id => branches.find(b => b.id === id)?.name ?? '—';
-  const activeUnits = units.filter(u => u.status === 'active' || u.id === material.stock_unit_id);
+  const activeUnits = allUnits.filter(u => u.status !== 'inactive' || u.id === material.stock_unit_id);
+  const unitAdded = u => { setExtraUnits(x => [...x, u]); onChanged?.(); };
   const choosableCategories = categories.filter(c => c.status === 'active' || c.id === material.category_id);
 
   async function save(e) {
@@ -550,10 +555,14 @@ function MaterialModal({ material, organizationId, materials, categories, units,
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="mat-stock">Stock unit</label>
-            <select id="mat-stock" className="form-input" value={stockId} disabled={stockLocked} onChange={e => setStockId(e.target.value)}>
+            <select id="mat-stock" className="form-input" value={newUnitFor ? '__new' : stockId} disabled={stockLocked}
+              onChange={e => { if (e.target.value === '__new') { setNewUnitFor(true); return; } setNewUnitFor(false); setStockId(e.target.value); }}>
               <option value="">Not set yet</option>
               {activeUnits.map(u => <option key={u.id} value={u.id}>{u.symbol} — {u.name}</option>)}
+              <option value="__new">+ New unit…</option>
             </select>
+            {newUnitFor && <NewUnitInline organizationId={organizationId} units={allUnits} onCancel={() => setNewUnitFor(false)}
+              onCreated={u => { unitAdded(u); setStockId(u.id); setNewUnitFor(false); }} />}
             <span className="form-hint">
               {stockLocked ? 'Fixed: conversions, sources or recipes are expressed in it.' : 'The unit stock of this material is counted in. Add a unit under Units if it is missing.'}
             </span>
@@ -577,7 +586,7 @@ function MaterialModal({ material, organizationId, materials, categories, units,
 
       {!isNew && (
         <div className="modal-form mt-16">
-          <ConversionsEditor material={material} organizationId={organizationId} units={activeUnits} unitById={unitById} onChanged={onChanged} />
+          <ConversionsEditor material={material} organizationId={organizationId} units={activeUnits} unitById={unitById} onChanged={onChanged} onUnitAdded={unitAdded} />
           <FormerSources material={material} branches={branches} suppliers={suppliers} unitById={unitById} />
           <section>
             <h3 className="modal-section-title">Status</h3>
@@ -603,7 +612,39 @@ function MaterialModal({ material, organizationId, materials, categories, units,
 }
 
 /** 1 <unit> = factor × stock unit. Saved one line at a time. */
-function ConversionsEditor({ material, organizationId, units, unitById, onChanged }) {
+/** A unit added on the spot (2026-11-20, the user): short name + full name, e.g. pakti · Pakti, bag12 · Bag 12 kg */
+function NewUnitInline({ organizationId, units, onCreated, onCancel }) {
+  const [symbol, setSymbol] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function add() {
+    setError('');
+    const s = symbol.trim();
+    const n = name.trim() || s;
+    if (!s) { setError('Type the short name, e.g. pakti or bag12.'); return; }
+    if (units.some(u => u.symbol.toLowerCase() === s.toLowerCase())) { setError(`${s} is already a unit — choose it from the list.`); return; }
+    setBusy(true);
+    const { data, error: err } = await supabase.from('units').insert({ organization_id: organizationId, symbol: s, name: n }).select('id, symbol, name, status').single();
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onCreated(data);
+  }
+  return (
+    <div className="new-unit">
+      <input className="form-input" placeholder="Short, e.g. pakti" aria-label="Short name" data-no-caps value={symbol} autoFocus onChange={e => setSymbol(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      <input className="form-input" placeholder="Full, e.g. Bag 12 kg" aria-label="Full name" value={name} onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={add}>Add unit</button>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
+      {error && <span className="text-xs text-error" style={{ flexBasis: '100%' }}>{error}</span>}
+    </div>
+  );
+}
+
+function ConversionsEditor({ material, organizationId, units, unitById, onChanged, onUnitAdded }) {
+  const [newUnitRow, setNewUnitRow] = useState(null);   // the row whose unit is being added
   const stock = unitById[material.stock_unit_id];
   const [rows, setRows] = useState((material.conversions ?? []).map(c => ({ ...c, factor: String(c.factor_to_stock_unit), saved: true })));
   const [busy,  setBusy]  = useState(null);
@@ -653,11 +694,12 @@ function ConversionsEditor({ material, organizationId, units, unitById, onChange
               return (
                 <div key={r.saved ? r.unit_id : `new-${i}`} className="conversion-row">
                   <span className="text-sm">1</span>
-                  <select className="form-input" aria-label="Unit" value={r.unit_id} disabled={r.saved}
-                    onChange={e => setRows(rs => rs.map((x, j) => (j === i ? { ...x, unit_id: e.target.value } : x)))}>
+                  <select className="form-input" aria-label="Unit" value={newUnitRow === i ? '__new' : r.unit_id} disabled={r.saved}
+                    onChange={e => { if (e.target.value === '__new') { setNewUnitRow(i); return; } setNewUnitRow(null); setRows(rs => rs.map((x, j) => (j === i ? { ...x, unit_id: e.target.value } : x))); }}>
                     <option value="" disabled>Unit…</option>
                     {(r.saved ? [unitById[r.unit_id]] : units.filter(u => !used.has(u.id) || u.id === r.unit_id)).filter(Boolean)
                       .map(u => <option key={u.id} value={u.id}>{u.symbol}</option>)}
+                    {!r.saved && <option value="__new">+ New unit…</option>}
                   </select>
                   <span className="text-sm">=</span>
                   <NumberInput step="any" min="0" className="form-input" aria-label="Factor" value={r.factor}
@@ -673,6 +715,8 @@ function ConversionsEditor({ material, organizationId, units, unitById, onChange
               );
             })}
           </div>
+          {newUnitRow !== null && <NewUnitInline organizationId={organizationId} units={units} onCancel={() => setNewUnitRow(null)}
+            onCreated={u => { onUnitAdded?.(u); setRows(rs => rs.map((x, j) => (j === newUnitRow ? { ...x, unit_id: u.id } : x))); setNewUnitRow(null); }} />}
           <button type="button" className="btn btn-ghost btn-sm mt-8"
             onClick={() => setRows(rs => [...rs, { unit_id: '', factor: '', notes: null, saved: false }])}>
             <Plus size={13} /> Add a unit

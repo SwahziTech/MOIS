@@ -3186,3 +3186,4 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pl-cons strong { color: var(--text-primary); font-weight: 600; }
 .pl-cons .pl-cons-off { opacity: .6; }
 .mc-group td { background: var(--bg-soft); font-size: var(--text-sm); }
+.new-unit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; } .new-unit .form-input { width: 140px; }

@@ -288,7 +288,7 @@ export default function Stock() {
         );
       })()}
       {posting && refs && (
-        <MovementModal type={posting} refs={refs} balances={balanceMap} defaultWarehouseId={warehouseId}
+        <MovementModal type={posting} refs={refs} balances={balanceMap} defaultWarehouseId={warehouseId} kind={isProducts ? 'product' : 'material'}
           onClose={() => setPosting(null)} onPosted={async () => { setPosting(null); await load(); }} />
       )}
       {!posting && refs && nextCount && !countPaused && (

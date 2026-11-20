@@ -22,7 +22,7 @@ const kindForStore = w => (w?.type === 'finished_goods' ? 'product' : 'material'
  * offers what the user may do and shows the effect before posting.
  */
 // prefill (2026-11-20): { warehouseId, date, lines: [{ key, colorId, unitId, quantity }], banner } — an uploaded count sheet, checked and posted here as usual
-export default function MovementModal({ type, refs, balances, defaultWarehouseId, defaultItemKey, prefill = null, onClose, onPosted }) {
+export default function MovementModal({ type, refs, balances, defaultWarehouseId, defaultItemKey, prefill = null, kind = null, onClose, onPosted }) {
   const { canAt, canManage, organization } = useAuth();
   const { inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
@@ -30,8 +30,11 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   const { warehouses, items, unitById, colorById, suppliers } = refs;
 
   // Stores of the branch picked in the sidebar (all of them on "All branches")
+  // materials never go into a curing store or a ready-goods store, products only into ready-goods stores (2026-11-20, the user)
+  const itemKind = kind ?? (String(defaultItemKey ?? '').startsWith('m:') ? 'material' : String(defaultItemKey ?? '').startsWith('p:') ? 'product' : null);
+  const storeFits = w => (itemKind === 'material' ? w.type === 'raw_materials' || w.type === 'general' : itemKind === 'product' ? w.type === 'finished_goods' : true);
   const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && inBranch(w.branch_id)
-    && canAt(def.perm, w.branch_id, w.id));
+    && canAt(def.perm, w.branch_id, w.id) && storeFits(w));
   const startWh = prefill?.warehouseId ?? defaultWarehouseId;
   const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === startWh) ? startWh : (allowed[0]?.id ?? ''));
   const [toWarehouseId, setToWarehouseId] = useState('');
@@ -292,7 +295,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
                 <label className="form-label" htmlFor="mv-to">To</label>
                 <select id="mv-to" className="form-input" value={toWarehouseId} onChange={e => setToWarehouseId(e.target.value)}>
                   <option value="">Choose…</option>
-                  {warehouses.filter(w => w.status === 'active' && w.id !== warehouseId).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
+                  {warehouses.filter(w => w.status === 'active' && w.id !== warehouseId && storeFits(w)).map(w => <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>)}
                 </select>
               </div>
             ) : (
