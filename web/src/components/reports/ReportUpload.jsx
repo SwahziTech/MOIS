@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Trash2, AlertTriangle, FileImage } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { files } from '../../lib/files';
+import { files as fileStore } from '../../lib/files';   // named apart: the page list below is `files`
 import { shrinkImage } from '../../lib/shrinkImage';
 import { useAuth } from '../../hooks/useAuth';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -11,6 +11,7 @@ import { loadDayFacts, readReport, bestMatch, words } from '../../lib/dailyRepor
 import { useProductionLists } from '../production/BatchNotes';
 import NumberInput from '../NumberInput';
 import SalesUpload from './SalesUpload';
+import StockCountUpload from './StockCountUpload';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(String(v).replace(/,/g, '')));
 const KINDS = [['production', 'Production report'], ['sales', 'Sales sheet'], ['stock', 'Stock count'], ['past_sales', 'Past sales']];
@@ -27,7 +28,8 @@ const KINDS = [['production', 'Production report'], ['sales', 'Sales sheet'], ['
  * stock and yield checks — before the day is saved.
  * Sales sheet and past sales (2026-11-03): a typing grid beside the pages,
  * handed to Sales › Record sale one sale at a time (components/reports/SalesUpload).
- * Stock count follows.
+ * Stock count (2026-11-20): rows of store, item, colour and what was found,
+ * handed to Stock › Count one store at a time (components/reports/StockCountUpload).
  */
 export default function ReportUpload({ refs, branchId, branchName, today }) {
   const { organization, canAt } = useAuth();
@@ -36,6 +38,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
   const [kind, setKind] = useState('production');
   const [date, setDate] = useState(today);
   const [salesStats, setSalesStats] = useState(null);   // the sales grid's summary, shown in the summary cards
+  const [countStats, setCountStats] = useState(null);   // the count grid's summary (2026-11-20)
   const [files, setFiles] = useState([]);       // [{ file, preview }] — the pages, kept with the day
   const [text, setText] = useState('');
   const [read, setRead] = useState(null);       // { batches, meters, cementStore } once read
@@ -90,7 +93,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
       const file = await shrinkImage(raw, { max: 2400 });   // smaller before upload (2026-11-11); sheets keep more detail
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
       const path = `${organization.id}/${branchId}/${date}/${at}-${i + 1}.${ext}`;
-      const up = await files('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
+      const up = await fileStore('report-photos').upload(path, file, { contentType: file.type || undefined, upsert: false });
       if (up.error) throw up.error;
       rows.push({ file_path: path, file_name: file.name });
     }
@@ -198,7 +201,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
     }
   }
   async function openKept(u) {
-    const { data } = await files('report-photos').createSignedUrl(u.file_path, 300);
+    const { data } = await fileStore('report-photos').createSignedUrl(u.file_path, 300);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener');
   }
 
@@ -213,6 +216,11 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
         <div className="mm-stat"><span className="pl-label">To type</span><strong className={toType ? 'text-warning' : ''}>{read ? toType : '—'}</strong><span className="pl-help">details the report doesn't hold</span></div>
         <div className="mm-stat"><span className="pl-label">Already in MOIS</span><strong className={already ? 'text-warning' : ''}>{facts ? `${formatAmount(already)} pcs` : '…'}</strong><span className="pl-help">for {tableDate(date)}{kept.length ? ` · ${kept.length} upload${kept.length === 1 ? '' : 's'} kept` : ''}</span></div>
       </div>}
+      {kind === 'stock' && <div className="mm-stats">
+        <div className="mm-stat"><span className="pl-label">Counted</span><strong>{countStats?.rows ?? 0}</strong><span className="pl-help">{countStats?.stores ? `item${countStats.rows === 1 ? '' : 's'} in ${countStats.stores} store${countStats.stores === 1 ? '' : 's'}` : 'type the rows below'}</span></div>
+        <div className="mm-stat"><span className="pl-label">Differences</span><strong className={countStats?.diffs ? 'text-warning' : ''}>{countStats?.diffs ?? 0}</strong><span className="pl-help">counted ≠ MOIS</span></div>
+        <div className="mm-stat"><span className="pl-label">To type</span><strong className={countStats?.toType ? 'text-warning' : ''}>{countStats?.toType ?? 0}</strong><span className="pl-help">red boxes</span></div>
+      </div>}
       {kind !== 'production' && kind !== 'stock' && <div className="mm-stats">
         <div className="mm-stat"><span className="pl-label">Sales</span><strong>{salesStats?.sales ?? 0}</strong><span className="pl-help">{salesStats ? `${salesStats.rows} row${salesStats.rows === 1 ? '' : 's'}${salesStats.span ? ` · ${salesStats.span}` : ''}` : 'type the rows below'}</span></div>
         <div className="mm-stat"><span className="pl-label">Value</span><strong>Tsh {formatAmount(salesStats?.value ?? 0)}</strong><span className="pl-help">paid Tsh {formatAmount(salesStats?.paid ?? 0)}</span></div>
@@ -222,7 +230,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
       <div className="filter-chips" style={{ margin: '12px 0 8px' }}>
         {KINDS.map(([k, label]) => (
           <button key={k} type="button" className={`filter-chip${kind === k ? ' is-on' : ''}`} onClick={() => setKind(k)}
-            title={k === 'stock' ? 'Coming next' : undefined}>{label}{k === 'stock' ? ' · soon' : ''}</button>
+          >{label}</button>
         ))}
       </div>
 
@@ -235,8 +243,8 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
         </div>
         <div className="ru-file-info">
           <strong>{files.length ? `${files.length} page${files.length === 1 ? '' : 's'}` : 'No photo yet'}</strong>
-          <span className="pl-help">{files.length ? 'Kept with the day when you save.' : kind === 'production' ? 'Photo or PDF of the report; paste its text below.' : 'Photos of the sales book; type the rows below.'}</span>
-          <label className="pe-field" style={{ maxWidth: 200, marginTop: 8 }}><span>{kind === 'past_sales' ? 'Day the pages were uploaded' : 'Day of the report'}</span>
+          <span className="pl-help">{files.length ? 'Kept with the day when you save.' : kind === 'production' ? 'Photo or PDF of the report; paste its text below.' : kind === 'stock' ? 'Photos of the count sheet; type the rows below.' : 'Photos of the sales book; type the rows below.'}</span>
+          <label className="pe-field" style={{ maxWidth: 200, marginTop: 8 }}><span>{kind === 'past_sales' ? 'Day the pages were uploaded' : kind === 'stock' ? 'Day of the count' : 'Day of the report'}</span>
             <input type="date" className="form-input" max={today} value={date} onChange={e => setDate(e.target.value || today)} /></label>
           {kind === 'production' && read?.readDate && read.readDate !== date && <span className="pl-help text-warning">The report says {dateText(read.readDate)}.</span>}
         </div>
@@ -245,7 +253,7 @@ export default function ReportUpload({ refs, branchId, branchName, today }) {
       </div></div>
 
       {kind === 'stock' ? (
-        <div className="card"><div className="card-body"><p className="text-sm">Coming next.</p></div></div>
+        <StockCountUpload refs={refs} branchId={branchId} today={today} day={date} keep={keep} onStats={setCountStats} />
       ) : kind !== 'production' ? (
         <SalesUpload key={kind} refs={refs} branchId={branchId} today={today} day={date} past={kind === 'past_sales'} keep={keep} onStats={setSalesStats} />
       ) : (

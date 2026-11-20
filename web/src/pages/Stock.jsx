@@ -13,6 +13,7 @@ import ErrorState from '../components/ErrorState';
 import MovementModal from '../components/inventory/MovementModal';
 import { DoubleEntryAlert } from '../components/inventory/DoubleEntry';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
+import { COUNT_QUEUE_KEY } from '../components/reports/StockCountUpload';
 import { dateText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load stock. Please try again.";
@@ -48,6 +49,12 @@ export default function Stock() {
   const [sortBy,      setSortBy]      = useState('size');
   const [posting,     setPosting]     = useState(null);   // movement type
   const [historyOf,   setHistoryOf]   = useState(null);   // an item whose history is open
+  // an uploaded count sheet (2026-11-20): one Count form a store, filled in, posted here one after another
+  const queueKey = COUNT_QUEUE_KEY(organization?.id);
+  const [countQueue, setCountQueue] = useState(() => { try { return JSON.parse(sessionStorage.getItem(queueKey) || 'null'); } catch { return null; } });
+  const [countPaused, setCountPaused] = useState(false);
+  const saveQueue = q => { setCountQueue(q); try { if (q?.stores?.length) sessionStorage.setItem(queueKey, JSON.stringify(q)); else sessionStorage.removeItem(queueKey); } catch { /* ignore */ } };
+  const nextCount = countQueue?.stores?.[0];
 
   async function load(date = asOfDate) {
     setError('');
@@ -179,6 +186,13 @@ export default function Stock() {
         )}
       </ListToolbar>
       {refs && <DoubleEntryAlert refs={refs} reloadKey={balances} onFixed={() => load()} />}
+      {nextCount && countPaused && (
+        <div className="alert alert-info" role="note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span>Uploaded count sheet: {countQueue.stores.length} store{countQueue.stores.length === 1 ? '' : 's'} still to post.</span>
+          <button type="button" className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setCountPaused(false)}>Continue</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => saveQueue(null)}>Discard</button>
+        </div>
+      )}
       {refs && (
         <ChipRow value={chip} onChange={setChip}
           items={isProducts ? categoryChipItems(cats, c => c.status === 'active') : materialChips} />
@@ -267,6 +281,13 @@ export default function Stock() {
       {posting && refs && (
         <MovementModal type={posting} refs={refs} balances={balanceMap} defaultWarehouseId={warehouseId}
           onClose={() => setPosting(null)} onPosted={async () => { setPosting(null); await load(); }} />
+      )}
+      {!posting && refs && nextCount && !countPaused && (
+        <MovementModal key={`${nextCount.warehouseId}-${countQueue.stores.length}`} type="count" refs={refs} balances={balanceMap}
+          prefill={{ warehouseId: nextCount.warehouseId, date: countQueue.date, lines: nextCount.lines,
+            banner: `From the uploaded count sheet${countQueue.total > 1 ? ` — store ${countQueue.total - countQueue.stores.length + 1} of ${countQueue.total}` : ''}. Check it, then post.` }}
+          onClose={() => setCountPaused(true)}
+          onPosted={async () => { saveQueue({ ...countQueue, stores: countQueue.stores.slice(1) }); await load(); }} />
       )}
     </PageShell>
   );

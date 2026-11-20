@@ -21,7 +21,8 @@ const kindForStore = w => (w?.type === 'finished_goods' ? 'product' : 'material'
  * atomically by post_inventory_movement() (migration 022); this form only
  * offers what the user may do and shows the effect before posting.
  */
-export default function MovementModal({ type, refs, balances, defaultWarehouseId, defaultItemKey, onClose, onPosted }) {
+// prefill (2026-11-20): { warehouseId, date, lines: [{ key, colorId, unitId, quantity }], banner } — an uploaded count sheet, checked and posted here as usual
+export default function MovementModal({ type, refs, balances, defaultWarehouseId, defaultItemKey, prefill = null, onClose, onPosted }) {
   const { canAt, canManage, organization } = useAuth();
   const { inBranch } = useBranch();
   const today = orgToday(organization?.timezone);
@@ -31,15 +32,16 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   // Stores of the branch picked in the sidebar (all of them on "All branches")
   const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && inBranch(w.branch_id)
     && canAt(def.perm, w.branch_id, w.id));
-  const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === defaultWarehouseId) ? defaultWarehouseId : (allowed[0]?.id ?? ''));
+  const startWh = prefill?.warehouseId ?? defaultWarehouseId;
+  const [warehouseId, setWarehouseId] = useState(allowed.some(w => w.id === startWh) ? startWh : (allowed[0]?.id ?? ''));
   const [toWarehouseId, setToWarehouseId] = useState('');
   const [supplier,  setSupplier]  = useState(null);   // { id } | { newName } | null
-  const [date,      setDate]      = useState(today);
+  const [date,      setDate]      = useState(prefill?.date && prefill.date <= today ? prefill.date : today);
   const [asOf,      setAsOf]      = useState(null);   // balances at a past date
   const [reference, setReference] = useState('');
   const [reason,    setReason]    = useState('');
   const [notes,     setNotes]     = useState('');
-  const [lines,     setLines]     = useState(() => [defaultItemKey && refs.items[defaultItemKey]
+  const [lines,     setLines]     = useState(() => (prefill?.lines?.length ? prefill.lines.filter(l => refs.items[l.key]).map(l => ({ ...emptyLine(refs.items[l.key].kind), key: l.key, colorId: l.colorId || '', unitId: l.unitId || refs.items[l.key].mainUnitId || refs.items[l.key].stockUnitId || '', quantity: String(l.quantity ?? '') })) : null) ?? [defaultItemKey && refs.items[defaultItemKey]
     ? { ...emptyLine(refs.items[defaultItemKey].kind), key: defaultItemKey, unitId: refs.items[defaultItemKey].mainUnitId ?? refs.items[defaultItemKey].stockUnitId ?? '' }
     : emptyLine(kindForStore(warehouses.find(w => w.id === warehouseId)))]);
   const [busy,  setBusy]  = useState(false);
@@ -270,6 +272,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
       )}
       <form id="movement-form" className="modal-form" onSubmit={post} hidden={!!repeats}>
         <p className="text-sm text-muted">{def.help} Posted movements can't be edited — a mistake is undone with a reversal.</p>
+        {prefill?.banner && <div className="alert alert-info" role="note">{prefill.banner}</div>}
         {error && !repeats && <div className="alert alert-error" role="alert">{error}</div>}
         {needsApproval && allowed.length > 0 && (
           <div className="alert alert-info" role="note">{date < today ? 'Backdated entries' : type === 'count' ? "Count differences" : 'Corrections'} need an admin's approval: this is sent to the Approvals queue and changes stock once approved.</div>
