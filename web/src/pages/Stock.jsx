@@ -121,6 +121,14 @@ export default function Stock() {
         m[i.key] = { item: i, total: 0, curing: 0, byColour: {}, unitId: i.stockUnitId, last: null };
       }
     }
+    // every active material shows, at 0 when none is in stock: a new category (Consumable, 2026-11-20) gets its chip and its Receive
+    if (!isProducts) {
+      for (const i of Object.values(refs.items)) {
+        if (i.kind !== 'material' || i.status !== 'active' || m[i.key]) continue;
+        if (branchId && i.branchId && i.branchId !== branchId) continue;
+        m[i.key] = { item: i, total: 0, curing: 0, byColour: {}, unitId: i.stockUnitId, last: null };
+      }
+    }
     return Object.values(m);
   }, [refs, balances, whById, branchId, warehouseId, isProducts, showZero]);
 
@@ -133,7 +141,8 @@ export default function Stock() {
   const q = search.trim().toLowerCase();
   const byName = (a, b) => a.item.name.localeCompare(b.item.name, undefined, { numeric: true });
   const shown = cards
-    .filter(c => (showZero || c.total !== 0 || c.curing !== 0) && inChip(c.item)
+    // a material category picked shows its materials at 0 too — so a new one can be received (2026-11-20)
+    .filter(c => (showZero || (!isProducts && chip) || c.total !== 0 || c.curing !== 0) && inChip(c.item)
       && (!q || `${c.item.name} ${c.item.category ?? c.item.materialCategory ?? ''}`.toLowerCase().includes(q)))
     .sort((a, b) => sortBy === 'qty_desc' ? b.total - a.total || byName(a, b)
       : sortBy === 'qty_asc' ? a.total - b.total || byName(a, b)
