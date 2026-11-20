@@ -64,6 +64,31 @@ function sumMaterials(lists) {
  * batches: [{ n, bags, stage?, cost?, costComplete?, estimate?, team?, machine?, waste?: [{ name, qty, unit, reason, cost? }], qc?: { tags, note }, outputs: [{ name, pieces, passed?, residual, perBag, perPiece?, perSqm? }],
  *             materials: [{ id, label, name, qty, unit, rank }] }]
  */
+// a batch as a table (2026-11-20, the user): the main materials across as headers, each cell the quantity used with its cost small below
+function MaterialTable({ mats, rows, costed, money }) {
+  const seen = {};
+  for (const m of mats) (seen[m.label] ||= new Set()).add(m.id);
+  const labelOf = m => (seen[m.label].size > 1 ? m.name : m.label);
+  return (
+    <div className="pb-table-wrap"><table className="pb-table">
+      <thead><tr><th>Product</th><th className="num">Qty</th>
+        {mats.map(m => <th key={`${m.id}|${m.unit}`} className="num" title={m.name}>{labelOf(m)} <span className="pb-mat-unit">{m.unit}</span></th>)}
+        <th className="num">Pcs/bag</th>{costed && <th className="num">Cost</th>}</tr></thead>
+      <tbody>{rows.map((r, i) => (
+        <tr key={i} className={r.cls || ''}>
+          <td className="pb-name">{r.name}</td>
+          <td className="num"><strong>{qtyText(r.pieces)}</strong> <span className="pb-mat-unit">pcs</span>{r.passed != null && <div className="pb-passed">{qtyText(r.passed)} passed</div>}</td>
+          {r.sameMix ? (mats.length > 0 && <td colSpan={mats.length} className="pl-help">{r.sameMix}</td>)
+            : mats.map(m => { const x = r.mats?.find(y => y.id === m.id && y.unit === m.unit); return (
+              <td key={`${m.id}|${m.unit}`} className="num">{x ? <><strong>{qtyText(r2(x.qty))}</strong>{x.cost != null && <div className="pb-cell-cost">{money(x.cost)}</div>}</> : ''}</td>); })}
+          <td className="num">{r.perBag != null ? <strong>{qtyText(r2(r.perBag))}</strong> : ''}</td>
+          {costed && <td className="num">{r.cost}</td>}
+        </tr>
+      ))}</tbody>
+    </table></div>
+  );
+}
+
 export default function ProductionBreakdown({ batches, dayTotal = true, stageBadge, currency }) {
   const costed = batches.some(b => b.cost != null);
   const money = v => formatMoney(Number(v), currency);
@@ -83,31 +108,16 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
           <section key={b.n} className={`pb-batch${b.stage === 'Void' ? ' is-void' : ''}`}>
             <div className="pb-head">
               <strong>Batch {b.n}</strong>
-              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${b.team}` : ''}{b.people != null ? ` · ${b.people} ${b.people === 1 ? 'person' : 'people'}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
+              {/* the team's name and how many worked — not their names (2026-11-20, the user) */}
+              <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${String(b.team).split(' (')[0]}` : ''}{b.people != null ? ` · ${b.people} ${b.people === 1 ? 'person' : 'people'}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
               {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
                 material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
               {b.stage && stageBadge?.(b.stage)}
             </div>
-            {main && (
-              <div className="pb-row">
-                <span className="pb-name">{main.name}</span>
-                <span className="pb-pcs"><strong>{qtyText(main.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
-                  {main.passed != null && <span className="pb-passed">{qtyText(main.passed)} passed</span>}</span>
-                <MaterialStrip materials={mats} soft />
-                <span className="pb-avg">{b.bags > 0 ? <><strong>{qtyText(r2((Number(main.pieces) || 0) / b.bags))}</strong> <span className="pb-mat-unit">pcs/bag</span></> : '—'}</span>
-                {costed && <span className="pb-cost">{unitCost(main, b.estimate)}</span>}
-              </div>
-            )}
-            {residuals.map((o, i) => (
-              <div key={i} className="pb-row pb-res">
-                <span className="pb-name">+ {o.name}</span>
-                <span className="pb-pcs"><strong>{qtyText(o.pieces)}</strong> <span className="pb-mat-unit">pcs</span>
-                  {o.passed != null && <span className="pb-passed">{qtyText(o.passed)} passed</span>}</span>
-                <span className="pl-help">residual · same mix as {main?.name}</span>
-                <span />
-                {costed && <span className="pb-cost">{unitCost(o, b.estimate)}</span>}
-              </div>
-            ))}
+            {main && <MaterialTable mats={mats} costed={costed} money={money} rows={[
+              { name: main.name, pieces: main.pieces, passed: main.passed, mats, perBag: b.bags > 0 ? (Number(main.pieces) || 0) / b.bags : null, cost: unitCost(main, b.estimate) },
+              ...residuals.map(o => ({ name: `+ ${o.name}`, pieces: o.pieces, passed: o.passed, cls: 'pb-res', sameMix: `residual · same mix as ${main.name}`, cost: unitCost(o, b.estimate) })),
+            ]} />}
             {(b.waste || []).length > 0 && (
               <div className="pb-extra">wasted {b.waste.map((w, i) => <span key={i}>{i ? ' · ' : ''}<strong>{qtyText(r2(w.qty))}</strong> {w.unit} {w.name} ({w.reason}){w.cost != null ? ` ${money(w.cost)}` : ''}</span>)}</div>
             )}
@@ -119,13 +129,9 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
       })}
       {dayTotal && batches.length > 1 && (
         <section className="pb-batch pb-day">
-          <div className="pb-row pb-total">
-            <span className="pb-name">Day total · {live.length} batch{live.length === 1 ? '' : 'es'}</span>
-            <span className="pb-pcs"><strong>{qtyText(live.reduce((s, b) => s + pcs(b), 0))}</strong> <span className="pb-mat-unit">pcs</span></span>
-            <MaterialStrip materials={sumMaterials(live.map(b => b.materials))} />
-            <span className="pb-avg"><strong>{qtyText(r2(live.reduce((s, b) => s + (Number(b.bags) || 0), 0)))}</strong> <span className="pb-mat-unit">bags</span></span>
-            {costed && <span className="pb-cost"><strong>{live.some(b => b.estimate) ? '≈ ' : ''}{money(live.reduce((s, b) => s + (Number(b.cost) || 0), 0))}</strong></span>}
-          </div>
+          {(() => { const all = sumMaterials(live.map(b => b.materials)).map(m => ({ ...m, cost: live.every(b => b.materials.every(x => x.cost != null)) ? live.reduce((s, b) => s + b.materials.filter(x => x.id === m.id && x.unit === m.unit).reduce((t, x) => t + x.cost, 0), 0) : null }));
+            return <MaterialTable mats={all} costed={costed} money={money} rows={[{ name: `Day total · ${live.length} batch${live.length === 1 ? '' : 'es'}`, cls: 'pb-total', pieces: live.reduce((s, b) => s + pcs(b), 0), mats: all,
+              perBag: null, cost: <strong>{live.some(b => b.estimate) ? '≈ ' : ''}{money(live.reduce((s, b) => s + (Number(b.cost) || 0), 0))}</strong> }]} />; })()}
         </section>
       )}
     </div>
