@@ -3147,3 +3147,5 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sp-zone-list li { break-inside: avoid; padding: 1px 0; }
 .sp-zone { align-items: flex-start; }
 .sp-zone-list[open] { flex-basis: 100%; }
+.sp-held { fill: var(--text-secondary); font-size: 10px; pointer-events: none; }
+.sp-place { width: auto; display: inline-block; padding: 2px 6px; height: auto; font-size: var(--text-xs); margin-left: 6px; }

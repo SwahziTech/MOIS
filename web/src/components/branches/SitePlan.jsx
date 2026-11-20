@@ -35,6 +35,8 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
   const [zones, setZones] = useState([]);        // [{ id | tmp, name, color }]
   const [machines, setMachines] = useState([]);  // [{ id, name, zone }] — zone: a zone key; its products are kept there
   const [links, setLinks] = useState([]);        // machine_products of the branch's machines
+  const [stock, setStock] = useState({});        // `${store}|${product}` → quantity on hand (all colours)
+  const [unitOf, setUnitOf] = useState({});      // product id → its stock unit symbol
   const [products, setProducts] = useState([]);  // the branch's products [{ id, name }]
   const [sel, setSel] = useState(null);          // { type: 'area' | 'lane', key }
   const [drag, setDrag] = useState(null);
@@ -55,6 +57,16 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
       supabase.from('machines').select('*').eq('branch_id', branch.id).eq('status', 'active').order('name'),
       supabase.from('machine_products').select('machine_id, product_id'),
     ]);
+    // what is on hand in the branch's stores, to show on the plan (2026-11-20, the user)
+    const ids = stores.map(w => w.id);
+    const [sb, un] = await Promise.all([
+      ids.length ? supabase.from('stock_balances').select('warehouse_id, product_id, quantity, stock_unit_id').in('warehouse_id', ids).not('product_id', 'is', null) : Promise.resolve({ data: [] }),
+      supabase.from('units').select('id, symbol'),
+    ]);
+    const sym = Object.fromEntries((un.data || []).map(u => [u.id, u.symbol]));
+    const st = {}, uo = {};
+    for (const r of sb.data || []) { const k = `${r.warehouse_id}|${r.product_id}`; st[k] = (st[k] || 0) + Number(r.quantity); uo[r.product_id] = sym[r.stock_unit_id] ?? ''; }
+    setStock(st); setUnitOf(uo);
     if (a.error) { setAreas([]); setError(['42P01', 'PGRST205'].includes(a.error.code) ? 'Site plans need migration 137 on the database.' : dbErrorMessage(a.error)); return; }
     setAreas((a.data || []).map(x => ({ ...x, x: +x.x, y: +x.y, w: +x.w, h: +x.h })));
     setLanes((l.data || []).map(x => ({ ...x, key: x.id })));
@@ -79,6 +91,16 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
     const home = homes[pid] && areas?.find(a => keyOf(a) === homes[pid]);
     if (home?.zone_id) return home.zone_id;
     return machines.find(m => m.zone && links.some(l => l.machine_id === m.id && l.product_id === pid))?.zone ?? null;
+  };
+  // the quantity of a product in an area's store, and what an area holds
+  const qtyText = (v, pid) => `${(Math.round(v * 100) / 100).toLocaleString('en-US')} ${(unitOf[pid] || '').toUpperCase() === 'SQM' ? 'm²' : 'pcs'}`;
+  const storeOfZone = zk => areas?.find(a => a.zone_id === zk && a.warehouse_id && a.kind === 'ready')?.warehouse_id ?? null;
+  const contents = a => {
+    if (!a.warehouse_id || !['ready', 'curing'].includes(a.kind)) return [];
+    const list = a.kind === 'curing'
+      ? products.filter(p => Math.abs(stock[`${a.warehouse_id}|${p.id}`] || 0) > 1e-9)   // curing: whatever is curing there now
+      : products.filter(p => homes[p.id] === keyOf(a));
+    return list.map(p => ({ ...p, qty: stock[`${a.warehouse_id}|${p.id}`] || 0 }));
   };
   const setZone = (k, patch) => change(() => setZones(zs => zs.map(z => (keyOf(z) === k ? { ...z, ...patch } : z))));
 
@@ -195,13 +217,16 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
             const upright = a.h > a.w * 2 && a.w < 40;
             const small = upright || a.w < 70 || a.h < 30 || a.name.length * 7 > a.w - 6;
             const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+            const held = contents(a).filter(p => p.qty > 1e-9);
+            const showHeld = held.length > 0 && !upright && a.h >= 34 && a.w >= 50;
             return (
               <g key={keyOf(a)} className={`sp-area${canEdit ? ' can-edit' : ''}`} onPointerDown={e => { if (drawing) return; e.stopPropagation(); if (canEdit) down(e, a); else setSel({ type: 'area', key: keyOf(a) }); }}>
-                <title>{`${a.name} · ${k.label}${a.warehouse_id ? ` · ${storeName(a.warehouse_id) ?? ''}` : ''}${homeCount(keyOf(a)) ? ` · ${homeCount(keyOf(a))} product(s)` : ''}`}</title>
+                <title>{`${a.name} · ${k.label}${a.warehouse_id ? ` · ${storeName(a.warehouse_id) ?? ''}` : ''}${held.length ? `\n${held.map(p => `${p.name}: ${qtyText(p.qty, p.id)}`).join('\n')}` : ''}`}</title>
                 <rect x={a.x} y={a.y} width={a.w} height={a.h} rx="4"
                   style={{ fill: k.open ? 'transparent' : `color-mix(in srgb, ${k.color} 22%, var(--bg-surface))`, stroke: k.color }}
                   strokeWidth={on ? 2.5 : 1} strokeDasharray={k.open ? '5 3' : undefined} />
-                <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`} transform={upright ? `rotate(-90 ${cx} ${cy})` : undefined}
+                {showHeld && <text x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="central" className="sp-held">{held.length} product{held.length === 1 ? '' : 's'} on hand</text>}
+                <text x={cx} y={showHeld ? cy - 6 : cy} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`} transform={upright ? `rotate(-90 ${cx} ${cy})` : undefined}
                   style={zoneColor(a.zone_id) ? { fill: zoneColor(a.zone_id) } : undefined}>{a.name}</text>
               </g>
             );
@@ -231,10 +256,16 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
               <button type="button" className="btn btn-ghost btn-sm text-error" onClick={removeSel}><Trash2 size={14} /> Remove</button>
             </div>
           ) : <p className="text-sm"><strong>{selArea.name}</strong> · {AREA_KINDS[selArea.kind].label}{selArea.warehouse_id ? ` · ${storeName(selArea.warehouse_id) ?? ''}` : ''}</p>}
-          {STOCK_KINDS.includes(selArea.kind) && selArea.kind !== 'material' && (
+          {selArea.kind === 'curing' && (
+            <div className="sp-homes">
+              <span className="pl-label">Curing here now</span>
+              {contents(selArea).length ? contents(selArea).map(p => <span key={p.id} className="ptc-chip">{p.name} · <strong>{qtyText(p.qty, p.id)}</strong></span>) : <span className="pl-help">nothing</span>}
+            </div>
+          )}
+          {selArea.kind === 'ready' && (
             <div className="sp-homes">
               <span className="pl-label">Products kept here</span>
-              {productsHere(sel.key).map(p => <span key={p.id} className="ptc-chip">{p.name}
+              {productsHere(sel.key).map(p => <span key={p.id} className="ptc-chip">{p.name}{selArea.warehouse_id ? <> · <strong>{qtyText(stock[`${selArea.warehouse_id}|${p.id}`] || 0, p.id)}</strong></> : null}
                 {canEdit && <button type="button" aria-label={`${p.name} not kept here`} onClick={() => change(() => setHomes(h => { const n = { ...h }; delete n[p.id]; return n; }))}><X size={11} /></button>}</span>)}
               {!productsHere(sel.key).length && <span className="pl-help">none yet</span>}
               {canEdit && <select className="form-input ptc-sel" value="" aria-label="Add a product kept here" onChange={e => e.target.value && change(() => setHomes(h => ({ ...h, [e.target.value]: sel.key })))}>
@@ -268,7 +299,16 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
                 {/* the products kept in this zone, opened like a drop-down (2026-11-20, the user) */}
                 <details className="sp-zone-list">
                   <summary>{here.length} product{here.length === 1 ? '' : 's'} kept here</summary>
-                  {here.length ? <ul>{here.map(p => <li key={p.id}>{p.name}{homes[p.id] ? <span className="pl-help"> · {areas.find(a => keyOf(a) === homes[p.id])?.name}</span> : null}</li>)}</ul>
+                  {here.length ? <ul>{here.map(p => {
+                    const area = homes[p.id] ? areas.find(a => keyOf(a) === homes[p.id]) : null;
+                    const wh = area?.warehouse_id ?? storeOfZone(keyOf(z));
+                    return <li key={p.id}>{p.name}{wh ? <strong> · {qtyText(stock[`${wh}|${p.id}`] || 0, p.id)}</strong> : null}
+                      {canEdit ? <select className="form-input sp-place" aria-label={`Where ${p.name} is kept`} value={area ? keyOf(area) : ''}
+                        onChange={e => change(() => setHomes(h => { const n = { ...h }; if (e.target.value) n[p.id] = e.target.value; else delete n[p.id]; return n; }))}>
+                        <option value="">No place yet</option>
+                        {areas.filter(a => a.zone_id === keyOf(z) && a.kind === 'ready').map(a => <option key={keyOf(a)} value={keyOf(a)}>{a.name}</option>)}</select>
+                        : <span className="pl-help"> · {area ? area.name : 'no place on the plan yet'}</span>}</li>;
+                  })}</ul>
                     : <span className="pl-help">None yet — set a machine's zone below, or add products to an area of this zone.</span>}
                 </details>
               </div>
