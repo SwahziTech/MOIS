@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PeriodBar from '../components/PeriodBar';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -375,7 +375,11 @@ export default function ProductionLedger() {
       </div>}
 
       {openDay && refs && (
-        <Modal title={`Production — ${dateText(openDay.date)}`} onClose={() => setOpen(null)} size="xl"
+        <Modal size="xl" onClose={() => setOpen(null)}
+          title={<span className="flex items-center gap-8" style={{ width: '100%' }}>Production — {dateText(openDay.date)}
+            {/* the day's job card in the old system's format, A4 (2026-11-20, the user) */}
+            <button type="button" className="icon-btn" style={{ marginLeft: 'auto' }} aria-label="View job card" title="View job card — materials used and their cost, products made"
+              onClick={() => window.open(`/print/job-card/${openDay.branchId}/${openDay.date}`, '_blank', 'noopener')}><FileText size={18} /></button></span>}
           footer={<button type="button" className="btn btn-outline" onClick={() => setOpen(null)}>Close</button>}>
           <DaySummary day={summaryOf(openDay)} currency={organization?.currency_code} />
         </Modal>

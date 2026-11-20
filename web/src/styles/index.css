@@ -3161,3 +3161,23 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pb-table tr.pb-res td.pb-name { font-weight: 400; }
 .pb-table tr.pb-total td { font-weight: 600; }
 .pb-cell-cost { font-size: var(--text-xs); color: var(--text-muted); font-weight: 400; }
+
+/* production job card (2026-11-20, the user's old-system format): three boxes — costs, materials, products */
+.jc { font-family: 'Times New Roman', Times, serif; font-size: 12pt; }
+.jc-head { display: flex; justify-content: center; position: relative; border-bottom: 1px solid #1a1a1a; padding-bottom: 8px; }
+.jc-co { text-align: center; line-height: 1.6; }
+.jc-head .doc-logo { position: absolute; right: 0; top: 0; }
+.jc-title { margin-top: 6px; font-size: 13pt; }
+.jc-details { display: flex; justify-content: space-between; gap: 24px; border-bottom: 1px solid #1a1a1a; padding-bottom: 8px; }
+.jc-details > div { display: flex; flex-direction: column; gap: 3px; }
+.jc-details > div > div { display: grid; grid-template-columns: 110px auto; }
+.jc-details .doc-label { display: inline; font-size: 10pt; text-transform: none; letter-spacing: 0; color: #444; }
+.jc-boxes { display: grid; grid-template-columns: 0.8fr 1.45fr 1fr; gap: 6px; align-items: start; }
+.jc-box { border: 1.5px solid #1a1a1a; padding: 6px 4px 8px; min-height: 120px; }
+.jc-box h2 { font-size: 11pt; font-weight: 400; text-align: center; margin: 6px 0 10px; text-transform: uppercase; }
+.jc-table { font-size: 9pt; }
+.jc-table th { font-size: 8.5pt; padding: 3px 2px; }
+.jc-table td { padding: 2px; border-bottom: 0; }
+.jc-table tr.jc-break td { border-top: 1px dotted #999; }
+.jc-batch { color: #777; font-size: 8pt; }
+.jc-empty { font-size: 9pt; color: #666; text-align: center; padding: 0 6px; }
