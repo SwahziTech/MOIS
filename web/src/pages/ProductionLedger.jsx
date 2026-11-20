@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PeriodBar from '../components/PeriodBar';
-import { BookOpen, FileText } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -152,7 +152,7 @@ export default function ProductionLedger() {
       norm: track && d.batches.some(b => b.team_id && b.status !== 'void')
         ? labourNorm({ machines: track.machines, norms: track.norms[d.branchId] || {} }, d.batches.filter(b => b.status !== 'void').map(b => ({ machineId: b.machine_id, productId: b.product_id, bags: Number(b.cement_bags) }))) : null,
       batches: d.batches.map((b, i) => ({
-        n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
+        id: b.id, n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
         cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
         team: teamOf(b), people: track && b.team_id ? peopleOf(track.teams, b.team_id, b.worker_ids).length : null, machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
         qc: b.status === 'released' ? { tags: b.qc_tags || [], note: b.release_note } : null,
@@ -375,11 +375,7 @@ export default function ProductionLedger() {
       </div>}
 
       {openDay && refs && (
-        <Modal size="xl" onClose={() => setOpen(null)}
-          title={<span className="flex items-center gap-8" style={{ width: '100%' }}>Production — {dateText(openDay.date)}
-            {/* the day's job card in the old system's format, A4 (2026-11-20, the user) */}
-            <button type="button" className="icon-btn" style={{ marginLeft: 'auto' }} aria-label="View job card" title="View job card — materials used and their cost, products made"
-              onClick={() => window.open(`/print/job-card/${openDay.branchId}/${openDay.date}`, '_blank', 'noopener')}><FileText size={18} /></button></span>}
+        <Modal title={`Production — ${dateText(openDay.date)}`} onClose={() => setOpen(null)} size="xl"
           footer={<button type="button" className="btn btn-outline" onClick={() => setOpen(null)}>Close</button>}>
           <DaySummary day={summaryOf(openDay)} currency={organization?.currency_code} />
         </Modal>

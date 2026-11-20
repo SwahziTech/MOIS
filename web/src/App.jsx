@@ -67,7 +67,7 @@ export default function App() {
           <Route path="/print/statement/:id" element={<StatementDocument />} />
           <Route path="/print/payslips/:id" element={<PayslipDocument />} />
           <Route path="/print/grn/:id" element={<GoodsReceivedDocument />} />
-          <Route path="/print/job-card/:branchId/:date" element={<JobCardDocument />} />
+          <Route path="/print/job-card/:batchId" element={<JobCardDocument />} />
           <Route path="/print/supplier-statement/:id" element={<SupplierStatementDocument />} />
           <Route path="/print/po/:id" element={<PurchaseOrderDocument />} />
           <Route path="/print/list/:kind" element={<ListDocument />} />

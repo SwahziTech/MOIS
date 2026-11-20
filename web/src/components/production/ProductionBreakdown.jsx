@@ -1,3 +1,4 @@
+import { FileText } from 'lucide-react';
 import { qtyText } from '../../lib/inventory';
 import { formatMoney } from '../../lib/format';
 
@@ -113,6 +114,9 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
               {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
                 material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
               {b.stage && stageBadge?.(b.stage)}
+              {/* a saved batch's job card, A4 (2026-11-20, the user): one card a batch */}
+              {b.id && <button type="button" className="icon-btn" aria-label={`Job card for batch ${b.n}`} title="View job card — materials used and their cost, products made"
+                onClick={() => window.open(`/print/job-card/${b.id}`, '_blank', 'noopener')}><FileText size={16} /></button>}
             </div>
             {main && <MaterialTable mats={mats} costed={costed} money={money} rows={[
               { name: main.name, pieces: main.pieces, passed: main.passed, mats, perBag: b.bags > 0 ? (Number(main.pieces) || 0) / b.bags : null, cost: unitCost(main, b.estimate) },

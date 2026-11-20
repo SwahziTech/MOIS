@@ -18,7 +18,7 @@ const amt = v => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maxi
  * first, VAT included) and the products made (pieces × cost a piece).
  */
 export default function JobCardDocument() {
-  const { branchId, date } = useParams();
+  const { batchId } = useParams();
   const { session, loading: authLoading } = useAuth();
   const [d, setD] = useState(null);
   const [error, setError] = useState('');
@@ -39,18 +39,25 @@ export default function JobCardDocument() {
   useEffect(() => {
     if (!session) return;
     (async () => {
-      const [b, br, refs] = await Promise.all([
-        supabase.from('production_batches').select('*, materials:production_batch_materials(*), outputs:production_batch_outputs(*)')
-          .eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void').order('created_at'),
-        supabase.from('branches').select('name, organization_id').eq('id', branchId).maybeSingle(),
+      const [b, refs] = await Promise.all([
+        supabase.from('production_batches').select('*, materials:production_batch_materials(*), outputs:production_batch_outputs(*)').eq('id', batchId).maybeSingle(),
         loadInventoryRefs(),
       ]);
-      if (b.error || !br.data) { setError("We couldn't load this day's production."); return; }
-      if (!(b.data || []).length) { setError('No production recorded at this branch on this day.'); return; }
-      const org = await supabase.from('organizations').select('*').eq('id', br.data.organization_id).maybeSingle();
-      setD({ batches: b.data, branch: br.data.name, org: org.data, refs });
+      if (b.error || !b.data) { setError("We couldn't find this batch."); return; }
+      const x = b.data;
+      // its place in the day (batch 2 of 4) and who made it — the team's name and how many, no names
+      const [day, br, org, team, mach] = await Promise.all([
+        supabase.from('production_batches').select('id').eq('branch_id', x.branch_id).eq('batch_date', x.batch_date).order('created_at'),
+        supabase.from('branches').select('name').eq('id', x.branch_id).maybeSingle(),
+        supabase.from('organizations').select('*').eq('id', x.organization_id).maybeSingle(),
+        x.team_id ? supabase.from('production_teams').select('name').eq('id', x.team_id).maybeSingle() : Promise.resolve({ data: null }),
+        x.machine_id ? supabase.from('machines').select('name').eq('id', x.machine_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const ids = (day.data || []).map(r => r.id);
+      setD({ batches: [x], n: ids.indexOf(x.id) + 1, of: ids.length, branch: br.data?.name, org: org.data, refs,
+        team: team.data?.name ?? null, people: (x.worker_ids || []).length || null, machine: mach.data?.name ?? null });
     })();
-  }, [branchId, date, session]);
+  }, [batchId, session]);
 
   if (authLoading) return null;
   if (!session) return <div className="doc-msg">Sign in to MOIS to see this document.</div>;
@@ -76,7 +83,9 @@ export default function JobCardDocument() {
   const released = batches.filter(b => b.released_on).map(b => b.released_on).sort();
   const allReleased = released.length === batches.length;
   const each = m => (m.cost != null && Number(m.quantity) > 0 ? Number(m.cost) / Number(m.quantity) : null);
-  const several = batches.length > 1;
+  const several = false;   // one batch a card (2026-11-20, the user)
+  const b0 = batches[0];
+  const date = b0.batch_date;
 
   const matTable = (rows, total) => (
     <table className="doc-table jc-table">
@@ -116,9 +125,10 @@ export default function JobCardDocument() {
 
         <section className="jc-details">
           <div>
-            <div><span className="doc-label">Job card</span>PJC-{date.replaceAll('-', '')}</div>
-            <div><span className="doc-label">Description</span>Production · {d.branch}</div>
-            <div><span className="doc-label">Batches</span>{batches.length} · {qty(sum(batches, b => Number(b.cement_bags)))} bags of cement</div>
+            <div><span className="doc-label">Job card</span>PJC-{date.replaceAll('-', '')}-{d.n}</div>
+            <div><span className="doc-label">Description</span>Production · {d.branch} · batch {d.n} of {d.of}</div>
+            <div><span className="doc-label">Batch</span>{qty(Number(b0.cement_bags))} bags of cement{b0.status === 'void' ? ' · VOID' : ''}</div>
+            <div><span className="doc-label">Made by</span>{[d.team, d.people != null && `${d.people} ${d.people === 1 ? 'person' : 'people'}`, d.machine].filter(Boolean).join(' · ') || '—'}</div>
             <div><span className="doc-label">Currency</span>{org?.currency_code || 'TZS'}</div>
           </div>
           <div>
