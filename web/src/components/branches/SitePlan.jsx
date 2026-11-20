@@ -191,14 +191,17 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
           {ordered.map(a => {
             const k = AREA_KINDS[a.kind];
             const on = sel?.key === keyOf(a);
-            const small = a.w < 70 || a.h < 30;
+            // a thin, tall area (a wall strip, a gate) writes its name sideways; a tight one writes it smaller
+            const upright = a.h > a.w * 2 && a.w < 40;
+            const small = upright || a.w < 70 || a.h < 30 || a.name.length * 7 > a.w - 6;
+            const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
             return (
               <g key={keyOf(a)} className={`sp-area${canEdit ? ' can-edit' : ''}`} onPointerDown={e => { if (drawing) return; e.stopPropagation(); if (canEdit) down(e, a); else setSel({ type: 'area', key: keyOf(a) }); }}>
                 <title>{`${a.name} · ${k.label}${a.warehouse_id ? ` · ${storeName(a.warehouse_id) ?? ''}` : ''}${homeCount(keyOf(a)) ? ` · ${homeCount(keyOf(a))} product(s)` : ''}`}</title>
                 <rect x={a.x} y={a.y} width={a.w} height={a.h} rx="4"
                   style={{ fill: k.open ? 'transparent' : `color-mix(in srgb, ${k.color} 22%, var(--bg-surface))`, stroke: k.color }}
                   strokeWidth={on ? 2.5 : 1} strokeDasharray={k.open ? '5 3' : undefined} />
-                <text x={a.x + a.w / 2} y={a.y + a.h / 2} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`}
+                <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`} transform={upright ? `rotate(-90 ${cx} ${cy})` : undefined}
                   style={zoneColor(a.zone_id) ? { fill: zoneColor(a.zone_id) } : undefined}>{a.name}</text>
               </g>
             );
