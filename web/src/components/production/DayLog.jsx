@@ -175,6 +175,12 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     setStock(by[rawId] || {});
   }
   useEffect(() => { loadStock(); }, [rawId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // consumables a bag (138): mafuta, sabuni — set in Costing, taken with the batch by the server; shown and checked here
+  const [consumables, setConsumables] = useState([]);
+  useEffect(() => {
+    supabase.from('production_consumables').select('material_id, unit_id, quantity_per_bag, category_ids').eq('branch_id', branchId).eq('status', 'active')
+      .then(({ data, error }) => setConsumables(error ? [] : data || []));
+  }, [branchId]);
   useEffect(() => {
     Promise.all([
       supabase.from('product_specs').select('product_id, spec_id, pcs_per_sqm, average_yield_per_bag'),
@@ -219,6 +225,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     const u = {};
     for (const s of staged.filter(x => x.payload.raw_warehouse_id === rawId)) {
       for (const m of s.payload.materials) u[m.material_id] = (u[m.material_id] || 0) + m.quantity * (factorOf(m.material_id, m.unit_id) ?? 0);
+      for (const c of s.consumables || []) u[c.materialId] = (u[c.materialId] || 0) + c.need;
     }
     return u;
   }, [staged, rawId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -234,7 +241,18 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
     return { ...it, perBag: Number(it.quantity), factor: f, isBag, edited: edited !== undefined, quantity, need, available, short: need != null && need > available + 1e-9,
       source: isBag || edited !== undefined ? 'counted' : 'recipe' };
   });
-  const shortLines = lines.filter(l => l.short);
+  // the consumables this batch takes: its category's (or group's), not already a recipe material
+  const mainCat = main?.categoryId; const mainGroup = cats.byId[mainCat]?.parent_category_id;
+  const consLines = !recipe ? [] : consumables
+    .filter(c => (c.category_ids || []).some(id => id === mainCat || id === mainGroup) && !lines.some(l => l.material_id === c.material_id))
+    .map(c => {
+      const quantity = bags != null ? Math.round(Number(c.quantity_per_bag) * bags * 1000) / 1000 : 0;
+      const f = factorOf(c.material_id, c.unit_id);
+      const need = f != null ? quantity * f : quantity;
+      const available = (stock[c.material_id] ?? 0) - (usedToday[c.material_id] ?? 0);
+      return { material_id: c.material_id, unit_id: c.unit_id, quantity, factor: f, need, available, short: need > available + 1e-9, consumable: true };
+    });
+  const shortLines = [...lines, ...consLines].filter(l => l.short);
   // another store at the branch that holds everything this batch is short of
   const betterStore = shortLines.length ? rawStores.find(w => w.id !== rawId && shortLines.every(l => (otherStock[w.id]?.[l.material_id] ?? 0) + 1e-9 >= (l.need ?? Infinity))) : null;
 
@@ -347,6 +365,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
         pieces: o.pieces, sqm: sqmOf(o.productId, o.pieces), residual: !o.primary, wastani: bands[o.productId]?.average_yield_per_bag ?? null })),
       materials: lines.map(l => ({ materialId: l.material_id, name: refs.items[`m:${l.material_id}`]?.name, quantity: l.quantity ?? 0, unit: symOf(l.unit_id),
         stockQty: (l.quantity ?? 0) * (l.factor ?? 0), counted: l.source === 'counted' })),
+      consumables: consLines.map(c => ({ materialId: c.material_id, need: c.need })),   // counted against the store for the next batches (138)
       factor: theoretical != null ? theoretical / bags : null, theoretical, outOfBand, expected, notes: form.notes.trim(),
       team: tracked ? teamLabel(lists, form.teamId, form.workerIds) : null, machine: tracked ? lists.machines.find(m => m.id === form.machineId)?.name : null };
     setStaged(st => (editingId ? st.map(x => (x.id === editingId ? item : x)) : [...st, item]));
@@ -574,6 +593,18 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
                           onChange={e => set({ edits: { ...form.edits, [l.material_id]: e.target.value } })} />
                         <span className="pl-unit">{symOf(l.unit_id)}</span>
                         {l.short && <span className="pl-stock text-error">Short {qtyText(round(l.factor ? (l.need - l.available) / l.factor : l.need - l.available, 2))} {l.factor ? symOf(l.unit_id) : stockSym(l.material_id)}</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* consumables a bag (138): worked out from the bags — set in Costing › Cost inputs */}
+                {consLines.length > 0 && (
+                  <div className="pl-steel" title="Not in the recipe: taken from the store with each batch at the amount a bag set in Costing › Cost inputs › Materials">
+                    <span className="pl-label">Consumables</span>
+                    {consLines.map(c => (
+                      <span key={c.material_id} className={`pl-steel-item${c.short ? ' is-short' : ''}`}>
+                        <span className="pl-steel-name">{refs.items[`m:${c.material_id}`]?.name}</span> <strong>{qtyText(c.quantity)}</strong> <span className="pl-unit">{symOf(c.unit_id)}</span>
+                        {c.short && <span className="pl-stock text-error">Short {qtyText(round(c.factor ? (c.need - c.available) / c.factor : c.need - c.available, 2))} {symOf(c.unit_id)}</span>}
                       </span>
                     ))}
                   </div>

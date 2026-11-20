@@ -14,6 +14,7 @@ import ElectricityCosting from '../components/costing/ElectricityCosting';
 import OverheadsCosting from '../components/costing/OverheadsCosting';
 import MaterialsCosting from '../components/costing/MaterialsCosting';
 import LabourCosting from '../components/costing/LabourCosting';
+import ConsumablesCard from '../components/costing/ConsumablesCard';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
@@ -127,7 +128,11 @@ export default function Costing() {
           : view === 'inputs' ? <>
             <PageTabs nested tabs={[['materials', 'Materials'], ['labour', 'Labour'], ['electricity', 'Electricity'], ['other', 'Other overheads']]} value={inView} onChange={setInView} />
             {inView === 'labour' ? <LabourCosting branchId={branchId} currency={organization?.currency_code} />
-              : inView === 'materials' ? <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+              : inView === 'materials' ? <>
+                {/* mafuta, sabuni: an amount a bag, set here (138, 2026-11-20) */}
+                <ConsumablesCard branchId={branchId} refs={refs} />
+                <MaterialsCosting branchId={branchId} refs={refs} currency={organization?.currency_code} />
+              </>
               : inView === 'electricity' ? <ElectricityCosting branchId={branchId} refs={refs} currency={organization?.currency_code} tabs={null} />
               : <OverheadsCosting branchId={branchId} currency={organization?.currency_code} />}
           </>
