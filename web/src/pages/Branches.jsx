@@ -5,6 +5,8 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonRow } from '../components/LoadingSpinner';
 import { Building2, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import SitePlan from '../components/branches/SitePlan';
 
 const LOAD_ERROR = "We couldn't load this page. Please try again.";
 
@@ -14,6 +16,8 @@ export default function Branches() {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
   const [expanded,   setExpanded]   = useState({});
+  const { organization, canManage } = useAuth();
+  const canDraw = canManage('system.manage');   // site plans: the Technical admin only (137)
 
   async function load() {
     setLoading(true);
@@ -139,6 +143,11 @@ export default function Branches() {
                         </tbody>
                       </table>
                     )}
+                    {/* the branch's site plan (137, 2026-11-20) — drawn by the Technical admin, seen by all */}
+                    <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+                      <h3 className="modal-section-title" style={{ marginTop: 0 }}>Site plan</h3>
+                      <SitePlan branch={branch} stores={whs.filter(w => w.status === 'active')} organizationId={organization?.id} canEdit={canDraw} />
+                    </div>
                   </div>
                 )}
               </div>

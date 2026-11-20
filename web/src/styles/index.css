@@ -3116,3 +3116,22 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pp-shared { overflow-x: auto; }
 .pp-shared-table th, .pp-shared-table td.num { white-space: nowrap; }
 .pp-shared-table td:nth-child(2) { min-width: 9em; }
+
+/* site plan (137, 2026-11-20): a branch's areas drawn on a 680 × 500 plan */
+.sp { display: flex; flex-direction: column; gap: 10px; }
+.sp-svg { width: 100%; max-width: 980px; display: block; touch-action: none; user-select: none; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-soft); }
+.sp-svg.is-drawing { cursor: crosshair; }
+.sp-ground { fill: transparent; }
+.sp-area.can-edit { cursor: move; }
+.sp-area { cursor: pointer; }
+.sp-label { fill: var(--text-primary); font-size: 13px; font-weight: 500; pointer-events: none; }
+.sp-label.is-small { font-size: 10px; font-weight: 400; }
+.sp-lane { stroke: var(--text-secondary); cursor: pointer; }
+.sp-lane.is-sel { stroke: var(--accent); }
+.sp-handle { fill: var(--accent); cursor: nwse-resize; }
+.sp-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: var(--text-xs); color: var(--text-secondary); }
+.sp-legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+.sp-panel { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; background: var(--bg-surface); display: flex; flex-direction: column; gap: 8px; }
+.sp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.sp-row .pe-field { min-width: 160px; }
+.sp-homes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
