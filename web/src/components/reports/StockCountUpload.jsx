@@ -7,6 +7,7 @@ import { dbErrorMessage } from '../../lib/masterData';
 import { MOVEMENT_TYPES, qtyText, stockKey, byMaterialOrder } from '../../lib/inventory';
 import { categoryTools, productOrder } from '../../lib/categories';
 import NumberInput from '../NumberInput';
+import { useSiteZones, ZoneTag } from '../../lib/siteZones';
 
 const num = v => (String(v ?? '').trim() === '' ? null : Number(String(v).replace(/,/g, '')));
 let seq = 0;
@@ -38,6 +39,7 @@ export default function StockCountUpload({ refs, branchId, day, today, keep, onS
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const zones = useSiteZones(branchId);   // where each product is kept (137), shown under the item
 
   // what MOIS holds in each store on the day of the count
   useEffect(() => {
@@ -133,7 +135,7 @@ export default function StockCountUpload({ refs, branchId, day, today, keep, onS
                     onChange={e => set(r.k, { key: e.target.value, colorId: '', unitId: refs.items[e.target.value]?.mainUnitId ?? refs.items[e.target.value]?.stockUnitId ?? '' })}>
                     <option value="">Choose…</option>
                     {itemsFor(r).map(x => <option key={x.key} value={x.key}>{x.name}</option>)}
-                  </select></td>
+                  </select>{it?.kind === 'product' && zones?.hasPlan && <div><ZoneTag where={zones.of(it.id)} /></div>}</td>
                   <td>{it?.colorIds?.length ? (
                     <select className={`form-input${bad(miss.colour)}`} aria-label="Colour" value={r.colorId} onChange={e => set(r.k, { colorId: e.target.value })}>
                       <option value="">Choose…</option>

@@ -1,3 +1,4 @@
+import { useSiteZones, ZoneTag } from '../lib/siteZones';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
@@ -326,6 +327,7 @@ const fgStoresOf = (refs, branchId) => refs.warehouses.filter(w => w.status === 
   && w.type === 'finished_goods' && w.receives_production !== false);
 
 function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClose, onSaved }) {
+  const zones = useSiteZones(batch.branch_id);   // where each product goes to be kept (137)
   const fgStores = fgStoresOf(refs, batch.branch_id);
   const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
@@ -392,7 +394,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
                 const pp = passedOf(o);
                 return (
                   <tr key={o.id}>
-                    <td style={{ fontWeight: 500 }}>{nameOf(o)}{!o.is_primary && <div className="text-xs text-muted">leftover</div>}</td>
+                    <td style={{ fontWeight: 500 }}>{nameOf(o)}{!o.is_primary && <div className="text-xs text-muted">leftover</div>}{zones?.hasPlan && <div><ZoneTag where={zones.of(o.product_id)} /></div>}</td>
                     <td style={{ textAlign: 'right' }}>{qtyText(o.pieces_cast)}</td>
                     {active.map(r => (
                       <td key={r.id}><NumberInput step="1" min="0" className="form-input" style={{ width: 70 }} placeholder="0" aria-label={`${nameOf(o)} ${r.name}`}

@@ -1,3 +1,4 @@
+import { useSiteZones, ZoneTag } from '../lib/siteZones';
 import { useEffect, useMemo, useState } from 'react';
 import PeriodBar from '../components/PeriodBar';
 import { Receipt, Plus, Trash2, Printer, Check, Eye, Pencil, Paperclip } from 'lucide-react';
@@ -1307,6 +1308,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
 
 /** Hand goods over: line by line what leaves, up to what is still to deliver and the value paid */
 function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClose, onSaved }) {
+  const zones = useSiteZones(sale.branch_id);   // where each product is kept (137): where to load it from
   // what is in the finished-goods store now, per product and colour (2026-10-26)
   // the store the goods leave from (135): must be chosen when the branch has several (yard, shop) — 2026-11-19, the user
   // the yard first and filled in; the shop below it (2026-11-19, the user)
@@ -1411,7 +1413,7 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
           <tbody>
             {lines.map(l => (
               <tr key={l.id}>
-                <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong></td>
+                <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong>{zones?.hasPlan && <div><ZoneTag where={zones.of(l.product_id)} /></div>}</td>
                 <td style={{ textAlign: 'right' }}>{qtyText(l.left)} {per(l.product_id)}</td>
                 <td style={{ textAlign: 'right' }} className={tooMuch.some(x => x.k === stockKey(l)) ? 'text-error' : ''}>{!storeId ? '—' : inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} ${per(l.product_id)}` : '…'}</td>
                 <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>

@@ -14,6 +14,7 @@ import MovementModal from '../components/inventory/MovementModal';
 import { DoubleEntryAlert } from '../components/inventory/DoubleEntry';
 import ItemHistoryModal from '../components/inventory/ItemHistory';
 import { COUNT_QUEUE_KEY } from '../components/reports/StockCountUpload';
+import { useSiteZones, ZoneTag } from '../lib/siteZones';
 import { dateText } from '../lib/format';
 
 const LOAD_ERROR = "We couldn't load stock. Please try again.";
@@ -55,6 +56,7 @@ export default function Stock() {
   const [countPaused, setCountPaused] = useState(false);
   const saveQueue = q => { setCountQueue(q); try { if (q?.stores?.length) sessionStorage.setItem(queueKey, JSON.stringify(q)); else sessionStorage.removeItem(queueKey); } catch { /* ignore */ } };
   const nextCount = countQueue?.stores?.[0];
+  const zones = useSiteZones(branchId);   // where each product is kept (137), when one branch is chosen
 
   async function load(date = asOfDate) {
     setError('');
@@ -224,6 +226,7 @@ export default function Stock() {
                     {c.total < 0 && <span className="sk-out">BELOW ZERO</span>}
                   </span>
                   <strong>{c.item.name}</strong>
+                  {isProducts && zones?.hasPlan && <ZoneTag where={zones.of(c.item.id)} />}
                 </div>
                 <div className="sk-total">
                   {!isProducts && mainUnitOf(c.item) ? (<>
