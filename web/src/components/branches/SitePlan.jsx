@@ -21,6 +21,8 @@ export const AREA_KINDS = {
 };
 const LANES = { road: { label: 'Road', width: 6, dash: '14 8' }, main: { label: 'Main route', width: 2, dash: '6 5' }, lane: { label: 'Lane', width: 1.2, dash: '3 4' } };
 const STOCK_KINDS = ['ready', 'curing', 'material'];
+// a zone is a name and a text colour (2026-11-20, the user: the box keeps its kind's colour, the words show the zone)
+export const ZONE_COLORS = { teal: '#1D9E75', blue: '#378ADD', coral: '#D85A30', purple: '#7F77DD', amber: '#BA7517', pink: '#D4537E', green: '#639922', gray: '#888780' };
 let tmp = 0;
 const keyOf = a => a.id ?? a.tmp;
 const r1 = v => Math.round(v);
@@ -30,6 +32,9 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
   const [areas, setAreas] = useState(null);
   const [lanes, setLanes] = useState([]);
   const [homes, setHomes] = useState({});        // product id → area key
+  const [zones, setZones] = useState([]);        // [{ id | tmp, name, color }]
+  const [machines, setMachines] = useState([]);  // [{ id, name, zone }] — zone: a zone key; its products are kept there
+  const [links, setLinks] = useState([]);        // machine_products of the branch's machines
   const [products, setProducts] = useState([]);  // the branch's products [{ id, name }]
   const [sel, setSel] = useState(null);          // { type: 'area' | 'lane', key }
   const [drag, setDrag] = useState(null);
@@ -41,17 +46,23 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
 
   async function load() {
     setError(''); setSel(null); setDrawing(null); setDirty(false);
-    const [a, l, h, bp] = await Promise.all([
+    const [a, l, h, bp, z, m, mp] = await Promise.all([
       supabase.from('site_areas').select('*').eq('branch_id', branch.id).eq('status', 'active'),
       supabase.from('site_lanes').select('*').eq('branch_id', branch.id),
       supabase.from('product_home_areas').select('product_id, area_id').eq('branch_id', branch.id),
       supabase.from('branch_products').select('product_id, product:products(canonical_name)').eq('branch_id', branch.id).eq('status', 'active'),
+      supabase.from('site_zones').select('*').eq('branch_id', branch.id).order('name'),
+      supabase.from('machines').select('*').eq('branch_id', branch.id).eq('status', 'active').order('name'),
+      supabase.from('machine_products').select('machine_id, product_id'),
     ]);
     if (a.error) { setAreas([]); setError(['42P01', 'PGRST205'].includes(a.error.code) ? 'Site plans need migration 137 on the database.' : dbErrorMessage(a.error)); return; }
     setAreas((a.data || []).map(x => ({ ...x, x: +x.x, y: +x.y, w: +x.w, h: +x.h })));
     setLanes((l.data || []).map(x => ({ ...x, key: x.id })));
     setHomes(Object.fromEntries((h.data || []).map(x => [x.product_id, x.area_id])));
     setProducts((bp.data || []).map(x => ({ id: x.product_id, name: x.product?.canonical_name ?? '—' })).sort((p, q) => p.name.localeCompare(q.name)));
+    setZones(z.data || []);
+    setMachines((m.data || []).map(x => ({ id: x.id, name: x.name, zone: x.zone_id ?? '', was: x.zone_id ?? null })));
+    setLinks(mp.data || []);
   }
   useEffect(() => { load(); }, [branch.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -62,6 +73,14 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
   // drawn back to front: big areas first, so what sits inside them stays on top
   const ordered = useMemo(() => [...(areas || [])].sort((a, b) => b.w * b.h - a.w * a.h), [areas]);
   const homeCount = k => Object.values(homes).filter(v => v === k).length;
+  const zoneColor = k => ZONE_COLORS[zones.find(z => keyOf(z) === k)?.color] ?? null;
+  // where each product is kept: its home area's zone, else the zone of a machine it is made on (as product_zone() in 137)
+  const zoneOfProduct = pid => {
+    const home = homes[pid] && areas?.find(a => keyOf(a) === homes[pid]);
+    if (home?.zone_id) return home.zone_id;
+    return machines.find(m => m.zone && links.some(l => l.machine_id === m.id && l.product_id === pid))?.zone ?? null;
+  };
+  const setZone = (k, patch) => change(() => setZones(zs => zs.map(z => (keyOf(z) === k ? { ...z, ...patch } : z))));
 
   function down(e, a) {
     if (!canEdit || drawing) return;
@@ -105,13 +124,25 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
     setError(''); setBusy(true);
     try {
       if (areas.some(a => !String(a.name || '').trim())) throw new Error('Every area needs a name.');
+      if (zones.some(z => !String(z.name || '').trim())) throw new Error('Every zone needs a name.');
+      // zones first, so areas and machines can point at them
+      const zoneId = {};
+      const { data: zBefore } = await supabase.from('site_zones').select('id').eq('branch_id', branch.id);
+      const zKeep = new Set(zones.filter(z => z.id).map(z => z.id));
+      const zGone = (zBefore || []).map(x => x.id).filter(id => !zKeep.has(id));
+      if (zGone.length) { const r = await supabase.from('site_zones').delete().in('id', zGone); if (r.error) throw r.error; }
+      for (const z of zones) {
+        const row = { name: z.name.trim(), color: z.color };
+        if (z.id) { const r = await supabase.from('site_zones').update(row).eq('id', z.id); if (r.error) throw r.error; zoneId[z.id] = z.id; }
+        else { const r = await supabase.from('site_zones').insert({ ...row, organization_id: organizationId, branch_id: branch.id }).select('id').single(); if (r.error) throw r.error; zoneId[z.tmp] = r.data.id; }
+      }
       const { data: before } = await supabase.from('site_areas').select('id').eq('branch_id', branch.id);
       const keep = new Set(areas.filter(a => a.id).map(a => a.id));
       const gone = (before || []).map(x => x.id).filter(id => !keep.has(id));
       if (gone.length) { const r = await supabase.from('site_areas').delete().in('id', gone); if (r.error) throw r.error; }
       const idOf = {};
       for (const a of areas) {
-        const row = { name: a.name.trim(), kind: a.kind, warehouse_id: STOCK_KINDS.includes(a.kind) ? a.warehouse_id || null : null, x: a.x, y: a.y, w: a.w, h: a.h, parent_id: null };
+        const row = { name: a.name.trim(), kind: a.kind, warehouse_id: STOCK_KINDS.includes(a.kind) ? a.warehouse_id || null : null, zone_id: a.zone_id ? zoneId[a.zone_id] ?? null : null, x: a.x, y: a.y, w: a.w, h: a.h, parent_id: null };
         if (a.id) { const r = await supabase.from('site_areas').update(row).eq('id', a.id); if (r.error) throw r.error; idOf[a.id] = a.id; }
         else {
           const r = await supabase.from('site_areas').insert({ ...row, organization_id: organizationId, branch_id: branch.id }).select('id').single();
@@ -123,6 +154,11 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
         const box = areas.filter(b => b !== a && b.w * b.h > a.w * a.h && b.x <= a.x && b.y <= a.y && b.x + b.w >= a.x + a.w && b.y + b.h >= a.y + a.h)
           .sort((p, q) => p.w * p.h - q.w * q.h)[0];
         if (box) { const r = await supabase.from('site_areas').update({ parent_id: idOf[keyOf(box)] }).eq('id', idOf[keyOf(a)]); if (r.error) throw r.error; }
+      }
+      for (const m of machines) {
+        const z = m.zone ? zoneId[m.zone] ?? null : null;
+        if (z === m.was) continue;   // only the machines whose zone changed
+        const r = await supabase.from('machines').update({ zone_id: z }).eq('id', m.id); if (r.error) throw r.error;
       }
       let r = await supabase.from('site_lanes').delete().eq('branch_id', branch.id); if (r.error) throw r.error;
       if (lanes.length) { r = await supabase.from('site_lanes').insert(lanes.map(l => ({ organization_id: organizationId, branch_id: branch.id, kind: l.kind, points: l.points }))); if (r.error) throw r.error; }
@@ -162,7 +198,8 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
                 <rect x={a.x} y={a.y} width={a.w} height={a.h} rx="4"
                   style={{ fill: k.open ? 'transparent' : `color-mix(in srgb, ${k.color} 22%, var(--bg-surface))`, stroke: k.color }}
                   strokeWidth={on ? 2.5 : 1} strokeDasharray={k.open ? '5 3' : undefined} />
-                <text x={a.x + a.w / 2} y={a.y + a.h / 2} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`}>{a.name}</text>
+                <text x={a.x + a.w / 2} y={a.y + a.h / 2} textAnchor="middle" dominantBaseline="central" className={`sp-label${small ? ' is-small' : ''}`}
+                  style={zoneColor(a.zone_id) ? { fill: zoneColor(a.zone_id) } : undefined}>{a.name}</text>
               </g>
             );
           })}
@@ -183,6 +220,8 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
               <label className="pe-field"><span>Name</span><input className="form-input" value={selArea.name} onChange={e => setArea({ name: e.target.value })} /></label>
               <label className="pe-field"><span>Kind</span><select className="form-input" value={selArea.kind} onChange={e => setArea({ kind: e.target.value })}>
                 {Object.entries(AREA_KINDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
+              <label className="pe-field"><span>Zone</span><select className="form-input" value={selArea.zone_id ?? ''} onChange={e => setArea({ zone_id: e.target.value || null })}>
+                <option value="">None</option>{zones.map(z => <option key={keyOf(z)} value={keyOf(z)}>{z.name}</option>)}</select></label>
               {STOCK_KINDS.includes(selArea.kind) && <label className="pe-field"><span>Part of store</span><select className="form-input" value={selArea.warehouse_id ?? ''} onChange={e => setArea({ warehouse_id: e.target.value || null })}>
                 <option value="">None</option>{stores.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>}
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setArea({ w: selArea.h, h: selArea.w, x: Math.min(selArea.x, W - selArea.h), y: Math.min(selArea.y, H - selArea.w) })}><RotateCw size={14} /> Turn</button>
@@ -206,6 +245,41 @@ export default function SitePlan({ branch, stores, organizationId, canEdit }) {
         <div className="sp-panel sp-row">
           <span className="text-sm">{LANES[lanes.find(l => l.key === sel.key)?.kind]?.label}</span>
           <button type="button" className="btn btn-ghost btn-sm text-error" onClick={removeSel}><Trash2 size={14} /> Remove</button>
+        </div>
+      )}
+
+      {/* zones: a name and a text colour; a machine's products are kept in its zone */}
+      {(zones.length > 0 || canEdit) && (
+        <div className="sp-panel">
+          <span className="pl-label">Zones</span>
+          {zones.map(z => {
+            const here = products.filter(p => zoneOfProduct(p.id) === keyOf(z));
+            return (
+              <div key={keyOf(z)} className="sp-zone">
+                {canEdit ? <>
+                  <input className="form-input sp-zone-name" aria-label="Zone name" value={z.name} style={{ color: ZONE_COLORS[z.color] }} onChange={e => setZone(keyOf(z), { name: e.target.value })} />
+                  <select className="form-input sp-zone-color" aria-label="Zone colour" value={z.color} onChange={e => setZone(keyOf(z), { color: e.target.value })}>
+                    {Object.keys(ZONE_COLORS).map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  <button type="button" className="icon-btn" aria-label={`Remove zone ${z.name}`} onClick={() => change(() => { setZones(zs => zs.filter(x => keyOf(x) !== keyOf(z))); setAreas(as => as.map(a => (a.zone_id === keyOf(z) ? { ...a, zone_id: null } : a))); setMachines(ms => ms.map(m => (m.zone === keyOf(z) ? { ...m, zone: '' } : m))); })}><Trash2 size={14} /></button>
+                </> : <strong style={{ color: ZONE_COLORS[z.color] }}>{z.name}</strong>}
+                <span className="pl-help" title={here.map(p => p.name).join(', ')}>{here.length} product{here.length === 1 ? '' : 's'} kept here</span>
+              </div>
+            );
+          })}
+          {canEdit && <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => change(() => setZones(zs => [...zs, { tmp: `t${++tmp}`, name: `Zone ${zs.length + 1}`, color: Object.keys(ZONE_COLORS)[zs.length % 8] }]))}><Plus size={14} /> Zone</button>}
+          {machines.length > 0 && zones.length > 0 && (
+            <div className="sp-machines">
+              <span className="pl-label">Products of each machine are kept in</span>
+              {machines.map(m => (
+                <label key={m.id} className="sp-machine"><span>{m.name}</span>
+                  {canEdit ? <select className="form-input" value={m.zone} onChange={e => change(() => setMachines(ms => ms.map(x => (x.id === m.id ? { ...x, zone: e.target.value } : x))))}>
+                    <option value="">—</option>{zones.map(z => <option key={keyOf(z)} value={keyOf(z)}>{z.name}</option>)}</select>
+                    : <strong style={{ color: zoneColor(m.zone) ?? undefined }}>{zones.find(z => keyOf(z) === m.zone)?.name ?? '—'}</strong>}
+                </label>
+              ))}
+              <span className="pl-help">A product kept elsewhere: select that area on the plan and add it under Products kept here.</span>
+            </div>
+          )}
         </div>
       )}
 

@@ -3135,3 +3135,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .sp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .sp-row .pe-field { min-width: 160px; }
 .sp-homes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sp-zone { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sp-zone-name { max-width: 160px; font-weight: 600; }
+.sp-zone-color { width: auto; }
+.sp-machines { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.sp-machine { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
+.sp-machine .form-input { width: auto; }

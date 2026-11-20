@@ -72,7 +72,10 @@ export default function Branches() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {branches.map(branch => {
-            const whs = warehousesFor(branch.id);
+            const all = warehousesFor(branch.id);
+            // curing stores work behind the scenes (2026-11-20, the user): the list shows the main stores
+            const whs = all.filter(w => w.type !== 'wip');
+            const backend = all.filter(w => w.type === 'wip' && w.status === 'active');
             const isExpanded = expanded[branch.id];
             return (
               <div key={branch.id} className="card">
@@ -143,10 +146,11 @@ export default function Branches() {
                         </tbody>
                       </table>
                     )}
+                    {backend.length > 0 && <p className="pl-help" style={{ padding: '8px 20px 0' }} title="Batches cure here before quality release; their stock shows as Curing">Behind the scenes (curing): {backend.map(w => w.name).join(' · ')}</p>}
                     {/* the branch's site plan (137, 2026-11-20) — drawn by the Technical admin, seen by all */}
                     <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
                       <h3 className="modal-section-title" style={{ marginTop: 0 }}>Site plan</h3>
-                      <SitePlan branch={branch} stores={whs.filter(w => w.status === 'active')} organizationId={organization?.id} canEdit={canDraw} />
+                      <SitePlan branch={branch} stores={all.filter(w => w.status === 'active')} organizationId={organization?.id} canEdit={canDraw} />
                     </div>
                   </div>
                 )}
