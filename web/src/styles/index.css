@@ -3185,3 +3185,4 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pl-cons { margin-top: 8px; font-size: var(--text-xs); color: var(--text-muted); }
 .pl-cons strong { color: var(--text-primary); font-weight: 600; }
 .pl-cons .pl-cons-off { opacity: .6; }
+.mc-group td { background: var(--bg-soft); font-size: var(--text-sm); }

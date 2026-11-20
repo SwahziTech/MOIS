@@ -112,7 +112,8 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
               {/* the team's name and how many worked — not their names (2026-11-20, the user) */}
               <span className="pl-help">{qtyText(r2(b.bags))} bags{residuals.length ? ` · ${qtyText(pcs(b))} pcs` : ''}{b.team ? ` · ${String(b.team).split(' (')[0]}` : ''}{b.people != null ? ` · ${b.people} ${b.people === 1 ? 'person' : 'people'}` : ''}{b.machine ? ` · ${b.machine}` : ''}</span>
               {b.cost != null && <span className="pb-cost-head" title={b.costComplete === false ? 'A material had no cost known — left out' : b.estimate ? 'Estimate from today\'s stock costs — fixed when saved' : 'Materials at cost, oldest stock first, VAT included'}>
-                material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}</span>}
+                material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}
+                {b.consumables > 0 && <span className="pl-help" title="Indirect materials (mould oil, soap): production overhead, in the cost a piece"> · consumables {money(b.consumables)}</span>}</span>}
               {b.stage && stageBadge?.(b.stage)}
               {/* a saved batch's job card, A4 (2026-11-20, the user): one card a batch */}
               {b.id && <button type="button" className="icon-btn" aria-label={`Job card for batch ${b.n}`} title="View job card — materials used and their cost, products made"

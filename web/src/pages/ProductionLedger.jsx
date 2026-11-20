@@ -137,6 +137,7 @@ export default function ProductionLedger() {
     return Object.values(p);
   };
 
+  const consOf = b => (b.materials || []).filter(m => m.source === 'consumable').reduce((t, m) => t + Number(m.cost || 0), 0);
   function summaryOf(d) {
     const mats = {};
     for (const b of d.batches.filter(x => x.status !== 'void')) for (const m of b.materials || []) {
@@ -153,14 +154,15 @@ export default function ProductionLedger() {
         ? labourNorm({ machines: track.machines, norms: track.norms[d.branchId] || {} }, d.batches.filter(b => b.status !== 'void').map(b => ({ machineId: b.machine_id, productId: b.product_id, bags: Number(b.cement_bags) }))) : null,
       batches: d.batches.map((b, i) => ({
         id: b.id, n: i + 1, bags: Number(b.cement_bags), stage: stageOf(b, today),
-        cost: b.material_cost, costComplete: b.material_cost_complete,   // 055: costed as the materials left the store
+        // 055: costed as the materials left the store; consumables (138) are indirect: shown apart, not in the material cost (2026-11-20)
+        cost: b.material_cost != null ? Number(b.material_cost) - consOf(b) : null, costComplete: b.material_cost_complete, consumables: consOf(b) || null,
         team: teamOf(b), people: track && b.team_id ? peopleOf(track.teams, b.team_id, b.worker_ids).length : null, machine: track?.machines.find(m => m.id === b.machine_id)?.name ?? null,
         qc: b.status === 'released' ? { tags: b.qc_tags || [], note: b.release_note } : null,
         factor: b.theoretical_bags != null ? b.theoretical_bags / b.cement_bags : null,
         outOfBand: b.theoretical_bags != null && (b.cement_bags < b.bags_min - 1e-9 || (b.bags_max != null && b.cement_bags > b.bags_max + 1e-9)),
         outputs: [...(b.outputs || [])].sort((x, y) => y.is_primary - x.is_primary).map(o => ({ name: productName(o), pieces: o.pieces_cast, residual: !o.is_primary, passed: o.pieces_passed, perBag: o.yield_per_bag,
           perPiece: o.cost_per_piece, perSqm: o.cost_per_sqm })),
-        materials: breakdownMaterials(b.materials, refs),
+        materials: breakdownMaterials((b.materials || []).filter(m => m.source !== 'consumable'), refs),
       })),
       products: productsOf(d).map(p => ({ ...p, sqm: sqmOf(p.productId, p.pieces) })),
       materials: Object.values(mats).sort((a, b) => byMaterialOrder(a.item, b.item)).map(m => ({ name: m.item.name, used: m.used, unit: m.unit })),

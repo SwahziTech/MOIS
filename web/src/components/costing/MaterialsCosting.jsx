@@ -32,7 +32,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
   async function load() {
     setError('');
     const { data, error: err } = await supabase.from('production_batch_materials')
-      .select('material_id, stock_quantity, cost, batch:production_batches!inner(batch_date, branch_id, status)')
+      .select('material_id, stock_quantity, cost, source, batch:production_batches!inner(batch_date, branch_id, status)')
       .eq('batch.branch_id', branchId).neq('batch.status', 'void').gte('batch.batch_date', periodRange(period, today)[0]).lte('batch.batch_date', periodRange(period, today)[1]);
     if (err) { console.error(err); setError("We couldn't load material costs."); return; }
     setUsed(data || []);
@@ -51,17 +51,18 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
     if (!used) return [];
     const by = {};
     for (const u of used) {
-      const x = by[u.material_id] ??= { qty: 0, cost: 0, uncosted: false };
+      const x = by[u.material_id] ??= { qty: 0, cost: 0, uncosted: false, indirect: false };
       x.qty += Number(u.stock_quantity); x.cost += Number(u.cost || 0); if (u.cost == null) x.uncosted = true;
+      if (u.source === 'consumable') x.indirect = true;   // mould oil, soap (138): indirect materials, shown apart
     }
-    const total = Object.values(by).reduce((t, x) => t + x.cost, 0);
+    const total = Object.values(by).filter(x => !x.indirect).reduce((t, x) => t + x.cost, 0);
     return mats.map(m => {
       const x = by[m.id] ?? { qty: 0, cost: 0, uncosted: false };
       const main = m.mainUnitId ? m.units.find(u => u.id === m.mainUnitId) : null;   // shown in its main unit (051)
       const unitId = main ? main.id : m.stockUnitId;
       const factor = main ? main.factor : 1;
       const sv = stock[m.id];
-      return { m, qty: x.qty / factor, unit: refs.unitById[unitId]?.symbol ?? '', cost: r2(x.cost), share: total > 0 ? x.cost / total : 0,
+      return { m, indirect: x.indirect || m.inRecipes === false, qty: x.qty / factor, unit: refs.unitById[unitId]?.symbol ?? '', cost: r2(x.cost), share: !x.indirect && total > 0 ? x.cost / total : 0,
         perUnit: x.qty > 0 ? x.cost / (x.qty / factor) : null, uncosted: x.uncosted,
         stockValue: sv?.value != null ? Number(sv.value) : null, stockQty: sv?.on_hand != null ? Number(sv.on_hand) / factor : null,
         unitCost: sv?.unit_cost != null ? Number(sv.unit_cost) * factor : null };
@@ -71,15 +72,18 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
 
   if (error) return <div className="card"><ErrorState message={error} onRetry={load} /></div>;
   if (used === null) return <div className="card"><span className="skeleton" /></div>;
-  const totalUsed = rows.reduce((t, r) => t + r.cost, 0);
-  const top = rows.find(r => r.cost > 0);
+  const direct = rows.filter(r => !r.indirect);
+  const indirect = rows.filter(r => r.indirect);
+  const totalUsed = direct.reduce((t, r) => t + r.cost, 0);
+  const indirectUsed = indirect.reduce((t, r) => t + r.cost, 0);
+  const top = direct.find(r => r.cost > 0);
   const stockTotal = rows.reduce((t, r) => t + (r.stockValue || 0), 0);
   const label = weekLabel(period, today)?.toLowerCase() ?? { 30: 'last 30 days', 90: 'last 90 days', 365: 'last 12 months' }[period];
 
   return (
     <>
       <div className="mm-stats">
-        <div className="mm-stat"><span className="pl-label">Materials used</span><strong>{money(r2(totalUsed))}</strong><span className="pl-help">{label} · into production</span></div>
+        <div className="mm-stat"><span className="pl-label">Materials used</span><strong>{money(r2(totalUsed))}</strong><span className="pl-help">{label} · into production{indirectUsed > 0 ? ` · + ${formatMoneyShort(r2(indirectUsed), currency)} consumables` : ''}</span></div>
         <div className="mm-stat"><span className="pl-label">Biggest cost</span><strong>{top ? top.m.name : '—'}</strong><span className="pl-help">{top ? `${Math.round(top.share * 100)}% · ${formatMoneyShort(top.cost, currency)}` : 'nothing used yet'}</span></div>
         <div className="mm-stat"><span className="pl-label">In store at cost</span><strong>{money(r2(stockTotal))}</strong><span className="pl-help">oldest stock first</span></div>
       </div>
@@ -91,7 +95,9 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
           <table>
             <thead><tr><th>Material</th><th className="num">Used</th><th className="num">Cost (TZS)</th><th className="num">Share</th><th className="num">A unit used (TZS)</th><th className="num">In store</th><th className="num">A unit in store (TZS)</th><th className="num">Store value (TZS)</th></tr></thead>
             <tbody>
-              {rows.map(r => (
+              {[...direct, ...(indirect.length ? [{ head: true }] : []), ...indirect].map(r => r.head ? (
+                <tr key="indirect" className="mc-group"><td colSpan={8} title="Not in the mix: mould oil, soap — production overhead, taken per bag of cement"><strong>Indirect materials (consumables)</strong></td></tr>
+              ) : (
                 <tr key={r.m.id}>
                   <td><span className="pl-help">{r.m.materialCategory ?? ''}</span><div><strong>{r.m.name}</strong></div></td>{/* materials: category above the name (locked) */}
                   <td className="num">{r.qty > 0 ? <>{qtyText(r2(r.qty))} <span className="pl-help">{r.unit}</span></> : ''}</td>
@@ -104,7 +110,7 @@ export default function MaterialsCosting({ branchId, refs, currency }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td><strong>Total</strong></td><td /><td className="num"><strong>{money(r2(totalUsed))}</strong></td><td colSpan={4} /><td className="num"><strong>{money(r2(stockTotal))}</strong></td></tr></tfoot>
+            <tfoot><tr><td><strong>Total</strong></td><td /><td className="num"><strong>{money(r2(totalUsed + indirectUsed))}</strong></td><td colSpan={4} /><td className="num"><strong>{money(r2(stockTotal))}</strong></td></tr></tfoot>
           </table>
         </div></div>
       )}
