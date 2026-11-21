@@ -109,6 +109,32 @@ export async function openPdf(doc, setup) {
   pdf.save(name);
   return 'downloaded';
 }
+/**
+ * Phones (2026-11-21, the user: the PDF button did nothing on a director's phone): a phone only shares or
+ * opens a file straight after a tap, so the viewer builds the file when it opens and hands it over at once.
+ */
+export async function pdfFile(doc, setup) {
+  const pdf = await buildPdf(doc, setup);
+  return new File([pdf.output('blob')], `${doc.fileName}.pdf`, { type: 'application/pdf' });
+}
+/** Share a ready file (phone list of apps), else open it in the browser's PDF viewer — call straight from the tap */
+export function shareOrOpenPdf(file) {
+  if (isPhone() && navigator.canShare?.({ files: [file] })) {
+    return navigator.share({ files: [file], title: file.name }).then(() => 'shared').catch(e => {
+      if (e?.name === 'AbortError') return 'cancelled';
+      openFile(file); return 'opened';
+    });
+  }
+  openFile(file);
+  return Promise.resolve('opened');
+}
+function openFile(file) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
 export async function printPdf(doc, setup) {
   const pdf = await buildPdf(doc, setup);
   pdf.autoPrint();

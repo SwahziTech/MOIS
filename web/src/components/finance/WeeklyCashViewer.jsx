@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, MessageSquare, Check, ExternalLink } from 'lucide-react';
 import { PagePreview } from './WeeklyCashDocDialog';
-import { pickPaper, openPdf, isPhone } from '../../lib/weeklyCashDoc';
+import { pickPaper, openPdf, isPhone, pdfFile, shareOrOpenPdf } from '../../lib/weeklyCashDoc';
 
 /*
  * The weekly cash report full screen, as the PDF page (2026-11-16, the user: directors open it on their
@@ -14,11 +14,19 @@ export default function WeeklyCashViewer({ doc, total, money, canDecide = false,
   const [mode, setMode] = useState(null);   // null | 'comment'
   const [note, setNote] = useState('');
   const setup = pickPaper(doc);
+  // the PDF is made as the report opens (2026-11-21): a phone only shares or opens a file straight after the tap
+  const [file, setFile] = useState(null);
+  useEffect(() => {
+    let live = true;
+    pdfFile(doc, setup).then(f => { if (live) setFile(f); }).catch(() => {});
+    return () => { live = false; };
+  }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pdfTap = () => (file ? shareOrOpenPdf(file) : openPdf(doc, setup));
   return createPortal(
     <div className="wcv" role="dialog" aria-modal="true" aria-label={doc.title}>
       <div className="wcv-bar">
         <strong className="wcv-title">{doc.title}</strong>
-        <button type="button" className="btn btn-ghost btn-sm" title={isPhone() ? 'Open the PDF with an app on this phone' : 'Save as PDF'} onClick={() => openPdf(doc, setup)}>{isPhone() ? <ExternalLink size={16} /> : <Download size={16} />} PDF</button>
+        <button type="button" className="btn btn-ghost btn-sm" title={isPhone() ? 'Open the PDF with an app on this phone' : 'Save as PDF'} onClick={pdfTap}>{isPhone() ? <ExternalLink size={16} /> : <Download size={16} />} PDF</button>
         {/* close: always top right, red on hover (2026-11-21, the user — the standard everywhere) */}
         <button type="button" className="close-x" aria-label="Close" title="Close" onClick={onClose}><X size={18} /></button>
       </div>

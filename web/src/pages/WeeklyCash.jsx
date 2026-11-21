@@ -638,7 +638,7 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     req: { title: reqTitle, showApproved, total, approvedTotal,
       lines: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(l.amount) ?? 0, approved: num(l.approved) ?? num(l.amount) ?? 0 })) },
     account: { bank: payTo.bank, number: payTo.no, holder: payTo.name },   // always on the page (2026-11-15, the user)
-    notes: notes.trim(), fileName: `Weekly cash ${branchName ?? ''} ${week}`,
+    notes: notes.trim(), fileName: `Request ${tableDate(week)}${branchName ? ` - ${branchName}` : ''}`,   // e.g. Request 21 Nov 2026 - Dodoma (2026-11-21, the user)
   });
 
   // the total rows stand out: TOTAL CASH on top, the two closing rows at the bottom
