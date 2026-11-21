@@ -23,6 +23,9 @@ const PAGE = 500;
 const NOUN = { production_use: 'Production use', production_output: 'Production', curing_release: 'Quality release', waste: 'Waste / broken',
   sale_delivery: 'Goods leaving', reclassification: 'Reclassification' };
 const nounOf = t => MOVEMENT_TYPES[t]?.noun ?? NOUN[t] ?? t;
+// the other side of a one-store movement, by its kind (Allocation: from → to)
+const SOURCE = { receipt: 'Supplier', production_output: 'Production', opening_balance: 'Opening stock', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
+const DEST = { sale_delivery: 'Customer', production_use: 'Production', issue: 'Issued out', waste: 'Waste', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
 
 /*
  * The inventory ledger as documents (migration 022). Read-only: a mistake
@@ -95,8 +98,6 @@ export default function Movements() {
   // A movement's legs for the same item give its from and to (a transfer, a quality release, broken → Rejects);
   // a single leg's other side is named by the kind of movement (production, the customer, the supplier…).
   const storeName = id => whById[id]?.name ?? '—';
-  const SOURCE = { receipt: 'Supplier', production_output: 'Production', opening_balance: 'Opening stock', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
-  const DEST = { sale_delivery: 'Customer', production_use: 'Production', issue: 'Issued out', waste: 'Waste', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
   const rowsOf = m => {
     const g = {};
     for (const l of m.lines) {
@@ -192,6 +193,16 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
   const reverseNeedsApproval = !canManage('inventory.adjust');
   const [requested, setRequested] = useState(false);
   const unit = id => refs.unitById[id]?.symbol ?? '';
+  // one line an item (2026-11-21, the user): its two sides as an allocation, from → to, each store's balance after
+  const nameOf = id => whById[id]?.name ?? '—';
+  const groups = Object.values(m.lines.reduce((g, l) => {
+    const k = itemKey(l) + '|' + (l.color_id ?? '');
+    (g[k] ||= { k, line: l, out: [], in: [] })[Number(l.quantity) < 0 ? 'out' : 'in'].push(l);
+    return g;
+  }, {})).map(g => ({ ...g,
+    from: g.out.length ? [...new Set(g.out.map(l => nameOf(l.warehouse_id)))].join(', ') : (m.movement_type === 'receipt' && m.supplier?.name) || SOURCE[m.movement_type] || '—',
+    to: g.in.length ? [...new Set(g.in.map(l => nameOf(l.warehouse_id)))].join(', ') : m.movement_type === 'transfer' ? nameOf(m.to_warehouse_id) : DEST[m.movement_type] || '—',
+    main: g.out[0] ?? g.in[0] }));
 
   async function reverse() {
     setError('');
@@ -219,7 +230,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
       <div className="modal-form">
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         <dl className="detail-list text-sm">
-          <dt>Store</dt><dd>{m.movement_type === 'transfer' ? `${warehouseLabel(whById[m.warehouse_id])} → ${warehouseLabel(whById[m.to_warehouse_id])}` : warehouseLabel(whById[m.warehouse_id])}</dd>
+          <dt>Allocation</dt><dd>{[...new Set(groups.map(g => `${g.from} → ${g.to}`))].join(' · ')}</dd>
           {m.supplier && <><dt>Supplier</dt><dd>{m.supplier.name}</dd></>}
           {m.reason && <><dt>Reason</dt><dd>{m.reason}</dd></>}
           {m.reference && <><dt>Reference</dt><dd>{m.reference}</dd></>}
@@ -234,24 +245,21 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
         </dl>
         <div className="table-container">
           <table>
-            <thead><tr><th>Item</th><th>Store</th><th>As entered</th><th style={{ textAlign: 'right' }}>Stock change</th><th style={{ textAlign: 'right' }} title="Stock in that store right after this line, in date order">Balance after</th></tr></thead>
+            <thead><tr><th>Item</th><th>Allocation</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }} title="Stock in each store right after this movement, in date order">Balance after</th></tr></thead>
             <tbody>
-              {m.lines.map(l => (
-                <tr key={l.id}>
+              {groups.map(g => { const l = g.main; return (
+                <tr key={g.k}>
                   <td>{refs.items[itemKey(l)]?.name ?? '—'}{l.color_id && <span className="text-muted"> · {refs.colorById[l.color_id]?.name}</span>}</td>
-                  <td className="text-sm text-muted">{warehouseLabel(whById[l.warehouse_id])}</td>
-                  <td className="text-sm">
+                  <td className="text-sm">{g.from} <span className="pl-help">→</span> {g.to}</td>
+                  <td style={{ textAlign: 'right' }} className="text-sm">
                     {l.transaction_type === 'count'
-                      ? `found ${qtyText(l.entered_quantity)} ${unit(l.entered_unit_id)}`
-                      : `${qtyText(Math.abs(l.entered_quantity))} ${unit(l.entered_unit_id)}`}
-                    {l.unit_cost != null && <span className="text-muted"> · {formatMoney(l.unit_cost, organization?.currency_code)} each</span>}
+                      ? <>found {qtyText(l.entered_quantity)} {unit(l.entered_unit_id)}</>
+                      : <strong>{qtyText(Math.abs(l.entered_quantity))} {unit(l.entered_unit_id)}</strong>}
+                    {l.unit_cost != null && <div className="text-muted">{formatMoney(l.unit_cost, organization?.currency_code)} each</div>}
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }} className={Number(l.quantity) < 0 ? 'text-error' : ''}>
-                    {Number(l.quantity) > 0 ? '+' : ''}{qtyText(l.quantity)} {unit(l.stock_unit_id)}
-                  </td>
-                  <td style={{ textAlign: 'right' }} className="text-muted">{after[l.id] != null ? `${qtyText(after[l.id])} ${unit(l.stock_unit_id)}` : '—'}</td>
+                  <td style={{ textAlign: 'right' }} className="text-sm text-muted">{[...g.out, ...g.in].map(x => (after[x.id] != null ? <div key={x.id}>{nameOf(x.warehouse_id)} {qtyText(after[x.id])} {unit(x.stock_unit_id)}</div> : null))}</td>
                 </tr>
-              ))}
+              ); })}
             </tbody>
           </table>
         </div>
