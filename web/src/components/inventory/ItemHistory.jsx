@@ -49,7 +49,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
     Promise.all([
       supabase.from('inventory_transactions')
         .select(`id, transaction_date, transaction_type, quantity, entered_quantity, entered_unit_id, unit_cost, color_id, seq, created_at,
-          warehouse:warehouses!inner(branch_id, name), unit:units!inventory_transactions_entered_unit_id_fkey(symbol),
+          warehouse:warehouses!inner(branch_id, name, type), unit:units!inventory_transactions_entered_unit_id_fkey(symbol),
           movement:inventory_movements(movement_type, reason, reference, notes, created_by, production_batch_id)`)
         .eq(col, item.id).order('transaction_date').order('seq'),
       item.kind === 'material' ? supabase.from('purchase_line_costs').select('*').eq('material_id', item.id) : Promise.resolve({ data: [] }),
@@ -57,9 +57,10 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
       if (!live) return;
       const bought = Object.fromEntries((pc.data || []).map(x => [x.transaction_id, x]));
       let bal = 0;
-      const list = (t.data || []).filter(x => !branchId || x.warehouse?.branch_id === branchId).map(x => {
+      // the Rejects store's side of a broken piece is not stock here (139): one line, 'Reject', out of the store it left
+      const list = (t.data || []).filter(x => (!branchId || x.warehouse?.branch_id === branchId) && x.warehouse?.type !== 'rejects').map(x => {
         bal += Number(x.quantity);
-        return { ...x, buy: bought[x.id] ?? null, balance: bal };
+        return { ...x, buy: bought[x.id] ?? null, balance: bal, reject: x.transaction_type === 'waste' && x.movement?.reason === 'Broken while loading' };
       });
       setRows(list);
       const ids = [...new Set(list.map(x => x.movement?.created_by).filter(Boolean))];
@@ -98,7 +99,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
                 <button type="button" className="ih-line" onClick={() => setOpen(isOpen ? null : x.id)} aria-expanded={isOpen}>
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   <span className="ih-date">{x.transaction_date.slice(5).split('-').reverse().join('/')}</span>
-                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
+                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : x.reject ? 'Reject' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
                   <span className="ih-who">{supplier ?? (x.color_id ? colorName(x.color_id) : '')}</span>
                   <span className={`ih-qty ${q < 0 ? 'is-out' : 'is-in'}`}>{q < 0 ? '−' : '+'}{qtyText(r2(Math.abs(q) / f))} {unit?.symbol}</span>
                   <span className="ih-price">{price != null ? money(price) : ''}</span>
