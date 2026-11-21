@@ -245,7 +245,6 @@ export default function Stock() {
                     {pcs != null && <span className="sk-sub">({qtyText(pcs)} pcs)</span>}
                     {!isProducts && altOf(c, c.total) && <span className="sk-sub">({altOf(c, c.total)})</span>}
                   </>)}
-                  {c.rejects > 0 && <span className="sk-cure" title="In the Rejects store — broken while loading; pick the Rejects store to see them">+ {qtyText(round(c.rejects))} {unit(c.unitId)} rejects</span>}
                   {c.curing > 0 && <span className="sk-cure" title="In the curing store — not sellable until its quality release">+ {qtyText(round(c.curing))} {unit(c.unitId)}{pcsOf(c, c.curing) != null ? ` (${qtyText(pcsOf(c, c.curing))} pcs)` : ''} curing</span>}
                 </div>
                 <div className="sk-colours">

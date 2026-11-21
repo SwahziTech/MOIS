@@ -16,8 +16,10 @@ const LABEL = {
   sale_delivery: 'Sold — left', waste: 'Thrown away',
 };
 const PRODUCTION = new Set(['production_use', 'production_output', 'curing_out', 'curing_in']);
-const groupOf = t => (t.buy ? 'purchase' : PRODUCTION.has(t.transaction_type) ? 'production' : 'movement');
+const groupOf = t => (t.buy ? 'purchase' : PRODUCTION.has(t.transaction_type) ? 'production' : t.transaction_type === 'sale_delivery' ? 'sales' : 'movement');
 const GROUPS = [['all', 'All'], ['purchase', 'Purchases'], ['production', 'Production'], ['movement', 'Other']];
+// products (2026-11-21, the user): All · Production · Sales · Rejects — Rejects lists the Rejects store's own lines and its total
+const PRODUCT_GROUPS = [['all', 'All'], ['production', 'Production'], ['sales', 'Sales'], ['rejects', 'Rejects']];
 const PERIODS = [['all', 'All time']];   // after the usual periods
 const r2 = n => Math.round(n * 100) / 100;
 
@@ -36,6 +38,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
   const today = orgToday(organization?.timezone);
   const money = v => formatMoney(v, organization?.currency_code);
   const [rows, setRows] = useState(null);
+  const [rejectRows, setRejectRows] = useState([]);   // the Rejects store's lines (139), with its own balance
   const [group, setGroup] = useState(mode === 'purchases' ? 'purchase' : 'all');
   const [period, setPeriod] = useSessionPeriod('item-history');
   const [newestFirst, setNewestFirst] = useState(true);
@@ -57,8 +60,12 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
       if (!live) return;
       const bought = Object.fromEntries((pc.data || []).map(x => [x.transaction_id, x]));
       let bal = 0;
-      // the Rejects store's side of a broken piece is not stock here (139): one line, 'Reject', out of the store it left
-      const list = (t.data || []).filter(x => (!branchId || x.warehouse?.branch_id === branchId) && x.warehouse?.type !== 'rejects').map(x => {
+      // the Rejects store's side of a broken piece is not stock here (139): one line, 'Reject', out of the store it left;
+      // the Rejects store's own lines go to the Rejects tab
+      const here = (t.data || []).filter(x => !branchId || x.warehouse?.branch_id === branchId);
+      let rb = 0;
+      setRejectRows(here.filter(x => x.warehouse?.type === 'rejects').map(x => { rb += Number(x.quantity); return { ...x, balance: rb, inRejects: true }; }));
+      const list = here.filter(x => x.warehouse?.type !== 'rejects').map(x => {
         bal += Number(x.quantity);
         return { ...x, buy: bought[x.id] ?? null, balance: bal, reject: x.transaction_type === 'waste' && x.movement?.reason === 'Broken while loading' };
       });
@@ -74,19 +81,24 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
 
   const [since, until] = useMemo(() => periodRange(period, today), [period, today]);
 
-  const shown = (rows || []).filter(x => (group === 'all' || groupOf(x) === group) && x.transaction_date >= since && x.transaction_date <= until);
+  const groups = item.kind === 'product' ? PRODUCT_GROUPS : GROUPS;
+  const inGroup = (x, g) => g === 'all' || (g === 'rejects' ? x.inRejects : groupOf(x) === g);
+  const pool = group === 'rejects' ? rejectRows : rows || [];
+  const shown = pool.filter(x => inGroup(x, group) && x.transaction_date >= since && x.transaction_date <= until);
+  const rejectsTotal = rejectRows.length ? rejectRows[rejectRows.length - 1].balance : 0;
   const ordered = newestFirst ? [...shown].reverse() : shown;
-  const counts = Object.fromEntries(GROUPS.map(([k]) => [k, (rows || []).filter(x => k === 'all' || groupOf(x) === k).length]));
+  const counts = Object.fromEntries(groups.map(([k]) => [k, k === 'rejects' ? rejectRows.length : (rows || []).filter(x => inGroup(x, k)).length]));
 
   return (
     <div className="ih">
       <div className="ih-filters">
-        {mode !== 'purchases' && GROUPS.map(([k, l]) => (
+        {mode !== 'purchases' && groups.map(([k, l]) => (
           counts[k] > 0 || k === 'all' ? <button key={k} type="button" className={`filter-chip${group === k ? ' is-on' : ''}`} onClick={() => setGroup(k)}>{l} {counts[k] ? `(${counts[k]})` : ''}</button> : null
         ))}
         <PeriodBar value={period} onChange={setPeriod} today={today} extra={PERIODS} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewestFirst(v => !v)}>{newestFirst ? 'Newest first' : 'Oldest first'} ⇅</button>
       </div>
+      {group === 'rejects' && <p className="text-sm">In Rejects now: <strong>{qtyText(r2(rejectsTotal / f))} {unit?.symbol}</strong> <span className="pl-help">· broken while loading, kept apart from the good stock</span></p>}
       {rows === null ? <span className="skeleton" /> : ordered.length === 0 ? <p className="pl-help">Nothing in this view.</p> : (
         <div className="ih-list">
           {ordered.map(x => {
@@ -99,7 +111,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
                 <button type="button" className="ih-line" onClick={() => setOpen(isOpen ? null : x.id)} aria-expanded={isOpen}>
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   <span className="ih-date">{x.transaction_date.slice(5).split('-').reverse().join('/')}</span>
-                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : x.reject ? 'Reject' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
+                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : x.inRejects ? (Number(x.quantity) > 0 ? 'Rejected in' : 'Out of rejects') : x.reject ? 'Reject' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
                   <span className="ih-who">{supplier ?? (x.color_id ? colorName(x.color_id) : '')}</span>
                   <span className={`ih-qty ${q < 0 ? 'is-out' : 'is-in'}`}>{q < 0 ? '−' : '+'}{qtyText(r2(Math.abs(q) / f))} {unit?.symbol}</span>
                   <span className="ih-price">{price != null ? money(price) : ''}</span>
