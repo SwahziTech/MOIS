@@ -34,13 +34,6 @@ export default function PageShell({ title, subtitle, description, primaryAction,
   }, []);
   const section = NAV.find(sec => sec.items.some(i => navActive(i, loc)));
   const sectionItem = section?.items.find(i => (!i.perm || can(i.perm)));
-  // inside the secretary's dashboard (2026-11-03): no heading of its own — its buttons, then the page
-  if (embedded) return (
-    <div className="page-embedded">
-      {(primaryAction || actions) && <div className="page-embedded-actions">{actions}{primaryAction}</div>}
-      {children}
-    </div>
-  );
   // the heading (2026-11-10, the user): the path from Home to where you are — section, page, open tab(s); each step but
   // the last can be clicked. No Back button: the browser's own back arrow goes back.
   const openTabs = useOpenTabs();
@@ -82,6 +75,13 @@ export default function PageShell({ title, subtitle, description, primaryAction,
     window.addEventListener('resize', later);
     return () => { mo.disconnect(); window.removeEventListener('resize', later); cancelAnimationFrame(raf); };
   }, [loc.pathname, loc.search]);
+  // after every hook (lint 2026-11-21) — inside the secretary's dashboard (2026-11-03): no heading of its own — its buttons, then the page
+  if (embedded) return (
+    <div className="page-embedded">
+      {(primaryAction || actions) && <div className="page-embedded-actions">{actions}{primaryAction}</div>}
+      {children}
+    </div>
+  );
   return (
     <main ref={mainRef} className={`page-content animate-fadeIn${barEl ? ' has-top-crumbs' : ''}`}>
       {crumbsInBar}

@@ -811,14 +811,6 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
     onSaved();
   }
 
-  if (submitted) {
-    return (
-      <Modal title="Record goods + purchase" onClose={onSaved}
-        footer={<button type="button" className="btn btn-primary" onClick={onSaved}>Done</button>}>
-        <p className="text-sm">Sent for an admin's approval. The goods and the purchase are recorded, dated {dateText(date)}, once it is approved — follow it under <strong>Approvals</strong>.</p>
-      </Modal>
-    );
-  }
 
   const setNewLine = (i, patch) => setNewLines(ls => ls.map((l, j) => {
     if (j !== i) return l;
@@ -837,6 +829,15 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
   }));
   // opened from a material's Intake: that material is on the first line
   useEffect(() => { if (isNew && materialId) pickMaterial(0, materialId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // after every hook (lint 2026-11-21): returning earlier made the window lose a hook once sent for approval
+  if (submitted) {
+    return (
+      <Modal title="Record goods + purchase" onClose={onSaved}
+        footer={<button type="button" className="btn btn-primary" onClick={onSaved}>Done</button>}>
+        <p className="text-sm">Sent for an admin's approval. The goods and the purchase are recorded, dated {dateText(date)}, once it is approved — follow it under <strong>Approvals</strong>.</p>
+      </Modal>
+    );
+  }
   function pickMaterial(i, materialId) {
     setNewLine(i, { materialId });
     const past = pastOf(wh?.branch_id ?? branchId, materialId);

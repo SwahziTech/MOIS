@@ -590,7 +590,7 @@ export function OrdersPanel({ refs, branchId, inBranch, fromRequest, onUsedReque
   useEffect(() => { if (fromRequest) { setMaking({ request: fromRequest }); onUsedRequest(); } }, [fromRequest]); // eslint-disable-line react-hooks/exhaustive-deps
   // only what is still to buy (2026-11-16, the user): waiting, approved, or ordered with its order still open;
   // bought ones are in Purchases / Expenses, cancelled ones are deleted
-  const here = (rows || []).filter(r => inBranch(r.branch_id) && (['waiting', 'approved'].includes(r.status) || (r.status === 'ordered' && orders[r.id])));
+  const here = (rows || []).filter(r => inBranch(r.branch_id) && r.status === 'open');   // open orders only (lint 2026-11-21: the requests' filter had been pasted here, so no order ever showed)
   const supplierName = id => refs?.suppliers.find(s => s.id === id)?.name ?? '—';
   const lineIn = l => (l.kind === 'expense' ? paidFor[l.id] != null : (got[l.id] ?? 0) >= Number(l.stock_quantity) - 1e-9);
   const fullyIn = po => (po.lines || []).every(lineIn);
