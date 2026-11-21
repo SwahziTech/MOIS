@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
@@ -58,6 +59,7 @@ export default function Movements() {
         scope(supabase.from('inventory_movements')
           .select(`id, movement_type, movement_date, created_at, created_by, branch_id, warehouse_id, to_warehouse_id,
                    reference, reason, notes, reverses_movement_id, supplier:suppliers(name),
+                   sale:sales(id, sale_no, walk_in_name, customer:customers(name)),
                    lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, color_id, quantity, stock_unit_id,
                                                 entered_quantity, entered_unit_id, counted_quantity, unit_cost)`)
           // the day it happened, newest first; the same day in the order recorded, latest first (2026-11-21, the user)
@@ -133,7 +135,7 @@ export default function Movements() {
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table>
+            <table className="mv-table">
               <thead><tr><th>Date</th><th>Type</th><th>Item</th><th className="num">Qty</th><th>Allocation</th><th>Reference</th><th aria-label="Actions" /></tr></thead>
               <tbody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
@@ -146,13 +148,13 @@ export default function Movements() {
                       <span className="badge badge-neutral">{nounOf(m.movement_type)}</span>
                       {reversedBy[m.id] && <span className="badge badge-warning" style={{ marginLeft: 4 }}>reversed</span>}
                       {dateIn(m.created_at, organization?.timezone) > m.movement_date && (
-                        <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${tableDate(m.created_at, organization?.timezone)}`}>entered later</span>
+                        <div className="pl-help" title={`Recorded ${tableDate(m.created_at, organization?.timezone)}`}>entered {tableDate(m.created_at, organization?.timezone)}</div>
                       )}
                     </td>
                     <td className="text-sm"><strong>{name}</strong></td>
                     <td className="num">{qtyText(Math.round(qty * 1000) / 1000)} <span className="pl-help">{unit}</span></td>
                     <td className="text-sm">{from} <span className="pl-help">→</span> {to}</td>
-                    <td className="text-sm text-muted">{m.reference || m.supplier?.name || '—'}</td>
+                    <td className="text-sm text-muted">{m.reference || m.supplier?.name || '—'}{m.sale && <div className="pl-help">{m.sale.customer?.name || m.sale.walk_in_name || 'Walk-in'}</div>}</td>
                     <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setViewing(m)}>View</button></td>
                   </tr>
                 ))}
@@ -174,6 +176,7 @@ export default function Movements() {
 }
 
 function MovementDetail({ movement: m, refs, whById, people, original, reversal, onClose, onReversed }) {
+  const navigate = useNavigate();
   const { canAt, canManage, organization } = useAuth();
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -220,6 +223,9 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
           {m.supplier && <><dt>Supplier</dt><dd>{m.supplier.name}</dd></>}
           {m.reason && <><dt>Reason</dt><dd>{m.reason}</dd></>}
           {m.reference && <><dt>Reference</dt><dd>{m.reference}</dd></>}
+          {/* the sale's buyer, and the sale itself in Sales (2026-11-21, the user) */}
+          {m.sale && <><dt>Customer</dt><dd>{m.sale.customer?.name || m.sale.walk_in_name || 'Walk-in'}
+            <div><a className="link-btn" href={`/sales?sale=${m.sale.id}`} onClick={e => { e.preventDefault(); onClose(); navigate(`/sales?sale=${m.sale.id}`); }}>Open sale #{m.sale.sale_no} in Sales</a></div></dd></>}
           {m.notes && <><dt>Notes</dt><dd>{m.notes}</dd></>}
           <dt>Dated</dt><dd>{dateText(m.movement_date)}</dd>
           <dt>Recorded</dt><dd>{dateTimeText(m.created_at, organization?.timezone)} by {people[m.created_by] || 'a user'}</dd>
