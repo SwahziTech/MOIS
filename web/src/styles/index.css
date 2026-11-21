@@ -3193,3 +3193,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .xs-grid tr.xs-dragging td.xs-rn { cursor: grabbing; }
 .xs-grid tr.xs-drop-above td { box-shadow: inset 0 2px 0 #21a366; }
 .xs-grid tr.xs-drop-below td { box-shadow: inset 0 -2px 0 #21a366; }
+
+/* STANDARD close × (2026-11-21, the user): always at the top right of a window; turns red when hovered */
+.close-x { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: auto; padding: 0;
+  border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-muted); cursor: pointer; flex: none;
+  transition: background .12s, color .12s; }
+.close-x.close-x:hover:not(:disabled), .close-x.close-x:focus-visible { background: var(--color-error); color: #fff; }

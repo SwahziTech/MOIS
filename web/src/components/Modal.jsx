@@ -20,7 +20,7 @@ export default function Modal({ title, onClose, children, footer, size, after = 
       <div className={`modal${size === 'lg' ? ' modal-lg' : size === 'xl' ? ' modal-xl' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
           <h2 id="modal-title" className="card-title">{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn close-x" onClick={onClose} aria-label="Close" title="Close">
             <X size={16} />
           </button>
         </div>
