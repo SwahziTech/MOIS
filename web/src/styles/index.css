@@ -3208,3 +3208,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .mv-table td:last-child { width: 1%; white-space: nowrap; }
 /* movements: fit the page instead of growing to the content (the table-card rule above uses max-content) */
 .card:has(> .table-container > .mv-table) { width: auto; min-width: 0; }
+/* material variance: one row a batch (2026-11-21) */
+.bc-table td:first-child, .bc-table td.num { white-space: nowrap; }
+.bc-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; padding: 8px 6px; }
+.bc-table td { padding: 8px 6px; font-size: var(--text-sm); }
+.card:has(> .table-container > .bc-table), .card:has(> * > .table-container > .bc-table) { width: auto; min-width: 0; }

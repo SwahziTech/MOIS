@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import BatchCostTable from '../components/production/BatchCostTable';
 import { useSearchParams } from 'react-router-dom';
 import { useUrlTab } from '../lib/urlTab';
 import { Factory, Plus } from 'lucide-react';
@@ -189,8 +190,8 @@ export default function Production() {
       ) : (
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : current === 'variance' ? (
-          <VarianceTable rows={variance.filter(v => inBranch(v.branch_id))
-            .sort((a, b) => byMaterialOrder(refs?.items[`m:${a.material_id}`] ?? {}, refs?.items[`m:${b.material_id}`] ?? {}))} refs={refs} loading={loading} />
+          // one row a batch (2026-11-21, the user): materials used with their cost, cost a piece, its job card
+          <BatchCostTable batches={batches} refs={refs} inBranch={inBranch} today={today} currency={organization?.currency_code} loading={loading || !refs} />
         ) : (
           <div className="table-container">
             {current === 'curing' && ready.length > 0 && (
