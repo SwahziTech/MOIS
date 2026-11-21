@@ -107,9 +107,11 @@ export default function Stock() {
       if (branchId && wh.branch_id !== branchId) continue;
       if (warehouseId && b.warehouse_id !== warehouseId
         && !(wh.type === 'wip' && whById[warehouseId]?.type === 'finished_goods' && whById[warehouseId]?.branch_id === wh.branch_id)) continue;
-      const c = (m[item.key] ??= { item, total: 0, curing: 0, byColour: {}, unitId: b.stock_unit_id, last: null });
+      const c = (m[item.key] ??= { item, total: 0, curing: 0, rejects: 0, byColour: {}, unitId: b.stock_unit_id, last: null });
       const q = Number(b.quantity);
       if (wh.type === 'wip') c.curing += q;
+      // broken pieces (139) are not sellable stock: apart, unless the Rejects store itself is picked
+      else if (wh.type === 'rejects' && warehouseId !== wh.id) c.rejects += q;
       else { c.total += q; if (b.color_id) c.byColour[b.color_id] = (c.byColour[b.color_id] ?? 0) + q; }
       if (!c.last || String(b.last_movement_date) > c.last) c.last = String(b.last_movement_date);
     }
@@ -243,6 +245,7 @@ export default function Stock() {
                     {pcs != null && <span className="sk-sub">({qtyText(pcs)} pcs)</span>}
                     {!isProducts && altOf(c, c.total) && <span className="sk-sub">({altOf(c, c.total)})</span>}
                   </>)}
+                  {c.rejects > 0 && <span className="sk-cure" title="In the Rejects store — broken while loading; pick the Rejects store to see them">+ {qtyText(round(c.rejects))} {unit(c.unitId)} rejects</span>}
                   {c.curing > 0 && <span className="sk-cure" title="In the curing store — not sellable until its quality release">+ {qtyText(round(c.curing))} {unit(c.unitId)}{pcsOf(c, c.curing) != null ? ` (${qtyText(pcsOf(c, c.curing))} pcs)` : ''} curing</span>}
                 </div>
                 <div className="sk-colours">
