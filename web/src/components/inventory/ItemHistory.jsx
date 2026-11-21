@@ -98,7 +98,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
         <PeriodBar value={period} onChange={setPeriod} today={today} extra={PERIODS} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewestFirst(v => !v)}>{newestFirst ? 'Newest first' : 'Oldest first'} ⇅</button>
       </div>
-      {group === 'rejects' && <p className="text-sm">In Rejects now: <strong>{qtyText(r2(rejectsTotal / f))} {unit?.symbol}</strong> <span className="pl-help">· broken while loading, kept apart from the good stock</span></p>}
+      {group === 'rejects' && <p className="text-sm">In Rejects now: <strong>{qtyText(r2(rejectsTotal / f))} {unit?.symbol}</strong> <span className="pl-help">· rejected at release or broken while loading — kept apart from the good stock</span></p>}
       {rows === null ? <span className="skeleton" /> : ordered.length === 0 ? <p className="pl-help">Nothing in this view.</p> : (
         <div className="ih-list">
           {ordered.map(x => {
@@ -111,7 +111,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
                 <button type="button" className="ih-line" onClick={() => setOpen(isOpen ? null : x.id)} aria-expanded={isOpen}>
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   <span className="ih-date">{x.transaction_date.slice(5).split('-').reverse().join('/')}</span>
-                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : x.inRejects ? (Number(x.quantity) > 0 ? 'Rejected in' : 'Out of rejects') : x.reject ? 'Reject' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
+                  <span className={`ih-kind is-${groupOf(x)}`}>{x.buy ? 'Purchase' : x.inRejects ? (Number(x.quantity) < 0 ? 'Out of rejects' : x.transaction_type === 'curing_in' ? 'Rejected at release' : x.movement?.reason === 'Broken while loading' ? 'Broken loading' : 'Into rejects') : x.reject ? 'Reject' : LABEL[x.transaction_type] ?? x.transaction_type}</span>
                   <span className="ih-who">{supplier ?? (x.color_id ? colorName(x.color_id) : '')}</span>
                   <span className={`ih-qty ${q < 0 ? 'is-out' : 'is-in'}`}>{q < 0 ? '−' : '+'}{qtyText(r2(Math.abs(q) / f))} {unit?.symbol}</span>
                   <span className="ih-price">{price != null ? money(price) : ''}</span>
