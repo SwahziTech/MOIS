@@ -330,7 +330,9 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
   const outputs = [...(batch.outputs || [])].sort((a, b) => b.is_primary - a.is_primary);
   const [fgId, setFgId] = useState(fgStores[0]?.id ?? '');
   const [date, setDate] = useState(today);
-  const [rejects, setRejects] = useState({});   // `${output id}|${reason id}` → pieces
+  // one Reject number a product, and its reason (2026-11-21, the user) — the pieces go into the Rejects store (140)
+  const [rejects, setRejects] = useState({});   // output id → pieces
+  const [why, setWhy] = useState({});           // output id → reason id
   const [note, setNote] = useState('');
   const [tags, setTags] = useState([]);   // quality issues seen (056)
   const [busy, setBusy] = useState(false);
@@ -339,7 +341,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
   // with a minimum curing period (054): not before it, no reason needed after it; without one, early needs a reason
   const tooSoon = minFrom != null && date < minFrom;
   const early = minFrom == null && date < batch.curing_until;
-  const rejectedOf = o => active.reduce((s, r) => s + (num(rejects[`${o.id}|${r.id}`]) ?? 0), 0);
+  const rejectedOf = o => num(rejects[o.id]) ?? 0;
   const passedOf = o => o.pieces_cast - rejectedOf(o);
   const nameOf = o => `${refs.items[`p:${o.product_id}`]?.name ?? '—'}${o.color_id ? ` ${refs.colorById[o.color_id]?.name ?? ''}` : ''}`;
 
@@ -348,6 +350,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
     setError('');
     for (const o of outputs) {
       if (passedOf(o) < 0) { setError(`${nameOf(o)}: more rejects than the ${o.pieces_cast} pieces cast.`); return; }
+      if (rejectedOf(o) > 0 && !why[o.id]) { setError(`${nameOf(o)}: choose why the pieces are rejected.`); return; }
     }
     if (tooSoon) { setError(`It cures at least until ${minFrom} — release from then.`); return; }
     if (early && !note.trim()) { setError(`Curing runs until ${dateText(batch.curing_until)} — say why it is released early.`); return; }
@@ -355,7 +358,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
     const { error: err } = await supabase.rpc('release_production_batch', { p_batch: batch.id, p: {
       fg_warehouse_id: fgId, release_date: date, note: note.trim() || null,
       outputs: outputs.map(o => ({ output_id: o.id, pieces_passed: passedOf(o),
-        rejects: active.filter(r => num(rejects[`${o.id}|${r.id}`]) > 0).map(r => ({ reason_id: r.id, pieces: num(rejects[`${o.id}|${r.id}`]) })) })),
+        rejects: rejectedOf(o) > 0 ? [{ reason_id: why[o.id], pieces: rejectedOf(o) }] : [] })),
     } });
     if (!err && tags.length) await supabase.rpc('set_batch_quality', { p_batch: batch.id, p_tags: tags });
     setBusy(false);
@@ -386,7 +389,7 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
         </div>
         <div className="table-container">
           <table>
-            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Cast</th>{active.map(r => <th key={r.id}>{r.name}</th>)}<th style={{ textAlign: 'right' }}>Passed</th></tr></thead>
+            <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Cast</th><th title="Pieces that fail: they go into the Rejects store, with their reason">Reject</th><th>Reason</th><th style={{ textAlign: 'right' }}>Passed</th></tr></thead>
             <tbody>
               {outputs.map(o => {
                 const pp = passedOf(o);
@@ -394,10 +397,13 @@ function ReleaseModal({ batch, name, refs, reasons, today, minFrom = null, onClo
                   <tr key={o.id}>
                     <td style={{ fontWeight: 500 }}>{nameOf(o)}{!o.is_primary && <div className="text-xs text-muted">leftover</div>}</td>
                     <td style={{ textAlign: 'right' }}>{qtyText(o.pieces_cast)}</td>
-                    {active.map(r => (
-                      <td key={r.id}><NumberInput step="1" min="0" className="form-input" style={{ width: 70 }} placeholder="0" aria-label={`${nameOf(o)} ${r.name}`}
-                        value={rejects[`${o.id}|${r.id}`] ?? ''} onChange={e => setRejects(x => ({ ...x, [`${o.id}|${r.id}`]: e.target.value }))} /></td>
-                    ))}
+                    <td><NumberInput step="1" min="0" className="form-input" style={{ width: 80 }} placeholder="0" aria-label={`${nameOf(o)} rejected`}
+                      value={rejects[o.id] ?? ''} onChange={e => setRejects(x => ({ ...x, [o.id]: e.target.value }))} /></td>
+                    <td>{rejectedOf(o) > 0 ? (
+                      <select className={`form-input${why[o.id] ? '' : ' is-invalid'}`} style={{ minWidth: 130 }} aria-label={`${nameOf(o)} reject reason`} value={why[o.id] ?? ''} onChange={e => setWhy(x => ({ ...x, [o.id]: e.target.value }))}>
+                        <option value="">Choose…</option>
+                        {active.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>) : <span className="pl-help">—</span>}</td>
                     <td style={{ textAlign: 'right' }}><strong className={pp < 0 ? 'text-error' : ''}>{qtyText(pp)}</strong>{rejectedOf(o) > 0 && <div className="text-xs text-muted">{qtyText(rejectedOf(o))} rejected</div>}</td>
                   </tr>
                 );
