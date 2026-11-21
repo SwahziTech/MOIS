@@ -3187,3 +3187,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pl-cons .pl-cons-off { opacity: .6; }
 .mc-group td { background: var(--bg-soft); font-size: var(--text-sm); }
 .new-unit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; } .new-unit .form-input { width: 140px; }
+/* sheet: hold a row number and drag the row (2026-11-21) */
+.xs-grid td.xs-rn-drag { cursor: grab; user-select: none; touch-action: none; }
+.xs-grid tr.xs-dragging td { background: color-mix(in srgb, #21a366 12%, transparent) !important; }
+.xs-grid tr.xs-dragging td.xs-rn { cursor: grabbing; }
+.xs-grid tr.xs-drop-above td { box-shadow: inset 0 2px 0 #21a366; }
+.xs-grid tr.xs-drop-below td { box-shadow: inset 0 -2px 0 #21a366; }

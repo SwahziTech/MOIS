@@ -9,7 +9,8 @@ import NumberInput from './NumberInput';
  *     a cell's text is selected when you land on it, so typing replaces it;
  *   - paste rows copied from Excel (Ctrl+C there, Ctrl+V here): they fill from the cell you are in,
  *     adding rows as needed;
- *   - an empty row always waits at the bottom; the totals stay at the foot.
+ *   - an empty row always waits at the bottom; the totals stay at the foot;
+ *   - hold a row's number and drag the row up or down to move it (2026-11-21).
  *
  * columns: [{ key, label, type: 'text'|'number'|'select', options?: [{ value, label }], width?, align?,
  *             min?, editable?: boolean (default: !readOnly), ignoreLock?: boolean, show?: row => node (read-only display) }]
@@ -88,6 +89,33 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
     onChange(next);
   };
   const removeRow = r => onChange(rows.filter((_, j) => j !== r));
+  // hold a row's number and drag the whole row up or down (2026-11-21, the user); a locked row and the empty row stay put
+  const [rowDrag, setRowDrag] = useState(null);   // { from, over }
+  const canDragRow = r => !readOnly && r < rows.length && !isLocked(rows[r]);
+  function startRowDrag(e, r) {
+    if (!canDragRow(r) || e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget; try { el.setPointerCapture?.(e.pointerId); } catch { /* not every pointer can be captured */ }
+    let over = r;
+    setRowDrag({ from: r, over: r });
+    const at = ev => {
+      const tr = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('tr[data-r]');
+      if (!tr || !box.current?.contains(tr)) return;
+      over = Math.min(Math.max(Number(tr.dataset.r), 0), rows.length - 1);
+      setRowDrag({ from: r, over });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', at); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      setRowDrag(null);
+      if (over === r) return;
+      const next = [...rows];
+      const [moved] = next.splice(r, 1);
+      next.splice(over, 0, moved);
+      onChange(next);
+    };
+    // followed on the whole page, so a quick drag past the row numbers still lands
+    window.addEventListener('pointermove', at); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  }
 
   function focusCell(r, c) {
     const el = box.current?.querySelector(`[data-cell="${r}:${c}"]`);
@@ -167,8 +195,8 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
         </thead>
         <tbody>
           {shown.map((row, r) => (
-            <tr key={r} style={rowH[r] ? { height: rowH[r] } : undefined} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
-              <td className="xs-rn">{r + 1}{resizable && <span className="xs-row-rs" role="separator" aria-label={`Resize row ${r + 1}`} title="Drag to resize · double-click to reset"
+            <tr key={r} data-r={r} style={rowH[r] ? { height: rowH[r] } : undefined} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}${rowDrag?.from === r ? ' xs-dragging' : ''}${rowDrag && rowDrag.over === r && rowDrag.from !== r ? (rowDrag.over < rowDrag.from ? ' xs-drop-above' : ' xs-drop-below') : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
+              <td className={`xs-rn${canDragRow(r) ? ' xs-rn-drag' : ''}`} title={canDragRow(r) ? 'Hold and drag to move the row' : undefined} onPointerDown={e => startRowDrag(e, r)}>{r + 1}{resizable && <span className="xs-row-rs" role="separator" aria-label={`Resize row ${r + 1}`} title="Drag to resize · double-click to reset"
                 onPointerDown={e => startRow(e, r)} onDoubleClick={() => setRowH(p => { const n = { ...p }; delete n[r]; return n; })} />}</td>
               {columns.map((col, c) => <td key={col.key} data-col={col.key}>{cell(row, r, col, c)}</td>)}
               {!readOnly && <td className="xs-del">{!row.__blank && !isLocked(row) && (!canRemoveRow || canRemoveRow(row)) && (
