@@ -53,7 +53,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
       supabase.from('inventory_transactions')
         .select(`id, transaction_date, transaction_type, quantity, entered_quantity, entered_unit_id, unit_cost, color_id, seq, created_at,
           warehouse:warehouses!inner(branch_id, name, type), unit:units!inventory_transactions_entered_unit_id_fkey(symbol),
-          movement:inventory_movements(movement_type, reason, reference, notes, created_by, production_batch_id)`)
+          movement:inventory_movements(movement_type, reason, reference, notes, created_by, production_batch_id, sale_id)`)
         .eq(col, item.id).order('transaction_date').order('seq'),
       item.kind === 'material' ? supabase.from('purchase_line_costs').select('*').eq('material_id', item.id) : Promise.resolve({ data: [] }),
     ]).then(async ([t, pc]) => {
@@ -125,7 +125,11 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
                       <dt>Cost</dt><dd>{money(x.buy.cost_per_stock_unit * f)} per {unit?.symbol} (incl. VAT &amp; transport){x.buy.vat_share > 0 ? ` · VAT ${money(x.buy.vat_share)}` : ''}</dd></>}
                     {!x.buy && x.unit_cost != null && <><dt>Cost</dt><dd>{money(x.unit_cost)} per {x.unit?.symbol}</dd></>}
                     {x.movement?.reason && <><dt>Note</dt><dd>{x.movement.reason}</dd></>}
-                    {x.movement?.reference && <><dt>Reference</dt><dd>{x.movement.reference}</dd></>}
+                    {/* the reference opens what it came from (2026-11-21, the user): the sale in Sales, the batch's job card */}
+                    {(x.movement?.reference || x.movement?.sale_id || x.movement?.production_batch_id) && <><dt>Reference</dt><dd>
+                      {x.movement?.sale_id ? <a className="link-btn" href={`/sales?sale=${x.movement.sale_id}`} title="Open the sale in Sales">{x.movement.reference || 'Open the sale'}</a>
+                        : x.movement?.production_batch_id ? <a className="link-btn" href={`/print/job-card/${x.movement.production_batch_id}`} target="_blank" rel="noopener noreferrer" title="Open the batch's job card">{x.movement.reference || 'Production batch — job card'}</a>
+                        : x.movement.reference}</dd></>}
                     <dt>Recorded</dt><dd>{people[x.movement?.created_by] ?? '—'} · {dateTimeText(x.created_at)}</dd>
                   </dl>
                 )}
