@@ -60,8 +60,8 @@ export default function Movements() {
                    reference, reason, notes, reverses_movement_id, supplier:suppliers(name),
                    lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, color_id, quantity, stock_unit_id,
                                                 entered_quantity, entered_unit_id, counted_quantity, unit_cost)`)
-          // the most recently recorded first (2026-11-21, the user) — the day it happened is in the Date column
-          .order('created_at', { ascending: false }))
+          // the day it happened, newest first; the same day in the order recorded, latest first (2026-11-21, the user)
+          .order('movement_date', { ascending: false }).order('created_at', { ascending: false }))
           .limit(PAGE),
       ]);
       if (mv.error) throw mv.error;
@@ -89,14 +89,32 @@ export default function Movements() {
     && (inBranch(whById[m.warehouse_id]?.branch_id) || inBranch(whById[m.to_warehouse_id]?.branch_id))
     && (!warehouseId || m.warehouse_id === warehouseId || m.to_warehouse_id === warehouseId));
 
-  const where = m => m.movement_type === 'transfer'
-    ? `${warehouseLabel(whById[m.warehouse_id])} → ${warehouseLabel(whById[m.to_warehouse_id])}`
-    : warehouseLabel(whById[m.warehouse_id]);
-  const summary = m => {
-    const lines = m.lines.filter(l => l.transaction_type !== 'transfer_in' && (kind === 'products' ? l.product_id : l.material_id));
-    const first = lines[0] && refs?.items[itemKey(lines[0])]?.name;
-    return lines.length > 1 ? `${first} and ${lines.length - 1} more` : first ?? '—';
+  // One row an item (2026-11-21, the user): Date · Type · Item · Qty · Allocation (from → to) · Reference.
+  // A movement's legs for the same item give its from and to (a transfer, a quality release, broken → Rejects);
+  // a single leg's other side is named by the kind of movement (production, the customer, the supplier…).
+  const storeName = id => whById[id]?.name ?? '—';
+  const SOURCE = { receipt: 'Supplier', production_output: 'Production', opening_balance: 'Opening stock', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
+  const DEST = { sale_delivery: 'Customer', production_use: 'Production', issue: 'Issued out', waste: 'Waste', adjustment: 'Adjustment', count: 'Stock count', reversal: 'Reversed (undone)', reclassification: 'Reclassified' };
+  const rowsOf = m => {
+    const g = {};
+    for (const l of m.lines) {
+      if (kind === 'products' ? !l.product_id : !l.material_id) continue;
+      const k = itemKey(l) + '|' + (l.color_id ?? '');
+      (g[k] ||= { line: l, out: [], in: [] })[Number(l.quantity) < 0 ? 'out' : 'in'].push(l);
+    }
+    return Object.values(g).map(({ line, out, in: inn }) => {
+      const sum = ls => ls.reduce((t, l) => t + Math.abs(Number(l.quantity)), 0);
+      const qty = out.length ? sum(out) : sum(inn);
+      const from = out.length ? [...new Set(out.map(l => storeName(l.warehouse_id)))].join(', ')
+        : (m.movement_type === 'receipt' && m.supplier?.name) || SOURCE[m.movement_type] || '—';
+      const to = inn.length ? [...new Set(inn.map(l => storeName(l.warehouse_id)))].join(', ')
+        : m.movement_type === 'transfer' ? storeName(m.to_warehouse_id) : DEST[m.movement_type] || '—';
+      const it = refs?.items[itemKey(line)];
+      return { key: `${m.id}|${itemKey(line)}|${line.color_id ?? ''}`, m, name: `${it?.name ?? '—'}${line.color_id ? ` ${refs?.colorById[line.color_id]?.name ?? ''}` : ''}`,
+        qty, unit: refs?.unitById[line.stock_unit_id]?.symbol ?? '', from, to };
+    });
   };
+  const tableRows = shown.flatMap(rowsOf);
 
   return (
     <PageShell title="Movements" subtitle="Inventory">
@@ -116,13 +134,13 @@ export default function Movements() {
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
             <table>
-              <thead><tr><th>Date</th><th>Type</th><th>Store</th><th>Items</th><th>Reference</th><th>By</th><th aria-label="Actions" /></tr></thead>
+              <thead><tr><th>Date</th><th>Type</th><th>Item</th><th className="num">Qty</th><th>Allocation</th><th>Reference</th><th aria-label="Actions" /></tr></thead>
               <tbody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
-                : shown.length === 0 ? (
+                : tableRows.length === 0 ? (
                   <tr><td colSpan={7}><EmptyState icon={ArrowLeftRight} title="No movements yet" description="Receipts, issues, transfers, adjustments and counts appear here once posted." /></td></tr>
-                ) : shown.map(m => (
-                  <tr key={m.id}>
+                ) : tableRows.map(({ key, m, name, qty, unit, from, to }) => (
+                  <tr key={key} title={people[m.created_by] ? `By ${people[m.created_by]}` : undefined}>
                     <td className="text-muted">{tableDate(m.movement_date)}</td>
                     <td>
                       <span className="badge badge-neutral">{nounOf(m.movement_type)}</span>
@@ -131,10 +149,10 @@ export default function Movements() {
                         <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${tableDate(m.created_at, organization?.timezone)}`}>entered later</span>
                       )}
                     </td>
-                    <td className="text-sm">{where(m)}</td>
-                    <td className="text-sm">{summary(m)}</td>
+                    <td className="text-sm"><strong>{name}</strong></td>
+                    <td className="num">{qtyText(Math.round(qty * 1000) / 1000)} <span className="pl-help">{unit}</span></td>
+                    <td className="text-sm">{from} <span className="pl-help">→</span> {to}</td>
                     <td className="text-sm text-muted">{m.reference || m.supplier?.name || '—'}</td>
-                    <td className="text-sm text-muted">{people[m.created_by] || '—'}</td>
                     <td style={{ textAlign: 'right' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setViewing(m)}>View</button></td>
                   </tr>
                 ))}
