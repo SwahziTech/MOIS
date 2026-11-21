@@ -32,7 +32,7 @@ export default function MovementModal({ type, refs, balances, defaultWarehouseId
   // Stores of the branch picked in the sidebar (all of them on "All branches")
   // materials never go into a curing store or a ready-goods store, products only into ready-goods stores (2026-11-20, the user)
   const itemKind = kind ?? (String(defaultItemKey ?? '').startsWith('m:') ? 'material' : String(defaultItemKey ?? '').startsWith('p:') ? 'product' : null);
-  const storeFits = w => (itemKind === 'material' ? w.type === 'raw_materials' || w.type === 'general' : itemKind === 'product' ? w.type === 'finished_goods' : true);
+  const storeFits = w => (itemKind === 'material' ? w.type === 'raw_materials' || w.type === 'general' : itemKind === 'product' ? w.type === 'finished_goods' || w.type === 'rejects' : true);   // Rejects: counted or issued out when vipande are sold (2026-11-21)
   const allowed = warehouses.filter(w => w.status === 'active' && w.branch?.status !== 'inactive' && inBranch(w.branch_id)
     && canAt(def.perm, w.branch_id, w.id) && storeFits(w));
   const startWh = prefill?.warehouseId ?? defaultWarehouseId;
