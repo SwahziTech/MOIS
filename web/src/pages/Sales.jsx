@@ -1337,6 +1337,8 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
     }
     return next;
   });
+  // broken while loading (139): pieces found broken — out of the store into Rejects, for this sale (2026-11-21, the user)
+  const [broken, setBroken] = useState({});
   const needEfd = Number(sale.vat) > 0;
   const [efdNo, setEfdNo] = useState(sale.efd_receipt_no ?? '');
   const [checked, setChecked] = useState(false);
@@ -1348,26 +1350,17 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
   const value = lines.reduce((t, l) => t + r2(unitInc(l) * (num(qty[l.id]) ?? 0)), 0);
   const stockKey = l => `${l.product_id}|${l.color_id ?? ''}`;
   const leaving = {};
-  for (const l of lines) leaving[stockKey(l)] = (leaving[stockKey(l)] || 0) + (num(qty[l.id]) ?? 0);
+  for (const l of lines) leaving[stockKey(l)] = (leaving[stockKey(l)] || 0) + (num(qty[l.id]) ?? 0) + (num(broken[l.id]) ?? 0);   // loaded + broken both leave the store
   const tooMuch = inStore ? Object.entries(leaving).filter(([k, q]) => q > (inStore[k] ?? 0) + 1e-9).map(([k, q]) => {
     const l = lines.find(y => stockKey(y) === k);
     return { k, q, store: Math.max(inStore[k] ?? 0, 0), name: `${refs.items[`p:${l.product_id}`]?.name ?? ''}${l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}` };
   }) : [];
-  // fill what the payments cover, line by line in order
-  function fillPaid() {
-    let room = canLeave;
-    const next = {};
-    for (const l of lines) {
-      const q = Math.max(0, Math.min(l.left, Math.floor((room / unitInc(l)) * 100) / 100));
-      next[l.id] = q > 0 ? String(q) : '';
-      room -= r2(unitInc(l) * q);
-    }
-    setQty(next);
-  }
   async function save() {
     setError('');
     if (!storeId || !storePicked) { setError('Choose the store the goods leave from.'); return; }
     if (value <= 0) { setError('Enter what leaves.'); return; }
+    if (lines.some(l => (num(broken[l.id]) ?? 0) < 0)) { setError('Broken pieces are zero or more.'); return; }
+    if (lines.some(l => (num(broken[l.id]) ?? 0) > 0 && !(num(qty[l.id]) > 0))) { setError('Broken pieces go with what is loaded on that line.'); return; }
     if (!leftOn || leftOn > today || leftOn < sale.sale_date) { setError(`The date is from the sale (${tableDate(sale.sale_date)}) to today.`); return; }
     if (tooMuch.length) { setError(`Not enough in the store: ${tooMuch.map(x => `${x.name} — ${qtyText(x.q)} leaving, ${qtyText(x.store)} in store`).join('; ')}.`); return; }
     if (value > canLeave + 0.01) { setError(`Goods worth ${money(canLeave)} can leave — record a payment first.`); return; }
@@ -1376,7 +1369,7 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
     setBusy(true);
     // a delivery: who receives it is asked when it is confirmed delivered, not now
     const { data: did, error: err } = await supabase.rpc('record_sale_delivery', { p_sale: sale.id, p: { kind, warehouse_id: storeId, delivered_on: leftOn, received_by: kind === 'collection' ? receivedBy : '', vehicle, ...(needEfd ? { efd_receipt_no: efdNo.trim() } : {}),
-      lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]) })) } });
+      lines: lines.filter(l => num(qty[l.id]) > 0).map(l => ({ sale_line_id: l.id, quantity: num(qty[l.id]), ...(num(broken[l.id]) > 0 ? { broken: num(broken[l.id]) } : {}) })) } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't record this. Please try again.")); return; }
     if (kind === 'delivery' && driver.trim() && did) await supabase.rpc('set_delivery_trip', { p_delivery: did, p: { driver: driver.trim() } });
@@ -1393,6 +1386,7 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
           <button type="button" className={`filter-chip${kind === 'delivery' ? ' is-on' : ''}`} onClick={() => setKind('delivery')}>We deliver</button>
           <span className="pl-help" style={{ marginLeft: 'auto' }}>Paid for, not yet taken: <strong>{money(canLeave)}</strong></span>
         </div>
+        {/* the details first (2026-11-21, the user): date, store, who collected and the truck — then what leaves */}
         <div className="form-row">
         <label className="pe-field" style={{ maxWidth: 200 }}><span>Date</span>
           <input type="date" className="form-input" min={sale.sale_date} max={today} value={leftOn} onChange={e => setLeftOn(e.target.value)} /></label>
@@ -1406,41 +1400,50 @@ function DeliveryModal({ sale, refs, money, today, doneOf, canLeave, per, onClos
           </label>
         )}
         </div>
-        <table className="rd-table">
-          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Left to deliver</th><th style={{ textAlign: 'right' }}>In store</th><th style={{ textAlign: 'right' }}>Leaving now</th><th style={{ textAlign: 'right' }}>Value</th></tr></thead>
-          <tbody>
-            {lines.map(l => (
-              <tr key={l.id}>
-                <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong></td>
-                <td style={{ textAlign: 'right' }}>{qtyText(l.left)} {per(l.product_id)}</td>
-                <td style={{ textAlign: 'right' }} className={tooMuch.some(x => x.k === stockKey(l)) ? 'text-error' : ''}>{!storeId ? '—' : inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} ${per(l.product_id)}` : '…'}</td>
-                <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>
-                <td style={{ textAlign: 'right' }}>{num(qty[l.id]) > 0 ? money(r2(unitInc(l) * num(qty[l.id]))) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {tooMuch.length > 0 && (
-          <div className="alert alert-error" role="alert">
-            <strong>Not enough in the store</strong> — {tooMuch.map(x => `${x.name}: ${qtyText(r2(x.q))} leaving, ${qtyText(r2(x.store))} in store`).join('; ')}. Lower the quantity, or wait for stock (curing to be released).
-          </div>
-        )}
-        <div className="flex items-center gap-8">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={fillPaid}>Fill what is paid for</button>
-        </div>
         <div className="form-row">
-          {needEfd && (
-            <div className="sl-efd">
-              <label className="pe-field"><span>EFD receipt no. (required — this sale carries VAT)</span><input className="form-input" value={efdNo} onChange={e => setEfdNo(e.target.value)} /></label>
-              <p className="text-sm">Check the EFD receipt shows: total <strong>{money(Number(sale.total))}</strong> · VAT <strong>{money(Number(sale.vat))}</strong> · without VAT <strong>{money(Number(sale.subtotal))}</strong></p>
-              <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} /> The EFD receipt shows these amounts</label>
-            </div>
-          )}
           {/* minimal (2026-11-11, the user): collected — who took it and the truck; delivered — the driver and the truck */}
           {kind === 'collection' && <label className="pe-field"><span>Collected by</span><input className="form-input" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} /></label>}
           {kind === 'delivery' && <label className="pe-field"><span>Driver</span><input className="form-input" value={driver} onChange={e => setDriver(e.target.value)} /></label>}
           <label className="pe-field"><span>Truck plate no.</span><input className="form-input" placeholder="e.g. T 123 ABC" value={vehicle} data-no-caps onChange={e => setVehicle(e.target.value.toUpperCase())} /></label>
         </div>
+        {/* product · qty · broken · amount, then what remains when not all of the order leaves (2026-11-21, the user) */}
+        <table className="rd-table dl-table">
+          <thead><tr><th>Product</th><th style={{ textAlign: 'right' }}>Qty</th>
+            <th style={{ textAlign: 'right' }} title="Found broken while loading: they leave the store into Rejects, for this sale — the customer gets the qty">Broken</th>
+            <th style={{ textAlign: 'right' }}>Amount</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
+          <tbody>
+            {lines.map(l => {
+              const q = num(qty[l.id]) ?? 0;
+              const rest = r2(l.left - q);
+              const short = tooMuch.some(x => x.k === stockKey(l));
+              return (
+                <tr key={l.id}>
+                  <td><strong>{refs.items[`p:${l.product_id}`]?.name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong>
+                    <div className={`pl-help${short ? ' text-error' : ''}`}>{qtyText(l.left)} {per(l.product_id)} to deliver · {!storeId ? '—' : inStore ? `${qtyText(r2(Math.max(inStore[stockKey(l)] ?? 0, 0)))} in store` : '…'}</div></td>
+                  <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 100, marginLeft: 'auto' }} aria-label="Qty leaving" value={qty[l.id]} onChange={e => setQty({ ...qty, [l.id]: e.target.value })} /></td>
+                  <td style={{ textAlign: 'right' }}><NumberInput step="any" min="0" className="form-input" style={{ width: 80, marginLeft: 'auto' }} aria-label="Broken while loading" placeholder="0" value={broken[l.id] ?? ''} onChange={e => setBroken({ ...broken, [l.id]: e.target.value })} /></td>
+                  <td style={{ textAlign: 'right' }}>{q > 0 ? money(r2(unitInc(l) * q)) : '—'}</td>
+                  <td style={{ textAlign: 'right' }} className={rest > 0 ? 'text-warning' : 'pl-help'}>{rest > 0 ? `${qtyText(rest)} ${per(l.product_id)}` : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {lines.some(l => (num(broken[l.id]) ?? 0) > 0) && (
+          <p className="pl-help">Broken: {lines.filter(l => (num(broken[l.id]) ?? 0) > 0).map(l => `${qtyText(num(broken[l.id]))} ${per(l.product_id)} ${refs.items[`p:${l.product_id}`]?.name ?? ''}`).join(', ')} — out of {stores.find(w => w.id === storeId)?.name ?? 'the store'} into Rejects, marked for sale #{sale.sale_no}.</p>
+        )}
+        {tooMuch.length > 0 && (
+          <div className="alert alert-error" role="alert">
+            <strong>Not enough in the store</strong> — {tooMuch.map(x => `${x.name}: ${qtyText(r2(x.q))} leaving, ${qtyText(r2(x.store))} in store`).join('; ')}. Lower the quantity, or wait for stock (curing to be released).
+          </div>
+        )}
+        {needEfd && (
+          <div className="sl-efd">
+            <label className="pe-field"><span>EFD receipt no. (required — this sale carries VAT)</span><input className="form-input" value={efdNo} onChange={e => setEfdNo(e.target.value)} /></label>
+            <p className="text-sm">Check the EFD receipt shows: total <strong>{money(Number(sale.total))}</strong> · VAT <strong>{money(Number(sale.vat))}</strong> · without VAT <strong>{money(Number(sale.subtotal))}</strong></p>
+            <label className="text-sm flex items-center gap-8"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} /> The EFD receipt shows these amounts</label>
+          </div>
+        )}
       </div>
     </Modal>
   );
