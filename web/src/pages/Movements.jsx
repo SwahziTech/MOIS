@@ -10,13 +10,18 @@ import { MOVEMENT_TYPES, loadInventoryRefs, warehouseLabel, itemKey, qtyText } f
 /** Date (YYYY-MM-DD) a timestamp falls on in the organization's time zone */
 const dateIn = (ts, tz) => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC' }).format(new Date(ts)); } catch { return String(ts).slice(0, 10); } };
 import PageShell from '../components/PageShell';
+import { PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Modal from '../components/Modal';
 import { SkeletonRow } from '../components/LoadingSpinner';
 
 const LOAD_ERROR = "We couldn't load movements. Please try again.";
-const PAGE = 200;
+const PAGE = 500;
+// every kind of movement has a plain name (2026-11-21, the user: all movements show here)
+const NOUN = { production_use: 'Production use', production_output: 'Production', curing_release: 'Quality release', waste: 'Waste / broken',
+  sale_delivery: 'Goods leaving', reclassification: 'Reclassification' };
+const nounOf = t => MOVEMENT_TYPES[t]?.noun ?? NOUN[t] ?? t;
 
 /*
  * The inventory ledger as documents (migration 022). Read-only: a mistake
@@ -34,6 +39,7 @@ export default function Movements() {
   const [type,        setType]        = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [viewing,     setViewing]     = useState(null);
+  const [kind,        setKind]        = useState('products');   // products | materials (2026-11-21, the user)
 
   async function load() {
     setError('');
@@ -54,7 +60,8 @@ export default function Movements() {
                    reference, reason, notes, reverses_movement_id, supplier:suppliers(name),
                    lines:inventory_transactions(id, transaction_type, warehouse_id, material_id, product_id, color_id, quantity, stock_unit_id,
                                                 entered_quantity, entered_unit_id, counted_quantity, unit_cost)`)
-          .order('movement_date', { ascending: false }).order('created_at', { ascending: false }))
+          // the most recently recorded first (2026-11-21, the user) — the day it happened is in the Date column
+          .order('created_at', { ascending: false }))
           .limit(PAGE),
       ]);
       if (mv.error) throw mv.error;
@@ -76,7 +83,9 @@ export default function Movements() {
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
   const reversedBy = useMemo(() => Object.fromEntries(movements.filter(m => m.reverses_movement_id).map(m => [m.reverses_movement_id, m])), [movements]);
-  const shown = movements.filter(m => (!type || m.movement_type === type)
+  const ofKind = m => m.lines.some(l => (kind === 'products' ? l.product_id : l.material_id));
+  const types = [...new Set(movements.filter(ofKind).map(m => m.movement_type))].sort((a, b) => nounOf(a).localeCompare(nounOf(b)));
+  const shown = movements.filter(m => ofKind(m) && (!type || m.movement_type === type)
     && (inBranch(whById[m.warehouse_id]?.branch_id) || inBranch(whById[m.to_warehouse_id]?.branch_id))
     && (!warehouseId || m.warehouse_id === warehouseId || m.to_warehouse_id === warehouseId));
 
@@ -84,17 +93,18 @@ export default function Movements() {
     ? `${warehouseLabel(whById[m.warehouse_id])} → ${warehouseLabel(whById[m.to_warehouse_id])}`
     : warehouseLabel(whById[m.warehouse_id]);
   const summary = m => {
-    const lines = m.lines.filter(l => l.transaction_type !== 'transfer_in');
+    const lines = m.lines.filter(l => l.transaction_type !== 'transfer_in' && (kind === 'products' ? l.product_id : l.material_id));
     const first = lines[0] && refs?.items[itemKey(lines[0])]?.name;
     return lines.length > 1 ? `${first} and ${lines.length - 1} more` : first ?? '—';
   };
 
   return (
     <PageShell title="Movements" subtitle="Inventory">
+      <PageTabs tabs={[['products', 'Products'], ['materials', 'Materials']]} value={kind} onChange={k => { setKind(k); setType(''); }} />
       <div className="flex items-center gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Type" value={type} onChange={e => setType(e.target.value)}>
           <option value="">All types</option>
-          {Object.entries(MOVEMENT_TYPES).map(([k, d]) => <option key={k} value={k}>{d.noun}</option>)}
+          {types.map(k => <option key={k} value={k}>{nounOf(k)}</option>)}
         </select>
         <select className="form-input" style={{ width: 'auto' }} aria-label="Store" value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
           <option value="">All stores</option>
@@ -115,7 +125,7 @@ export default function Movements() {
                   <tr key={m.id}>
                     <td className="text-muted">{tableDate(m.movement_date)}</td>
                     <td>
-                      <span className="badge badge-neutral">{MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type}</span>
+                      <span className="badge badge-neutral">{nounOf(m.movement_type)}</span>
                       {reversedBy[m.id] && <span className="badge badge-warning" style={{ marginLeft: 4 }}>reversed</span>}
                       {dateIn(m.created_at, organization?.timezone) > m.movement_date && (
                         <span className="badge badge-neutral" style={{ marginLeft: 4 }} title={`Recorded ${tableDate(m.created_at, organization?.timezone)}`}>entered later</span>
@@ -169,7 +179,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
     if (reverseNeedsApproval) {
       const { error: err } = await supabase.rpc('request_change', {
         p_kind: 'stock_reversal', p_branch_id: null, p_payload: { movement_id: m.id, reason: reason.trim() },
-        p_summary: `Reverse the ${(MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type).toLowerCase()} of ${dateText(m.movement_date)} at ${warehouseLabel(whById[m.warehouse_id])} — ${reason.trim()}`,
+        p_summary: `Reverse the ${nounOf(m.movement_type).toLowerCase()} of ${dateText(m.movement_date)} at ${warehouseLabel(whById[m.warehouse_id])} — ${reason.trim()}`,
       });
       setBusy(false);
       if (err) { setError(dbErrorMessage(err, "We couldn't send this for approval. Please try again.")); return; }
@@ -183,7 +193,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
   }
 
   return (
-    <Modal title={`${MOVEMENT_TYPES[m.movement_type]?.noun ?? m.movement_type} · ${dateText(m.movement_date)}`} onClose={onClose} size="lg"
+    <Modal title={`${nounOf(m.movement_type)} · ${dateText(m.movement_date)}`} onClose={onClose} size="lg"
       footer={<button type="button" className="btn btn-outline" onClick={onClose}>Close</button>}>
       <div className="modal-form">
         {error && <div className="alert alert-error" role="alert">{error}</div>}
@@ -195,7 +205,7 @@ function MovementDetail({ movement: m, refs, whById, people, original, reversal,
           {m.notes && <><dt>Notes</dt><dd>{m.notes}</dd></>}
           <dt>Dated</dt><dd>{dateText(m.movement_date)}</dd>
           <dt>Recorded</dt><dd>{dateTimeText(m.created_at, organization?.timezone)} by {people[m.created_by] || 'a user'}</dd>
-          {original && <><dt>Reverses</dt><dd>{MOVEMENT_TYPES[original.movement_type]?.noun} of {dateText(original.movement_date)}</dd></>}
+          {original && <><dt>Reverses</dt><dd>{nounOf(original.movement_type)} of {dateText(original.movement_date)}</dd></>}
           {reversal && <><dt>Reversed</dt><dd>{dateText(reversal.movement_date)} — {reversal.reason}</dd></>}
         </dl>
         <div className="table-container">
