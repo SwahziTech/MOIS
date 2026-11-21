@@ -3204,3 +3204,7 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .mv-table th, .mv-table td { padding-left: 10px; padding-right: 10px; white-space: normal; }
 .mv-table td:first-child, .mv-table td.num { white-space: nowrap; }
 .mv-table .badge { white-space: nowrap; }
+.mv-table td { overflow-wrap: anywhere; word-break: break-word; }
+.mv-table td:last-child { width: 1%; white-space: nowrap; }
+/* movements: fit the page instead of growing to the content (the table-card rule above uses max-content) */
+.card:has(> .table-container > .mv-table) { width: auto; min-width: 0; }
