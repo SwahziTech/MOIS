@@ -3187,10 +3187,3 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .pl-cons .pl-cons-off { opacity: .6; }
 .mc-group td { background: var(--bg-soft); font-size: var(--text-sm); }
 .new-unit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; } .new-unit .form-input { width: 140px; }
-/* sheet: move a cell's content up or down (2026-11-21) — small arrows on the cell in use */
-.xs-grid td.xs-movable { position: relative; }
-.xs-shift { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; gap: 1px; z-index: 2; }
-.xs-grid td.xs-movable:focus-within .xs-shift { display: flex; }
-.xs-shift button { font-size: 8px; line-height: 1; padding: 1px 3px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-surface); color: var(--text-muted); cursor: pointer; }
-.xs-shift button:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
-.xs-shift button:disabled { opacity: .3; cursor: default; }

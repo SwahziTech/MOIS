@@ -9,8 +9,7 @@ import NumberInput from './NumberInput';
  *     a cell's text is selected when you land on it, so typing replaces it;
  *   - paste rows copied from Excel (Ctrl+C there, Ctrl+V here): they fill from the cell you are in,
  *     adding rows as needed;
- *   - an empty row always waits at the bottom; the totals stay at the foot;
- *   - Alt+↑ / Alt+↓ (or the small ▲▼ on the cell in use) moves a cell's content up or down its column.
+ *   - an empty row always waits at the bottom; the totals stay at the foot.
  *
  * columns: [{ key, label, type: 'text'|'number'|'select', options?: [{ value, label }], width?, align?,
  *             min?, editable?: boolean (default: !readOnly), ignoreLock?: boolean, show?: row => node (read-only display) }]
@@ -89,20 +88,6 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
     onChange(next);
   };
   const removeRow = r => onChange(rows.filter((_, j) => j !== r));
-  // move a cell's content up or down its column (2026-11-21, the user): it swaps with the cell next to it;
-  // only between rows that can be typed in (never a locked row, a formula cell or the empty row)
-  const canShift = (r, col) => r >= 0 && r < rows.length && canEdit(col, rows[r]);
-  function shiftCell(r, c, dr) {
-    const col = columns[c];
-    const to = r + dr;
-    if (!canShift(r, col) || !canShift(to, col)) return;
-    const next = rows.map(x => ({ ...x }));
-    const v = next[r][col.key];
-    next[r][col.key] = next[to][col.key];
-    next[to][col.key] = v;
-    onChange(next);
-    setTimeout(() => focusCell(to, c), 0);
-  }
 
   function focusCell(r, c) {
     const el = box.current?.querySelector(`[data-cell="${r}:${c}"]`);
@@ -120,8 +105,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
   function onKey(e, r, c) {
     const el = e.target;
     const isSelect = el.tagName === 'SELECT';
-    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); shiftCell(r, c, e.key === 'ArrowUp' ? -1 : 1); }
-    else if (e.key === 'Enter') { e.preventDefault(); move(r, c, e.shiftKey ? -1 : 1, 0); }
+    if (e.key === 'Enter') { e.preventDefault(); move(r, c, e.shiftKey ? -1 : 1, 0); }
     else if (e.key === 'Escape') { el.blur(); }
     else if (!isSelect && e.key === 'ArrowDown') { e.preventDefault(); move(r, c, 1, 0); }
     else if (!isSelect && e.key === 'ArrowUp') { e.preventDefault(); move(r, c, -1, 0); }
@@ -186,12 +170,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
             <tr key={r} style={rowH[r] ? { height: rowH[r] } : undefined} className={`${isLocked(row) ? 'xs-locked' : ''}${row.__blank ? ' xs-blank' : ''}${rowClass ? ` ${rowClass(row) || ''}` : ''}`} title={isLocked(row) ? lockedTitle : undefined}>
               <td className="xs-rn">{r + 1}{resizable && <span className="xs-row-rs" role="separator" aria-label={`Resize row ${r + 1}`} title="Drag to resize · double-click to reset"
                 onPointerDown={e => startRow(e, r)} onDoubleClick={() => setRowH(p => { const n = { ...p }; delete n[r]; return n; })} />}</td>
-              {columns.map((col, c) => <td key={col.key} data-col={col.key} className={!readOnly && !row.__blank && canEdit(col, row) ? 'xs-movable' : undefined}>{cell(row, r, col, c)}
-                {!readOnly && !row.__blank && canEdit(col, row) && (canShift(r - 1, col) || canShift(r + 1, col)) && (
-                  <span className="xs-shift" aria-hidden="true">
-                    <button type="button" tabIndex={-1} title="Move up (Alt+↑)" disabled={!canShift(r - 1, col)} onMouseDown={e => e.preventDefault()} onClick={() => shiftCell(r, c, -1)}>▲</button>
-                    <button type="button" tabIndex={-1} title="Move down (Alt+↓)" disabled={!canShift(r + 1, col)} onMouseDown={e => e.preventDefault()} onClick={() => shiftCell(r, c, 1)}>▼</button>
-                  </span>)}</td>)}
+              {columns.map((col, c) => <td key={col.key} data-col={col.key}>{cell(row, r, col, c)}</td>)}
               {!readOnly && <td className="xs-del">{!row.__blank && !isLocked(row) && (!canRemoveRow || canRemoveRow(row)) && (
                 <button type="button" tabIndex={-1} className="xs-del-btn" aria-label={`Remove row ${r + 1}`} title="Remove the row" onClick={() => removeRow(r)}><X size={12} /></button>)}</td>}
             </tr>
