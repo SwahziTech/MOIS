@@ -43,12 +43,12 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
       supabase.from('expenses').select('account_id').limit(1)])
       .then(([acc, probe]) => setAccounts(probe.error ? [] : (acc.data || []).filter(a => a.status === 'active' || a.id === accountId)));
   }, [branch]); // eslint-disable-line react-hooks/exhaustive-deps
-  const account = accounts.find(a => a.id === accountId);
   const [paid,     setPaid]     = useState(expense ? String(expense.amount_paid) : '');
   const [method,   setMethod]   = useState(expense?.payment_method ?? '');
   const [accountId, setAccountId] = useState(expense?.account_id ?? '');   // paid from (094)
   const [weekly, setWeekly] = useState(expense ? (expense.from_weekly_cash ?? null) : null);   // money from the weekly cash? (121)
   const [accounts, setAccounts] = useState([]);
+  const account = accounts.find(a => a.id === accountId);
   const [paidOn,   setPaidOn]   = useState(expense?.paid_on ?? expense?.expense_date ?? today);
   const [paidOnSet, setPaidOnSet] = useState(!!expense?.paid_on);
   const [notes,    setNotes]    = useState(expense?.notes ?? '');
@@ -312,8 +312,11 @@ export default function ExpenseModal({ expense, prefill, branchId, categories, s
           ) : (
             <div className="form-group">
               <label className="form-label" htmlFor="ex-method">How</label>
-              <input id="ex-method" className="form-input" list="ex-methods" placeholder="e.g. Cash" value={method} onChange={e => setMethod(e.target.value)} />
-              <datalist id="ex-methods">{PAYMENT_METHODS.map(m => <option key={m} value={m} />)}</datalist>
+              {/* a real dropdown (2026-11-22, the user): a typed box with suggestions hid them once filled */}
+              <select id="ex-method" className="form-input" value={method} onChange={e => setMethod(e.target.value)}>
+                <option value="">Choose…</option>
+                {[...(PAYMENT_METHODS.includes(method) || !method ? [] : [method]), ...PAYMENT_METHODS].map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
           )}
           {num(paid) > 0 && (

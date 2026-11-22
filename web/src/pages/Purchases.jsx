@@ -1028,8 +1028,11 @@ function PurchaseModal({ mode, receipt, purchase, materialId, fromOrder, refs, m
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="pu-method">How</label>
-              <input id="pu-method" className="form-input" list="pu-methods" placeholder="e.g. Cash" value={method} onChange={e => setMethod(e.target.value)} />
-              <datalist id="pu-methods">{METHODS.map(m => <option key={m} value={m} />)}</datalist>
+              {/* a real dropdown (2026-11-22, the user): a typed box with suggestions hid them once filled */}
+              <select id="pu-method" className="form-input" value={method} onChange={e => setMethod(e.target.value)}>
+                <option value="">Choose…</option>
+                {[...(METHODS.includes(method) || !method ? [] : [method]), ...METHODS].map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
             {num(paid) > 0 && (
               <div className="form-group">
