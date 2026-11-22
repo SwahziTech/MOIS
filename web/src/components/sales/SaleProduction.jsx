@@ -5,6 +5,7 @@ import { qtyText } from '../../lib/inventory';
 import { dbErrorMessage } from '../../lib/masterData';
 import Modal from '../Modal';
 import NumberInput from '../NumberInput';
+import DropDetails from '../DropDetails';
 
 /*
  * Customer orders (141, 2026-11-22, the user): on a sale — what it waits for, and the production made for it.
@@ -40,10 +41,12 @@ export function productionSummary(rows) {
   return { planned, cast, ready };
 }
 
-export default function SaleProduction({ sale, refs, rows = [], paid, canSell, canPlan, onChanged }) {
+// makeTick: the sale window's step button asks for the Make in production window (2026-11-22, step by step)
+export default function SaleProduction({ sale, refs, rows = [], paid, canSell, makeTick = 0, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [making, setMaking] = useState(false);
+  useEffect(() => { if (makeTick > 0) setMaking(true); }, [makeTick]);
   const live = sale.stage !== 'cancelled';
   const waiting = sale.waiting_for || [];
   const nameOf = (productId, colorId) => `${refs.items[`p:${productId}`]?.name ?? '—'}${colorId ? ` ${refs.colorById[colorId]?.name ?? ''}` : ''}`;
@@ -63,17 +66,12 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
         <div className="so-wait">
           <span className="pl-label">Waiting for</span>
           {/* a dropdown (2026-11-22, the user): tick what it waits for */}
-          <details className="so-drop">
-            <summary className="form-input">{waiting.length ? WAITING.filter(([k]) => waiting.includes(k)).map(([, l]) => l).join(', ') : 'Nothing'}</summary>
-            <div className="so-menu">
-              {WAITING.map(([k, l]) => (
-                <label key={k} className="so-opt"><input type="checkbox" checked={waiting.includes(k)} disabled={!canSell || busy} onChange={() => toggle(k)} /> {l}</label>
-              ))}
-            </div>
-          </details>
-          {['order', 'invoice'].includes(sale.stage) && canPlan && (
-            <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setMaking(true)}><Factory size={14} /> Make in production</button>
-          )}
+          <DropDetails summary={waiting.length ? WAITING.filter(([k]) => waiting.includes(k)).map(([, l]) => l).join(', ') : 'Nothing'}>
+            {WAITING.map(([k, l]) => (
+              <label key={k} className="so-opt"><input type="checkbox" checked={waiting.includes(k)} disabled={!canSell || busy} onChange={() => toggle(k)} /> {l}</label>
+            ))}
+          </DropDetails>
+          {/* Make in production: now a step of the sale window (2026-11-22) */}
         </div>
       )}
       {error && <p className="text-xs text-error">{error}</p>}

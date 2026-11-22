@@ -3229,3 +3229,9 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 a.ih-line { color: inherit; text-decoration: none; }
 .ih-kind.is-sales { color: var(--color-warning); }
 .ih-owed { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+/* the sale window's More menu opens upward from the footer (2026-11-22) */
+.so-drop.is-up .so-menu { top: auto; bottom: calc(100% + 4px); }
+.so-drop > summary.btn { min-width: 0; padding-right: 14px; }
+.so-drop > summary.btn::after { content: none; }
+.so-menu button.so-opt { border: 0; background: transparent; text-align: left; color: var(--text-primary); white-space: nowrap; }
+.so-menu button.so-opt.text-error { color: var(--color-error); }

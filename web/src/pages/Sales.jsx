@@ -19,6 +19,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
+import DropDetails from '../components/DropDetails';
 import SaleProduction, { loadSaleProduction, productionSummary, WAITING, ADVANCE } from '../components/sales/SaleProduction';
 import { ListToolbar, ChipRow, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
@@ -1133,6 +1134,32 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
     return true;
   }
   const toStage = (stage, p = {}) => run(() => supabase.rpc('set_sale_stage', { p_sale: sale.id, p_stage: stage, p }));
+  const [makeTick, setMakeTick] = useState(0);
+  const shortAny = (sale.lines || []).some(l => shortOf(l) > 0);
+  const canSellHere = canAt('sales.create', br, null);
+  const canPay = ['order', 'invoice'].includes(sale.stage) && owed > 0 && canAt('payments.record', br, null);
+  const payNow = () => { setPay(p => ({ ...p, amount: String(owed) })); setPaying(true); };
+  const docOf = { quotation: ['quotation', 'Print quotation'], order: ['proforma', 'Print proforma'], invoice: ['invoice', 'Print invoice'] }[sale.stage];
+  // in the order a sale goes: note → quotation → order (make what is short, take the advance) → invoice → paid → goods leave
+  const steps = [
+    sale.stage === 'note' && canSellHere && { key: 'quote', label: 'Make quotation', run: () => toStage('quotation') },
+    ['note', 'quotation'].includes(sale.stage) && canSellHere && { key: 'order', label: 'Confirm order', run: () => toStage('order') },
+    ['order', 'invoice'].includes(sale.stage) && shortAny && !production.some(r => r.order.status === 'open') && canAt('production.plan', br, null)
+      && { key: 'make', label: 'Make in production', run: () => setMakeTick(t => t + 1) },
+    canPay && { key: 'pay', label: 'Record payment', run: payNow },
+    ['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && { key: 'invoice', label: 'Invoice', run: () => setAskEfd(true) },
+    canHand && { key: 'hand', label: 'Deliver / collect', run: () => setHanding(true) },
+  ].filter(Boolean);
+  // a quotation's Next is the order; an order's is making what is short, then the payment
+  const next = sale.stage === 'cancelled' ? null : steps[0] ?? null;
+  const more = [
+    ...steps.filter(a => a !== next),
+    docOf && { key: 'print', label: docOf[1], run: () => openDoc(docOf[0]) },
+    sale.stage === 'quotation' && { key: 'proforma', label: 'Print proforma', run: () => openDoc('proforma') },
+    !editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) && { key: 'correct', label: 'Correct…', run: () => setCorrecting(true) },
+    sale.stage !== 'cancelled' && paid === 0 && canSellHere && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) && { key: 'cancel', label: 'Cancel sale', run: () => setCancelling(true), danger: true },
+    sale.stage === 'cancelled' && paid === 0 && !(sale.deliveries || []).length && canSellHere && { key: 'delete', label: 'Delete', run: () => { setError(''); setDeleting(true); }, danger: true },
+  ].filter(Boolean);
   // printable documents open in a tab of their own
   const openDoc = (doc, extra = '') => window.open(`/print/sale/${sale.id}?doc=${doc}${extra}`, '_blank', 'noopener');
 
@@ -1140,26 +1167,16 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
     <Modal title={`${STAGES[sale.stage]} #${sale.sale_no} — ${buyer}`} onClose={onClose} size="xl"
       footer={<>
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
-        {/* print, correct, cancel and delete on the left; the next steps on the right (2026-11-19, the user) */}
-        <span className="flex items-center gap-8" style={{ marginRight: 'auto', flexWrap: 'wrap' }}>
-        {!['cancelled', 'note'].includes(sale.stage) && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
-          <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
-        {sale.stage === 'quotation' && <button type="button" className="btn btn-ghost" title="The quotation as a proforma invoice" onClick={() => openDoc('proforma')}><Printer size={14} /> Proforma</button>}
-        {!editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) &&
-          <button type="button" className="btn btn-ghost" onClick={() => setCorrecting(true)}>Correct…</button>}
-        {sale.stage !== 'cancelled' && paid === 0 && canAt('sales.create', br, null) && (sale.stage !== 'invoice' || canAt('sales.discount', br, null)) &&
-          <button type="button" className="btn btn-ghost" onClick={() => setCancelling(true)}>Cancel sale</button>}
-        {/* a cancelled sale is deleted by the user (126, 2026-11-16) — whoever may cancel it */}
-        {sale.stage === 'cancelled' && paid === 0 && !(sale.deliveries || []).length && canAt('sales.create', br, null) &&
-          <button type="button" className="btn btn-ghost text-error" onClick={() => { setError(''); setDeleting(true); }}><Trash2 size={14} /> Delete</button>}
-        </span>
-        {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
-        {/* a note (141): to a quotation, or straight to an order */}
-        {sale.stage === 'note' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('quotation')}>Make quotation</button>}
-        {['note', 'quotation'].includes(sale.stage) && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
-        {['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAskEfd(true)}>Invoice</button>}
-        {canHand && <button type="button" className="btn btn-outline" onClick={() => setHanding(true)}>Deliver / collect</button>}
-        {['order', 'invoice'].includes(sale.stage) && owed > 0 && canAt('payments.record', br, null) && <button type="button" className="btn btn-primary" onClick={() => { setPay(p => ({ ...p, amount: String(owed) })); setPaying(true); }}>Record payment</button>}
+        {/* step by step (2026-11-22, the user): one Next for the sale's next step, Back to edit, the rest under More */}
+        {more.length > 0 && (
+          <span style={{ marginRight: 'auto' }}>
+            <DropDetails className="so-drop is-up" summaryClass="btn btn-ghost" summary="More ▾" closeOnPick>
+              {more.map(a => <button key={a.key} type="button" className={`so-opt${a.danger ? ' text-error' : ''}`} disabled={busy} onClick={a.run}>{a.label}</button>)}
+            </DropDetails>
+          </span>
+        )}
+        {editable && <button type="button" className="btn btn-outline" onClick={onEdit} title="Back to the form to change it">Back</button>}
+        {next && <button type="button" className="btn btn-primary" disabled={busy} onClick={next.run}>Next: {next.label}</button>}
       </>}>
       <div className="modal-form">
         <p className="text-sm text-muted">
@@ -1205,7 +1222,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
 
         {/* customer orders (141): waiting for, make in production, progress */}
         {(sale.stage !== 'invoice' || production.length > 0 || (sale.waiting_for || []).length > 0) && (
-          <SaleProduction sale={sale} refs={refs} rows={production} paid={paid} canSell={canAt('sales.create', br, null)} canPlan={canAt('production.plan', br, null)} onChanged={onChanged} />
+          <SaleProduction sale={sale} refs={refs} rows={production} paid={paid} canSell={canAt('sales.create', br, null)} makeTick={makeTick} onChanged={onChanged} />
         )}
         {!['note', 'quotation', 'cancelled'].includes(sale.stage) && (
           <section>
