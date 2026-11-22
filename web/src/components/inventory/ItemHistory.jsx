@@ -39,6 +39,21 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
   const money = v => formatMoney(v, organization?.currency_code);
   const [rows, setRows] = useState(null);
   const [rejectRows, setRejectRows] = useState([]);   // the Rejects store's lines (139), with its own balance
+  // sold but not yet collected (2026-11-22, the user): on the Sales tab with their total — the stock is unchanged until they leave
+  const [owed, setOwed] = useState([]);
+  useEffect(() => {
+    if (item.kind !== 'product') return undefined;
+    let live = true;
+    supabase.from('sale_lines').select('id, quantity, color_id, sale:sales!inner(id, sale_no, stage, sale_date, branch_id, walk_in_name, customer:customers(name)), done:sale_delivery_lines(quantity)')
+      .eq('product_id', item.id).in('sale.stage', ['order', 'invoice'])
+      .then(({ data }) => {
+        if (!live) return;
+        setOwed((data || []).filter(l => !branchId || l.sale.branch_id === branchId)
+          .map(l => ({ ...l, left: Number(l.quantity) - (l.done || []).reduce((t, d) => t + Number(d.quantity), 0) }))
+          .filter(l => l.left > 1e-9).sort((a, b) => b.sale.sale_date.localeCompare(a.sale.sale_date)));
+      });
+    return () => { live = false; };
+  }, [item.id, item.kind, branchId]);
   const [group, setGroup] = useState(mode === 'purchases' ? 'purchase' : 'all');
   const [period, setPeriod] = useSessionPeriod('item-history');
   const [newestFirst, setNewestFirst] = useState(true);
@@ -87,7 +102,7 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
   const shown = pool.filter(x => inGroup(x, group) && x.transaction_date >= since && x.transaction_date <= until);
   const rejectsTotal = rejectRows.length ? rejectRows[rejectRows.length - 1].balance : 0;
   const ordered = newestFirst ? [...shown].reverse() : shown;
-  const counts = Object.fromEntries(groups.map(([k]) => [k, k === 'rejects' ? rejectRows.length : (rows || []).filter(x => inGroup(x, k)).length]));
+  const counts = Object.fromEntries(groups.map(([k]) => [k, k === 'rejects' ? rejectRows.length : (rows || []).filter(x => inGroup(x, k)).length + (k === 'sales' ? owed.length : 0)]));
 
   return (
     <div className="ih">
@@ -98,6 +113,25 @@ export function ItemHistoryList({ item, branchId, mode = 'all', unit, suppliers 
         <PeriodBar value={period} onChange={setPeriod} today={today} extra={PERIODS} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewestFirst(v => !v)}>{newestFirst ? 'Newest first' : 'Oldest first'} ⇅</button>
       </div>
+      {group === 'sales' && owed.length > 0 && (
+        <div className="ih-owed">
+          <p className="text-sm">Sold, still to collect: <strong>{qtyText(r2(owed.reduce((t, l) => t + l.left, 0) / f))} {unit?.symbol}</strong> <span className="pl-help">· still in the store until the goods leave</span></p>
+          <div className="ih-list">
+            {owed.map(l => (
+              <div key={l.id} className="ih-row"><a className="ih-line" href={`/sales?sale=${l.sale.id}`} title="Open the sale in Sales">
+                <span />
+                <span className="ih-date">{l.sale.sale_date.slice(5).split('-').reverse().join('/')}</span>
+                <span className="ih-kind is-sales">To collect</span>
+                <span className="ih-who">#{l.sale.sale_no} · {l.sale.customer?.name || l.sale.walk_in_name || 'Walk-in'}{l.color_id ? ` · ${colorName(l.color_id)}` : ''}</span>
+                <span className="ih-qty is-out">{qtyText(r2(l.left / f))} {unit?.symbol}</span>
+                <span className="ih-price" />
+                <span className="ih-bal">—</span>
+              </a></div>
+            ))}
+          </div>
+          <p className="pl-help" style={{ marginTop: 10 }}>Left the store:</p>
+        </div>
+      )}
       {group === 'rejects' && <p className="text-sm">In Rejects now: <strong>{qtyText(r2(rejectsTotal / f))} {unit?.symbol}</strong> <span className="pl-help">· rejected at release or broken while loading — kept apart from the good stock</span></p>}
       {rows === null ? <span className="skeleton" /> : ordered.length === 0 ? <p className="pl-help">Nothing in this view.</p> : (
         <div className="ih-list">
