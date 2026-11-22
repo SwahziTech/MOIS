@@ -3213,3 +3213,8 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .bc-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; padding: 8px 6px; }
 .bc-table td { padding: 8px 6px; font-size: var(--text-sm); }
 .card:has(> .table-container > .bc-table), .card:has(> * > .table-container > .bc-table) { width: auto; min-width: 0; }
+/* customer orders on a sale (141): waiting for, production progress */
+.so { display: flex; flex-direction: column; gap: 8px; }
+.so-wait { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.so-wait .pl-label { margin-right: 4px; }
+.so-prog td, .so-prog th { white-space: nowrap; }

@@ -19,6 +19,7 @@ import { dbErrorMessage } from '../lib/masterData';
 import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
+import SaleProduction, { loadSaleProduction, productionSummary, WAITING, ADVANCE } from '../components/sales/SaleProduction';
 import { ListToolbar, ChipRow, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -28,8 +29,10 @@ import ProductPicker from '../components/production/ProductPicker';
 import SalesSettings from '../components/sales/SalesSettings';
 
 const LOAD_ERROR = "We couldn't load sales. Please try again.";
-const STAGES = { quotation: 'Quotation', order: 'Order', invoice: 'Invoice', cancelled: 'Cancelled' };
-const STAGE_BADGE = { quotation: 'badge-neutral', order: 'badge-accent', invoice: 'badge-success', cancelled: 'badge-neutral' };
+const STAGES = { note: 'Note', quotation: 'Quotation', order: 'Order', invoice: 'Invoice', cancelled: 'Cancelled' };
+const STAGE_BADGE = { note: 'badge-neutral', quotation: 'badge-neutral', order: 'badge-accent', invoice: 'badge-success', cancelled: 'badge-neutral' };
+// Sales › Invoices tabs (141, 2026-11-22, the user): the order pipeline — a cancelled sale stays under the stage it left
+const PIPE = [['note', 'Notes'], ['quotation', 'Quotations'], ['order', 'Orders'], ['invoice', 'Invoices']];
 const METHODS = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' };
 const num = v => (String(v ?? '').trim() === '' ? null : Number(v));
 const r2 = n => Math.round(n * 100) / 100;
@@ -56,6 +59,8 @@ export default function Sales() {
   const [stage, setStage] = useState('');
   const [editing, setEditing] = useState(null);   // a sale (or {} for new)
   const [viewing, setViewing] = useState(null);   // a sale id
+  const [prod, setProd] = useState({});           // sale id → the production made for it (141)
+  const [pipe, setPipe] = useState('order');      // the Invoices page's tab
   const [view, setView] = useUrlTab('book');      // book | list | deliveries | overview (the book first — 2026-10-26); list = the sidebar's Invoices
   const [accounts, setAccounts] = useState([]);   // receiving accounts (067)
   const [proofs, setProofs] = useState({});       // payment id → its proof (105)
@@ -94,6 +99,7 @@ export default function Sales() {
       if (s.error) throw s.error;
       setRefs(r);
       setSales(s.data || []);
+      setProd(await loadSaleProduction((s.data || []).filter(x => ['order', 'invoice'].includes(x.stage)).map(x => x.id)).catch(() => ({})));
       setCustomers(c.data || []);
     } catch (e) {
       console.error(e);
@@ -121,9 +127,10 @@ export default function Sales() {
   const paidOf = s => (s.payments || []).reduce((t, p) => t + Number(p.amount), 0);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (sales || []).filter(s => inBranch(s.branch_id) && (!stage || s.stage === stage)
+    const inPipe = s => s.stage === pipe || (s.stage === 'cancelled' && s.cancelled_from === pipe);
+    return (sales || []).filter(s => inBranch(s.branch_id) && (view === 'list' ? inPipe(s) : !stage || s.stage === stage)
       && (!q || `${s.sale_no} ${buyerOf(s)} ${s.walk_in_phone ?? ''} ${s.efd_receipt_no ?? ''}`.toLowerCase().includes(q)));
-  }, [sales, search, stage, branchId, customers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sales, search, stage, pipe, view, branchId, customers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSell = branchId && canAt('sales.create', branchId, null);
   useEffect(() => {
@@ -139,7 +146,7 @@ export default function Sales() {
   const soldCount = useMemo(() => {
     const since = new Date(new Date(`${today}T00:00:00Z`).getTime() - 90 * 864e5).toISOString().slice(0, 10);
     const c = {};
-    for (const x of sales || []) if (x.branch_id === branchId && x.stage !== 'cancelled' && x.stage !== 'quotation' && x.sale_date >= since)
+    for (const x of sales || []) if (x.branch_id === branchId && !['note', 'quotation', 'cancelled'].includes(x.stage) && x.sale_date >= since)
       for (const l of x.lines || []) c[l.product_id] = (c[l.product_id] || 0) + 1;
     return c;
   }, [sales, branchId, today]);
@@ -167,7 +174,9 @@ export default function Sales() {
     <PageShell title={onInvoices ? 'Invoices' : 'Sales'} subtitle="Sales"
       description={branchId ? branchName : 'All branches'}
       onSettings={() => setShowSettings(true)}
-      actions={canSell && <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button>}
+      actions={canSell && <>
+        {onInvoices && <button type="button" className="btn btn-outline" title="A customer's wish written down — nothing confirmed yet" onClick={() => setEditing({ note: true })}><Plus size={15} /> New note</button>}
+        <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button></>}
       primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
@@ -178,7 +187,7 @@ export default function Sales() {
               {' '}<button type="button" className="btn btn-outline btn-sm" onClick={() => { const q = stepUpload(); if (q) openUpload(q); }}>Skip this sale</button>
               {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={stopUpload}>Stop</button></div>
           )}
-          {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && x.stage !== 'quotation' && x.stage !== 'cancelled')}
+          {view === 'book' && sales && refs && <SalesBook sales={(sales || []).filter(x => inBranch(x.branch_id) && !['note', 'quotation', 'cancelled'].includes(x.stage))}
             refs={refs} accounts={accounts.filter(a => inBranch(a.branch_id))} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} proofs={proofs} onOpen={id => setViewing(id)}
             canProof={id => canAt('sales.create', id, null)} organizationId={organization?.id} onChanged={load} />}
           {view === 'receipts' && <PaymentProofsList branchId={branchId} inBranch={inBranch} directorView={!canSell && canAt('sales.confirm_payments', branchId, null)} />}
@@ -186,7 +195,7 @@ export default function Sales() {
           {view === 'overview' && sales && refs && <SalesOverview sales={(sales || []).filter(x => inBranch(x.branch_id))} refs={refs} customers={customers} money={money} currency={organization?.currency_code} today={today} buyerOf={buyerOf} />}
           {view === 'list' && <>
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
-          <ChipRow value={stage} onChange={setStage} items={Object.entries(STAGES).map(([id, label]) => ({ id, label }))} />
+          <PageTabs tabs={PIPE.map(([k, l]) => [k, `${l} (${(sales || []).filter(x => inBranch(x.branch_id) && x.stage === k).length})`])} value={pipe} onChange={setPipe} />
           <section className="sk">
             <div className="sk-head"><span>Sales ({shown.length})</span><span className="pl-help">newest first</span></div>
             {sales === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
@@ -206,7 +215,10 @@ export default function Sales() {
                   </div>
                   <div className="co-details">
                     <span><span className={`badge ${STAGE_BADGE[s.stage]}`}>{STAGES[s.stage]}</span></span>
-                    {s.stage !== 'cancelled' && s.stage !== 'quotation' && (
+                    {(s.waiting_for || []).length > 0 && s.stage !== 'cancelled' && <span>{WAITING.filter(([k]) => s.waiting_for.includes(k)).map(([k, l]) => <span key={k} className="badge badge-warning" style={{ marginRight: 4 }}>{l}</span>)}</span>}
+                    {(() => { const p = productionSummary(prod[s.id]); return p ? <span title="Made for this order: ready (passed) of the pieces to make; cast so far">made <strong>{qtyText(p.ready)}</strong> / {qtyText(p.planned)}<span className="pl-help"> · cast {qtyText(p.cast)}</span></span> : null; })()}
+                    {s.stage === 'order' && Number(s.total) > 0 && paidOf(s) / Number(s.total) < ADVANCE - 1e-9 && <span className="text-warning" title={`Production usually starts after a ${Math.round(ADVANCE * 100)}% advance`}>under {Math.round(ADVANCE * 100)}% paid</span>}
+                    {!['note', 'cancelled', 'quotation'].includes(s.stage) && (
                       <span>paid <strong>{money(paid)}</strong>{Number(s.total) - paid > 0.004 ? <span className="co-est"> {money(r2(Number(s.total) - paid))} owed</span> : <span className="pl-help"> · paid in full</span>}</span>
                     )}
                     {s.stage === 'cancelled' && <span className="pl-help">{s.cancel_reason}</span>}
@@ -221,7 +233,7 @@ export default function Sales() {
       )}
 
       {editing && refs && (
-        <SaleEditor key={editing.upload ? `upload-${editing.at}` : 'edit'} sale={editing.id ? editing : null} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
+        <SaleEditor key={editing.upload ? `upload-${editing.at}` : 'edit'} sale={editing.id ? editing : null} note={!!editing.note} prefill={editing.prefill} book={!!editing.book} sold={soldCount} walkIns={walkIns} accounts={branchAccounts} branchId={editing.branch_id ?? branchId} refs={refs} customers={customers} money={money} today={today}
           canDiscount={canAt('sales.discount', editing.branch_id ?? branchId, null)}
           canOther={canAt('sales.other_items', editing.branch_id ?? branchId, null)}
           onClose={() => setEditing(null)} onSaved={async id => {
@@ -233,7 +245,7 @@ export default function Sales() {
           }} />
       )}
       {open && refs && !editing && (
-        <SaleView sale={open} proofs={proofs} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
+        <SaleView sale={open} production={prod[open.id] || []} proofs={proofs} accounts={accounts.filter(a => a.branch_id === open.branch_id)} refs={refs} buyer={buyerOf(open)} customer={customers.find(c => c.id === open.customer_id)} money={money} today={today} canAt={canAt}
           onEdit={() => setEditing(open)} onClose={() => setViewing(null)} onChanged={load} />
       )}
       {showSettings && <SalesSettings onClose={() => { setShowSettings(false); load(); }} />}
@@ -323,7 +335,7 @@ function SaleProofWindow({ amount, money, start, note = 'Posted with the sale wh
   );
 }
 
-function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, canOther = false, onClose, onSaved }) {
+function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walkIns = [], accounts = [], branchId, refs, customers, money, today, canDiscount, canOther = false, onClose, onSaved }) {
   const { organization } = useAuth();
   const [buyer, setBuyer] = useState(sale?.customer_id || prefill?.customer_id ? 'customer' : 'walkin');
   const [customerId, setCustomerId] = useState(sale?.customer_id ?? prefill?.customer_id ?? '');
@@ -526,7 +538,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
     const noReason = lines.findIndex(l => !l.other && preview(l)?.off && preview(l)?.listInc != null && !l.reason.trim());
     if (noReason >= 0) { flag(`reason-${noReason}`, `${refs.items[`p:${lines[noReason].productId}`]?.name}: give the reason for the price change.`); return; }
     const payload = {
-      id: sale?.id, branch_id: branchId, sale_date: date, valid_until: validUntil || null, notes,
+      id: sale?.id, branch_id: branchId, sale_date: date, valid_until: validUntil || null, notes, ...(note && !sale ? { as_note: true } : {}),
       ...(cust ? { customer_id: cust } : { walk_in_name: walkName, walk_in_phone: walkPhone }),
       lines: lines.map(l => {
         if (l.other) return { item_name: l.name.trim(), price: num(l.price) };   // an other item (104)
@@ -669,7 +681,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
   const dayUnpaid = r2(dayList.reduce((t, x) => t + Math.max(x.view.total - x.view.paid, 0), 0));
 
   return (
-    <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : 'New quotation'}
+    <Modal title={<span className="sl-title">{sale ? `${STAGES[sale.stage]} #${sale.sale_no}` : book ? 'Record a sale' : note ? 'New note' : 'New quotation'}
         <input type="date" className="form-input sl-date" aria-label="Date" max={today} value={date} title={dayOn && dayList.length ? 'The date of every sale in the list' : undefined} onChange={e => changeDate(e.target.value)} /></span>} onClose={onClose} size="xl"
       after={dayOn ? <>
         {/* between the sale being recorded and the day's list (2026-11-08) */}
@@ -746,7 +758,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
           }}>Reset</button>
         </div> : <>
           <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : 'Save quotation'}</button>
+          <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy} onClick={() => save()}>{sale ? 'Save' : book ? 'Record sale' : note ? 'Save note' : 'Save quotation'}</button>
         </>}
       </>}>
       <div className="modal-form">
@@ -1060,7 +1072,7 @@ function SaleEditor({ sale, prefill, book = false, sold = {}, walkIns = [], acco
 }
 
 /** One sale: its lines and totals, payments, and what can be done next */
-function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
+function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buyer, customer, money, today, canAt, onEdit, onClose, onChanged }) {
   const [proofFor, setProofFor] = useState(null);    // a payment getting its proof (105)
   const [reviewFor, setReviewFor] = useState(null);  // a payment a director checks
   const [paying, setPaying] = useState(false);
@@ -1081,7 +1093,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
   const owed = r2(Number(sale.total) - paid);
   const unitOf = id => refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '';
   const per = id => (unitOf(id).toUpperCase() === 'SQM' ? 'm²' : 'pc');
-  const editable = ['quotation', 'order'].includes(sale.stage) && canAt('sales.create', br, null) && !(sale.deliveries || []).length;
+  const editable = ['note', 'quotation', 'order'].includes(sale.stage) && canAt('sales.create', br, null) && !(sale.deliveries || []).length;
   // deliveries (065): what has left, its cost, and the margin on it (without VAT)
   const deliveries = [...(sale.deliveries || [])].sort((a, b) => b.delivery_no - a.delivery_no);
   const [confirming, setConfirming] = useState(null);   // a delivery on the way, being confirmed (096)
@@ -1122,7 +1134,7 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
         {error && <span className="modal-footer-error" role="alert">{error}</span>}
         {/* print, correct, cancel and delete on the left; the next steps on the right (2026-11-19, the user) */}
         <span className="flex items-center gap-8" style={{ marginRight: 'auto', flexWrap: 'wrap' }}>
-        {sale.stage !== 'cancelled' && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
+        {!['cancelled', 'note'].includes(sale.stage) && <button type="button" className="btn btn-ghost" onClick={() => openDoc({ quotation: 'quotation', order: 'proforma', invoice: 'invoice' }[sale.stage])}>
           <Printer size={14} /> {{ quotation: 'Quotation', order: 'Proforma', invoice: 'Invoice' }[sale.stage]}</button>}
         {sale.stage === 'quotation' && <button type="button" className="btn btn-ghost" title="The quotation as a proforma invoice" onClick={() => openDoc('proforma')}><Printer size={14} /> Proforma</button>}
         {!editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) &&
@@ -1134,7 +1146,9 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           <button type="button" className="btn btn-ghost text-error" onClick={() => { setError(''); setDeleting(true); }}><Trash2 size={14} /> Delete</button>}
         </span>
         {editable && <button type="button" className="btn btn-outline" onClick={onEdit}>Edit</button>}
-        {sale.stage === 'quotation' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
+        {/* a note (141): to a quotation, or straight to an order */}
+        {sale.stage === 'note' && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('quotation')}>Make quotation</button>}
+        {['note', 'quotation'].includes(sale.stage) && canAt('sales.create', br, null) && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => toStage('order')}>Confirm order</button>}
         {['quotation', 'order'].includes(sale.stage) && canAt('invoices.create', br, null) && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAskEfd(true)}>Invoice</button>}
         {canHand && <button type="button" className="btn btn-outline" onClick={() => setHanding(true)}>Deliver / collect</button>}
         {['order', 'invoice'].includes(sale.stage) && owed > 0 && canAt('payments.record', br, null) && <button type="button" className="btn btn-primary" onClick={() => { setPay(p => ({ ...p, amount: String(owed) })); setPaying(true); }}>Record payment</button>}
@@ -1181,7 +1195,11 @@ function SaleView({ sale, proofs = {}, accounts = [], refs, buyer, customer, mon
           </tbody>
         </table>
 
-        {sale.stage !== 'quotation' && sale.stage !== 'cancelled' && (
+        {/* customer orders (141): waiting for, make in production, progress */}
+        {(sale.stage !== 'invoice' || production.length > 0 || (sale.waiting_for || []).length > 0) && (
+          <SaleProduction sale={sale} refs={refs} rows={production} paid={paid} canSell={canAt('sales.create', br, null)} canPlan={canAt('production.plan', br, null)} onChanged={onChanged} />
+        )}
+        {!['note', 'quotation', 'cancelled'].includes(sale.stage) && (
           <section>
             {(sale.payments || []).length === 0 ? <div className="sv-card"><span className="sv-card-label">Paid</span><span className="pl-help">No payment yet</span></div> : (
               <div className="sv-cards">
