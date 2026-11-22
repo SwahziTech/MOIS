@@ -41,7 +41,9 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
-  const { branchId } = useBranch();
+  const { branchId, branches } = useBranch();
+  // sold but not yet collected (2026-11-22, the user): the stock stays until the goods leave — the amount to collect shows under it, like curing
+  const [toCollect, setToCollect] = useState({});   // `${product}|${colour}` → quantity held for sales not yet collected
   const [view,        setView]        = useState('products');  // materials | products
   const [warehouseId, setWarehouseId] = useState('');
   const [showZero,    setShowZero]    = useState(false);
@@ -84,6 +86,17 @@ export default function Stock() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { setWarehouseId(''); }, [branchId]);
+  useEffect(() => {
+    let live = true;
+    const ids = branchId ? [branchId] : (branches || []).map(b => b.id);
+    Promise.all(ids.map(id => supabase.rpc('sales_availability', { p_branch_id: id, ...(warehouseId ? { p_warehouse_id: warehouseId } : {}) }))).then(res => {
+      if (!live) return;
+      const m = {};
+      for (const r of res) for (const x of r.data || []) { const k = `${x.product_id}|${x.color_id ?? ''}`; m[k] = (m[k] || 0) + Math.max(Number(x.reserved) || 0, 0); }
+      setToCollect(m);
+    });
+    return () => { live = false; };
+  }, [branchId, branches, warehouseId]);
   useEffect(() => { setChip(''); setWarehouseId(''); }, [view]);
 
   const whById = useMemo(() => Object.fromEntries((refs?.warehouses || []).map(w => [w.id, w])), [refs]);
@@ -245,6 +258,7 @@ export default function Stock() {
                     {pcs != null && <span className="sk-sub">({qtyText(pcs)} pcs)</span>}
                     {!isProducts && altOf(c, c.total) && <span className="sk-sub">({altOf(c, c.total)})</span>}
                   </>)}
+                  {(() => { const k = c.item.kind === 'product' && Object.keys(c.byColour).length === 0 ? `${c.item.id}|` : null; const q = k ? toCollect[k] : Object.keys(c.byColour).reduce((t, col) => t + (toCollect[`${c.item.id}|${col}`] || 0), 0) || toCollect[`${c.item.id}|`]; return q > 0 ? <span className="sk-cure" title="Sold but not yet collected or delivered — still in the store until the goods leave">{qtyText(round(q))} {unit(c.unitId)}{pcsOf(c, q) != null ? ` (${qtyText(pcsOf(c, q))} pcs)` : ''} to collect</span> : null; })()}
                   {c.curing > 0 && <span className="sk-cure" title="In the curing store — not sellable until its quality release">+ {qtyText(round(c.curing))} {unit(c.unitId)}{pcsOf(c, c.curing) != null ? ` (${qtyText(pcsOf(c, c.curing))} pcs)` : ''} curing</span>}
                 </div>
                 <div className="sk-colours">
