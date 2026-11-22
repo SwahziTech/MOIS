@@ -94,7 +94,7 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
     }
   }
   if (live && openOrder && canPlan) {
-    for (const r of gone) changes.push({ key: `gone:${r.line.id}`, kind: 'gone', text: `${nameOf(r.line.product_id, r.line.color_id)} is no longer in the order; production #${r.order.order_no} still makes ${qtyText(Math.max(Number(r.line.pieces) - Number(r.progress?.cast_pieces ?? 0), 0))} pcs of it`, order: r.order });
+    for (const r of gone) changes.push({ key: `gone:${r.line.id}`, kind: 'gone', text: `${nameOf(r.line.product_id, r.line.color_id)} is no longer in the order; production #${r.order.order_no} still makes ${qtyText(Math.max(Number(r.line.pieces) - Number(r.progress?.cast_pieces ?? 0), 0))} pcs of it`, order: r.order, line: r.line });
     if (sale.due_date && openOrder.due_date && sale.due_date !== openOrder.due_date)
       changes.push({ key: 'due', kind: 'due', text: `The order is due ${sale.due_date}; production #${openOrder.order_no} is due ${openOrder.due_date}`, order: openOrder });
   }
@@ -106,6 +106,19 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
     relinked.current = openOrder.id + [...saleLineIds].join();
     supabase.rpc('update_production_for_sale', { p_sale: sale.id, p: { order_id: openOrder.id, lines: [] } }).then(({ error: err }) => { if (!err) onChanged(); });
   }, [edited, lineChanges, openOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a product taken out of the order (2026-11-22, the user): remove it from the production order here — the Planner's writer keeps its rules
+  async function removeLine(c) {
+    setError(''); setBusy(true);
+    const { data: o, error: e1 } = await supabase.from('production_orders')
+      .select('id, reference, due_date, notes, lines:production_order_lines(id, product_id, color_id, pieces, sqm, display_order)').eq('id', c.order.id).single();
+    const rest = (o?.lines || []).filter(x => x.id !== c.line.id).sort((a, b) => a.display_order - b.display_order);
+    if (e1 || !rest.length) { setBusy(false); setError(e1 ? dbErrorMessage(e1) : `It is the only product in production #${c.order.order_no} — cancel that order in the Planner instead`); return; }
+    const { error: err } = await supabase.rpc('save_production_order', { p: { id: o.id, reference: o.reference, due_date: o.due_date, notes: o.notes,
+      lines: rest.map(x => ({ product_id: x.product_id, color_id: x.color_id, pieces: x.pieces, sqm: x.sqm })) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err, "We couldn't change production. Please try again.")); return; }
+    onChanged();
+  }
   async function applyChange(c, how) {
     setError(''); setBusy(true);
     const { data, error: err } = how === 'separate'
@@ -153,7 +166,7 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
                 {c.kind === 'less' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Reduce #{c.order.order_no} to {qtyText(c.pieces)}</button>}
                 {c.kind === 'new' && <><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')} title="Merge it into the production order already made for this order">Add to #{c.order.order_no}</button>
                   <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => applyChange(c, 'separate')}>New production order</button></>}
-                {c.kind === 'gone' && <button type="button" className="btn btn-outline btn-sm" onClick={toPlanner}><CalendarClock size={15} /> Change it in the Planner</button>}
+                {c.kind === 'gone' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => removeLine(c)}>Remove from #{c.order.order_no}</button>}
                 {c.kind === 'due' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Move #{c.order.order_no} to {sale.due_date}</button>}
               </span>
             </div>
