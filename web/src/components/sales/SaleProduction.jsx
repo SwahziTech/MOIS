@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -73,8 +73,14 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
   const open = rows.filter(r => r.order.status === 'open');
   const openOrder = open[0]?.order ?? null;
   const changes = [];
-  if (live && openOrder && canPlan) {
-    for (const l of (sale.lines || []).filter(x => x.product_id)) {
+  // only an edit of the order is a change (2026-11-22, the user): production moving on, or stock coming and going, is not.
+  // Saving an edited order replaces its lines, so a production line no longer linked to one of them means the order was edited.
+  const saleLineIds = new Set((sale.lines || []).map(l => l.id));
+  const productLines = (sale.lines || []).filter(x => x.product_id);
+  const edited = open.some(r => !saleLineIds.has(r.line.sale_line_id) && productLines.some(l => belongsTo(r, l, sale)));
+  const gone = open.filter(r => !productLines.some(l => belongsTo(r, l, sale)));
+  if (live && openOrder && canPlan && edited) {
+    for (const l of productLines) {
       const r = open.find(x => belongsTo(x, l, sale));
       const need = pcsOf(l, needOf(l));
       if (need == null) continue;
@@ -86,9 +92,20 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
         if (to < Number(r.line.pieces)) changes.push({ key: l.id, l, kind: 'less', text: `${nameOf(l.product_id, l.color_id)}: production #${r.order.order_no} makes ${qtyText(left - need)} pcs more than the order now needs${cast > to - 1 && cast > 0 ? ` (${qtyText(cast)} already cast)` : ''}`, order: r.order, pieces: to });
       } else if (!r && need > 0) changes.push({ key: l.id, l, kind: 'new', text: `${nameOf(l.product_id, l.color_id)}: ${qtyText(need)} pcs short and not in production`, order: openOrder, pieces: need });
     }
+  }
+  if (live && openOrder && canPlan) {
+    for (const r of gone) changes.push({ key: `gone:${r.line.id}`, kind: 'gone', text: `${nameOf(r.line.product_id, r.line.color_id)} is no longer in the order; production #${r.order.order_no} still makes ${qtyText(Math.max(Number(r.line.pieces) - Number(r.progress?.cast_pieces ?? 0), 0))} pcs of it`, order: r.order });
     if (sale.due_date && openOrder.due_date && sale.due_date !== openOrder.due_date)
       changes.push({ key: 'due', kind: 'due', text: `The order is due ${sale.due_date}; production #${openOrder.order_no} is due ${openOrder.due_date}`, order: openOrder });
   }
+  // edited but nothing to change: link production to the new lines quietly, so it isn't asked again
+  const lineChanges = changes.filter(c => ['more', 'less', 'new'].includes(c.kind)).length;
+  const relinked = useRef('');
+  useEffect(() => {
+    if (!edited || lineChanges > 0 || !openOrder || !canPlan || relinked.current === openOrder.id + [...saleLineIds].join()) return;
+    relinked.current = openOrder.id + [...saleLineIds].join();
+    supabase.rpc('update_production_for_sale', { p_sale: sale.id, p: { order_id: openOrder.id, lines: [] } }).then(({ error: err }) => { if (!err) onChanged(); });
+  }, [edited, lineChanges, openOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   async function applyChange(c, how) {
     setError(''); setBusy(true);
     const { data, error: err } = how === 'separate'
@@ -136,6 +153,7 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
                 {c.kind === 'less' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Reduce #{c.order.order_no} to {qtyText(c.pieces)}</button>}
                 {c.kind === 'new' && <><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')} title="Merge it into the production order already made for this order">Add to #{c.order.order_no}</button>
                   <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => applyChange(c, 'separate')}>New production order</button></>}
+                {c.kind === 'gone' && <button type="button" className="btn btn-outline btn-sm" onClick={toPlanner}><CalendarClock size={15} /> Change it in the Planner</button>}
                 {c.kind === 'due' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Move #{c.order.order_no} to {sale.due_date}</button>}
               </span>
             </div>
@@ -145,7 +163,7 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
       )}
       {rows.length > 0 && (
         <table className="rd-table so-prog">
-          <thead><tr><th>Made for this order</th><th className="num">To make</th><th className="num">Cast</th><th className="num">Curing</th><th className="num">Ready</th><th>Production order</th></tr></thead>
+          <thead><tr><th>Made for this order</th><th className="num">Planned</th><th className="num">Made</th><th className="num">Curing</th><th className="num">Ready</th><th className="num">Left to make</th><th>Production order</th></tr></thead>
           <tbody>
             {rows.map(({ order, line, progress }) => (
               <tr key={line.id}>
@@ -154,6 +172,7 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
                 <td className="num">{qtyText(progress?.cast_pieces ?? 0)}</td>
                 <td className="num">{qtyText(progress?.curing ?? 0)}</td>
                 <td className="num"><strong className={(progress?.passed ?? 0) >= line.pieces ? 'text-success' : ''}>{qtyText(progress?.passed ?? 0)}</strong></td>
+                <td className="num">{qtyText(Math.max(Number(line.pieces) - Number(progress?.cast_pieces ?? 0), 0))}</td>
                 <td className="text-sm">#{order.order_no} · {order.status}{order.due_date ? <span className="pl-help"> · due {order.due_date}</span> : ''}
                   <button type="button" className="icon-btn" style={{ marginLeft: 6, verticalAlign: 'middle' }} aria-label="Open the Planner" title="Open the Planner" onClick={toPlanner}><CalendarClock size={15} /></button></td>
               </tr>
