@@ -232,7 +232,7 @@ export default function CapacityPlanner({ refs, recipes, branchId, today, usage 
                   {o.due_date && <span className="pl-help">due {dateText(o.due_date)}</span>}
                   {o.status === 'open' && (st.late ? <span className="pl-badge is-out">At risk — ready about {st.lastReady}</span>
                     : st.anyLeft && st.lastReady && !st.unknown ? <span className="pl-badge">On track — ready about {st.lastReady}</span>
-                    : st.anyLeft && st.unknown ? <span className="pl-badge is-plain">No mold count for some products</span>
+                    : st.anyLeft && st.unknown ? null
                     : !st.anyLeft ? <span className="pl-badge is-plain">All cast — waiting for quality release</span> : null)}
                   {o.status !== 'open' && <span className="pl-badge is-plain">{STATUS_LABEL[o.status]}{o.close_note ? ` — ${o.close_note}` : ''}</span>}
                   {canPlan && (

@@ -3237,5 +3237,5 @@ a.ih-line { color: inherit; text-decoration: none; }
 .so-menu button.so-opt.text-error { color: var(--color-error); }
 /* an order changed since production was planned (2026-11-22) */
 .so-changes { display: flex; flex-direction: column; gap: 8px; }
-.so-change { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.so-change { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .so-change-acts { display: flex; gap: 6px; flex-wrap: wrap; }

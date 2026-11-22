@@ -1106,16 +1106,18 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
     && (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
   const goodsLeft = (sale.lines || []).some(l => l.product_id && Number(l.quantity) - doneOf(l.id) > 1e-9);
   // short of stock (2026-11-22, the user): under each product, what is still to make — before it leaves
+  const prodSig = production.map(r => `${r.line.id}:${r.line.pieces}:${r.progress?.passed ?? 0}:${r.order.status}`).join(',');
   const [freeStock, setFreeStock] = useState(null);   // `${product}|${colour}` → available (this sale's own hold given back)
   useEffect(() => {
     if (!['note', 'quotation', 'order', 'invoice'].includes(sale.stage) || !goodsLeft) return;
     supabase.rpc('sales_availability', { p_branch_id: sale.branch_id, ...(sale.warehouse_id ? { p_warehouse_id: sale.warehouse_id } : {}) }).then(({ data }) => {
       const m = Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.available)]));
-      if (['order', 'invoice'].includes(sale.stage)) for (const l of sale.lines || []) if (l.product_id) { const k = `${l.product_id}|${l.color_id ?? ''}`; m[k] = (m[k] ?? 0) + Math.max(Number(l.quantity) - doneOf(l.id), 0); }
+      // this order's own hold given back: what is left to collect less what its open production still makes (141)
+      if (['order', 'invoice'].includes(sale.stage)) for (const l of sale.lines || []) if (l.product_id) { const k = `${l.product_id}|${l.color_id ?? ''}`; m[k] = (m[k] ?? 0) + Math.max(Number(l.quantity) - doneOf(l.id) - inProd(l), 0); }
       setFreeStock(m);
     });
-  }, [sale.id, sale.stage]); // eslint-disable-line react-hooks/exhaustive-deps
-  const inProd = l => production.filter(r => belongsTo(r, l, sale) && r.order.status === 'open').reduce((t, r) => t + Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0), 0);
+  }, [sale.id, sale.stage, prodSig, (sale.lines || []).map(l => `${l.id}:${l.quantity}`).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  function inProd(l) { return production.filter(r => belongsTo(r, l, sale) && r.order.status === 'open').reduce((t, r) => t + Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0), 0); }
   const shortOf = l => { if (!freeStock || !l.product_id) return 0; const left = Math.max(Number(l.quantity) - doneOf(l.id), 0); return Math.max(left - Math.max(freeStock[`${l.product_id}|${l.color_id ?? ''}`] ?? 0, 0), 0); };
   // the status, not the stage (2026-11-19, the user): is it paid, and have the goods left?
   const live = ['order', 'invoice'].includes(sale.stage);
@@ -1208,7 +1210,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
                 <tr key={l.id}>
                   <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item'}</div>
                     {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))}{Number(l.vat_rate) === 0 ? ' before VAT' : ''} · {l.discount_reason}</div>}</td>
-                  <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}{shortOf(l) > 0 && <div className="text-xs text-warning" title="Not enough free stock for this line — production made for it is counted once its pieces pass">Short {qtyText(r2(shortOf(l)))} {per(l.product_id)}{inProd(l) > 0 ? <span> · {qtyText(inProd(l))} pcs in production{shortOf(l) - inProd(l) > 1e-9 ? ` · ${qtyText(r2(shortOf(l) - inProd(l)))} more to make` : ''}</span> : ' — to make'}</div>}</> : <span className="pl-help">—</span>}</td>
+                  <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}{shortOf(l) > 0 && <div className="text-xs text-warning" title="Not enough free stock for this line — production made for it is counted once its pieces pass">Short {qtyText(r2(shortOf(l)))} {per(l.product_id)}{inProd(l) > 0 ? <div>{qtyText(inProd(l))} pcs in production{shortOf(l) - inProd(l) > 1e-9 ? ` · ${qtyText(r2(shortOf(l) - inProd(l)))} more to make` : ''}</div> : ' — to make'}</div>}</> : <span className="pl-help">—</span>}</td>
                   <td style={{ textAlign: 'right' }}>{money(inc)}</td>
                   <td style={{ textAlign: 'right' }}>{money(Number(l.amount))}</td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(l.total))}</strong></td>
