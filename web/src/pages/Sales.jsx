@@ -177,7 +177,7 @@ export default function Sales() {
       actions={canSell && <>
         {onInvoices && <button type="button" className="btn btn-outline" title="A customer's wish written down — nothing confirmed yet" onClick={() => setEditing({ note: true })}><Plus size={15} /> New note</button>}
         <button type="button" className="btn btn-outline" onClick={() => setEditing({})}><Plus size={15} /> New quotation</button></>}
-      primaryAction={canSell && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>
+      primaryAction={canSell && !onInvoices && <button type="button" className="btn btn-primary" onClick={() => setEditing({ book: true })}><Plus size={15} /> Record sale</button>}>
       {error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
           {salesTabs}
@@ -197,9 +197,10 @@ export default function Sales() {
           <ListToolbar id="sales-search" search={search} onSearch={setSearch} placeholder="Search number, customer, phone or EFD receipt…" />
           <PageTabs tabs={PIPE.map(([k, l]) => [k, `${l} (${(sales || []).filter(x => inBranch(x.branch_id) && x.stage === k).length})`])} value={pipe} onChange={setPipe} />
           <section className="sk">
-            <div className="sk-head"><span>Sales ({shown.length})</span><span className="pl-help">newest first</span></div>
+            <div className="sk-head"><span>{view === 'list' ? PIPE.find(([k]) => k === pipe)?.[1] : 'Sales'} ({shown.length})</span><span className="pl-help">newest first</span></div>
             {sales === null ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk-card"><span className="skeleton" /></div>)
-            : shown.length === 0 ? <div className="card"><EmptyState icon={Receipt} title="No sales here yet" description={canSell ? 'Start with New sale: a quotation that becomes an order and an invoice.' : 'Sales recorded at this branch appear here.'} /></div>
+            : shown.length === 0 ? <div className="card"><EmptyState icon={Receipt} title={view === 'list' ? `No ${(PIPE.find(([k]) => k === pipe)?.[1] ?? 'sales').toLowerCase()} yet` : 'No sales here yet'}
+              description={view === 'list' ? { note: "A customer's wish written down — New note.", quotation: 'Prices offered while you agree — New quotation.', order: 'A confirmed order: made in production if stock is short, delivered as it is paid.', invoice: 'Final bills appear here.' }[pipe] : canSell ? 'Start with New sale: a quotation that becomes an order and an invoice.' : 'Sales recorded at this branch appear here.'} /></div>
             : shown.map(s => {
               const paid = paidOf(s);
               return (
@@ -369,6 +370,7 @@ function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walk
   const [prices, setPrices] = useState({});        // `${product}|${colour}` → { ex, rate, source }
   const [listPrices, setListPrices] = useState({}); // product id → the price list's prices as the customer pays them (the picker)
   const [avail, setAvail] = useState({});          // `${product}|${colour}` → available
+  const [stockInfo, setStockInfo] = useState({});  // `${product}|${colour}` → { onHand, held } — why available is less than the store (2026-11-22)
   // the store it is sold from (135): yard or shop — kept per branch on this device; asked only when the branch has several
   const saleStores = (refs.warehouses || []).filter(w => w.status === 'active' && w.branch_id === branchId && w.type === 'finished_goods')
     .sort((a, b) => (b.receives_production !== false) - (a.receives_production !== false) || a.name.localeCompare(b.name));
@@ -459,7 +461,8 @@ function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walk
   }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     supabase.rpc('sales_availability', { p_branch_id: branchId, ...(storeOn && store ? { p_warehouse_id: store } : {}) }).then(({ data }) =>
-      setAvail(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.available)]))));
+      { setAvail(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, Number(x.available)])));
+        setStockInfo(Object.fromEntries((data || []).map(x => [`${x.product_id}|${x.color_id ?? ''}`, { onHand: Number(x.on_hand), held: Number(x.reserved) }]))); });
   }, [branchId, store, storeOn]);
   // the price list's price (without VAT) and its VAT rate for each product and colour on the sale
   useEffect(() => {
@@ -502,8 +505,6 @@ function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walk
   const availOf = k => (avail[k] === undefined ? undefined : avail[k] + (ownHeld[k] || 0));
   const wanted = {};
   for (const l of lines) if (l.productId && num(l.quantity) > 0) wanted[key(l)] = (wanted[key(l)] || 0) + num(l.quantity);
-  const short = Object.entries(wanted).filter(([k, q]) => availOf(k) !== undefined && q > availOf(k) + 1e-9)
-    .map(([k, q]) => { const [pid, cid] = k.split('|'); return { name: `${refs.items[`p:${pid}`]?.name ?? ''}${cid ? ` ${refs.colorById[cid]?.name ?? ''}` : ''}`, q, av: Math.max(availOf(k), 0), unit: per(pid) }; });
   const set = (i, patch) => setLines(ls => ls.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   async function save(toList = false) {
@@ -824,12 +825,7 @@ function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walk
           <label className="pe-field" style={{ maxWidth: 240 }}><span>Quotation valid until (optional)</span><input type="date" className="form-input" min={date} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label>
         </div>}
 
-        {short.length > 0 && (
-          <div className="alert alert-warning" role="alert">
-            <strong>Not enough in stock:</strong> {short.map(x => `${x.name} — ${qtyText(r2(x.q))} ${x.unit} ordered, ${qtyText(r2(x.av))} available`).join('; ')}.
-            
-          </div>
-        )}
+
         <table className="rd-table sl-table">
           <thead><tr><th>Product</th><th>Colour</th><th style={{ textAlign: 'right' }}>Quantity</th><th style={{ textAlign: 'right' }}>Price</th><th style={{ textAlign: 'right' }}>Total</th><th /></tr></thead>
           <tbody>
@@ -860,7 +856,8 @@ function SaleEditor({ sale, prefill, note = false, book = false, sold = {}, walk
                     <span className="flex items-center gap-4" style={{ justifyContent: 'flex-end' }}>
                       <NumberInput step="any" min="0" className="form-input" style={{ width: 90 }} value={l.quantity} onChange={e => set(i, { quantity: e.target.value })} /> {per(l.productId)}
                     </span>
-                    {availOf(key(l)) !== undefined && <div className={`pl-help${(wanted[key(l)] ?? 0) > availOf(key(l)) + 1e-9 ? ' text-warning' : ''}`}>{qtyText(r2(Math.max(availOf(key(l)), 0)))} {unitOf(l.productId)} available</div>}
+                    {availOf(key(l)) !== undefined && <div className="pl-help" title={stockInfo[key(l)] ? `${qtyText(r2(stockInfo[key(l)].onHand))} in the store · ${qtyText(r2(stockInfo[key(l)].held))} held for other sales not yet collected` : undefined}>{qtyText(r2(Math.max(availOf(key(l)), 0)))} {unitOf(l.productId)} available{stockInfo[key(l)]?.held > 0 ? <span> · {qtyText(r2(stockInfo[key(l)].onHand))} in store</span> : null}</div>}
+                    {availOf(key(l)) !== undefined && (wanted[key(l)] ?? 0) > availOf(key(l)) + 1e-9 && <div className="text-xs text-warning" title="Confirm it as an order, then Make in production sends this to the Planner">Short {qtyText(r2((wanted[key(l)] ?? 0) - Math.max(availOf(key(l)), 0)))} {unitOf(l.productId)} — to make</div>}
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     {p === null ? <span className="pl-help">{it?.colorIds?.length && !l.colorId ? 'pick a colour' : '…'}</span>

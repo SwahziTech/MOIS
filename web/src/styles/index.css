@@ -3218,3 +3218,10 @@ body.menu-top.menu-top-hidden .main-wrapper { padding-top: 112px; }
 .so-wait { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .so-wait .pl-label { margin-right: 4px; }
 .so-prog td, .so-prog th { white-space: nowrap; }
+.so-drop { position: relative; }
+.so-drop > summary { list-style: none; cursor: pointer; min-width: 180px; padding-right: 28px; position: relative; }
+.so-drop > summary::-webkit-details-marker { display: none; }
+.so-drop > summary::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+.so-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 180px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; }
+.so-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm, 6px); cursor: pointer; font-size: var(--text-sm); }
+.so-opt:hover { background: var(--bg-sidebar-hover); }

@@ -62,9 +62,15 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, c
       {live && (
         <div className="so-wait">
           <span className="pl-label">Waiting for</span>
-          {WAITING.map(([k, l]) => (
-            <button key={k} type="button" className={`filter-chip${waiting.includes(k) ? ' is-on' : ''}`} disabled={!canSell || busy} onClick={() => toggle(k)}>{l}</button>
-          ))}
+          {/* a dropdown (2026-11-22, the user): tick what it waits for */}
+          <details className="so-drop">
+            <summary className="form-input">{waiting.length ? WAITING.filter(([k]) => waiting.includes(k)).map(([, l]) => l).join(', ') : 'Nothing'}</summary>
+            <div className="so-menu">
+              {WAITING.map(([k, l]) => (
+                <label key={k} className="so-opt"><input type="checkbox" checked={waiting.includes(k)} disabled={!canSell || busy} onChange={() => toggle(k)} /> {l}</label>
+              ))}
+            </div>
+          </details>
           {['order', 'invoice'].includes(sale.stage) && canPlan && (
             <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setMaking(true)}><Factory size={14} /> Make in production</button>
           )}
