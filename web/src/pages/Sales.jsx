@@ -20,7 +20,7 @@ import { loadInventoryRefs, qtyText, orgToday } from '../lib/inventory';
 import { categoryTools, productOrder } from '../lib/categories';
 import PageShell from '../components/PageShell';
 import DropDetails from '../components/DropDetails';
-import SaleProduction, { loadSaleProduction, productionSummary, WAITING, ADVANCE } from '../components/sales/SaleProduction';
+import SaleProduction, { belongsTo, loadSaleProduction, productionSummary, WAITING, ADVANCE } from '../components/sales/SaleProduction';
 import { ListToolbar, ChipRow, PageTabs } from '../components/ListControls';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
@@ -1115,6 +1115,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
       setFreeStock(m);
     });
   }, [sale.id, sale.stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inProd = l => production.filter(r => belongsTo(r, l, sale) && r.order.status === 'open').reduce((t, r) => t + Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0), 0);
   const shortOf = l => { if (!freeStock || !l.product_id) return 0; const left = Math.max(Number(l.quantity) - doneOf(l.id), 0); return Math.max(left - Math.max(freeStock[`${l.product_id}|${l.color_id ?? ''}`] ?? 0, 0), 0); };
   // the status, not the stage (2026-11-19, the user): is it paid, and have the goods left?
   const live = ['order', 'invoice'].includes(sale.stage);
@@ -1153,7 +1154,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
   // a quotation's Next is the order; an order's is making what is short, then the payment
   const next = sale.stage === 'cancelled' ? null : steps[0] ?? null;
   const more = [
-    ...steps.filter(a => a !== next),
+    ...steps.filter(a => a !== next && a.key !== 'pay'),
     docOf && { key: 'print', label: docOf[1], run: () => openDoc(docOf[0]) },
     sale.stage === 'quotation' && { key: 'proforma', label: 'Print proforma', run: () => openDoc('proforma') },
     !editable && sale.stage !== 'cancelled' && (canAt('system.manage', br, null) || canAt('sales.discount', br, null)) && { key: 'correct', label: 'Correct…', run: () => setCorrecting(true) },
@@ -1207,7 +1208,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
                 <tr key={l.id}>
                   <td><strong>{l.product_id ? it?.name : l.item_name}{l.color_id ? ` ${refs.colorById[l.color_id]?.name ?? ''}` : ''}</strong><div className="pl-help">{l.product_id ? it?.category : 'Other item'}</div>
                     {l.discount_reason && <div className="pl-help">list {money(r2(Number(l.list_price) * (1 + Number(l.vat_rate) / 100)))}{Number(l.vat_rate) === 0 ? ' before VAT' : ''} · {l.discount_reason}</div>}</td>
-                  <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}{shortOf(l) > 0 && <div className="text-xs text-warning" title="Not enough free stock: confirm it as an order, then Make in production">Short {qtyText(r2(shortOf(l)))} {per(l.product_id)} — to make</div>}</> : <span className="pl-help">—</span>}</td>
+                  <td style={{ textAlign: 'right' }}>{l.product_id ? <>{qtyText(Number(l.quantity))} {per(l.product_id)}{shortOf(l) > 0 && <div className="text-xs text-warning" title="Not enough free stock for this line — production made for it is counted once its pieces pass">Short {qtyText(r2(shortOf(l)))} {per(l.product_id)}{inProd(l) > 0 ? <span> · {qtyText(inProd(l))} pcs in production{shortOf(l) - inProd(l) > 1e-9 ? ` · ${qtyText(r2(shortOf(l) - inProd(l)))} more to make` : ''}</span> : ' — to make'}</div>}</> : <span className="pl-help">—</span>}</td>
                   <td style={{ textAlign: 'right' }}>{money(inc)}</td>
                   <td style={{ textAlign: 'right' }}>{money(Number(l.amount))}</td>
                   <td style={{ textAlign: 'right' }}><strong>{money(Number(l.total))}</strong></td>
@@ -1222,11 +1223,11 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
 
         {/* customer orders (141): waiting for, make in production, progress */}
         {(sale.stage !== 'invoice' || production.length > 0 || (sale.waiting_for || []).length > 0) && (
-          <SaleProduction sale={sale} refs={refs} rows={production} paid={paid} canSell={canAt('sales.create', br, null)} makeTick={makeTick} onChanged={onChanged} />
+          <SaleProduction sale={sale} refs={refs} rows={production} paid={paid} canSell={canAt('sales.create', br, null)} canPlan={canAt('production.plan', br, null)} needOf={shortOf} makeTick={makeTick} onChanged={onChanged} />
         )}
         {!['note', 'quotation', 'cancelled'].includes(sale.stage) && (
           <section>
-            {(sale.payments || []).length === 0 ? <div className="sv-card"><span className="sv-card-label">Paid</span><span className="pl-help">No payment yet</span></div> : (
+            {(sale.payments || []).length === 0 ? <div className="sv-card"><span className="sv-card-label">Paid</span><span className="pl-help">No payment yet</span>{canPay && <button type="button" className="btn btn-outline btn-sm sv-card-amt" onClick={payNow}>Record payment</button>}</div> : (
               <div className="sv-cards">
                 {[...sale.payments].sort((a, b) => (b.paid_on.localeCompare(a.paid_on) || b.created_at.localeCompare(a.created_at))).map(p => (
                   <div key={p.id} className="sv-card"><span className="sv-card-label">Paid</span><span>{tableDate(p.paid_on)}</span><span>{accountName(p.account_id) ?? METHODS[p.method]}{p.receipt_no ? ` · #${p.receipt_no}` : ''}{p.reference ? ` · ${p.reference}` : ''}</span><strong className="sv-card-amt">{money(Number(p.amount))}</strong>
@@ -1238,7 +1239,7 @@ function SaleView({ sale, production = [], proofs = {}, accounts = [], refs, buy
                       {proofs[p.id]?.status !== 'confirmed' && canAt('sales.create', sale.branch_id, null) && <button type="button" className="btn btn-outline btn-sm" onClick={() => setProofFor(p)}>{proofs[p.id] ? 'Replace proof' : 'Add proof'}</button>}
                       <button type="button" className="icon-btn" aria-label="Print receipt" title="Print receipt" onClick={() => openDoc('receipt', `&payment=${p.id}`)}><Printer size={15} /></button></span></div>
                 ))}
-                {owed > 0 && <div className="sv-card"><span className="sv-card-label">Owed</span><strong className="sv-card-amt text-warning">{money(owed)}</strong></div>}
+                {owed > 0 && <div className="sv-card"><span className="sv-card-label">Owed</span><strong className="sv-card-amt text-warning">{money(owed)}</strong>{canPay && <button type="button" className="btn btn-outline btn-sm" onClick={payNow}>Record payment</button>}</div>}
               </div>
             )}
           </section>

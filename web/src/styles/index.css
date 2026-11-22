@@ -3235,3 +3235,7 @@ a.ih-line { color: inherit; text-decoration: none; }
 .so-drop > summary.btn::after { content: none; }
 .so-menu button.so-opt { border: 0; background: transparent; text-align: left; color: var(--text-primary); white-space: nowrap; }
 .so-menu button.so-opt.text-error { color: var(--color-error); }
+/* an order changed since production was planned (2026-11-22) */
+.so-changes { display: flex; flex-direction: column; gap: 8px; }
+.so-change { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.so-change-acts { display: flex; gap: 6px; flex-wrap: wrap; }

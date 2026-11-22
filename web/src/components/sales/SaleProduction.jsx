@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Factory } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { qtyText } from '../../lib/inventory';
 import { dbErrorMessage } from '../../lib/masterData';
@@ -32,6 +33,10 @@ export async function loadSaleProduction(saleIds) {
   return out;
 }
 
+/** A production line belongs to a sale line: by its link, or — after the sale was edited and its lines replaced — by product and colour */
+export const belongsTo = (r, l, sale) => r.line.sale_line_id === l.id
+  || (!(sale.lines || []).some(y => y.id === r.line.sale_line_id) && r.line.product_id === l.product_id && (r.line.color_id ?? null) === (l.color_id ?? null));
+
 /** "made 400 / 1,200" across a sale's production */
 export function productionSummary(rows) {
   if (!rows?.length) return null;
@@ -42,7 +47,10 @@ export function productionSummary(rows) {
 }
 
 // makeTick: the sale window's step button asks for the Make in production window (2026-11-22, step by step)
-export default function SaleProduction({ sale, refs, rows = [], paid, canSell, makeTick = 0, onChanged }) {
+// needOf(line): how much of a line the free stock can't cover (stock unit) — the sale window works it out
+export default function SaleProduction({ sale, refs, rows = [], paid, canSell, canPlan = false, needOf = () => 0, makeTick = 0, onChanged }) {
+  const navigate = useNavigate();
+  const [sent, setSent] = useState(null);   // a production order just made: go to the Planner or stay
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [making, setMaking] = useState(false);
@@ -50,6 +58,47 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, m
   const live = sale.stage !== 'cancelled';
   const waiting = sale.waiting_for || [];
   const nameOf = (productId, colorId) => `${refs.items[`p:${productId}`]?.name ?? '—'}${colorId ? ` ${refs.colorById[colorId]?.name ?? ''}` : ''}`;
+  const toPlanner = () => navigate('/production?tab=planner');
+
+  // the order changed since production was planned (2026-11-22, the user): more, less, a product added, a new date
+  const [perSqm, setPerSqm] = useState({});
+  useEffect(() => {
+    const ids = [...new Set((sale.lines || []).map(l => l.product_id).filter(Boolean))];
+    if (!ids.length || !rows.length) return;
+    supabase.from('product_specs').select('product_id, pcs_per_sqm').in('product_id', ids)
+      .then(({ data }) => setPerSqm(Object.fromEntries((data || []).filter(x => Number(x.pcs_per_sqm) > 0).map(x => [x.product_id, Number(x.pcs_per_sqm)]))));
+  }, [sale.id, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isSqm = id => (refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM';
+  const pcsOf = (l, q) => (isSqm(l.product_id) ? (perSqm[l.product_id] ? Math.ceil(q * perSqm[l.product_id]) : null) : Math.ceil(q));
+  const open = rows.filter(r => r.order.status === 'open');
+  const openOrder = open[0]?.order ?? null;
+  const changes = [];
+  if (live && openOrder && canPlan) {
+    for (const l of (sale.lines || []).filter(x => x.product_id)) {
+      const r = open.find(x => belongsTo(x, l, sale));
+      const need = pcsOf(l, needOf(l));
+      if (need == null) continue;
+      const left = r ? Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0) : 0;   // still to come out of production
+      const cast = r ? Number(r.progress?.cast_pieces ?? 0) : 0;
+      if (r && need > left) changes.push({ key: l.id, l, kind: 'more', text: `${nameOf(l.product_id, l.color_id)}: the order needs ${qtyText(need - left)} pcs more than production #${r.order.order_no} makes`, order: r.order, pieces: Number(r.line.pieces) + (need - left), extra: need - left });
+      else if (r && left > need) {
+        const to = Math.max(Number(r.line.pieces) - (left - need), cast, 1);
+        if (to < Number(r.line.pieces)) changes.push({ key: l.id, l, kind: 'less', text: `${nameOf(l.product_id, l.color_id)}: production #${r.order.order_no} makes ${qtyText(left - need)} pcs more than the order now needs${cast > to - 1 && cast > 0 ? ` (${qtyText(cast)} already cast)` : ''}`, order: r.order, pieces: to });
+      } else if (!r && need > 0) changes.push({ key: l.id, l, kind: 'new', text: `${nameOf(l.product_id, l.color_id)}: ${qtyText(need)} pcs short and not in production`, order: openOrder, pieces: need });
+    }
+    if (sale.due_date && openOrder.due_date && sale.due_date !== openOrder.due_date)
+      changes.push({ key: 'due', kind: 'due', text: `The order is due ${sale.due_date}; production #${openOrder.order_no} is due ${openOrder.due_date}`, order: openOrder });
+  }
+  async function applyChange(c, how) {
+    setError(''); setBusy(true);
+    const { data, error: err } = how === 'separate'
+      ? await supabase.rpc('make_production_for_sale', { p_sale: sale.id, p: { lines: [{ sale_line_id: c.l.id, pieces: c.kind === 'more' ? c.extra : c.pieces }] } })
+      : await supabase.rpc('update_production_for_sale', { p_sale: sale.id, p: { order_id: c.order.id, ...(c.kind === 'due' ? { due_date: sale.due_date, lines: [] } : { lines: [{ sale_line_id: c.l.id, pieces: c.pieces }] }) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err, "We couldn't change production. Please try again.")); return; }
+    if (how === 'separate' && data) setSent({ id: data });
+    onChanged();
+  }
 
   async function toggle(k) {
     setError(''); setBusy(true);
@@ -75,6 +124,25 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, m
         </div>
       )}
       {error && <p className="text-xs text-error">{error}</p>}
+      {changes.length > 0 && (
+        <div className="alert alert-warning so-changes" role="note">
+          <strong>The order changed since production was planned</strong>
+          {changes.map(c => (
+            <div key={c.key} className="so-change">
+              <span>{c.text}.</span>
+              <span className="so-change-acts">
+                {c.kind === 'more' && <><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Update #{c.order.order_no} to {qtyText(c.pieces)}</button>
+                  <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => applyChange(c, 'separate')} title="A production order of its own for the extra pieces">New order for {qtyText(c.extra)}</button></>}
+                {c.kind === 'less' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Reduce #{c.order.order_no} to {qtyText(c.pieces)}</button>}
+                {c.kind === 'new' && <><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')} title="Merge it into the production order already made for this order">Add to #{c.order.order_no}</button>
+                  <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => applyChange(c, 'separate')}>New production order</button></>}
+                {c.kind === 'due' && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => applyChange(c, 'update')}>Move #{c.order.order_no} to {sale.due_date}</button>}
+              </span>
+            </div>
+          ))}
+          <span className="pl-help">Or leave it as it is — change it later here or in the Planner.</span>
+        </div>
+      )}
       {rows.length > 0 && (
         <table className="rd-table so-prog">
           <thead><tr><th>Made for this order</th><th className="num">To make</th><th className="num">Cast</th><th className="num">Curing</th><th className="num">Ready</th><th>Production order</th></tr></thead>
@@ -86,18 +154,27 @@ export default function SaleProduction({ sale, refs, rows = [], paid, canSell, m
                 <td className="num">{qtyText(progress?.cast_pieces ?? 0)}</td>
                 <td className="num">{qtyText(progress?.curing ?? 0)}</td>
                 <td className="num"><strong className={(progress?.passed ?? 0) >= line.pieces ? 'text-success' : ''}>{qtyText(progress?.passed ?? 0)}</strong></td>
-                <td className="text-sm">#{order.order_no} · {order.status}{order.due_date ? <span className="pl-help"> · due {order.due_date}</span> : ''}</td>
+                <td className="text-sm">#{order.order_no} · {order.status}{order.due_date ? <span className="pl-help"> · due {order.due_date}</span> : ''}
+                  <button type="button" className="icon-btn" style={{ marginLeft: 6, verticalAlign: 'middle' }} aria-label="Open the Planner" title="Open the Planner" onClick={toPlanner}><CalendarClock size={15} /></button></td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {making && <MakeModal sale={sale} refs={refs} rows={rows} paid={paid} nameOf={nameOf} onClose={() => setMaking(false)} onSaved={() => { setMaking(false); onChanged(); }} />}
+      {making && <MakeModal sale={sale} refs={refs} rows={rows} paid={paid} nameOf={nameOf} needOf={needOf} onClose={() => setMaking(false)} onSaved={id => { setMaking(false); setSent({ id }); onChanged(); }} />}
+      {/* sent (2026-11-22, the user): go to the Planner, or stay on the order */}
+      {sent && (
+        <Modal title="Sent to the Planner" onClose={() => setSent(null)}
+          footer={<><button type="button" className="btn btn-outline" onClick={() => setSent(null)}>Stay here</button>
+            <button type="button" className="btn btn-primary" onClick={() => { setSent(null); toPlanner(); }}><CalendarClock size={15} /> Go to the Planner</button></>}>
+          <p className="text-sm">A production order was made for this order. Its progress shows here as batches are cast against it.</p>
+        </Modal>
+      )}
     </section>
   );
 }
 
-function MakeModal({ sale, refs, rows, paid, nameOf, onClose, onSaved }) {
+function MakeModal({ sale, refs, rows, paid, nameOf, needOf, onClose, onSaved }) {
   const lines = (sale.lines || []).filter(l => l.product_id);
   const [inStore, setInStore] = useState(null);
   const [perSqm, setPerSqm] = useState({});
@@ -108,7 +185,7 @@ function MakeModal({ sale, refs, rows, paid, nameOf, onClose, onSaved }) {
   const isSqm = id => (refs.unitById[refs.items[`p:${id}`]?.stockUnitId]?.symbol ?? '').toUpperCase() === 'SQM';
   const done = l => (sale.deliveries || []).reduce((t, d) => t + (d.lines || []).filter(x => x.sale_line_id === l.id).reduce((u, x) => u + Number(x.quantity), 0), 0);
   // already being made for this line (still to pass), in pieces
-  const making = l => rows.filter(r => r.line.sale_line_id === l.id && r.order.status === 'open').reduce((t, r) => t + Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0), 0);
+  const making = l => rows.filter(r => belongsTo(r, l, sale) && r.order.status === 'open').reduce((t, r) => t + Math.max(Number(r.line.pieces) - Number(r.progress?.passed ?? 0), 0), 0);
   const toPcs = (l, q) => (isSqm(l.product_id) ? (perSqm[l.product_id] ? Math.ceil(q * perSqm[l.product_id]) : null) : Math.ceil(q));
 
   useEffect(() => {
@@ -119,11 +196,10 @@ function MakeModal({ sale, refs, rows, paid, nameOf, onClose, onSaved }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the shortfall a line, in pieces: what is left to deliver less the store and what is already being made
+  // the same shortage the sale shows (free stock — others' holds taken off), in pieces, less what is already being made
   const shortOf = l => {
     if (!inStore) return null;
-    const left = Math.max(Number(l.quantity) - done(l), 0);
-    const store = Math.max(inStore[`${l.product_id}|${l.color_id ?? ''}`] ?? 0, 0);
-    const p = toPcs(l, Math.max(left - store, 0));
+    const p = toPcs(l, needOf(l));
     return p == null ? null : Math.max(p - making(l), 0);
   };
   useEffect(() => { if (inStore) setPcs(Object.fromEntries(lines.map(l => [l.id, String(shortOf(l) ?? '')]))); }, [inStore, perSqm]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -134,10 +210,10 @@ function MakeModal({ sale, refs, rows, paid, nameOf, onClose, onSaved }) {
     const out = lines.map(l => ({ sale_line_id: l.id, pieces: Math.round(Number(pcs[l.id]) || 0) })).filter(x => x.pieces > 0);
     if (!out.length) { setError('Enter the pieces to make.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('make_production_for_sale', { p_sale: sale.id, p: { due_date: due || null, lines: out } });
+    const { data, error: err } = await supabase.rpc('make_production_for_sale', { p_sale: sale.id, p: { due_date: due || null, lines: out } });
     setBusy(false);
     if (err) { setError(dbErrorMessage(err, "We couldn't start production. Please try again.")); return; }
-    onSaved();
+    onSaved(data);
   }
 
   return (
