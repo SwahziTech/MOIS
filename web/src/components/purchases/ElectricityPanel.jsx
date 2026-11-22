@@ -39,6 +39,8 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
   const [meterOpen, setMeterOpen] = useState(null);   // a meter's settings (2026-11-11)
   const [deciding, setDeciding] = useState(null);  // { q, decision }
   const [voiding, setVoiding] = useState(null);
+  const [fixing, setFixing] = useState(null);   // a reading the technical admin corrects (144)
+  const canFix = !!branchId && canAt('system.manage', branchId);
   const canRecord = !!branchId && (canAt('procurement.receive', branchId) || canAt('production.create', branchId));
 
   async function load() {
@@ -170,7 +172,8 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
                 <tr key={r.id} className={r.status === 'void' ? 'is-inactive' : ''}>
                   <td>{tableDate(r.read_on)}</td><td>{r.slot === 'morning' ? 'Morning' : 'Evening'}</td><td>{meterName(r.meter_id)}</td><td className="num">{units(Number(r.reading))}</td>
                   <td>{r.status === 'void' ? <span className="text-muted">Void — {r.void_reason}</span> : r.note || ''}</td>
-                  <td>{r.status === 'recorded' && canRecord && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(r)}>Void…</button>}</td>
+                  <td>{r.status === 'recorded' && canFix && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFixing(r)} title="Correct the day, morning/evening or units — the old one stays as void">Edit…</button>}
+                    {r.status === 'recorded' && canRecord && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVoiding(r)}>Void…</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -200,6 +203,7 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
       {meterOpen && <MeterSettings meter={meterOpen} branchId={branchId} onClose={() => setMeterOpen(null)} onChanged={load} />}
       {buying && <BuyModal q={buying} meterName={meterName(buying.lines[0].meter_id)} today={today} money={money} onClose={() => setBuying(null)} onSaved={async () => { setBuying(null); await load(); }} />}
       {deciding && <TopupDecision {...deciding} onClose={() => setDeciding(null)} onDone={async () => { setDeciding(null); await load(); }} />}
+      {fixing && <FixModal row={fixing} name={meterName(fixing.meter_id)} today={today} onClose={() => setFixing(null)} onDone={async () => { setFixing(null); await load(); }} />}
       {voiding && <VoidModal row={voiding} onClose={() => setVoiding(null)} onDone={async () => { setVoiding(null); await load(); }} />}
     </>
   );
@@ -207,19 +211,27 @@ export default function ElectricityPanel({ branchId, tabs, onOrder }) {
 
 /* A day's readings: morning and evening for each meter (either can wait until later) */
 export function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
+  const { canAt } = useAuth();
+  const canFix = meters.length > 0 && canAt('system.manage', meters[0].branch_id);   // a recorded reading corrected (144)
   const [day, setDay] = useState(today);
   const [vals, setVals] = useState({});       // `${meter}|${slot}` → text
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const had = (m, slot) => readings.find(r => r.meter_id === m && r.read_on === day && r.slot === slot && r.status === 'recorded');
-  const val = (m, slot) => (had(m, slot) ? String(Number(had(m, slot).reading)) : vals[`${m}|${slot}`] ?? '');
+  const val = (m, slot) => vals[`${m}|${slot}`] ?? (had(m, slot) ? String(Number(had(m, slot).reading)) : '');
   async function save() {
     setError('');
     const list = meters.flatMap(m => ['morning', 'evening'].filter(s => !had(m.id, s) && num(vals[`${m.id}|${s}`]) !== null)
       .map(s => ({ meter_id: m.id, slot: s, reading: num(vals[`${m.id}|${s}`]) })));
-    if (!list.length) { setError('Enter a reading.'); return; }
+    const fixes = canFix ? meters.flatMap(m => ['morning', 'evening'].map(s => had(m.id, s)).filter(Boolean)
+      .filter(r => vals[`${r.meter_id}|${r.slot}`] != null && num(vals[`${r.meter_id}|${r.slot}`]) !== null && num(vals[`${r.meter_id}|${r.slot}`]) !== Number(r.reading))) : [];
+    if (!list.length && !fixes.length) { setError('Enter a reading.'); return; }
     setBusy(true);
-    const { error: err } = await supabase.rpc('record_power_readings', { p: { read_on: day, readings: list } });
+    for (const r of fixes) {
+      const { error: err } = await supabase.rpc('correct_power_reading', { p_id: r.id, p: { reading: num(vals[`${r.meter_id}|${r.slot}`]) } });
+      if (err) { setBusy(false); setError(dbErrorMessage(err)); return; }
+    }
+    const { error: err } = list.length ? await supabase.rpc('record_power_readings', { p: { read_on: day, readings: list } }) : { error: null };
     setBusy(false);
     if (err) { setError(dbErrorMessage(err)); return; }
     onSaved();
@@ -241,7 +253,7 @@ export function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
                   <td><strong>{m.name}</strong></td>
                   {['morning', 'evening'].map(s => (
                     <td key={s} className="num">
-                      <NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} disabled={!!had(m.id, s)}
+                      <NumberInput step="any" min="0" className="form-input" style={{ width: 100 }} disabled={!!had(m.id, s) && !canFix} title={had(m.id, s) && canFix ? 'Recorded — change it to correct it' : undefined}
                         value={val(m.id, s)} onChange={e => setVals(v => ({ ...v, [`${m.id}|${s}`]: e.target.value }))} />
                     </td>
                   ))}
@@ -252,6 +264,38 @@ export function ReadingsModal({ meters, readings, today, onClose, onSaved }) {
           </tbody>
         </table>
         <p className="pl-help" title={"The units left on each meter. Read in the morning before work and in the evening after — the evening can be added later. A token loaded during the day: enter it first (Record expense → Electricity)."}>Units left on each meter.</p>
+      </div>
+    </Modal>
+  );
+}
+
+/* The technical admin corrects a reading (144): day, morning/evening, units — the old one stays, void "Corrected" */
+function FixModal({ row, name, today, onClose, onDone }) {
+  const [f, setF] = useState({ read_on: row.read_on, slot: row.slot, reading: String(Number(row.reading)) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function go() {
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.rpc('correct_power_reading', { p_id: row.id, p: { read_on: f.read_on, slot: f.slot, reading: num(f.reading) } });
+    setBusy(false);
+    if (err) { setError(dbErrorMessage(err)); return; }
+    onDone();
+  }
+  return (
+    <Modal title={`Correct reading — ${name}`} onClose={onClose}
+      footer={<>{error && <span className="modal-footer-error" role="alert">{error}</span>}
+        <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+        <button type="button" className={`btn btn-primary${busy ? ' btn-loading' : ''}`} disabled={busy || num(f.reading) === null || !f.read_on} onClick={go}>Save</button></>}>
+      <div className="modal-form">
+        <div className="form-row">
+          <label className="pe-field"><span>Day</span><input type="date" className="form-input" max={today} value={f.read_on} onChange={e => setF({ ...f, read_on: e.target.value })} /></label>
+          <label className="pe-field"><span>When</span>
+            <select className="form-input" value={f.slot} onChange={e => setF({ ...f, slot: e.target.value })}>
+              <option value="morning">Morning (asubuhi)</option><option value="evening">Evening (jioni)</option>
+            </select></label>
+          <label className="pe-field"><span>Units left</span><NumberInput step="any" min="0" className="form-input" value={f.reading} onChange={e => setF({ ...f, reading: e.target.value })} /></label>
+        </div>
+        <p className="pl-help">Was {tableDate(row.read_on)} {row.slot === 'morning' ? 'morning' : 'evening'}: {units(Number(row.reading))}. The old one stays in the list as void.</p>
       </div>
     </Modal>
   );
