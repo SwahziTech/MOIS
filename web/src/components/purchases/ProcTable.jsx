@@ -27,7 +27,7 @@ export const STATUS_OPTIONS = [{ value: '', label: 'All' }, ...Object.entries(ST
 export default function ProcTable({ rows, loading, money, empty = 'Nothing recorded in this period.' }) {
   const total = rows.filter(r => r.status !== 'void' && r.status !== 'approval').reduce((t, r) => t + (Number(r.amount) || 0), 0);
   return (
-    <table className="proc-table">
+    <table className="proc-table pc">
       <thead><tr><th>Date</th><th>Item</th><th className="num">Qty</th><th className="num">Price (TZS)</th><th className="num">Amount (TZS)</th><th>Source</th><th>Status</th></tr></thead>
       <tbody>
         {loading ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>

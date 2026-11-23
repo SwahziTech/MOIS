@@ -121,7 +121,7 @@ export default function UsersPage() {
           <ErrorState message={error} onRetry={load} />
         ) : (
           <div className="table-container">
-            <table>
+            <table className="pc">
               <thead>
                 <tr>
                   <th>User</th>

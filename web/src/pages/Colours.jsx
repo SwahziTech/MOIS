@@ -51,7 +51,7 @@ export default function Colours() {
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table>
+            <table className="pc">
               <thead>
                 <tr><th>Colour</th><th>Order</th><th>Used by</th><th>Status</th>{canWrite && <th aria-label="Actions" />}</tr>
               </thead>

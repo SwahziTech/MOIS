@@ -145,7 +145,7 @@ function AccountsTab({ accs, mv, balanceOf, unassigned, unassignedNet, account, 
       </div>
       {rp.bar()}
       <div className="card"><div className="table-container">
-        <table>
+        <table className="pc">
           <thead><tr><th>Date</th><th>Account</th><th>What</th><th>Reference</th><th className="num">In (TZS)</th><th className="num">Out (TZS)</th>{running && <th className="num">Balance (TZS)</th>}</tr></thead>
           <tbody>
             {shown.length === 0 ? <tr><td colSpan={running ? 7 : 6} className="text-muted">No money in or out in this range.</td></tr>

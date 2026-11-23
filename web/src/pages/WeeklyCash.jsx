@@ -262,7 +262,7 @@ export default function WeeklyCash({ embed = null, onEmbedClose, onEmbedSaved })
           </div>
           <div><PeriodSelect period={period} today={today} extra={[['all', 'All time']]} range={[cp.from, cp.to]} note={cpNote} /></div>
           <div className="card"><div className="table-container">
-            <table>
+            <table className="pc">
               <thead><tr><th title="The report date (a Saturday); its cash is for that week, Saturday to Saturday">Date</th><th>Status</th><th className="num">Asked (TZS)</th><th className="num">Sent (TZS)</th><th className="num">Spent (TZS)</th><th className="num">Balance (TZS)</th><th aria-label="Actions" style={{ width: 120 }} /></tr></thead>
               <tbody>
                 {shownWeeks.length === 0 ? <tr><td colSpan={7} className="text-muted">{here.length ? 'No weekly request in this period.' : <>No requests yet.</>}</td></tr>

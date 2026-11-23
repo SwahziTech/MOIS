@@ -247,7 +247,7 @@ function RoleDashboard({ keys, role, arranged = false, isOwner, isSecretary = fa
             {card('VAT', short(d.sales.vat), 'on this month\'s sales', '/sales?tab=book')}
           </>}</div>
           <div className="card"><div className="card-header"><h2 className="card-title">Latest sales</h2></div><div className="table-container">
-            <table><thead><tr><th>Date</th><th>No.</th><th>Customer</th><th>Stage</th><th className="num">Total (TZS)</th><th className="num">Owed (TZS)</th></tr></thead>
+            <table className="pc"><thead><tr><th>Date</th><th>No.</th><th>Customer</th><th>Stage</th><th className="num">Total (TZS)</th><th className="num">Owed (TZS)</th></tr></thead>
               <tbody>{!d ? <tr><td colSpan={6}><span className="skeleton" /></td></tr>
                 : d.recent.length === 0 ? <tr><td colSpan={6} className="text-muted">No orders or invoices yet.</td></tr>
                 : d.recent.map(r => <tr key={r.id}><td>{tableDate(r.date)}</td><td>{r.no}</td><td>{r.who}</td><td>{STAGE[r.stage]}</td>

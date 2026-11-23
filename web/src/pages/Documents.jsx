@@ -63,7 +63,7 @@ export default function Documents() {
           {kinds.length > 1 && <ChipRow value={kind} onChange={setKind} items={kinds.map(k => ({ id: k, label: k }))} />}
           <div className="card"><div className="table-container">
             {error ? <ErrorState message={error} /> : (
-              <table>
+              <table className="pc">
                 <thead><tr><th>Date</th><th>Document</th><th>Number</th><th>{tab === 'payslips' ? 'Pay sheet' : tab === 'purchasing' ? 'Supplier' : 'Customer'}</th><th>Reference</th><th className="num">Amount (TZS)</th><th aria-label="Print" /></tr></thead>
                 <tbody>
                   {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>

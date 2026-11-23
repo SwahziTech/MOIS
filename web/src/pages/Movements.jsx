@@ -136,7 +136,7 @@ export default function Movements() {
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table className="mv-table">
+            <table className="mv-table pc">
               <thead><tr><th>Date</th><th>Type</th><th>Item</th><th className="num">Qty</th><th>Allocation</th><th>Reference</th><th aria-label="Actions" /></tr></thead>
               <tbody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)

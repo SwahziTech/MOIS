@@ -250,7 +250,7 @@ export function RequestsPanel({ refs, branchId, inBranch, people, money = v => v
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card"><div className="table-container">
-        <table>
+        <table className="pc">
           <thead><tr><th>No.</th><th>Asked</th><th>By</th><th>Needed by</th><th>What</th><th>Status</th><th aria-label="Actions" /></tr></thead>
           <tbody>
             {rows === null ? <tr><td colSpan={7}><span className="skeleton" /></td></tr>
