@@ -1,3 +1,5 @@
+import { saveFile, isApp } from './native';
+
 /*
  * The weekly cash report as a document (2026-11-15, the user): one page, on the paper that fits it,
  * as PDF (what directors open, mostly on their phones) or Excel (for whoever edits it).
@@ -86,6 +88,7 @@ export function downloadCsv(doc) {
     ['TOTAL', '', plain(doc.req.total), ...(doc.req.showApproved ? [plain(doc.req.approvedTotal)] : [])], [],
     ['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME'], [doc.account?.bank ?? '', doc.account?.number ?? '', doc.account?.holder ?? ''], ...(doc.notes ? [[], [`Notes: ${doc.notes}`]] : [])];
   const url = URL.createObjectURL(new Blob(['﻿' + out.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  if (isApp()) { URL.revokeObjectURL(url); return saveFile(new Blob(['﻿' + out.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${doc.fileName}.csv`); }
   const a = document.createElement('a'); a.href = url; a.download = `${doc.fileName}.csv`; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
@@ -99,6 +102,7 @@ export const isPhone = () => typeof navigator !== 'undefined' && /Android|iPhone
 export async function openPdf(doc, setup) {
   const pdf = await buildPdf(doc, setup);
   const name = `${doc.fileName}.pdf`;
+  if (isApp()) return saveFile(pdf.output('blob'), name, doc.title);   // the phone app: its share sheet
   if (isPhone() && typeof File !== 'undefined' && navigator.canShare) {
     const file = new File([pdf.output('blob')], name, { type: 'application/pdf' });
     if (navigator.canShare({ files: [file] })) {
@@ -119,6 +123,7 @@ export async function pdfFile(doc, setup) {
 }
 /** Share a ready file (phone list of apps), else open it in the browser's PDF viewer — call straight from the tap */
 export function shareOrOpenPdf(file) {
+  if (isApp()) return saveFile(file, file.name).catch(() => 'cancelled');
   if (isPhone() && navigator.canShare?.({ files: [file] })) {
     return navigator.share({ files: [file], title: file.name }).then(() => 'shared').catch(e => {
       if (e?.name === 'AbortError') return 'cancelled';
@@ -184,7 +189,5 @@ export async function downloadExcel(doc, { paper = 'A4', orientation = 'portrait
   if (doc.account) table('PAY TO', ['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME'], [{ cells: [doc.account.bank || '', doc.account.number || '', doc.account.holder || ''] }], 3, 2);
   if (doc.notes) { r += 1; const c = ws.getCell(r, 2); c.value = `Notes: ${doc.notes}`; c.font = TNR; }
   const buf = await wb.xlsx.writeBuffer();
-  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-  const a = document.createElement('a'); a.href = url; a.download = `${doc.fileName}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  await saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${doc.fileName}.xlsx`);   // the share sheet in the phone app (lib/native)
 }

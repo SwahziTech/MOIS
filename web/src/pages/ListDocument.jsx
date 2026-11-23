@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { loadInventoryRefs, orgToday, mainUnitOf, byMaterialOrder } from '../lib/inventory';
 import { formatAmount, dateText, tableDate } from '../lib/format';
+import { printPage } from '../lib/native';
 
 const qty = v => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v);
 const amt = v => formatAmount(Math.round(Number(v || 0)));
@@ -50,7 +51,7 @@ export default function ListDocument() {
   return (
     <div className="doc-page">
       <div className="doc-bar">
-        <button type="button" className="btn btn-primary" onClick={() => window.print()}><Printer size={15} /> Print / Save as PDF</button>
+        <button type="button" className="btn btn-primary" onClick={() => printPage()}><Printer size={15} /> Print / Save as PDF</button>
         <span className="pl-help">Choose “Save as PDF” as the printer to keep a copy.</span>
       </div>
       <article className={`doc${kind === 'attendance' ? ' doc-wide' : ''}`}>

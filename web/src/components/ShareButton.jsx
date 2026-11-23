@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Share2 } from 'lucide-react';
+import { saveFile, isApp } from '../lib/native';
 
 /*
  * Share an opened proof (2026-11-11, the user): on a phone it opens the share sheet — WhatsApp,
@@ -34,6 +35,8 @@ export default function ShareButton({ getBlob, deps = [], name = 'proof', text =
   const ext = blob.type === 'application/pdf' ? 'pdf' : blob.type === 'image/png' ? 'png' : blob.type === 'text/plain' ? 'txt' : 'jpg';
   const file = new File([blob], `${name.replace(/\.[^.]+$/, '')}.${ext}`, { type: blob.type || 'image/jpeg' });
   async function share() {
+    // 0. the phone app: its own share sheet (lib/native)
+    if (isApp()) { try { await saveFile(file, file.name, text); } catch { setSaid("Couldn't share it"); } return; }
     // 1. the phone's (or computer's) share sheet
     if (navigator.canShare?.({ files: [file] })) {
       try { await navigator.share({ files: [file], text: text || undefined }); return; }

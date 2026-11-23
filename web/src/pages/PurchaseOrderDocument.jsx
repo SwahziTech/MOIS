@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { formatMoney, dateText } from '../lib/format';
 import { qtyText } from '../lib/inventory';
+import { printPage } from '../lib/native';
 
 /*
  * A purchase order for the supplier (1c/077), A4, in a tab of its own:
@@ -46,7 +47,7 @@ export default function PurchaseOrderDocument() {
   return (
     <div className="doc-page">
       <div className="doc-bar">
-        <button type="button" className="btn btn-primary" onClick={() => window.print()}><Printer size={15} /> Print / Save as PDF</button>
+        <button type="button" className="btn btn-primary" onClick={() => printPage()}><Printer size={15} /> Print / Save as PDF</button>
         <span className="pl-help">Choose “Save as PDF” as the printer to keep a copy or send it.</span>
       </div>
       <article className="doc">

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { saveFile } from './native';
 
 /*
  * Reports (1f, PRD 4.15, 2026-10-29): read for a date range, newest first,
@@ -191,7 +192,5 @@ export async function exportTable(fileName, title, head, rows, total) {
   if (total) ws.addRow(total).font = { bold: true };
   ws.columns.forEach((c, i) => { c.width = i === 0 ? 32 : 16; });
   const buf = await wb.xlsx.writeBuffer();
-  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-  const a = document.createElement('a'); a.href = url; a.download = `${fileName}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  await saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${fileName}.xlsx`);   // the share sheet in the phone app (lib/native)
 }

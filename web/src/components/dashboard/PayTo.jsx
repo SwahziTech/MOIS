@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Check, Phone } from 'lucide-react';
+import { isApp, openAndroidApp } from '../../lib/native';
 
 /*
  * Where the money goes, ready to pay (2026-11-16, the user: copy + open the app; one-tap payment through
@@ -142,7 +143,9 @@ export default function PayTo({ payTo, amount, reference, money, onReference, on
         {ussd && (() => {
           const app = mode === 'crdb' ? APPS.crdb : mode === 'mobile' ? APPS[net] : APPS.nmb;
           const viaApp = app?.pkg && isAndroid();
+          // the phone app (lib/native): opened by its package — the app's web view doesn't follow intent: links
           return <a className="btn btn-primary btn-sm" href={viaApp ? appLink(app) : `tel:${ussd.replace(/#/g, '%23')}`}
+            onClick={viaApp && isApp() ? e => { e.preventDefault(); openAndroidApp(app.pkg); } : undefined}
             title={viaApp ? `Open the ${app.name} app` : `Dial ${ussd} on this phone`}><Phone size={14} /> Open {app?.name ?? 'the menu'} ({ussd})</a>;
         })()}
       </div>

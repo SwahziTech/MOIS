@@ -12,6 +12,7 @@ import Modal from '../Modal';
 import ProofBox from '../ProofBox';
 import { proofName, extOf } from '../../lib/proofName';
 import { SlipCanvas, markedSlipBlob, READY_MARK, smsImage } from './SlipMark';
+import { saveFile } from '../../lib/native';
 
 /*
  * Proof of payment (105, 2026-11-03, the user): instead of the WhatsApp group,
@@ -287,11 +288,8 @@ export function ReviewModal({ payment, sale, proof, buyer, account, money, canRe
     e.preventDefault();
     try {
       const blob = await markedSlipBlob(url, { color: markColor, strokes }, `${stamp.who} · ${stamp.at}`);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = (proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'png')).replace(/\.[^.]+$/, '') + '_marked.png';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      // downloaded in a browser; the phone app's share sheet (lib/native)
+      await saveFile(blob, (proof.file_name || proofName({ kind: `Sale-${sale.sale_no}`, who: buyer, amount: payment.amount, date: payment.paid_on }, 'png')).replace(/\.[^.]+$/, '') + '_marked.png');
     } catch { window.location.href = saveUrl; }
   }
   const pick = kind => {

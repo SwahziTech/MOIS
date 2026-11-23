@@ -38,4 +38,16 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- the Pay window opens these bank and mobile-money apps (web/src/components/dashboard/PayTo.jsx);
+         Android 11+ only lets an app see the apps it names here -->
+    <queries>
+        <package android:name="apps.crdbbank.com.mobapp" />
+        <package android:name="com.nmb10.eclectics" />
+        <package android:name="com.vodafone.mpesa.tanzania" />
+        <package android:name="tz.tigo.mfsapp" />
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+    </queries>
 </manifest>

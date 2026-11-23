@@ -4,6 +4,7 @@ import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { formatMoney, formatAmount, dateText } from '../lib/format';
+import { printPage } from '../lib/native';
 
 const CYCLE = { weekly: 'Weekly', fortnightly: 'Every 2 weeks', monthly: 'Monthly' };
 
@@ -54,7 +55,7 @@ export default function PayslipDocument() {
   return (
     <div className="doc-page">
       <div className="doc-bar">
-        <button type="button" className="btn btn-primary" onClick={() => window.print()}><Printer size={15} /> Print / Save as PDF</button>
+        <button type="button" className="btn btn-primary" onClick={() => printPage()}><Printer size={15} /> Print / Save as PDF</button>
         <span className="pl-help">{lines.length} payslip{lines.length === 1 ? '' : 's'}, one a page. Choose “Save as PDF” as the printer to keep a copy.</span>
       </div>
       {lines.length === 0 && <div className="doc-msg">No one on this pay sheet.</div>}

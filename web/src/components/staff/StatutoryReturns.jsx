@@ -4,6 +4,7 @@ import { Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatAmount, formatMoneyShort } from '../../lib/format';
 import { PageTabs } from '../ListControls';
+import { saveFile } from '../../lib/native';
 
 const monthName = m => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const prevMonth = m => { const d = new Date(`${m}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); };
@@ -62,9 +63,7 @@ export default function StatutoryReturns({ staff, today, currency, inBranch }) {
       ['Total', '', sum('gross'), sum('nssfEe'), sum('nssfEr'), sum('nssfEe') + sum('nssfEr')]);
     add('SDL & WCF', ['', 'Gross pay', 'SDL', 'WCF'], [['All staff paid', sum('gross'), sum('sdl'), sum('wcf')]]);
     const buf = await wb.xlsx.writeBuffer();
-    const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    const a = document.createElement('a'); a.href = url; a.download = `Statutory returns ${month}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    await saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Statutory returns ${month}.xlsx`);
   }
 
   return (
