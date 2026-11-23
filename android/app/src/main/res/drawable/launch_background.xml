@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the MOIS mark on the web charcoal -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#2B2B2B" /></item>
+    <item><bitmap android:gravity="center" android:src="@drawable/launch_logo" /></item>
+</layer-list>
