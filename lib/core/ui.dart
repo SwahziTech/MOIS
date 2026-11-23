@@ -240,7 +240,7 @@ class Stat extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             PlLabel(label),
             const SizedBox(height: 2),
-            Text(figure, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: Fs.lg, fontWeight: FontWeight.w700, color: figureColor)),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(figure, maxLines: 1, style: TextStyle(fontSize: Fs.lg, fontWeight: FontWeight.w700, color: figureColor))),
             if (help != null && help!.isNotEmpty) PlHelp(help!, maxLines: 2),
           ]),
         ),

@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/nav.dart';
 import '../core/ui.dart';
+import 'dashboard.dart';
 import 'stock.dart';
 
 /*
@@ -10,6 +11,7 @@ import 'stock.dart';
  * one by one; a path not ported yet says so.
  */
 final Map<String, Widget Function(String path)> _pages = {
+  '/': (_) => const DashboardPage(),
   '/stock': (_) => const StockPage(),
 };
 
