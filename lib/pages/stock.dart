@@ -199,83 +199,90 @@ class _StockPageState extends State<StockPage> {
     final chipItems = isProducts
         ? [for (final c in categoryChipItems(cats, (c) => c['status'] == 'active')) ChipItem(c.id, c.label, c.children?.map((k) => ChipItem(k.id, k.label)).toList())]
         : materialChips.values.toList();
-    return RefreshIndicator(
+    final narrowed = _showZero || _asOf.isNotEmpty || _sortBy != 'size';
+    // the user's Stock layout (2026-11-23): tabs with a small Store dropdown on the right;
+    // search with Filter / Sort beside it; one row of chips; compact rows; + actions bottom right
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: allowed.isEmpty
+          ? null
+          : PopupMenuButton<String>(
+              tooltip: 'Stock actions',
+              onSelected: (k) => _post(k),
+              itemBuilder: (_) => [for (final k in allowed) PopupMenuItem(value: k, child: Text(movementTypes[k]!.label))],
+              child: Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(color: t.dark ? C.khaki : C.charcoal, borderRadius: BorderRadius.circular(14)),
+                child: Icon(LucideIcons.plus, color: t.dark ? C.charcoal : Colors.white),
+              ),
+            ),
+      body: RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
         OfflineNote(_savedAt),
-        // Stock as of
         Row(children: [
-          Text('Stock as of', style: TextStyle(fontSize: Fs.sm, color: t.textSecondary)),
+          for (final (k, label) in const [('materials', 'Raw materials'), ('products', 'Finished goods')]) ...[
+            Chip2(label, on: _view == k, onTap: () => setState(() { _view = k; _chip = ''; _warehouseId = ''; })),
+            const SizedBox(width: 6),
+          ],
+          const Spacer(),
+          if (stores.length > 1)
+            PopupMenuButton<String>(
+              tooltip: 'Store',
+              initialValue: _warehouseId,
+              onSelected: (v) { setState(() => _warehouseId = v); _loadToCollect(); },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: '', child: Text('All stores')),
+                for (final w in stores) PopupMenuItem(value: w.id, child: Text(branchId.isEmpty ? warehouseLabel(w) : w.name)),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                constraints: const BoxConstraints(maxWidth: 120),
+                decoration: BoxDecoration(border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(6)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: Text(_warehouseId.isEmpty ? 'All stores' : (r.store(_warehouseId)?.name ?? ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: Fs.xs))),
+                  const Icon(LucideIcons.chevronDown, size: 14),
+                ]),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: TextField(
+                onChanged: (v) => setState(() => _q = v),
+                style: const TextStyle(fontSize: Fs.sm),
+                decoration: InputDecoration(
+                  hintText: isProducts ? 'Search product' : 'Search material', fillColor: t.soft, contentPadding: EdgeInsets.zero,
+                  prefixIcon: Icon(LucideIcons.search, size: 16, color: t.textMuted),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final d = await showDatePicker(context: context, initialDate: DateTime.parse(_asOf.isEmpty ? today : _asOf), firstDate: DateTime(2024), lastDate: DateTime.parse(today));
-              if (d == null) return;
-              final v = iso(d) == today ? '' : iso(d);
-              setState(() { _asOf = v; _loading = true; });
-              _load(v);
-            },
-            icon: const Icon(LucideIcons.calendar, size: 15),
-            label: Text(tableDate(_asOf.isEmpty ? today : _asOf)!),
+          SizedBox(
+            width: 44, height: 44,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, side: BorderSide(color: narrowed ? C.khaki : t.borderStrong)),
+              onPressed: () => _filterSort(context),
+              child: Badge(isLabelVisible: narrowed, smallSize: 7, backgroundColor: C.khaki, child: const Icon(LucideIcons.slidersHorizontal, size: 17)),
+            ),
           ),
         ]),
-        const SizedBox(height: 12),
-        // .sk-tabs
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: t.surface, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(10)),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           child: Row(children: [
-            for (final (k, label, icon) in const [('materials', 'Raw materials', LucideIcons.layers), ('products', 'Finished goods', LucideIcons.package)])
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: Material(
-                    color: _view == k ? C.khaki : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () => setState(() { _view = k; _chip = ''; _warehouseId = ''; }),
-                      child: SizedBox(height: 40, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(icon, size: 16, color: _view == k ? const Color(0xFF1E1C19) : t.textSecondary),
-                        const SizedBox(width: 8),
-                        Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: Fs.md, color: _view == k ? const Color(0xFF1E1C19) : t.textSecondary)),
-                      ])),
-                    ),
-                  ),
-                ),
-              ),
+            Chip2('All', on: _chip.isEmpty, onTap: () => setState(() => _chip = '')),
+            for (final c in chipItems) ...[const SizedBox(width: 6), Chip2(c.label, on: _chip == c.id, onTap: () => setState(() => _chip = _chip == c.id ? '' : c.id))],
           ]),
         ),
-        const SizedBox(height: 12),
-        ListToolbar(
-          placeholder: isProducts ? 'Search product (e.g. Chuchu, Buibui, 600R)…' : 'Search material (e.g. Huaxin, Rangi)…',
-          onSearch: (v) => setState(() => _q = v),
-          sort: SortSpec(value: _sortBy, onChange: (v) => setState(() => _sortBy = v),
-              options: [for (final e in _sortLabel.entries) (e.key, isProducts || e.key != 'size' ? e.value : 'Material order (cement → steel)')]),
-          filters: [
-            FilterSpec(key: 'store', label: 'Store', value: _warehouseId, onChange: (v) { setState(() => _warehouseId = v); _loadToCollect(); },
-                options: [('', 'All stores'), for (final w in stores) (w.id, warehouseLabel(w))]),
-            FilterSpec(key: 'zero', label: 'Zero stock', value: _showZero ? 'show' : '', onChange: (v) => setState(() => _showZero = v == 'show'),
-                options: const [('', 'Hide'), ('show', 'Show')]),
-          ],
-          trailing: [
-            if (allowed.isNotEmpty)
-              PopupMenuButton<String>(
-                tooltip: 'Stock actions',
-                onSelected: (k) => _post(k),
-                itemBuilder: (_) => [for (final k in allowed) PopupMenuItem(value: k, child: Text(movementTypes[k]!.label))],
-                child: Container(
-                  height: 40, padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: t.dark ? C.khaki : C.charcoal, borderRadius: BorderRadius.circular(6)),
-                  child: Row(children: [
-                    Icon(LucideIcons.plus, size: 15, color: t.dark ? C.charcoal : Colors.white),
-                    Icon(LucideIcons.chevronDown, size: 14, color: t.dark ? C.charcoal : Colors.white),
-                  ]),
-                ),
-              ),
-          ],
-        ),
-        ChipRow(items: chipItems, value: _chip, onChange: (v) => setState(() => _chip = v)),
+        if (_asOf.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Alert('Stock as of ${dateText(_asOf)}', tone: Tone.info,
+            action: TextButton(onPressed: () { setState(() { _asOf = ''; _loading = true; }); _load(''); }, child: const Text('Today')))),
         const SizedBox(height: 10),
         // .sk-head
         Padding(
@@ -290,15 +297,124 @@ class _StockPageState extends State<StockPage> {
               title: _balances.isNotEmpty ? 'Nothing in this view' : 'No stock recorded yet',
               description: _balances.isNotEmpty ? 'Change the search, chips or filters to see more.' : 'Start by posting opening balances for what is on hand, then receive and issue as stock moves.'))
         else
-          for (final c in shown) _card(context, c, allowed),
+          for (final c in shown) _row(context, c, allowed),
         if (shown.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: PlHelp('${_asOf.isNotEmpty ? 'Stock at the end of ${dateText(_asOf)}, from movements dated up to then. ' : ''}Calculated from posted movements — see Movements for the full history.'),
           ),
       ]),
+      ),
     );
   }
+
+  double _toCollectOf(_Card c) {
+    if (c.item.isProduct && c.byColour.isEmpty) return _toCollect['${c.item.id}|'] ?? 0;
+    final byCol = c.byColour.keys.fold<double>(0, (s, col) => s + (_toCollect['${c.item.id}|$col'] ?? 0));
+    return byCol > 0 ? byCol : (_toCollect['${c.item.id}|'] ?? 0);
+  }
+
+  /// One compact row (the user's format): name; category · curing · to collect · rejects; the figure on the right
+  Widget _row(BuildContext context, _Card c, List<String> allowed) {
+    final t = context.tk;
+    final mu = !isProducts ? mainUnitOf(c.item) : null;
+    final level = branchId.isNotEmpty ? (_reorder[branchId]?[c.item.id]) : null;
+    final collect = _toCollectOf(c);
+    final fig = mu != null ? '${qtyText(_round(c.total / mu.factor))} ${_unit(mu.id)}' : '${qtyText(_round(c.total))} ${_unit(c.unitId)}';
+    final sub = mu != null ? '${qtyText(_round(c.total))} ${_unit(c.unitId)}' : (_pcsOf(c, c.total) != null ? '${qtyText(_pcsOf(c, c.total))} pcs' : (!isProducts ? _altOf(c, c.total) : null));
+    final notes = [
+      (isProducts ? c.item.category : c.item.materialCategory) ?? '',
+      if (c.curing > 0) 'curing ${qtyText(_round(c.curing))}',
+      if (collect > 0) 'to collect ${qtyText(_round(collect))}',
+      if (c.rejects > 0) 'rejects ${qtyText(_round(c.rejects))}',
+    ].where((x) => x.isNotEmpty).join(' · ');
+    final flag = c.total < 0 ? 'BELOW ZERO' : (c.total <= 0 && c.curing <= 0) ? 'OUT' : (c.total > 0 && level != null && c.total < level) ? 'LOW' : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: t.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: t.border)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _details(c, allowed),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Flexible(child: Text(c.item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: Fs.md))),
+                    if (flag != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        decoration: BoxDecoration(border: Border.all(color: C.error), borderRadius: BorderRadius.circular(4)),
+                        child: Text(flag, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: C.error)),
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 3),
+                  Text(notes, style: TextStyle(fontSize: Fs.sm, color: t.textMuted)),
+                ]),
+              ),
+              const SizedBox(width: 10),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(fig, style: TextStyle(fontWeight: FontWeight.w700, fontSize: Fs.md, color: c.total < 0 ? C.error : null)),
+                if (sub != null) Text(sub, style: TextStyle(fontSize: Fs.xs, color: t.textMuted)),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Tapping a row: its colour boxes, actions (the web card) and its history
+  void _details(_Card c, List<String> allowed) {
+    final mu = mainUnitOf(c.item);
+    showModal(context, title: c.item.name, body: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _card(ctx, c, allowed),
+      ItemHistoryList(
+        item: c.item, branchId: branchId.isEmpty ? null : branchId, refs: _refs!,
+        factor: mu?.factor ?? 1, symbol: _unit(mu?.id ?? c.item.stockUnitId), stockSymbol: _unit(c.item.stockUnitId),
+      ),
+    ]));
+  }
+
+  /// Filter / Sort: sort, zero stock, stock as of a date
+  void _filterSort(BuildContext context) => showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: StatefulBuilder(builder: (ctx, set) => ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
+            const Padding(padding: EdgeInsets.only(bottom: 6), child: PlLabel('Sort')),
+            for (final e in _sortLabel.entries)
+              ListTile(
+                dense: true, contentPadding: EdgeInsets.zero,
+                title: Text(isProducts || e.key != 'size' ? e.value : 'Material order (cement → steel)'),
+                trailing: _sortBy == e.key ? const Icon(LucideIcons.check, size: 16) : null,
+                onTap: () { setState(() => _sortBy = e.key); Navigator.pop(ctx); },
+              ),
+            const Padding(padding: EdgeInsets.only(top: 10, bottom: 2), child: PlLabel('Show')),
+            SwitchListTile(
+              dense: true, contentPadding: EdgeInsets.zero, value: _showZero, title: const Text('Zero stock'),
+              onChanged: (v) { setState(() => _showZero = v); set(() {}); },
+            ),
+            ListTile(
+              dense: true, contentPadding: EdgeInsets.zero,
+              title: const Text('Stock as of'),
+              trailing: Text(tableDate(_asOf.isEmpty ? today : _asOf)!),
+              onTap: () async {
+                final d = await showDatePicker(context: ctx, initialDate: DateTime.parse(_asOf.isEmpty ? today : _asOf), firstDate: DateTime(2024), lastDate: DateTime.parse(today));
+                if (d == null) return;
+                final v = iso(d) == today ? '' : iso(d);
+                if (ctx.mounted) Navigator.pop(ctx);
+                setState(() { _asOf = v; _loading = true; });
+                _load(v);
+              },
+            ),
+          ])),
+        ),
+      );
 
   Widget _card(BuildContext context, _Card c, List<String> allowed) {
     final r = _refs!;
@@ -337,7 +453,7 @@ class _StockPageState extends State<StockPage> {
       decoration: BoxDecoration(color: t.surface, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(10)),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => _history(c.item),
+        onTap: null,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -423,14 +539,6 @@ class _StockPageState extends State<StockPage> {
         for (final b in _balances)
           '${b['warehouse_id']}|${b['material_id'] != null ? 'm:${b['material_id']}' : 'p:${b['product_id']}'}${b['color_id'] != null ? '|c:${b['color_id']}' : ''}': n(b['quantity']),
       };
-
-  void _history(Item item) {
-    final mu = mainUnitOf(item);
-    showModal(context, title: item.name, body: (ctx) => ItemHistoryList(
-      item: item, branchId: branchId.isEmpty ? null : branchId, refs: _refs!,
-      factor: mu?.factor ?? 1, symbol: _unit(mu?.id ?? item.stockUnitId), stockSymbol: _unit(item.stockUnitId),
-    ));
-  }
 
   Future<void> _post(String type, [String? itemKey]) async {
     final done = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => MovementPage(
