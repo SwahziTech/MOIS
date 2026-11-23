@@ -419,7 +419,7 @@ if a second paying tenant becomes imminent before 1a-1f are solid.
 The user's brief: a normal, simple native app for Android and iPhone whose logic and layouts
 are at least 80% of the web — every web page, offline, camera for proofs, opening the paying apps.
 
-- Code:  on branch  (worktree D:MOIS-app). Same database, same
+- Code: `mobile/` on branch `feat/mobile-app` (worktree D:MOIS-app). Same database, same
   rules: every read and write goes through the same tables, views and RPCs as the web.
 - Each page is a port of its web page — the same tabs, filters, cards, figures, forms and
   checks, in the same order (from the web code, page by page). Nothing invented or dropped
