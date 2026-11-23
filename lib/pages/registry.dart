@@ -3,12 +3,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/nav.dart';
 import '../core/ui.dart';
+import 'stock.dart';
 
 /*
  * Each web path's page in the app. Pages are added here as they are ported from the web,
  * one by one; a path not ported yet says so.
  */
-final Map<String, Widget Function(String path)> _pages = {};
+final Map<String, Widget Function(String path)> _pages = {
+  '/stock': (_) => const StockPage(),
+};
 
 Widget pageFor(String path, NavItem? item) {
   final base = path.split('&').first;

@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sembast/sembast_io.dart';
+import 'package:sembast/sembast_memory.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide SortOrder;
 import 'package:uuid/uuid.dart';
 
@@ -26,6 +27,8 @@ final _jobs = stringMapStoreFactory.store('jobs');
 
 Future<Database> _open() async {
   if (_db != null) return _db!;
+  // the browser copy (for checking pages beside the web): kept in memory
+  if (kIsWeb) return _db = await databaseFactoryMemory.openDatabase('mois_offline.db');
   final dir = await getApplicationDocumentsDirectory();
   _db = await databaseFactoryIo.openDatabase('${dir.path}${Platform.pathSeparator}mois_offline.db');
   return _db!;
