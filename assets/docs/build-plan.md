@@ -413,14 +413,27 @@ if a second paying tenant becomes imminent before 1a-1f are solid.
 
 ---
 
-## Mobile app
-**Status: CURRENT** (SwahziTech, 2026-11-23: the app must look and work about 90% like the web)
+## Mobile app (native, Flutter — Android + iPhone)
+**Status: CURRENT** (SwahziTech, 2026-11-23: start again; earlier Flutter builds deleted)
 
-The Android app is the web app itself, packaged with Capacitor (`web/android`): it opens
-the live address full-screen, so every web change is in the app at once. Phone fixes are
-made in the web's phone styles (≤760px) — wrapping toolbars, 40px tap targets, list tables
-as labelled cards (`table.pc`). A Flutter version was tried the same day and set aside
-(branch `feat/flutter-mobile`), kept in case offline screens are needed later.
+The user's brief: a normal, simple native app for Android and iPhone whose logic and layouts
+are at least 80% of the web — every web page, offline, camera for proofs, opening the paying apps.
+
+- Code:  on branch  (worktree D:MOIS-app). Same database, same
+  rules: every read and write goes through the same tables, views and RPCs as the web.
+- Each page is a port of its web page — the same tabs, filters, cards, figures, forms and
+  checks, in the same order (from the web code, page by page). Nothing invented or dropped
+  without asking; the LOCKED UI rules apply.
+- Frame: the web's phone layout — ⋮ menu top left opening the web's side menu, the heading
+  is the path, the web's colours, font and icon.
+- Offline: data last loaded is kept on the phone and readable offline; production, sales and
+  payments, goods leaving, expenses and meter readings recorded offline wait on the phone
+  and are sent in order when back online — anything the server refuses is shown to fix.
+- Camera / gallery for payment proofs and report photos; the Pay window opens the bank and
+  mobile-money apps; files shared and printed the phone's way.
+- First release: every page (the user chose all at once). iPhone builds need a Mac or a cloud
+  build service and an Apple Developer account.
+- The web-in-an-app (Capacitor, web/android) stays for now.
 
 ---
 
