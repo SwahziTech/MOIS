@@ -413,18 +413,14 @@ if a second paying tenant becomes imminent before 1a-1f are solid.
 
 ---
 
-## Mobile app (Flutter)
-**Status: CURRENT** (SwahziTech, 2026-11-23: build the mobile app now, in Flutter,
-with every page the web app has; all roles sign in)
+## Mobile app
+**Status: CURRENT** (SwahziTech, 2026-11-23: the app must look and work about 90% like the web)
 
-PRD sections: 9.4 (Responsive design — Mobile), 10.1 (Flutter). Code in `mobile/` on
-branch `feat/flutter-mobile`. Same database, same rules (RLS + the same RPCs);
-each role sees the web menu's pages for its permissions (menu_layouts, 098).
-
-Order: base (sign-in, roles, branch, menu, bottom bar Home · Production · Sales ·
-Stock · Menu) → dashboards, production, sales, stock & materials → every other
-page, one at a time. A page not built yet opens on the web from the app's menu.
-APK built locally (Android SDK on D:).
+The Android app is the web app itself, packaged with Capacitor (`web/android`): it opens
+the live address full-screen, so every web change is in the app at once. Phone fixes are
+made in the web's phone styles (≤760px) — wrapping toolbars, 40px tap targets, list tables
+as labelled cards (`table.pc`). A Flutter version was tried the same day and set aside
+(branch `feat/flutter-mobile`), kept in case offline screens are needed later.
 
 ---
 
