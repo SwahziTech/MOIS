@@ -155,7 +155,7 @@ export default function ReviewQueue() {
       <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table>
+            <table className="pc">
               <thead>
                 <tr><th>What</th><th>What's uncertain</th>{canResolve && <th>Your choices</th>}</tr>
               </thead>

@@ -1671,7 +1671,54 @@ function SalesBook({ sales, refs, accounts, money, currency, today, buyerOf, pro
       <div className="sb-under-bar">
       <PeriodBar value={period} onChange={setPeriod} today={today} range={[from, to]} sentLabel={params.get('label') || 'Chosen period'} extra={[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['all', 'All time']]} />
       </div>
-      <div className="card"><div className="table-container">
+      {/* phones (2026-11-23, the phone app is the web app): one card a sale — items, total, paid, goods */}
+      <div className="ph-only sbp">
+        {inPeriod.length === 0 ? <div className="card"><p className="text-sm text-muted" style={{ padding: 14 }}>{q || delivery || payment || account || vat ? 'Nothing matches — change the search or filters.' : 'No sales in this period.'}</p></div>
+        : inPeriod.map(x => {
+          const lines = [...(x.lines || [])].sort((a, b) => a.line_no - b.line_no).filter(l => lineOk(x, l));
+          if (!lines.length) return null;
+          const paid = paidOf(x); const owed = r2(Number(x.total) - paid);
+          const accs = [...new Set((x.payments || []).map(pm => accName(pm.account_id) || 'Other'))].join(', ');
+          const a = saleApproval(x, proofs, today);
+          return (
+            <div key={x.id} className="sbp-card" role="button" tabIndex={0} onClick={() => onOpen(x.id)} onKeyDown={e => { if (e.key === 'Enter') onOpen(x.id); }}>
+              <div className="sbp-head">
+                <span className="sbp-date">{tableDate(x.sale_date)} · #{x.sale_no}</span>
+                <span className="sbp-total">{formatAmount(Number(x.total))}</span>
+              </div>
+              <div className="sbp-who">{buyerOf(x)}{x.site ? <span className="pl-help"> · {x.site}</span> : null}</div>
+              {lines.map(l => {
+                const st = stateOf(x, l);
+                return (
+                  <div key={l.id} className="sbp-line">
+                    <span>{nameOf(l)}{l.product_id ? <span className="pl-help"> · {qtyText(Number(l.quantity))} <span className={['done', 'collected'].includes(st) ? '' : 'sb-unit-due'}>{per(l.product_id)}</span> × {formatAmount(r2(Number(l.total) / Number(l.quantity)))}</span> : <span className="pl-help"> · other item</span>}
+                      {l.product_id && !['done', 'collected'].includes(st) && <span className={`sb-del ${st === 'part' ? 'is-part' : 'is-not'}`}>{st === 'part' ? `Part — ${qtyText(r2(doneOf(x, l.id)))} left` : 'Not collected'}</span>}</span>
+                    <span className="sbp-amt">{formatAmount(Number(l.total))}</span>
+                  </div>
+                );
+              })}
+              <div className="sbp-foot">
+                <span>{paid > 0 ? `Paid ${formatAmount(r2(paid))}${accs ? ` · ${accs}` : ''}` : 'Not paid'}{slips(x) ? ` · ${slips(x)}` : ''}</span>
+                {owed > 0.004 && <span className="text-warning">Owes {formatAmount(owed)}</span>}
+              </div>
+              {(['proof', 'waiting'].includes(a.state) || (Number(x.vat) > 0 && !x.efd_receipt_no)) && (
+                <div className="sbp-badges">
+                  {['proof', 'waiting'].includes(a.state) && <span className={`badge ${a.badge}`}>{a.label}</span>}
+                  {Number(x.vat) > 0 && !x.efd_receipt_no && <span className="badge badge-warning">EFD to fill</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {rows.length > 0 && (
+          <div className="sbp-sum">
+            <span>Total <strong>{money(r2(sum(({ l }) => Number(l.total))))}</strong></span>
+            <span className="pl-help">VAT {money(r2(sum(({ l }) => (vatOn(l) ? Number(l.vat) : 0))))}</span>
+            <span className="pl-help">Paid {money(r2(inPeriod.reduce((t, x) => t + paidOf(x), 0)))}</span>
+          </div>
+        )}
+      </div>
+      <div className="card dt-only"><div className="table-container">
         <table className="sb-table">
           <thead>
             <tr><th>Date</th><th>Customer</th><th>Item</th><th className="num">Qty</th><th className="num">Rate{cur}</th><th className="num">Amount{cur}</th>

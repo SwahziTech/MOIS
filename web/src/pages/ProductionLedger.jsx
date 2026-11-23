@@ -283,7 +283,7 @@ export default function ProductionLedger() {
       {productId && (error ? <div className="card"><ErrorState message={error} onRetry={load} /></div> : (
         <>
           <div className="card"><div className="table-container">
-            <table>
+            <table className="pc">
               <thead><tr><th>Date</th>{!branchId && <th>Branch</th>}{colorOptions.length > 0 && <th>Colour</th>}<th>Team</th><th>Machine</th><th style={{ textAlign: 'right' }}>Bags</th><th style={{ textAlign: 'right' }}>Pieces</th><th style={{ textAlign: 'right' }}>Rejected</th><th>Stage</th></tr></thead>
               <tbody>
                 {loading ? <SkeletonRow cols={7} /> : productRows.length === 0 ? (
@@ -328,7 +328,7 @@ export default function ProductionLedger() {
           </div>
           <div className="table-container">
             {(
-              <table>
+              <table className="pc">
                 <thead><tr><th>{{ team: 'Team', machine: 'Machine', product: 'Product' }[groupBy]}</th><th style={{ textAlign: 'right' }}>Batches</th><th style={{ textAlign: 'right' }}>Bags</th>
                   <th style={{ textAlign: 'right' }}>Pieces</th><th style={{ textAlign: 'right' }}>Yield</th><th style={{ textAlign: 'right' }}>Rejects</th>
                   <th style={{ textAlign: 'right' }}>Material / pc</th></tr></thead>
@@ -352,7 +352,7 @@ export default function ProductionLedger() {
       {!productId && view === 'days' && <div className="card">
         {error ? <ErrorState message={error} onRetry={load} /> : (
           <div className="table-container">
-            <table>
+            <table className="pc">
               <thead><tr>
                 <th>Date</th>{!branchId && <th>Branch</th>}<th>Products</th><th style={{ textAlign: 'right' }}>Batches</th>
                 <th style={{ textAlign: 'right' }}>Bags</th><th>Stage</th>

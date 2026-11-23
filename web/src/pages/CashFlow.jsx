@@ -188,7 +188,7 @@ function MonthlyTab({ accs, mv, by, setBy, today, money, short }) {
         <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={xl}><Download size={14} /> Excel</button>
       </div>
       <div className="card"><div className="table-container">
-        <table>
+        <table className="sheet">
           <thead><tr><th>{by === 'week' ? 'Week' : 'Month'}</th><th className="num">Opening (TZS)</th>
             {INS.map(k => <th key={k} className="num">{KIND[k]}</th>)}{OUTS.map(k => <th key={k} className="num">{KIND[k]}</th>)}<th className="num">Closing (TZS)</th></tr></thead>
           <tbody>

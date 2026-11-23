@@ -3276,3 +3276,44 @@ a.ih-line { color: inherit; text-decoration: none; }
   table.pc tbody tr:hover { background: var(--bg-surface); }
   .table-container:has(> table.pc) { overflow-x: visible; border: 0; }
 }
+
+/* phone-only / desktop-only blocks (2026-11-23) */
+.ph-only { display: none; }
+@media (max-width: 760px) {
+  .ph-only { display: block; }
+  .dt-only { display: none !important; }
+}
+/* Sales book on phones: a card a sale */
+.sbp { display: flex; flex-direction: column; gap: 8px; }
+.sbp-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; cursor: pointer; }
+.sbp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sbp-date { font-size: var(--text-xs); color: var(--text-muted); }
+.sbp-total { font-weight: 700; font-size: var(--text-md); }
+.sbp-who { font-weight: 600; margin: 2px 0 6px; }
+.sbp-line { display: flex; justify-content: space-between; gap: 10px; font-size: var(--text-sm); padding: 3px 0; border-top: 1px dashed var(--border); }
+.sbp-line .sb-del { display: inline-block; margin-left: 6px; }
+.sbp-amt { white-space: nowrap; }
+.sbp-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--text-muted); margin-top: 6px; }
+.sbp-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.sbp-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 6px 2px; }
+/* page tabs on phones: swipe sideways without a scrollbar showing */
+@media (max-width: 760px) {
+  .page-tabs { scrollbar-width: none; }
+  .page-tabs::-webkit-scrollbar { display: none; }
+}
+/* spreadsheets on phones (attendance month, pay sheet, monthly cash flow, reports): the first
+   column (name, month, product) stays put while the figures swipe sideways */
+@media (max-width: 760px) {
+  :is(table.at-month, table.ps-table, table.sheet) :is(th, td):first-child {
+    position: sticky; left: 0; z-index: 2; background: var(--bg-surface);
+    max-width: 120px; white-space: normal; box-shadow: 1px 0 0 var(--border-strong);
+  }
+  .table-container :is(table.at-month, table.ps-table, table.sheet) :is(thead th, tfoot td):first-child { position: sticky !important; left: 0; z-index: 4; }
+  :is(table.at-month, table.ps-table, table.sheet) tfoot td:first-child { z-index: 5; }
+}
+/* last small controls on phones: recipe tiles, team / machine chips, text links */
+@media (max-width: 760px) {
+  .pl-tile .pl-num { min-height: 36px; }
+  .bn-chip-sel, .bn-edit { min-height: 36px; }
+  .link-btn { display: inline-block; padding: 8px 2px; }
+}

@@ -169,7 +169,7 @@ export default function Reports() {
           {rp.bar()}
           {nestedTabs && <div style={{ marginBottom: 8 }}><PageTabs nested tabs={nestedTabs} value={nested} onChange={setNested} /></div>}
           <div className="card"><div className="table-container">
-            <table>
+            <table className="sheet">
               <thead><tr>{(head.length ? head : ['']).map((h, i) => <th key={i} className={numCol(i) ? 'num' : ''}>{h}</th>)}</tr></thead>
               <tbody>
                 {data === null ? <tr><td colSpan={Math.max(head.length, 1)}><span className="skeleton" /></td></tr>
