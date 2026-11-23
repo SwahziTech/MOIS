@@ -3239,3 +3239,21 @@ a.ih-line { color: inherit; text-decoration: none; }
 .so-changes { display: flex; flex-direction: column; gap: 8px; }
 .so-change { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .so-change-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ----------------------------------------------------------------
+   PHONE (≤760px, 2026-11-23): the web is the phone app too (Capacitor) —
+   nothing wider than the screen, buttons a finger can hit. Desktop unchanged.
+---------------------------------------------------------------- */
+@media (max-width: 760px) {
+  /* toolbars wrap instead of pushing a button off the screen (Statements' Excel) */
+  .flex.items-center.gap-8 { flex-wrap: wrap; }
+  .sim-head > div { min-width: 0; }
+  .sim-title { overflow-wrap: anywhere; }
+  /* tap targets: at least 40px tall (small buttons, chips, attendance marks) */
+  .btn-sm { min-height: 40px; padding: 8px 12px; font-size: var(--text-sm); }
+  .filter-chip { min-height: 36px; }
+  .at-mark { width: 40px; height: 40px; }
+  .at-month .at-mark { width: 28px; height: 28px; }
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  .icon-btn { min-width: 40px; min-height: 40px; }
+}
