@@ -413,12 +413,18 @@ if a second paying tenant becomes imminent before 1a-1f are solid.
 
 ---
 
-## Mobile app (Flutter) — after Phase 1
-**Status: not started** (SwahziTech, 2026-10-22: mobile comes after Phase 1)
+## Mobile app (Flutter)
+**Status: CURRENT** (SwahziTech, 2026-11-23: build the mobile app now, in Flutter,
+with every page the web app has; all roles sign in)
 
-PRD sections: 9.4 (Responsive design — Mobile), 10.1 (Flutter). Phone screens
-first: materials, production, sales, stock. The React web app stays
-desktop/tablet.
+PRD sections: 9.4 (Responsive design — Mobile), 10.1 (Flutter). Code in `mobile/` on
+branch `feat/flutter-mobile`. Same database, same rules (RLS + the same RPCs);
+each role sees the web menu's pages for its permissions (menu_layouts, 098).
+
+Order: base (sign-in, roles, branch, menu, bottom bar Home · Production · Sales ·
+Stock · Menu) → dashboards, production, sales, stock & materials → every other
+page, one at a time. A page not built yet opens on the web from the app's menu.
+APK built locally (Android SDK on D:).
 
 ---
 
