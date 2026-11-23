@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MOIS</string>
+    <string name="title_activity_main">MOIS</string>
+    <string name="package_name">com.swahzitech.mois</string>
+    <string name="custom_url_scheme">com.swahzitech.mois</string>
+</resources>

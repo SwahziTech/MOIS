@@ -1,0 +1,21 @@
+{
+  "appId": "com.swahzitech.mois",
+  "appName": "MOIS",
+  "webDir": "dist",
+  "server": {
+    "url": "https://mois.swahzitech.workers.dev",
+    "androidScheme": "https",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#1A1A19"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#1A1A19",
+      "showSpinner": false
+    }
+  }
+}
