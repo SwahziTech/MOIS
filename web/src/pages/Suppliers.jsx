@@ -47,7 +47,7 @@ export default function Suppliers({ inTab = false, newTick = 0 } = {}) {
   async function load() {
     setError('');
     const [supRes, recRes, matRes, prodRes, totRes] = await Promise.all([
-      supabase.from('suppliers').select('id, name, contact_person, phone, email, address, tax_id, notes, status').order('name'),
+      supabase.from('suppliers').select('*').order('name'),   // every field, so the pay details (130) show in the edit form and are kept on save
       supabase.from('purchases')
         .select('id, supplier_id, branch_id, purchase_date, lines:purchase_lines(tx:inventory_transactions(material_id, product_id))')
         .eq('status', 'recorded'),
