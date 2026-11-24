@@ -32,7 +32,7 @@ class _ColoursPageState extends State<ColoursPage> {
     setState(() => _error = '');
     try {
       final (data, at) = await offline.load<List>('colours', () async =>
-          await db.from('color_palette').select('id, name, display_order, is_active, categories:product_category_colors(count)').order('display_order').order('name'));
+          await db.from('color_palette').select('id, name, display_order, is_active, categories:product_category_colors(count)').order('display_order', ascending: true).order('name', ascending: true));
       if (mounted) setState(() { _colours = [for (final x in data) Map<String, dynamic>.from(x as Map)]; _savedAt = at; });
     } catch (_) {
       if (mounted) setState(() => _error = "We couldn't load this page. Please try again.");

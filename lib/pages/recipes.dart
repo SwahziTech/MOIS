@@ -58,11 +58,11 @@ Future<Json> _fetch() async {
     db.from('recipe_versions').select('id, branch_id, copied_from_version_id, category_id, color_id, variant_label, version_number, effective_date, status, notes, created_by, created_at, '
         'color:color_palette(name, display_order), category:product_categories(name, sort_order), '
         'items:recipe_items(material_id, quantity, unit_id, quantity_confirmed, notes, material:materials(name, category:material_categories(display_order)), unit:units(symbol)), '
-        'links:recipe_version_products(product_id)').order('version_number'),
-    db.from('product_categories').select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))').order('sort_order'),
-    db.from('materials').select('id, name, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id)').order('name'),
+        'links:recipe_version_products(product_id)').order('version_number', ascending: true),
+    db.from('product_categories').select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))').order('sort_order', ascending: true),
+    db.from('materials').select('id, name, status, stock_unit_id, branch_id, category:material_categories(*), conversions:material_unit_conversions(unit_id)').order('name', ascending: true),
     db.from('units').select('id, symbol, name'),
-    db.from('products').select('id, canonical_name, product_id_ref, size_cm, category_id, status').order('canonical_name'),
+    db.from('products').select('id, canonical_name, product_id_ref, size_cm, category_id, status').order('canonical_name', ascending: true),
     db.from('branches').select('id, name'),
     db.from('branch_products').select('branch_id, product_id, status'),
   ]);

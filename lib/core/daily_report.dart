@@ -22,7 +22,7 @@ Future<Json> loadDayFacts(String branchId, String date, String today, Refs refs)
     db.from('production_batches').select('id, cement_bags, worker_ids, outputs:production_batch_outputs(product_id, color_id, is_primary, pieces_cast)').eq('branch_id', branchId).eq('batch_date', date).neq('status', 'void'),
     db.from('power_readings').select('meter_id, slot, reading, read_at').eq('branch_id', branchId).eq('read_on', date).eq('status', 'recorded'),
     db.from('power_daily').select('meter_id, day_units, token_missing').eq('branch_id', branchId).eq('day', date).then<List>((v) => v).catchError((_) => <dynamic>[]),
-    db.from('power_meters').select('id, name, status').eq('branch_id', branchId).order('name').then<List>((v) => v).catchError((_) => <dynamic>[]),
+    db.from('power_meters').select('id, name, status').eq('branch_id', branchId).order('name', ascending: true).then<List>((v) => v).catchError((_) => <dynamic>[]),
     date.compareTo(today) < 0 ? db.rpc('stock_balances_as_of', params: {'p_date': date}) : db.from('stock_balances').select('warehouse_id, material_id, product_id, quantity'),
     db.from('recipe_items').select('material_id, quantity, unit_id'),
   ]);

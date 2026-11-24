@@ -82,16 +82,16 @@ class _Data {
 
 Future<Json> _fetch() async {
   final r = await Future.wait<dynamic>([
-    db.from('product_categories').select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id, default_yield_tolerance, parent_category_id').order('sort_order'),
+    db.from('product_categories').select('id, name, category_id_ref, display_format, sort_order, status, default_unit_id, default_yield_tolerance, parent_category_id').order('sort_order', ascending: true),
     db.from('products').select('id, product_id_ref, canonical_name, size_cm, category_id, unit_id, pcs_per_sqm, wastani_per_bag, status, notes, strength_class, yield_tolerance, own_colors, category:product_categories(id, name, display_format, sort_order), unit:units(symbol, name), recipes:recipe_version_products(count)'),
-    db.from('units').select('id, symbol, name, status').order('symbol'),
+    db.from('units').select('id, symbol, name, status').order('symbol', ascending: true),
     db.from('review_flags').select('entity_id').eq('entity_type', 'product').eq('status', 'open'),
     db.from('branch_products').select('id, branch_id, product_id, status, reorder_level, bags_per_person_min, bags_per_person_max'),
     db.from('branches').select('id, name'),
     db.from('product_specs').select('product_id, spec_id, pcs_per_sqm, pcs_source, average_yield_per_bag, yield_source, yield_tolerance'),
     db.from('stock_balances').select('warehouse_id, product_id, color_id, quantity').not('product_id', 'is', null),
     db.from('warehouses').select('id, name, branch_id'),
-    db.from('color_palette').select('id, name, display_order, is_active').order('display_order'),
+    db.from('color_palette').select('id, name, display_order, is_active').order('display_order', ascending: true),
     db.from('product_category_colors').select('category_id, color_id, display_order'),
   ]);
   // molds (045) and own colours (046) on their own, so the page still works without them

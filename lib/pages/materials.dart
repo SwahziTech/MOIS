@@ -61,14 +61,14 @@ class _Data {
 
 Future<Json> _fetch() async {
   final r = await Future.wait<dynamic>([
-    db.from('materials').select('*, conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes), sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)').order('name'),
-    db.from('material_categories').select('*').order('display_order').order('name'),
-    db.from('units').select('id, symbol, name, notes, status').order('symbol'),
-    db.from('branches').select('id, name, status').order('name'),
+    db.from('materials').select('*, conversions:material_unit_conversions(unit_id, factor_to_stock_unit, notes), sources:material_branch_sources(id, branch_id, source_name, purchase_unit_id, supplier_id, is_primary, status, notes)').order('name', ascending: true),
+    db.from('material_categories').select('*').order('display_order', ascending: true).order('name', ascending: true),
+    db.from('units').select('id, symbol, name, notes, status').order('symbol', ascending: true),
+    db.from('branches').select('id, name, status').order('name', ascending: true),
     db.from('recipe_items').select('material_id, unit_id, recipe:recipe_versions(status)'),
     db.from('review_flags').select('entity_id').eq('entity_type', 'material').eq('status', 'open'),
     db.from('products').select('unit_id'),
-    db.from('suppliers').select('id, name, status').order('name'),
+    db.from('suppliers').select('id, name, status').order('name', ascending: true),
   ]);
   return {'materials': r[0], 'categories': r[1], 'units': r[2], 'branches': r[3], 'items': r[4], 'flags': r[5], 'products': r[6], 'suppliers': r[7]};
 }

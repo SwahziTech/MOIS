@@ -63,7 +63,7 @@ class _ItemHistoryListState extends State<ItemHistoryList> {
         final res = await Future.wait<dynamic>([
           db.from('inventory_transactions').select(
               'id, transaction_date, transaction_type, quantity, entered_quantity, entered_unit_id, unit_cost, color_id, seq, created_at, warehouse:warehouses!inner(branch_id, name, type), unit:units!inventory_transactions_entered_unit_id_fkey(symbol), movement:inventory_movements(movement_type, reason, reference, notes, created_by, production_batch_id, sale_id)')
-              .eq(col, item.id).order('transaction_date').order('seq'),
+              .eq(col, item.id).order('transaction_date', ascending: true).order('seq', ascending: true),
           item.isProduct ? Future.value(<dynamic>[]) : db.from('purchase_line_costs').select('*').eq('material_id', item.id),
           item.isProduct
               ? db.from('sale_lines').select('id, quantity, color_id, sale:sales!inner(id, sale_no, stage, sale_date, branch_id, walk_in_name, customer:customers(name)), done:sale_delivery_lines(quantity)')

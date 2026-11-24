@@ -119,7 +119,7 @@ class Session extends ChangeNotifier {
         final res = await Future.wait<dynamic>([
           db.from('organizations').select('id, name, legal_name, logo_url, brand_config, status, currency_code, timezone, default_branch_id, yield_tolerance').eq('id', orgId).maybeSingle(),
           db.from('user_roles').select('id, branch_id, warehouse_id, role:roles(id, name, description, role_permissions(permission:permissions(code)))').eq('user_id', uid).eq('organization_id', orgId),
-          db.from('branches').select('id, name, status').order('name'),
+          db.from('branches').select('id, name, status').order('name', ascending: true),
           db.from('warehouses').select('id, branch_id'),
         ]);
         return {'profile': prof, 'organization': res[0], 'roles': res[1], 'branches': res[2], 'warehouses': res[3]};

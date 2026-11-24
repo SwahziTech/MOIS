@@ -93,11 +93,11 @@ class Refs {
     if (!fresh && _last != null) return _last!;
     final (raw, at) = await offline.load<Json>('refs', () async {
       final res = await Future.wait<dynamic>([
-        db.from('warehouses').select('*, branch:branches(id, name, status)').order('name'),
-        db.from('materials').select('*, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)').order('name'),
-        db.from('products').select('*, category:product_categories(name)').order('canonical_name'),
+        db.from('warehouses').select('*, branch:branches(id, name, status)').order('name', ascending: true),
+        db.from('materials').select('*, category:material_categories(*), conversions:material_unit_conversions(unit_id, factor_to_stock_unit)').order('name', ascending: true),
+        db.from('products').select('*, category:product_categories(name)').order('canonical_name', ascending: true),
         db.from('units').select('id, symbol, name'),
-        db.from('suppliers').select('id, name, status').order('name'),
+        db.from('suppliers').select('id, name, status').order('name', ascending: true),
         db.from('product_category_colors').select('category_id, color_id, display_order'),
         db.from('product_categories').select('id, name, parent_category_id, sort_order, status'),
         db.from('color_palette').select('id, name, display_order, is_active'),

@@ -36,10 +36,10 @@ Future<Json> _fetch() async {
     vatColumn = false;
   }
   final r = await Future.wait<dynamic>([
-    db.from('branches').select('id, name, status, vat_rate').order('name'),
+    db.from('branches').select('id, name, status, vat_rate').order('name', ascending: true),
     db.from('category_color_pricing_rules').select('id, category_id, branch_id, pricing_type, base_color_id, items:category_color_price_items(color_id, amount)'),
-    db.from('products').select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol), category:product_categories(name)').order('canonical_name'),
-    db.from('product_categories').select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))').order('sort_order'),
+    db.from('products').select('id, canonical_name, product_id_ref, category_id, status, pcs_per_sqm, unit:units(symbol), category:product_categories(name)').order('canonical_name', ascending: true),
+    db.from('product_categories').select('id, name, sort_order, status, parent_category_id, colors:product_category_colors(color_id, display_order, color:color_palette(name, is_active))').order('sort_order', ascending: true),
     db.from('branch_products').select('branch_id, product_id').eq('status', 'active'),
   ]);
   return {'prices': prices, 'vatColumn': vatColumn, 'branches': r[0], 'rules': r[1], 'products': r[2], 'categories': r[3], 'carried': r[4]};

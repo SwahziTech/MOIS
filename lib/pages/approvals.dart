@@ -325,7 +325,7 @@ class _ReviewsPageState extends State<ReviewsPage> {
     try {
       final (d, _) = await offline.load<Json>('flags', () async {
         final flags = await db.from('review_flags').select('id, entity_type, entity_id, reason_code, reason, created_at, admin_explanation').eq('status', 'open')
-            .order('entity_type').order('created_at', ascending: false);
+            .order('entity_type', ascending: true).order('created_at', ascending: false);
         final byType = <String, List>{};
         for (final f in flags) { byType.putIfAbsent(f['entity_type'], () => []).add(f['entity_id']); }
         final names = <String, String>{};

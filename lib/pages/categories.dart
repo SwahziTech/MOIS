@@ -47,9 +47,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
         final r = await Future.wait<dynamic>([
           db.from('product_categories')
               .select('id, category_id_ref, name, display_format, sort_order, status, default_unit_id, default_yield_tolerance, parent_category_id, unit:units(symbol, name), colors:product_category_colors(color_id, display_order), products(count)')
-              .eq('products.status', 'active').order('sort_order').order('name'),
-          db.from('color_palette').select('id, name, display_order, is_active').order('display_order').order('name'),
-          db.from('units').select('id, symbol, name, status').order('symbol'),
+              .eq('products.status', 'active').order('sort_order', ascending: true).order('name', ascending: true),
+          db.from('color_palette').select('id, name, display_order, is_active').order('display_order', ascending: true).order('name', ascending: true),
+          db.from('units').select('id, symbol, name, status').order('symbol', ascending: true),
         ]);
         return {'categories': r[0], 'palette': r[1], 'units': r[2]};
       });

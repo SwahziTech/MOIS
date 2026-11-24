@@ -217,7 +217,7 @@ class _ProofReviewState extends State<ProofReview> {
       }
       final sib = await q;
       final ids = [pay['sale']['id'], for (final x in sib) x['payment']['sale']['id']];
-      final ls = await db.from('sale_lines').select('sale_id, line_no, item_name, quantity, price, total, unit:units(symbol), product:products(canonical_name)').inFilter('sale_id', ids).order('line_no');
+      final ls = await db.from('sale_lines').select('sale_id, line_no, item_name, quantity, price, total, unit:units(symbol), product:products(canonical_name)').inFilter('sale_id', ids).order('line_no', ascending: true);
       final m = <String, List<Json>>{};
       for (final l in ls) { m.putIfAbsent(l['sale_id'], () => []).add(l); }
       if (mounted) setState(() { _siblings = [for (final x in sib) Map<String, dynamic>.from(x)]; _lines = m; });

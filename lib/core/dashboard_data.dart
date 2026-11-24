@@ -230,7 +230,7 @@ List<({String month, double inn, double out})> trendFrom(Json data, String today
 
 // ---- dashboard.js -----------------------------------------------------------------------
 Future<Json> loadCuring(Refs refs, String today) async {
-  final data = await db.from('production_batches').select('id, branch_id, batch_date, curing_until, outputs:production_batch_outputs(product_id, color_id, is_primary, pieces_cast)').eq('status', 'curing').order('curing_until');
+  final data = await db.from('production_batches').select('id, branch_id, batch_date, curing_until, outputs:production_batch_outputs(product_id, color_id, is_primary, pieces_cast)').eq('status', 'curing').order('curing_until', ascending: true);
   final rows = [
     for (final b in data)
       if (session.inBranch(b['branch_id']))
@@ -248,7 +248,7 @@ Future<Json> loadCuring(Refs refs, String today) async {
 
 Future<Json> loadOpenOrders(String today) async {
   try {
-    final data = await db.from('production_orders').select('id, branch_id, order_no, reference, due_date, status, lines:production_order_lines(id)').eq('status', 'open').order('due_date', nullsFirst: false);
+    final data = await db.from('production_orders').select('id, branch_id, order_no, reference, due_date, status, lines:production_order_lines(id)').eq('status', 'open').order('due_date', ascending: true, nullsFirst: false);
     final orders = [for (final o in data) if (session.inBranch(o['branch_id'])) o];
     final ids = [for (final o in orders) for (final l in o['lines'] as List) l['id']];
     final pr = ids.isEmpty ? <dynamic>[] : await db.from('production_order_line_progress').select('*').inFilter('line_id', ids);
