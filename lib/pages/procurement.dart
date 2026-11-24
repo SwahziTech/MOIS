@@ -13,6 +13,7 @@ import '../docs/purchase_docs.dart';
 import '../shell.dart';
 import 'electricity.dart';
 import 'expense_form.dart';
+import 'orders.dart';
 import 'stock_history.dart';
 import 'suppliers.dart';
 import 'procurement_actions.dart';
@@ -351,9 +352,16 @@ class _ProcurementPageState extends State<ProcurementPage> {
         else if (tab == 'suppliers')
           SuppliersPanel(key: _supKey)
         else if (tab == 'electricity')
-          ElectricityPanel(branchId: branchId)
+          ElectricityPanel(branchId: branchId, onOrder: (q) => Shell.of(context).go('/orders?open=${q['id']}'))
         else
-          EmptyState(icon: LucideIcons.hammer, title: '${{'suppliers': 'Suppliers', 'requests': 'Orders'}[tab] ?? 'This part'} comes next', description: 'Being ported from the web, part by part.'),
+          RequestsPanel(
+            refs: refs, people: _people, openFirst: widget.query['open'],
+            actions: OrderActions(
+              onReceive: (fromOrder) async { if (await openPurchaseForm(context, _ctx, mode: 'new', fromOrder: fromOrder)) _load(); },
+              onRecordExpense: (prefill) async { if (await openExpenseForm(context, prefill: prefill, categories: _expCats, suppliers: refs.suppliers)) _load(); },
+              onRecordToken: (q, meterName) async { if (await buyTopup(context, q, meterName)) _load(); },
+            ),
+          ),
       ]),
       ),
     );

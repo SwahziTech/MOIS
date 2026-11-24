@@ -37,7 +37,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/movements': (_) => const MovementsPage(),
   '/purchases': (p) => ProcurementPage(query: Uri.parse(p).queryParameters),
   '/expenses': (p) => ProcurementPage(section: 'expenses', query: Uri.parse(p).queryParameters),
-  '/orders': (_) => const ProcurementPage(section: 'orders'),
+  '/orders': (p) => ProcurementPage(section: 'orders', query: Uri.parse(p).queryParameters),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),
