@@ -11,7 +11,9 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import '../docs/purchase_docs.dart';
 import '../shell.dart';
+import 'electricity.dart';
 import 'expense_form.dart';
+import 'stock_history.dart';
 import 'procurement_actions.dart';
 import 'purchase_form.dart';
 
@@ -342,8 +344,12 @@ class _ProcurementPageState extends State<ProcurementPage> {
                   ),
                 ]),
               ),
-        ] else
-          EmptyState(icon: LucideIcons.hammer, title: '${{'costs': 'Material costs', 'electricity': 'Electricity', 'suppliers': 'Suppliers', 'requests': 'Orders'}[tab] ?? 'This part'} comes next', description: 'Being ported from the web, part by part.'),
+        ] else if (tab == 'costs')
+          _MaterialCosts(refs: refs)
+        else if (tab == 'electricity')
+          ElectricityPanel(branchId: branchId)
+        else
+          EmptyState(icon: LucideIcons.hammer, title: '${{'suppliers': 'Suppliers', 'requests': 'Orders'}[tab] ?? 'This part'} comes next', description: 'Being ported from the web, part by part.'),
       ]),
       ),
     );
@@ -556,4 +562,95 @@ class _ProcurementPageState extends State<ProcurementPage> {
           Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w600))),
         ]),
       );
+}
+
+/// Material costs at the branch: the cost of the stock left (oldest used first), the latest cost, costed stock;
+/// a tap shows the material's purchases (web Purchases.jsx, tab costs)
+class _MaterialCosts extends StatefulWidget {
+  const _MaterialCosts({required this.refs});
+  final Refs refs;
+  @override
+  State<_MaterialCosts> createState() => _MaterialCostsState();
+}
+
+class _MaterialCostsState extends State<_MaterialCosts> {
+  List<({Json m, Object? avg, Object? last, Object? lastDate, Object? costed, Object? uncosted})>? _rows;
+  String get branchId => session.branchId;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    if (branchId.isEmpty) return;
+    try {
+      final mats = _l(await db.from('materials').select('id, name, status, branch_id, category:material_categories(display_order)').order('name', ascending: true))
+          .where((m) => m['status'] == 'active' && (m['branch_id'] == null || m['branch_id'] == branchId)).toList()
+        ..sort((a, b) {
+          final c = n(a['category']?['display_order'] ?? 999).compareTo(n(b['category']?['display_order'] ?? 999));
+          return c != 0 ? c : '${a['name']}'.compareTo('${b['name']}');
+        });
+      final vals = await Future.wait([
+        for (final m in mats) db.rpc('material_stock_value', params: {'p_branch_id': branchId, 'p_material_id': m['id']}).then<Map?>((v) => (v as List?)?.firstOrNull as Map?).catchError((_) => null),
+      ]);
+      if (!mounted) return;
+      setState(() => _rows = [
+            for (var i = 0; i < mats.length; i++)
+              (
+                m: mats[i], avg: vals[i]?['unit_cost'], last: vals[i]?['last_cost'], lastDate: vals[i]?['last_date'],
+                costed: vals[i]?['costed_quantity'] ?? (vals[i]?['on_hand'] != null ? n(vals[i]!['on_hand']) - n(vals[i]!['uncosted_quantity']) : null),
+                uncosted: vals[i]?['uncosted_quantity'] ?? 0,
+              ),
+          ]);
+    } catch (_) {
+      if (mounted) setState(() => _rows = []);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tk;
+    if (branchId.isEmpty) return const EmptyState(icon: LucideIcons.shoppingCart, title: 'Pick a branch', description: 'Material costs are per branch — pick one in the menu.');
+    final rows = _rows;
+    if (rows == null) return const Skeleton(rows: 5);
+    final refs = widget.refs;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final c in rows)
+        Builder(builder: (_) {
+          final it = refs.items['m:${c.m['id']}'];
+          final unit = refs.unit(it?.stockUnitId);
+          return InkWell(
+            onTap: it == null
+                ? null
+                : () {
+                    final mu = it.mainUnitId != null ? it.units.where((u) => u.id == it.mainUnitId).firstOrNull : null;
+                    Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => FullPage(
+                          title: '${c.m['name']} — purchases',
+                          footer: [OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+                          children: [ItemHistoryList(item: it, branchId: branchId, refs: refs, mode: 'purchases', factor: mu?.factor ?? 1, symbol: refs.unit(mu?.id ?? it.stockUnitId), stockSymbol: unit)],
+                        )));
+                  },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${c.m['name']}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    PlHelp('${n(c.costed) > 0 ? 'costed ${qtyText(n(c.costed))} $unit' : 'costed —'}${n(c.uncosted) > 0 ? ' · ${qtyText(n(c.uncosted))} $unit with no cost' : ''}'),
+                  ]),
+                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(c.avg != null ? '${_money(_r2(n(c.avg)))} / $unit' : 'no cost yet', style: TextStyle(fontWeight: FontWeight.w700, color: c.avg == null ? t.textMuted : null)),
+                  PlHelp(c.last != null ? 'latest ${_money(_r2(n(c.last)))} · ${tableDate(c.lastDate) ?? ''}' : 'latest —'),
+                ]),
+              ]),
+            ),
+          );
+        }),
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: PlHelp('Cost of the stock left at ${session.branchName} — oldest stock is used first; price plus transport, VAT apart. Stock received before its first purchase has no cost and is left out.'),
+      ),
+    ]);
+  }
 }
