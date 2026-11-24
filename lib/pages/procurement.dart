@@ -14,6 +14,7 @@ import '../shell.dart';
 import 'electricity.dart';
 import 'expense_form.dart';
 import 'stock_history.dart';
+import 'suppliers.dart';
 import 'procurement_actions.dart';
 import 'purchase_form.dart';
 
@@ -74,6 +75,7 @@ class _ProcurementPageState extends State<ProcurementPage> {
   Map<String, List<Json>> _txByMove = {}, _slips = {};
   Map<String, String> _people = {};
   bool _loading = true, _buyOpened = false;
+  final _supKey = GlobalKey<SuppliersPanelState>();
   String _error = '';
   DateTime? _savedAt;
 
@@ -346,6 +348,8 @@ class _ProcurementPageState extends State<ProcurementPage> {
               ),
         ] else if (tab == 'costs')
           _MaterialCosts(refs: refs)
+        else if (tab == 'suppliers')
+          SuppliersPanel(key: _supKey)
         else if (tab == 'electricity')
           ElectricityPanel(branchId: branchId)
         else
@@ -368,7 +372,15 @@ class _ProcurementPageState extends State<ProcurementPage> {
   /// one golden button, following the open tab (2026-11-16): expenses → Record expense, else Record purchase
   Widget? _fab() {
     final t = context.tk;
-    if (widget.section == 'orders' || _refs == null || _top == 'suppliers') return null;
+    if (widget.section == 'orders' || _refs == null) return null;
+    if (_top == 'suppliers') {
+      return !session.canManage('materials.manage')
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: t.dark ? C.khaki : C.charcoal, foregroundColor: t.dark ? C.charcoal : Colors.white,
+              onPressed: () => _supKey.currentState?.newSupplier(), icon: const Icon(LucideIcons.plus), label: const Text('New Supplier'),
+            );
+    }
     final expenses = _top == 'expenses';
     if (expenses ? (_expCats.isEmpty || (branchId.isNotEmpty && !canRecordAt(branchId))) : !canRecordAt(branchId)) return null;
     return FloatingActionButton.extended(
