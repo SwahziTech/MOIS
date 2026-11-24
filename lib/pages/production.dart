@@ -10,6 +10,7 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import 'day_log.dart';
 import 'planner.dart';
+import 'production_settings.dart';
 import 'procurement_actions.dart' show DateField;
 import 'reports.dart' show ReportSheet, RCell;
 
@@ -204,7 +205,12 @@ class _ProductionPageState extends State<ProductionPage> {
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
       child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
         OfflineNote(_savedAt),
-        PlHelp(branchId.isNotEmpty ? (session.branchName ?? '') : 'All branches'),
+        Row(children: [
+          Expanded(child: PlHelp(branchId.isNotEmpty ? (session.branchName ?? '') : 'All branches')),
+          // ⚙ beside the heading, as on the web: curing, teams & machines, reject reasons
+          IconButton(tooltip: 'Production settings', visualDensity: VisualDensity.compact, icon: const Icon(LucideIcons.settings, size: 18),
+              onPressed: () async { await openProductionSettings(context); _load(); }),
+        ]),
         if (page == 'production')
           PageTabs<String>(
             tabs: [
