@@ -49,6 +49,7 @@ dependencies:
   lucide_icons_flutter: ^4.0.3
   uuid: ^4.6.0
   http: ^1.6.0
+  archive: ^4.7.1
 
 dev_dependencies:
   flutter_test:
