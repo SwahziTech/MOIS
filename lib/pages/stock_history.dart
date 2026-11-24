@@ -123,7 +123,7 @@ class _ItemHistoryListState extends State<ItemHistoryList> {
     String dm(String d) => '${d.substring(8, 10)}/${d.substring(5, 7)}';
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (widget.mode != 'purchases')
-        Wrap(spacing: 6, runSpacing: 6, children: [
+        SlideRow(children: [
           for (final (k, l) in groups)
             if (counts[k]! > 0 || k == 'all') Chip2('$l ${counts[k]! > 0 ? '(${counts[k]})' : ''}', on: _group == k, onTap: () => setState(() => _group = k)),
         ]),

@@ -102,13 +102,13 @@ class ChipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final open = items.where((i) => (i.children?.isNotEmpty ?? false) && (i.id == value || i.children!.any((c) => c.id == value))).firstOrNull;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 6, runSpacing: 6, children: [
+      SlideRow(children: [
         Chip2(allLabel, on: value.isEmpty, onTap: () => onChange('')),
         for (final i in items) Chip2(i.label, on: value == i.id || open?.id == i.id, onTap: () => onChange(value == i.id ? '' : i.id)),
       ]),
       if (open != null) ...[
         const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 6, children: [
+        SlideRow(children: [
           Chip2('All ${open.label}', on: value == open.id, onTap: () => onChange(open.id)),
           for (final c in open.children!) Chip2(c.label, on: value == c.id, onTap: () => onChange(c.id)),
         ]),
@@ -653,6 +653,20 @@ class ColourDot extends StatelessWidget {
           Container(width: 10, height: 10, decoration: BoxDecoration(color: cssColour(name), shape: BoxShape.circle, border: Border.all(color: context.tk.borderStrong))),
           const SizedBox(width: 2),
           Text(name.isEmpty ? '' : name[0], style: TextStyle(fontSize: Fs.xs, color: context.tk.textMuted)),
+        ]),
+      );
+}
+
+/// LOCKED 2026-11-24: tabs and chips that don't fit stay on one row and slide sideways
+class SlideRow extends StatelessWidget {
+  const SlideRow({super.key, required this.children, this.spacing = 6});
+  final List<Widget> children;
+  final double spacing;
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) SizedBox(width: spacing), children[i]],
         ]),
       );
 }

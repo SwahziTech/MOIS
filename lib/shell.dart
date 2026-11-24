@@ -123,7 +123,7 @@ class ShellState extends State<Shell> {
             if (siblings.length > 1)
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                child: SlideRow(children: [
                   for (final g in siblings)
                     InkWell(
                       borderRadius: BorderRadius.circular(999),

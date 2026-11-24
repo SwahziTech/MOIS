@@ -113,7 +113,7 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
           Stat('Waiting for a director', '${counts['waiting']}', figureColor: counts['waiting']! > 0 ? C.warning : null, help: '${here.where((x) => x['state'] == 'overdue').length} overdue (over $confirmDays days)'),
           Stat('Confirmed', '${counts['confirmed']}', help: 'of ${counts['all']} payments'),
         ]),
-        Wrap(spacing: 6, runSpacing: 6, children: [
+        SlideRow(children: [
           for (final (k, l) in const [('todo', 'Proof to add'), ('waiting', 'Waiting'), ('confirmed', 'Confirmed'), ('all', 'All')])
             Chip2('$l (${counts[k]})', on: _show == k, onTap: () => setState(() => _show = k)),
         ]),

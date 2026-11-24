@@ -353,7 +353,7 @@ class _ReviewsPageState extends State<ReviewsPage> {
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         if (types.length > 1) ...[
-          Wrap(spacing: 6, runSpacing: 6, children: [
+          SlideRow(children: [
             Chip2('All (${flags.length})', on: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
             for (final t in types) Chip2('${_entityLabels[t] ?? t} (${flags.where((f) => f['entity_type'] == t).length})', on: _filter == t, onTap: () => setState(() => _filter = t)),
           ]),
