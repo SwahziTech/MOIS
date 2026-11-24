@@ -267,8 +267,10 @@ class _ReportsPageState extends State<ReportsPage> {
 
 /// The report table on a phone: first column fixed, the figures swipe sideways, total row bold at the bottom
 class ReportSheet extends StatelessWidget {
-  const ReportSheet({super.key, required this.head, required this.rows, this.total, this.firstWidth = 150, this.colWidth = 112});
+  const ReportSheet({super.key, required this.head, required this.rows, this.total, this.firstWidth = 150, this.colWidth = 112, this.onRowTap});
   final List<String> head;
+  /// a tap on a row's first cell (not the total), e.g. a batch's job card
+  final ValueChanged<int>? onRowTap;
   final List<List<Object?>> rows;
   final List<Object?>? total;
   final double firstWidth, colWidth;
@@ -312,7 +314,13 @@ class ReportSheet extends StatelessWidget {
           decoration: BoxDecoration(border: Border(right: BorderSide(color: t.border))),
           child: Column(children: [
             Container(decoration: BoxDecoration(color: t.soft, border: Border(bottom: BorderSide(color: t.borderStrong))), child: cell(head.first, first: true, header: true)),
-            for (final (i, r) in all.indexed) Container(decoration: rowDeco(i), child: cell(r.isEmpty ? '' : r.first, first: true, isTotal: total != null && i == all.length - 1)),
+            for (final (i, r) in all.indexed)
+              Container(
+                decoration: rowDeco(i),
+                child: onRowTap != null && i < rows.length
+                    ? InkWell(onTap: () => onRowTap!(i), child: cell(r.isEmpty ? '' : r.first, first: true))
+                    : cell(r.isEmpty ? '' : r.first, first: true, isTotal: total != null && i == all.length - 1),
+              ),
           ]),
         ),
         Expanded(

@@ -8,6 +8,8 @@ import '../core/production.dart';
 import '../core/session.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
+import '../core/pdf_doc.dart';
+import '../docs/job_card_doc.dart';
 import 'day_log.dart';
 import 'planner.dart';
 import 'production_settings.dart';
@@ -549,6 +551,7 @@ class _BatchCostTableState extends State<_BatchCostTable> {
     List<Json> cell(dynamic r, String k) => [for (final x in r.mats as List<Json>) if ('${x['material_id']}|${x['unit_id']}' == k) x];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       PeriodBar(value: _period, onChange: (v) => setState(() => _period = v)),
+      const PlHelp('Tap a batch for its job card.'),
       const SizedBox(height: 10),
       if (widget.loading)
         const Skeleton(rows: 4)
@@ -557,6 +560,8 @@ class _BatchCostTableState extends State<_BatchCostTable> {
       else
         ReportSheet(
           firstWidth: 150,
+          // a batch's job card, A4 (one card a batch), as the web's icon on each row
+          onRowTap: (i) => openDoc(context, 'Job card PJC batch ${rows[i].n} · ${'${rows[i].b['id']}'.substring(0, 8)}', () => jobCardPdf('${rows[i].b['id']}')),
           head: ['Product', 'Date', 'Batch', 'Pcs', for (final c in cols) '${labelOf(c)} ${c.unit}', 'Material cost (TZS)', 'Cost /pc (TZS)'],
           rows: [
             for (final r in rows)

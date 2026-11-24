@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../docs/job_card_doc.dart';
 import 'format.dart';
+import 'pdf_doc.dart';
 import 'inventory.dart';
 import 'session.dart';
 import 'theme.dart';
@@ -315,7 +317,8 @@ class ProductionBreakdown extends StatelessWidget {
                     if ((b.consumables ?? 0) > 0) TextSpan(text: ' · consumables ${money(b.consumables!)}'),
                   ])),
                 if (b.stage != null && stageBadge != null) stageBadge!(b.stage!),
-                if (b.onJobCard != null) IconButton(tooltip: 'View job card', onPressed: b.onJobCard, icon: const Icon(LucideIcons.fileText, size: 16), visualDensity: VisualDensity.compact),
+                // a saved batch's job card, A4 (2026-11-20, the user): one card a batch
+                if (b.onJobCard != null || b.id != null) IconButton(tooltip: 'View job card', onPressed: b.onJobCard ?? () => openDoc(context, 'Job card PJC batch ${b.n} · ${b.id!.substring(0, 8)}', () => jobCardPdf(b.id!)), icon: const Icon(LucideIcons.fileText, size: 16), visualDensity: VisualDensity.compact),
               ]),
               const SizedBox(height: 6),
               _MaterialTable(
