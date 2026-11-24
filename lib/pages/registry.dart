@@ -14,6 +14,7 @@ import 'movements.dart';
 import 'pricing.dart';
 import 'print_lists.dart';
 import 'procurement.dart';
+import 'production.dart';
 import 'products.dart';
 import 'reports.dart';
 import 'recipes.dart';
@@ -38,6 +39,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/purchases': (p) => ProcurementPage(query: Uri.parse(p).queryParameters),
   '/expenses': (p) => ProcurementPage(section: 'expenses', query: Uri.parse(p).queryParameters),
   '/orders': (p) => ProcurementPage(section: 'orders', query: Uri.parse(p).queryParameters),
+  '/production': (p) => ProductionPage(query: Uri.parse(p).queryParameters),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),
