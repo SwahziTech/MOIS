@@ -9,6 +9,7 @@ import '../core/session.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
 import 'day_log.dart';
+import 'planner.dart';
 import 'procurement_actions.dart' show DateField;
 import 'reports.dart' show ReportSheet, RCell;
 
@@ -216,7 +217,10 @@ class _ProductionPageState extends State<ProductionPage> {
           ),
         if (_rowError.isNotEmpty) Alert(_rowError, tone: Tone.error),
         if (current == 'planner')
-          EmptyState(icon: LucideIcons.factory, title: branchId.isEmpty ? 'Pick a branch' : 'The planner comes next', description: branchId.isEmpty ? 'Capacity is per branch — pick one in the menu.' : 'Being ported from the web.')
+          (branchId.isEmpty
+              ? const EmptyState(icon: LucideIcons.factory, title: 'Pick a branch', description: 'Capacity is per branch — pick one in the menu.')
+              : Planner(key: ValueKey(branchId), refs: refs, recipes: _recipes, curingDays: _curingDays, usage: usage,
+                  onOpenForm: canRecord ? (p, c) => setState(() { _preset = (productId: p, colorId: c, at: DateTime.now().millisecondsSinceEpoch); _tab = 'log'; }) : null))
         else if (current == 'log')
           (!canRecord ? const PlHelp('Pick a branch to record production.') : DayLog(
               refs: refs, recipes: _recipes, curingDays: _curingDays, usage: usage, preset: _preset,
