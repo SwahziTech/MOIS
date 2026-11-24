@@ -11,6 +11,7 @@ import 'categories.dart';
 import 'colours.dart';
 import 'materials.dart';
 import 'pricing.dart';
+import 'print_lists.dart';
 import 'products.dart';
 import 'recipes.dart';
 import 'stock.dart';
@@ -28,6 +29,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/pricing': (_) => const PricingPage(),
   '/materials': (_) => const MaterialsPage(),
   '/documents': (_) => const DocumentsPage(),
+  '/print-lists': (_) => const PrintListsPage(),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),

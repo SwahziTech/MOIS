@@ -670,3 +670,53 @@ class SlideRow extends StatelessWidget {
         ]),
       );
 }
+
+// ---- RangePeriod (web lib/rangePeriod.jsx): a page whose period is a date range -------------------
+const longerPeriods = [('quarter', 'This quarter'), ('year', 'This year'), ('30', 'Last 30 days'), ('90', 'Last 90 days'), ('all', 'All time'), ('custom', 'Dates…')];
+
+/// The standard bar, This month first, the last pick kept until the app closes, "Dates…" for any from–to
+class RangePeriod {
+  RangePeriod(this.id, {String fallback = 'month'}) {
+    final saved = _kept[id];
+    key = saved?.$1 ?? fallback;
+    custom = saved?.$2 ?? ('${session.today.substring(0, 7)}-01', session.today);
+  }
+  static final Map<String, (String, (String, String))> _kept = {};
+  final String id;
+  late String key;
+  late (String, String) custom;
+
+  String get from => key == 'custom' ? custom.$1 : periodRange(key, session.today).$1;
+  String get to {
+    final t = key == 'custom' ? custom.$2 : periodRange(key, session.today).$2;
+    return t == '9999-12-31' ? session.today : t;
+  }
+
+  void set(String k, [(String, String)? range]) {
+    key = k;
+    if (range != null) custom = range;
+    _kept[id] = (key, custom);
+  }
+
+  /// The bar; onChange runs after the period changed
+  Widget bar(BuildContext context, VoidCallback onChange) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        PeriodBar(value: key, onChange: (k) { set(k); onChange(); }, extra: longerPeriods, range: (from, to)),
+        if (key == 'custom')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(children: [
+              Expanded(child: _dateButton(context, custom.$1, DateTime(2020), DateTime.parse(custom.$2), (d) { set('custom', (d, custom.$2)); onChange(); })),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: PlHelp('to')),
+              Expanded(child: _dateButton(context, custom.$2, DateTime.parse(custom.$1), DateTime.parse(session.today), (d) { set('custom', (custom.$1, d)); onChange(); })),
+            ]),
+          ),
+      ]);
+
+  Widget _dateButton(BuildContext context, String value, DateTime first, DateTime last, ValueChanged<String> pick) => OutlinedButton(
+        onPressed: () async {
+          final d = await showDatePicker(context: context, initialDate: DateTime.parse(value), firstDate: first, lastDate: last);
+          if (d != null) pick(iso(d));
+        },
+        child: Text(tableDate(value) ?? value),
+      );
+}
