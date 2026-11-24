@@ -5,6 +5,7 @@ import '../core/nav.dart';
 import '../core/ui.dart';
 import 'approvals.dart';
 import 'daily_report.dart';
+import 'documents.dart';
 import 'dashboard.dart';
 import 'categories.dart';
 import 'colours.dart';
@@ -26,6 +27,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/recipes': (_) => const RecipesPage(),
   '/pricing': (_) => const PricingPage(),
   '/materials': (_) => const MaterialsPage(),
+  '/documents': (_) => const DocumentsPage(),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),

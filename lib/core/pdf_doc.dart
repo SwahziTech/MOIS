@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import 'format.dart';
+import 'offline.dart';
 import 'session.dart';
 import 'theme.dart';
 
@@ -148,6 +150,7 @@ pw.Widget docSign(List<String> labels) => pw.Padding(
 
 /// .doc-foot — the organization's footer text and "prepared with MOIS"
 pw.Widget docFoot(Json? org) => pw.Container(
+      width: double.infinity,
       padding: const pw.EdgeInsets.only(top: 8),
       decoration: const pw.BoxDecoration(border: pw.Border(top: pw.BorderSide(color: PdfColor.fromInt(0xFFDDDDDD)))),
       child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
@@ -177,7 +180,11 @@ Future<Uint8List> docPdf({required String title, required List<pw.Widget> body, 
 
 /// Open a document: build it, then show it with Print and Share
 Future<void> openDoc(BuildContext context, String title, Future<Uint8List> Function() build) =>
-    Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _DocView(title: title, make: build)));
+    Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _DocView(title: title, make: () async {
+          // a document opened once is kept on the phone: offline it opens from that copy
+          final (b64, _) = await offline.load<String>('pdf:$title',() async => base64Encode(await build()));
+          return base64Decode(b64);
+        })));
 
 class _DocView extends StatelessWidget {
   const _DocView({required this.title, required this.make});
