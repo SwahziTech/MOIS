@@ -11,6 +11,9 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import '../docs/purchase_docs.dart';
 import '../shell.dart';
+import 'expense_form.dart';
+import 'procurement_actions.dart';
+import 'purchase_form.dart';
 
 /*
  * Procurement — a port of web pages/Purchases.jsx (one page, three menu entries; approved 2026-11-24):
@@ -68,7 +71,7 @@ class _ProcurementPageState extends State<ProcurementPage> {
   Map<String, Json> _totals = {}, _deliv = {};
   Map<String, List<Json>> _txByMove = {}, _slips = {};
   Map<String, String> _people = {};
-  bool _loading = true;
+  bool _loading = true, _buyOpened = false;
   String _error = '';
   DateTime? _savedAt;
 
@@ -140,6 +143,12 @@ class _ProcurementPageState extends State<ProcurementPage> {
         _loading = false;
         _savedAt = at;
       });
+      // Materials' "Intake" opens a new purchase for that material (?buy=<material id>)
+      final buy = widget.query['buy'];
+      if (buy != null && !_buyOpened) {
+        _buyOpened = true;
+        _record(mode: 'new', materialId: buy);
+      }
     } catch (_) {
       if (mounted) setState(() { _error = "We couldn't load purchases. Please try again."; _loading = false; });
     }
@@ -260,7 +269,10 @@ class _ProcurementPageState extends State<ProcurementPage> {
         .where((o) => o.$1.isEmpty || (tab == 'expenses' ? ['part_paid', 'not_paid', 'done', 'void'].contains(o.$1) : tab == 'purchases' ? o.$1 != 'not_paid' : true))
         .toList();
 
-    return RefreshIndicator(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _fab(),
+      body: RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
       child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
         OfflineNote(_savedAt),
@@ -323,15 +335,51 @@ class _ProcurementPageState extends State<ProcurementPage> {
                   PlHelp('${warehouseLabel(refs.store('${a['warehouse_id']}'))} · ${_people['${a['created_by']}'] ?? '—'}'),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(onPressed: () => openDoc(context, 'Goods received note GRN-${'${a['movement_id']}'.substring(0, 8).toUpperCase()}', () => grnPdf('${a['movement_id']}')), child: const Text('GRN')),
+                    child: Wrap(spacing: 6, children: [
+                      if (canRecordAt(a['branch_id'])) FilledButton(onPressed: () => _record(mode: 'complete', receipt: a), child: const Text('Add purchase details')),
+                      TextButton(onPressed: () => openDoc(context, 'Goods received note GRN-${'${a['movement_id']}'.substring(0, 8).toUpperCase()}', () => grnPdf('${a['movement_id']}')), child: const Text('GRN')),
+                    ]),
                   ),
                 ]),
               ),
         ] else
           EmptyState(icon: LucideIcons.hammer, title: '${{'costs': 'Material costs', 'electricity': 'Electricity', 'suppliers': 'Suppliers', 'requests': 'Orders'}[tab] ?? 'This part'} comes next', description: 'Being ported from the web, part by part.'),
       ]),
+      ),
     );
   }
+
+  PurchaseCtx get _ctx => PurchaseCtx(refs: _refs!, purchases: _purchases, txByMove: _txByMove);
+
+  Future<void> _record({required String mode, Json? receipt, String? materialId}) async {
+    if (await openPurchaseForm(context, _ctx, mode: mode, receipt: receipt, materialId: materialId)) _load();
+  }
+
+  Future<bool> editPurchase(BuildContext context, Json p) => openPurchaseForm(context, _ctx, mode: 'edit', purchase: p);
+
+  Future<bool> editExpense(BuildContext context, Json e) => openExpenseForm(context, expense: e, categories: _expCats, suppliers: _refs!.suppliers);
+
+  /// one golden button, following the open tab (2026-11-16): expenses → Record expense, else Record purchase
+  Widget? _fab() {
+    final t = context.tk;
+    if (widget.section == 'orders' || _refs == null || _top == 'suppliers') return null;
+    final expenses = _top == 'expenses';
+    if (expenses ? (_expCats.isEmpty || (branchId.isNotEmpty && !canRecordAt(branchId))) : !canRecordAt(branchId)) return null;
+    return FloatingActionButton.extended(
+      backgroundColor: t.dark ? C.khaki : C.charcoal,
+      foregroundColor: t.dark ? C.charcoal : Colors.white,
+      onPressed: () async {
+        if (expenses) {
+          if (await openExpenseForm(context, categories: _expCats, suppliers: _refs!.suppliers)) _load();
+        } else {
+          _record(mode: 'new');
+        }
+      },
+      icon: const Icon(LucideIcons.plus),
+      label: Text(expenses ? 'Record expense' : 'Record purchase'),
+    );
+  }
+
 
   String _describe(List<Json>? lines) => [
         for (final x in lines ?? <Json>[])
@@ -386,14 +434,34 @@ class _ProcurementPageState extends State<ProcurementPage> {
     final (label, tone, help) = procStatus[st]!;
     final bal = tt != null ? n(tt['balance']) : 0;
     final slips = _slips['${p['id']}'] ?? [];
+    final can = p['status'] == 'recorded' && canRecordAt(p['branch_id']);
+    // bought from an order and delivered in portions (133): Change changes only the deliveries
+    final fromOrder = p['purchase_order_id'] != null && _l(p['items']).isNotEmpty;
+    Future<void> then(BuildContext ctx, Future<bool> Function() act) async {
+      Navigator.pop(ctx);
+      if (await act()) _load();
+    }
+
     Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (ctx) {
       final t = ctx.tk;
       return FullPage(
         title: 'Purchase · ${dateText(p['purchase_date'])}',
         footer: [
+          if (p['status'] == 'void' && session.canManage('system.manage'))
+            TextButton(onPressed: () => then(ctx, () => deletePurchase(context, purchase: p, goods: _describe(_txByMove['${p['movement_id']}']))), child: const Text('Delete…')),
           if (p['status'] == 'recorded' && p['movement_id'] != null)
             TextButton(onPressed: () => openDoc(ctx, 'Goods received note GRN-${'${p['movement_id']}'.substring(0, 8).toUpperCase()}', () => grnPdf('${p['movement_id']}')), child: const Text('Goods received note')),
-          if (slips.isNotEmpty) TextButton.icon(onPressed: () => showProof(ctx, slips.last), icon: const Icon(LucideIcons.eye, size: 15), label: const Text('View proof')),
+          if (can && !fromOrder) OutlinedButton(onPressed: () => then(ctx, () => editPurchase(context, p)), child: const Text('Change')),
+          if (can && delivOf(p) != 'delivered') FilledButton(onPressed: () => then(ctx, () => recordDelivery(context, purchase: p, status: ds, refs: refs)), child: const Text('Record delivery')),
+          // a rounding gap is settled when the purchase is recorded, not here (2026-11-16, the user)
+          if (can && tt != null && bal >= 1) FilledButton(onPressed: () => then(ctx, () => payPurchase(context, purchase: p, total: tt['total'], supplierName: supplierName(p['supplier_id']))), child: const Text('Pay')),
+          if (slips.isNotEmpty)
+            TextButton.icon(onPressed: () => showProof(ctx, slips.last), icon: const Icon(LucideIcons.eye, size: 15), label: const Text('View proof'))
+          else if (can)
+            TextButton.icon(
+              onPressed: () => then(ctx, () => addProcurementProof(context, kind: 'purchase', id: p['id'], branchId: p['branch_id'], amount: tt?['amount_paid'], paidOn: p['paid_on'], who: supplierName(p['supplier_id']))),
+              icon: const Icon(LucideIcons.paperclip, size: 15), label: const Text('Add proof'),
+            ),
           OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
         ],
         children: [
@@ -420,11 +488,8 @@ class _ProcurementPageState extends State<ProcurementPage> {
                 ]),
               );
             }),
-          if (_l(p['deliveries']).isNotEmpty) ...[
-            const SectionTitle('Deliveries'),
-            for (final d in _l(p['deliveries'])..sort((a, b) => '${b['delivered_on']}'.compareTo('${a['delivered_on']}')))
-              PlHelp('${tableDate(d['delivered_on']) ?? ''}${'${d['received_by'] ?? ''}'.isNotEmpty ? ' · received by ${d['received_by']}' : ''}'),
-          ],
+          if (p['status'] == 'recorded' && _l(p['items']).isNotEmpty)
+            PurchaseDeliveries(purchase: p, refs: refs, canEdit: can && fromOrder, onChanged: _load),
           if (slips.isNotEmpty) ...[
             const SectionTitle('Proof'),
             Wrap(spacing: 6, children: [for (final d in slips) OutlinedButton(onPressed: () => showProof(ctx, d), child: Text('${d['file_path'] != null ? 'Slip' : 'SMS'} · ${tableDate(d['paid_on']) ?? ''}'))]),
@@ -440,10 +505,28 @@ class _ProcurementPageState extends State<ProcurementPage> {
     final help = st == 'done' ? 'Paid in full — nothing left to do' : help0;
     final due = _r2(n(e['amount']) - n(e['amount_paid']));
     final slips = _slips['${e['id']}'] ?? [];
+    final can = e['status'] == 'recorded' && canRecordAt(e['branch_id']);
     Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (ctx) => FullPage(
           title: 'Expense · ${dateText(e['expense_date'])}',
           footer: [
-            if (slips.isNotEmpty) TextButton.icon(onPressed: () => showProof(ctx, slips.last), icon: const Icon(LucideIcons.eye, size: 15), label: const Text('View proof')),
+            if (slips.isNotEmpty)
+              TextButton.icon(onPressed: () => showProof(ctx, slips.last), icon: const Icon(LucideIcons.eye, size: 15), label: const Text('View proof'))
+            else if (can)
+              TextButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  if (await addProcurementProof(context, kind: 'expense', id: e['id'], branchId: e['branch_id'], amount: e['amount_paid'], paidOn: e['paid_on'] ?? e['expense_date'], who: '${e['description'] ?? ''}')) _load();
+                },
+                icon: const Icon(LucideIcons.paperclip, size: 15), label: const Text('Add proof'),
+              ),
+            if (can)
+              OutlinedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  if (await editExpense(context, e)) _load();
+                },
+                child: const Text('Change'),
+              ),
             OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
           ],
           children: [
