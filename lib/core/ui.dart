@@ -581,3 +581,78 @@ class SyncStrip extends StatelessWidget {
         },
       );
 }
+
+// ---- a full-screen window (web Modal size lg / forms): title, × top right, body, footer ----
+class FullPage extends StatelessWidget {
+  const FullPage({super.key, required this.title, required this.children, this.footer});
+  final String title;
+  final List<Widget> children;
+  final List<Widget>? footer;
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tk;
+    return Scaffold(
+      backgroundColor: t.canvas,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: Fs.md, fontWeight: FontWeight.w600)),
+        actions: [
+          IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(context), icon: const Icon(LucideIcons.x, size: 20)),
+        ],
+      ),
+      body: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: children),
+      bottomNavigationBar: footer == null || footer!.isEmpty
+          ? null
+          : SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                decoration: BoxDecoration(color: t.surface, border: Border(top: BorderSide(color: t.border))),
+                child: Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: footer!),
+              ),
+            ),
+    );
+  }
+}
+
+/// A section heading inside a window (.modal-section-title)
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.text, {super.key, this.trailing});
+  final String text;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 16, bottom: 6),
+        child: Row(children: [
+          Expanded(child: Text(text, style: TextStyle(fontSize: Fs.sm, fontWeight: FontWeight.w600, color: context.tk.textSecondary))),
+          ?trailing,
+        ]),
+      );
+}
+
+/// The colour a palette name stands for (the web paints it with the name as a CSS colour)
+Color cssColour(String name) {
+  const named = {
+    'red': Color(0xFFFF0000), 'blue': Color(0xFF0000FF), 'green': Color(0xFF008000), 'yellow': Color(0xFFFFFF00),
+    'black': Color(0xFF000000), 'white': Color(0xFFFFFFFF), 'grey': Color(0xFF808080), 'gray': Color(0xFF808080),
+    'brown': Color(0xFFA52A2A), 'orange': Color(0xFFFFA500), 'maroon': Color(0xFF800000), 'pink': Color(0xFFFFC0CB),
+    'purple': Color(0xFF800080), 'cream': Color(0xFFFFFDD0), 'beige': Color(0xFFF5F5DC), 'tan': Color(0xFFD2B48C),
+    'charcoal': Color(0xFF36454F), 'terracotta': Color(0xFFE2725B), 'gold': Color(0xFFFFD700), 'silver': Color(0xFFC0C0C0),
+    'navy': Color(0xFF000080), 'olive': Color(0xFF808000), 'teal': Color(0xFF008080), 'khaki': Color(0xFFF0E68C),
+  };
+  return named[name.trim().toLowerCase()] ?? const Color(0x00000000);
+}
+
+/// A colour dot with its first letter (.pc-dot)
+class ColourDot extends StatelessWidget {
+  const ColourDot(this.name, {super.key});
+  final String name;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: name,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: cssColour(name), shape: BoxShape.circle, border: Border.all(color: context.tk.borderStrong))),
+          const SizedBox(width: 2),
+          Text(name.isEmpty ? '' : name[0], style: TextStyle(fontSize: Fs.xs, color: context.tk.textMuted)),
+        ]),
+      );
+}
