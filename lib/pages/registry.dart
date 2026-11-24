@@ -9,6 +9,7 @@ import 'dashboard.dart';
 import 'categories.dart';
 import 'colours.dart';
 import 'products.dart';
+import 'recipes.dart';
 import 'stock.dart';
 
 /*
@@ -20,6 +21,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/stock': (_) => const StockPage(),
   '/categories': (_) => const CategoriesPage(),
   '/colours': (_) => const ColoursPage(),
+  '/recipes': (_) => const RecipesPage(),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),
