@@ -9,6 +9,7 @@ import '../core/offline.dart';
 import '../core/session.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
+import 'report_upload.dart';
 
 /*
  * Daily report — a port of web pages/DailyReport.jsx in the approved design (2026-11-23):
@@ -72,7 +73,7 @@ class _DailyReportPageState extends State<DailyReportPage> {
       child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         PageTabs<String>(tabs: tabs, value: _tab, onChange: (v) => setState(() => _tab = v)),
         if (_tab == 'upload')
-          const EmptyState(icon: LucideIcons.upload, title: 'Upload a report', description: 'A photo or PDF of the day filled into Record production — it comes with the Production page.')
+          ReportUpload(key: ValueKey('upload$branchId'))
         else ...[
           OfflineNote(_savedAt),
           if (_error.isNotEmpty) ErrorState(_error, onRetry: _load),

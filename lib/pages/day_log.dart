@@ -86,6 +86,10 @@ class _DayLogState extends State<DayLog> {
   ProductionLists? _lists;
   String _error = '', _addError = '', _sentNote = '';
   String? _editingId;
+  // batches handed over from Daily report › Upload a report: { date, forms, at }, one form at a time
+  Json? _upload;
+  bool _uploadClash = false, _uploadDone = false;
+  String get uploadKey => 'mois.upload.queue.${session.organization?['id']}.$branchId';
   final Map<String, TextEditingController> _ctl = {};
 
   TextEditingController ctl(String k, String v) {
@@ -125,6 +129,7 @@ class _DayLogState extends State<DayLog> {
     _wastani = {for (final s in r[0] as List) '${s['product_id']}': s['average_yield_per_bag']};
     _consumables = _l(r[1]);
     _lists = r[2] as ProductionLists;
+    await _readUpload();
     await Future.wait([_loadStock(), _loadOrders()]);
     if (mounted) setState(() => _ready = true);
     _bandsFor();
@@ -138,6 +143,53 @@ class _DayLogState extends State<DayLog> {
       setState(() { _editingId = null; _form = _Form()..productId = widget.preset!.productId..colorId = widget.preset!.colorId; });
       _bandsFor();
     }
+  }
+
+  Future<void> _readUpload() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final q = jsonDecode(p.getString(uploadKey) ?? 'null') as Map?;
+      if (q == null || (q['forms'] as List? ?? []).isEmpty) return;
+      final up = Map<String, dynamic>.from(q);
+      // the listed batches all save under one date: a different day waits until they are saved or cleared
+      if (_staged.isNotEmpty && _date != up['date']) { _upload = up; _uploadClash = true; return; }
+      final forms = up['forms'] as List;
+      final at = n(up['at'] ?? 0).toInt().clamp(0, forms.length - 1);
+      _uploadClash = false;
+      _date = '${up['date']}';
+      _editingId = null;
+      _form = _Form.from(Map<String, dynamic>.from(forms[at] as Map));
+      _upload = {...up, 'next': at + 1};
+    } catch (_) {}
+  }
+
+  Future<void> _storeUpload(Json? q) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (q == null) {
+        await p.remove(uploadKey);
+      } else {
+        await p.setString(uploadKey, jsonEncode(q));
+      }
+    } catch (_) {}
+  }
+
+  /// after a batch is added: the next uploaded batch, if any
+  bool _nextFromUpload() {
+    final u = _upload;
+    if (u == null || u['next'] == null || _uploadClash) return false;
+    final forms = u['forms'] as List, next = n(u['next']).toInt();
+    if (next < forms.length) {
+      _form = _Form.from(Map<String, dynamic>.from(forms[next] as Map));
+      _storeUpload({'date': u['date'], 'forms': forms, 'at': next});
+      _upload = {...u, 'next': next + 1};
+      _bandsFor();
+      return true;
+    }
+    _storeUpload(null);
+    _upload = null;
+    _uploadDone = true;
+    return false;
   }
 
   Future<void> _keep() async {
@@ -374,8 +426,9 @@ class _DayLogState extends State<DayLog> {
     };
     _set(() {
       _staged = _editingId != null ? [for (final x in _staged) x['id'] == _editingId ? item : x] : [..._staged, item];
+      final wasEditing = _editingId != null;
       _editingId = null;
-      _form = _form.next();
+      if (wasEditing || !_nextFromUpload()) _form = _form.next();
     });
   }
 
@@ -551,6 +604,19 @@ class _DayLogState extends State<DayLog> {
         );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (_uploadClash && _upload != null)
+        Alert('An uploaded report for ${dateText(_upload!['date'])} is waiting. Save or clear the ${_staged.length} batch${_staged.length == 1 ? '' : 'es'} listed for ${dateText(_date)} first, then open it again from Daily report.', tone: Tone.warning),
+      if (!_uploadClash && _upload?['next'] != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+          decoration: BoxDecoration(color: t.bgInfo, borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            Expanded(child: Text('From the uploaded report: batch ${_upload!['next']} of ${(_upload!['forms'] as List).length}. Check the materials, then Add to list.', style: const TextStyle(fontSize: Fs.sm))),
+            TextButton(onPressed: () => _set(() { if (!_nextFromUpload()) _form = _form.next(); }), child: const Text('Skip this batch')),
+          ]),
+        ),
+      if (_uploadDone && _staged.isNotEmpty) const Alert('Uploaded batches are on the list.', tone: Tone.info),
       if (_restored && _staged.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 8), child: Alert('Your unsaved list from earlier is back: ${_staged.length} batch${_staged.length == 1 ? '' : 'es'} not saved yet, dated ${dateText(_date)}.', tone: Tone.info)),
       Row(children: [
         if (rawStores.length > 1) ...[

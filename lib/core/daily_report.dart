@@ -209,3 +209,9 @@ List<Json> compareReport(Json read, Json facts) {
   }
   return rows;
 }
+
+/// the closest name in [list] (each with 'name'), as the web's bestMatch; null when nothing shares a word
+Json? bestMatch(String name, List<Json> list) => _bestMatch(name, list);
+
+/// a name's words, lower case, as the web's words()
+List<String> words(String s) => _words(s);

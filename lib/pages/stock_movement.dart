@@ -23,11 +23,13 @@ class _Line {
 String _kindForStore(Store? w) => w?.type == 'finished_goods' ? 'product' : 'material';
 
 class MovementPage extends StatefulWidget {
-  const MovementPage({super.key, required this.type, required this.refs, required this.balances, this.defaultWarehouseId, this.defaultItemKey, this.kind});
+  const MovementPage({super.key, required this.type, required this.refs, required this.balances, this.defaultWarehouseId, this.defaultItemKey, this.kind, this.prefill});
   final String type;
   final Refs refs;
   final Map<String, double> balances;
   final String? defaultWarehouseId, defaultItemKey, kind;
+  /// a sheet filled elsewhere (Daily report › Upload a report › Stock count): its date, lines { key, colorId, unitId, quantity } and a note
+  final ({String date, List<Map<String, String>> lines, String note})? prefill;
   @override
   State<MovementPage> createState() => _MovementPageState();
 }
@@ -48,10 +50,25 @@ class _MovementPageState extends State<MovementPage> {
   late String warehouseId = allowed.any((w) => w.id == widget.defaultWarehouseId) ? widget.defaultWarehouseId! : (allowed.firstOrNull?.id ?? '');
   String toWarehouseId = '';
   ({String? id, String? newName, bool pending})? supplier;
-  late String date = today;
+  late String date = widget.prefill?.date ?? today;
   Map<String, double>? asOf;
   final reference = TextEditingController(), reason = TextEditingController(), notes = TextEditingController();
-  late List<_Line> lines = [_firstLine()];
+  late List<_Line> lines = widget.prefill == null
+      ? [_firstLine()]
+      : [
+          for (final l in widget.prefill!.lines)
+            _Line(refs.items[l['key']]?.kind ?? 'material')
+              ..key = l['key'] ?? ''
+              ..colorId = l['colorId'] ?? ''
+              ..unitId = l['unitId'] ?? ''
+              ..quantity = l['quantity'] ?? '',
+        ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (date.compareTo(today) < 0) _loadAsOf();
+  }
   bool busy = false, submitted = false;
   String error = '';
   List<({int idx, List<Json> existing})>? repeats;
@@ -347,6 +364,7 @@ class _MovementPageState extends State<MovementPage> {
           Padding(padding: const EdgeInsets.only(top: 4), child: PlHelp(dateHint)),
         ]);
     return ListView(padding: const EdgeInsets.fromLTRB(16, 14, 16, 24), children: [
+      if (widget.prefill != null) Alert(widget.prefill!.note, tone: Tone.info),
       Text("${def.help} Posted movements can't be edited — a mistake is undone with a reversal.", style: TextStyle(fontSize: Fs.sm, color: t.textMuted)),
       const SizedBox(height: 10),
       if (error.isNotEmpty) Alert(error, tone: Tone.error),
