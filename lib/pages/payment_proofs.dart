@@ -3,6 +3,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/files.dart';
+import '../core/proof_box.dart';
+import '../core/sales.dart' show PayProof, postSharedSlip;
 import '../core/format.dart';
 import '../core/offline.dart';
 import '../core/session.dart';
@@ -43,8 +45,10 @@ Future<Map<String, Json>> loadProofs() async {
 }
 
 class PaymentProofsList extends StatefulWidget {
-  const PaymentProofsList({super.key, this.directorView = false});
+  const PaymentProofsList({super.key, this.directorView = false, this.onOpenSale});
   final bool directorView;
+  /// Sales › Slips: a tap on the sale number opens it
+  final ValueChanged<String>? onOpenSale;
   @override
   State<PaymentProofsList> createState() => _PaymentProofsListState();
 }
@@ -54,6 +58,9 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
   Map<String, Json> _proofs = {};
   Map<String, String> _accounts = {};
   late String _show = widget.directorView ? 'waiting' : 'todo';
+  // one proof/slip for several payments (2026-11-08): tick them, add it once
+  bool _choosing = false, _posting = false;
+  final Set<String> _sel = {};
   DateTime? _savedAt;
 
   @override
@@ -115,8 +122,11 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
         ]),
         SlideRow(children: [
           for (final (k, l) in const [('todo', 'Proof to add'), ('waiting', 'Waiting'), ('confirmed', 'Confirmed'), ('all', 'All')])
-            Chip2('$l (${counts[k]})', on: _show == k, onTap: () => setState(() => _show = k)),
+            Chip2('$l (${counts[k]})', on: _show == k, onTap: () => setState(() { _show = k; _choosing = false; _sel.clear(); })),
         ]),
+        if (_show == 'todo' && !_choosing && shown.any((x) => session.canAt('sales.create', x['sale']['branch_id'], null)))
+          Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => setState(() { _sel.clear(); _choosing = true; }), icon: const Icon(LucideIcons.receipt, size: 15), label: const Text('Add proof/slip for several'))),
+        if (_choosing) _selBar(here),
         const SizedBox(height: 10),
         if (shown.isEmpty)
           EmptyState(icon: LucideIcons.receipt, title: _show == 'todo' ? 'Every payment has its proof.' : _show == 'waiting' ? 'Nothing waits for a director.' : 'Nothing here.')
@@ -126,9 +136,37 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
     );
   }
 
+  Widget _selBar(List<Json> here) {
+    final rows = here.where((x) => _sel.contains(x['id'])).toList();
+    final total = rows.fold<double>(0, (t, x) => t + n(x['amount']));
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(color: context.tk.soft, borderRadius: BorderRadius.circular(8)),
+      child: Row(children: [
+        Expanded(child: Text(_sel.isEmpty ? 'Tick the payments this proof/slip is for.' : '${_sel.length} ticked · ${formatMoney(total, session.currency)}', style: const TextStyle(fontSize: Fs.sm))),
+        FilledButton(onPressed: _sel.isEmpty || _posting ? null : () => _postSeveral(rows, total), child: const Text('Add the proof/slip')),
+        TextButton(onPressed: () => setState(() { _sel.clear(); _choosing = false; }), child: const Text('Cancel')),
+      ]),
+    );
+  }
+
+  Future<void> _postSeveral(List<Json> rows, double total) async {
+    final slip = await proofWindow(context, amount: total, note: 'One slip for ${rows.map((x) => '#${x['sale']['sale_no']} ${_buyer(x)}').join(', ')}.', post: true);
+    if (slip == null || !mounted) return;
+    setState(() => _posting = true);
+    final names = {for (final x in rows) _buyer(x)}.toList();
+    final failed = await postSharedSlip(rows, slip, who: names.length > 2 ? '${names[0]}-and-${names.length - 1}-more' : names.join('-'));
+    if (!mounted) return;
+    setState(() { _posting = false; _sel.clear(); _choosing = false; });
+    if (failed > 0) toast(context, '$failed of the payments could not take the slip. Try again.', error: true);
+    _load();
+  }
+
   Widget _row(BuildContext context, Json x) {
     final t = context.tk;
     final pr = _proofs[x['id']];
+    final canAdd = x['state'] != 'confirmed' && session.canAt('sales.create', x['sale']['branch_id'], null);
     final (label, tone) = proofBadge[x['state']]!;
     final canReview = pr != null && x['state'] != 'confirmed' && session.canAt('sales.confirm_payments', x['sale']['branch_id']);
     return Padding(
@@ -142,9 +180,14 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(children: [
+              if (_choosing)
+                Checkbox(value: _sel.contains(x['id']), onChanged: !canAdd ? null : (v) => setState(() { if (v == true) { _sel.add('${x['id']}'); } else { _sel.remove(x['id']); } })),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('#${x['sale']['sale_no']} · ${_buyer(x)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  InkWell(
+                    onTap: widget.onOpenSale == null ? null : () => widget.onOpenSale!('${x['sale']['id']}'),
+                    child: Text('#${x['sale']['sale_no']} · ${_buyer(x)}', style: TextStyle(fontWeight: FontWeight.w600, decoration: widget.onOpenSale != null ? TextDecoration.underline : null)),
+                  ),
                   PlHelp('${tableDate(x['paid_on'])} · ${_acc(x)}${x['receipt_no'] != null ? ' · receipt ${x['receipt_no']}' : ''}'),
                   const SizedBox(height: 4),
                   Badge2(label, tone: tone),
@@ -155,6 +198,11 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
                 Text(formatAmount(n(x['amount'])), style: const TextStyle(fontWeight: FontWeight.w700)),
                 if (canReview) Padding(padding: const EdgeInsets.only(top: 6), child: FilledButton(onPressed: () => _review(x, pr, true), child: const Text('Check')))
                 else if (pr != null) TextButton(onPressed: () => _review(x, pr, false), child: const Text('View')),
+                if (canAdd && !_choosing)
+                  TextButton.icon(
+                    onPressed: () async { if (await addPaymentProof(context, payment: x, sale: x['sale'] as Json, proof: pr, buyer: _buyer(x))) _load(); },
+                    icon: const Icon(LucideIcons.receipt, size: 14), label: Text(pr != null ? 'Replace proof' : 'Add proof'),
+                  ),
               ]),
             ]),
           ),
@@ -322,4 +370,101 @@ class _MarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MarkPainter old) => old.color != color;
+}
+
+/// SaleProofWindow / SlipWindow: a photo, PDF or the SMS for a payment (or several); null when cancelled.
+/// [start] fills it; [post] words the button "Post proof".
+Future<PayProof?> proofWindow(BuildContext context, {required double amount, String note = 'Posted with the sale when it is saved.', PayProof? start, bool post = false}) =>
+    Navigator.push<PayProof>(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _ProofWindow(amount: amount, note: note, start: start, post: post)));
+
+class _ProofWindow extends StatefulWidget {
+  const _ProofWindow({required this.amount, required this.note, this.start, required this.post});
+  final double amount;
+  final String note;
+  final PayProof? start;
+  final bool post;
+  @override
+  State<_ProofWindow> createState() => _ProofWindowState();
+}
+
+class _ProofWindowState extends State<_ProofWindow> {
+  late ProofFile? _file = widget.start?.file;
+  late final _text = TextEditingController(text: widget.start?.text ?? '');
+  String _error = '';
+  @override
+  Widget build(BuildContext context) => FullPage(
+        title: 'Proof of payment${widget.amount > 0 ? ' · ${formatMoney(widget.amount, session.currency)}' : ''}',
+        footer: [
+          OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (_file == null && _text.text.trim().isEmpty) { setState(() => _error = 'Add the photo or paste the SMS.'); return; }
+              Navigator.pop(context, PayProof(amount: widget.amount, file: _file, text: _text.text));
+            },
+            child: Text(widget.post ? 'Post proof' : 'Add proof'),
+          ),
+        ],
+        children: [
+          PlHelp(widget.note),
+          const SizedBox(height: 8),
+          ProofBox(file: _file, onFile: (f) => setState(() { _file = f; _error = ''; }), text: _text, onText: () => setState(() => _error = '')),
+          if (_error.isNotEmpty) Alert(_error, tone: Tone.error),
+        ],
+      );
+}
+
+/// ProofModal: add (or replace) the proof of one payment — photo/PDF, SMS, or both; posted at once
+Future<bool> addPaymentProof(BuildContext context, {required Json payment, required Json sale, Json? proof, required String buyer}) async =>
+    await Navigator.push<bool>(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _AddProof(payment: payment, sale: sale, proof: proof, buyer: buyer))) == true;
+
+class _AddProof extends StatefulWidget {
+  const _AddProof({required this.payment, required this.sale, this.proof, required this.buyer});
+  final Json payment, sale;
+  final Json? proof;
+  final String buyer;
+  @override
+  State<_AddProof> createState() => _AddProofState();
+}
+
+class _AddProofState extends State<_AddProof> {
+  ProofFile? _file;
+  late final _text = TextEditingController(text: '${widget.proof?['sms_text'] ?? ''}');
+  bool _busy = false;
+  String _error = '';
+
+  Future<void> _save() async {
+    final p = widget.payment, s = widget.sale;
+    if (_file == null && _text.text.trim().isEmpty && widget.proof?['file_path'] == null) { setState(() => _error = 'Add the photo or paste the SMS.'); return; }
+    setState(() { _error = ''; _busy = true; });
+    try {
+      String? path, name;
+      if (_file != null) {
+        path = await uploadProof('payment-proofs', '${s['branch_id']}', '${p['id']}', _file!);
+        name = proofName(kind: 'Sale-${s['sale_no']}', who: widget.buyer, amount: n(p['amount']), date: p['paid_on'], ext: _file!.ext);
+      }
+      await db.rpc('submit_payment_proof', params: {'p': {'payment_id': p['id'], 'file_path': path, 'file_name': name, 'sms_text': _text.text.trim().isEmpty ? null : _text.text.trim()}});
+      if (mounted) Navigator.pop(context, true);
+      return;
+    } catch (e) {
+      _error = dbError(e, "We couldn't send the proof. Please try again.");
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => FullPage(
+        title: 'Proof of payment · ${formatMoney(n(widget.payment['amount']), session.currency)}',
+        footer: [
+          OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Posting…' : 'Post proof')),
+        ],
+        children: [
+          PlHelp('Sale #${widget.sale['sale_no']} · paid ${dateText(widget.payment['paid_on'])}${widget.payment['receipt_no'] != null ? ' · #${widget.payment['receipt_no']}' : ''}'),
+          if (widget.proof?['status'] == 'queried') Alert('A director asked: ${widget.proof!['note'] ?? ''}', tone: Tone.error),
+          if (widget.proof?['file_name'] != null && _file == null) PlHelp('Kept: ${widget.proof!['file_name']}'),
+          const SizedBox(height: 8),
+          ProofBox(file: _file, onFile: (f) => setState(() => _file = f), text: _text, onText: () => setState(() {})),
+          if (_error.isNotEmpty) Alert(_error, tone: Tone.error),
+        ],
+      );
 }

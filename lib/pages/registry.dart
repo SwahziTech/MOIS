@@ -18,6 +18,7 @@ import 'production.dart';
 import 'production_ledger.dart';
 import 'products.dart';
 import 'reports.dart';
+import 'sales.dart';
 import 'recipes.dart';
 import 'stock.dart';
 
@@ -42,6 +43,7 @@ final Map<String, Widget Function(String path)> _pages = {
   '/orders': (p) => ProcurementPage(section: 'orders', query: Uri.parse(p).queryParameters),
   '/production': (p) => ProductionPage(query: Uri.parse(p).queryParameters),
   '/production/ledger': (_) => const ProductionLedgerPage(),
+  '/sales': (p) => SalesPage(query: Uri.parse(p).queryParameters),
   '/products': (p) => ProductsPage(edit: Uri.parse(p).queryParameters['edit']),
   '/daily-report': (_) => const DailyReportPage(),
   '/approvals': (p) => ApprovalsPage(tab: p.contains('tab=payments') ? 'payments' : 'pending'),

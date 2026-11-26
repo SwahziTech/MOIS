@@ -31,10 +31,15 @@ class DateField extends StatelessWidget {
         onTap: !enabled
             ? null
             : () async {
-                final d = await showDatePicker(context: context, initialDate: DateTime.parse(value), firstDate: DateTime.parse(first ?? '2020-01-01'), lastDate: DateTime.parse(last ?? '2100-12-31'));
+                final lo = DateTime.parse(first ?? '2020-01-01'), hi = DateTime.parse(last ?? '2100-12-31');
+                // an empty date opens on today, kept inside first..last
+                var start = DateTime.tryParse(value) ?? DateTime.parse(session.today);
+                if (start.isBefore(lo)) start = lo;
+                if (start.isAfter(hi)) start = hi;
+                final d = await showDatePicker(context: context, initialDate: start, firstDate: lo, lastDate: hi);
                 if (d != null) onChange(iso(d));
               },
-        child: InputDecorator(decoration: InputDecoration(labelText: label, enabled: enabled), child: Text(tableDate(value) ?? value)),
+        child: InputDecorator(decoration: InputDecoration(labelText: label, enabled: enabled), child: Text(value.isEmpty ? '—' : (tableDate(value) ?? value))),
       );
 }
 
