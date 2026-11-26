@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -12,7 +14,8 @@ import 'theme.dart';
 import 'ui.dart';
 
 /*
- * Scan a written report (2026-11-26, the user): take photos of the pages with the camera (or pick them),
+ * Scan a written report (2026-11-26, the user): the phone's document scanner (ML Kit on Android, VisionKit on
+ * iPhone) finds each page's edges, crops it straight and cleans it; or photos from the camera / gallery.
  * put them in order, and make one PDF — each page a full A4 page — then share it through any app the
  * person chooses (WhatsApp, email, Drive …). The pages can also go into the upload as its photos.
  */
@@ -51,6 +54,18 @@ class _ScannerState extends State<_Scanner> {
   Future<void> _add(ImageSource src) async {
     setState(() => _error = '');
     try {
+      if (src == ImageSource.camera && !kIsWeb) {
+        // the document scanner: edges found, page cropped straight and cleaned; null when cancelled
+        try {
+          final r = await CunningDocumentScanner.scanDocuments(noOfPages: 50);
+          for (final (i, p) in (r?.images ?? const <String>[]).indexed) { _pages.add(ScanPage(await XFile(p).readAsBytes(), 'page-${_pages.length + 1}-$i.jpg')); }
+          if (mounted) setState(() {});
+          return;
+        } on CunningDocumentScannerException catch (e) {
+          if (e.code == 'permission_denied') { _error = 'The app needs the camera to scan. Allow it in the phone settings.'; if (mounted) setState(() {}); return; }
+          // no scanner on this phone: a plain photo instead
+        }
+      }
       if (src == ImageSource.gallery) {
         final xs = await ImagePicker().pickMultiImage(maxWidth: 2400, maxHeight: 2400, imageQuality: 85);
         for (final x in xs) { _pages.add(ScanPage(await x.readAsBytes(), x.name)); }
@@ -88,10 +103,10 @@ class _ScannerState extends State<_Scanner> {
         FilledButton.icon(onPressed: _pages.isEmpty || _busy ? null : _share, icon: const Icon(LucideIcons.share2, size: 16), label: Text(_busy ? 'Making PDF…' : 'Share PDF')),
       ],
       children: [
-        const PlHelp('Photograph each page flat and in good light. Share sends one PDF through the app you choose.'),
+        const PlHelp('Hold the phone over each page: the scanner finds the edges and straightens it. Share sends one PDF through the app you choose.'),
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: FilledButton.icon(onPressed: () => _add(ImageSource.camera), icon: const Icon(LucideIcons.camera, size: 16), label: Text(_pages.isEmpty ? 'Take a photo' : 'Next page'))),
+          Expanded(child: FilledButton.icon(onPressed: () => _add(ImageSource.camera), icon: const Icon(LucideIcons.camera, size: 16), label: Text(_pages.isEmpty ? 'Scan pages' : 'Scan more'))),
           const SizedBox(width: 8),
           Expanded(child: OutlinedButton.icon(onPressed: () => _add(ImageSource.gallery), icon: const Icon(LucideIcons.image, size: 16), label: const Text('From gallery'))),
         ]),
