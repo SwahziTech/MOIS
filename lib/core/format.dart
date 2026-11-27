@@ -173,10 +173,11 @@ String shortRange(String? from, String? to, String today) {
   String yr(String d) => d.substring(0, 4) != today.substring(0, 4) ? ' ${d.substring(0, 4)}' : '';
   String day(String d) => '${_monShort(d)} ${int.parse(d.substring(8))}${yr(d)}';
   if (from == to) return day(from);
+  // a whole month (or this month so far) — before the week rule, so a month that opens on a Sunday still reads "Nov"
+  if (from.substring(8) == '01' && from.substring(0, 7) == to.substring(0, 7) && (to == lastOfMonth(to) || to == today)) return '${_monShort(from)}${yr(from)}';
   var f = from;
   if (_utc(f).weekday == DateTime.sunday && shiftDay(f, 1).compareTo(to) <= 0) f = shiftDay(f, 1);
   if (f == to) return day(f);
-  if (f.substring(8) == '01' && f.substring(0, 7) == to.substring(0, 7) && (to == lastOfMonth(to) || to == today)) return '${_monShort(f)}${yr(f)}';
   return '${day(f)} – ${day(to)}';
 }
 
