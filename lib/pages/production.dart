@@ -10,6 +10,7 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import '../core/pdf_doc.dart';
 import '../docs/job_card_doc.dart';
+import '../shell.dart';
 import 'day_log.dart';
 import 'planner.dart';
 import 'production_settings.dart';
@@ -61,9 +62,20 @@ class _ProductionPageState extends State<ProductionPage> {
   void initState() {
     super.initState();
     // Stock's "Produce" opens the form with that product (?produce=<id>)
-    final p = widget.query['produce'];
-    if (p != null) { _preset = (productId: p, colorId: '', at: DateTime.now().millisecondsSinceEpoch); _tab = 'log'; }
+    _takePreset();
     _load();
+  }
+
+  // Stock's "Produce" and the Planner open the form with that product (?produce=<id>&colour=<id>)
+  void _takePreset() {
+    final p = widget.query['produce'];
+    if (p != null) { _preset = (productId: p, colorId: widget.query['colour'] ?? '', at: DateTime.now().millisecondsSinceEpoch); _tab = 'log'; }
+  }
+
+  @override
+  void didUpdateWidget(ProductionPage old) {
+    super.didUpdateWidget(old);
+    if (old.query['produce'] != widget.query['produce'] || old.query['colour'] != widget.query['colour'] || old.query['tab'] != widget.query['tab']) setState(() { _tab = null; _takePreset(); });
   }
 
   Future<void> _load() async {
@@ -228,7 +240,7 @@ class _ProductionPageState extends State<ProductionPage> {
           (branchId.isEmpty
               ? const EmptyState(icon: LucideIcons.factory, title: 'Pick a branch', description: 'Capacity is per branch — pick one in the menu.')
               : Planner(key: ValueKey(branchId), refs: refs, recipes: _recipes, curingDays: _curingDays, usage: usage,
-                  onOpenForm: canRecord ? (p, c) => setState(() { _preset = (productId: p, colorId: c, at: DateTime.now().millisecondsSinceEpoch); _tab = 'log'; }) : null))
+                  onOpenForm: canRecord ? (p, c) => Shell.of(context).go('/production?produce=$p${c.isNotEmpty ? '&colour=$c' : ''}') : null))
         else if (current == 'log')
           (!canRecord ? const PlHelp('Pick a branch to record production.') : DayLog(
               refs: refs, recipes: _recipes, curingDays: _curingDays, usage: usage, preset: _preset,

@@ -94,7 +94,7 @@ class _DeliveriesPanelState extends State<DeliveriesPanel> {
         else
           for (final r in shown) ...[
             if (r['delivered_on'] != lastDay) ...[
-              () { lastDay = r['delivered_on'] as String?; return SectionTitle('${tableDate(r['delivered_on'])} · ${shown.where((x) => x['delivered_on'] == r['delivered_on']).length} notes'); }(),
+              () { lastDay = r['delivered_on'] as String?; final k = shown.where((x) => x['delivered_on'] == r['delivered_on']).length; return SectionTitle('${tableDate(r['delivered_on'])} · $k note${k == 1 ? '' : 's'}'); }(),
             ],
             Container(
               margin: const EdgeInsets.only(bottom: 8),

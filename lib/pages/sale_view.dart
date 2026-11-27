@@ -724,9 +724,10 @@ class _CorrectState extends State<_Correct> {
   bool _busy = false, _sent = false;
   String _error = '';
 
-  double get newTotal => r2(_lines.where((x) => !x.remove).fold<double>(0, (t, x) => t + (x.l['product_id'] != null ? (numOf(x.quantity.text) ?? 0) * (numOf(x.price.text) ?? 0) : (numOf(x.price.text) ?? 0))) +
-      _added.fold<double>(0, (t, a) => t + (numOf(a.price.text) ?? 0)));
-  String payAmount(_CPay x) => _oneTx && _pays.length == 1 && !x.remove ? '$newTotal' : x.amount.text;
+  // each line in whole shillings (LOCKED whole amounts: qty × price rounded), as the database saves it
+  double get newTotal => _lines.where((x) => !x.remove).fold<double>(0, (t, x) => t + (x.l['product_id'] != null ? ((numOf(x.quantity.text) ?? 0) * (numOf(x.price.text) ?? 0)).roundToDouble() : (numOf(x.price.text) ?? 0).roundToDouble())) +
+      _added.fold<double>(0, (t, a) => t + (numOf(a.price.text) ?? 0).roundToDouble());
+  String payAmount(_CPay x) => _oneTx && _pays.length == 1 && !x.remove ? qtyText(newTotal).replaceAll(',', '') : x.amount.text;
 
   Future<void> _save() async {
     setState(() => _error = '');

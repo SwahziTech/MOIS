@@ -993,7 +993,7 @@ class _ElectricityState extends State<_Electricity> {
                         Expanded(child: Text('${tableDate(d.d['day'])} · ${d.d['meter_name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600))),
                         Text(formatAmount(n(d.d['day_cost'])), style: const TextStyle(fontWeight: FontWeight.w700)),
                       ]),
-                      PlHelp('${_units(n(d.d['day_units']))} units · ${d.batches.isEmpty ? 'idle' : '${d.batches.length} batches · ${_units(d.bags)} bags · ${_units(n(d.d['day_units']) / d.bags)} units a bag · ${formatAmount(n(d.d['day_cost']) / d.bags)} a bag'}'),
+                      PlHelp('${_units(n(d.d['day_units']))} units · ${d.batches.isEmpty ? 'idle' : '${d.batches.length} batch${d.batches.length == 1 ? '' : 'es'} · ${_units(d.bags)} bags · ${_units(n(d.d['day_units']) / d.bags)} units a bag · ${formatAmount(n(d.d['day_cost']) / d.bags)} a bag'}'),
                     ]),
                   ),
                 ),
@@ -1019,7 +1019,7 @@ class _ElectricityState extends State<_Electricity> {
             decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [Expanded(child: Text(nameOf(p.x.pid, p.x.cid), style: const TextStyle(fontWeight: FontWeight.w700))), Text(formatAmount(p.x.cost), style: const TextStyle(fontWeight: FontWeight.w700))]),
-              PlHelp('${p.x.batches.length} batches · ${_units(p.x.bags)} bags · made ${_units(p.qty)} ${p.unit == 'm²' ? 'm²' : 'pcs'}'
+              PlHelp('${p.x.batches.length} batch${p.x.batches.length == 1 ? '' : 'es'} · ${_units(p.x.bags)} bags · made ${_units(p.qty)} ${p.unit == 'm²' ? 'm²' : 'pcs'}'
                   '${p.perBag != null ? ' · ${formatAmount(p.perBag!)} a bag' : ''}${p.perUnit != null ? ' · ${formatAmount(p.perUnit!)} /${p.unit}' : ''} · latest ${tableDate(p.x.last)}'),
             ]),
           ),

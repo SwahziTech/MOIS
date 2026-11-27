@@ -106,7 +106,7 @@ const nav = [
 ];
 
 List<NavItem> get allItems => [for (final s in nav) ...s.items];
-NavItem? itemFor(String path) => allItems.where((i) => i.owns(path)).firstOrNull;
+NavItem? itemFor(String path) => allItems.where((i) => i.owns(path)).firstOrNull ?? allItems.where((i) => i.owns(path.split('?').first)).firstOrNull;
 String sectionOf(NavItem i) => nav.firstWhere((s) => s.items.contains(i), orElse: () => nav.first).title;
 
 /// The menu a person sees: their role's layout (098) if set; entries they can't open left out
