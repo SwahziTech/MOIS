@@ -58,8 +58,15 @@ export function productColorIds(product, catColors = [], ownColors = []) {
   return [...rows].sort((a, b) => a.display_order - b.display_order).map(c => c.color_id);
 }
 
-/** Reference data every inventory screen needs, in one round trip */
-export async function loadInventoryRefs() {
+/** Reference data every inventory screen needs, in one round trip.
+ * Calls made while one is already on its way share it (2026-11-27: pages and panels asked twice at once, slowing slow lines) */
+let refsInFlight = null;
+export function loadInventoryRefs() {
+  if (refsInFlight) return refsInFlight;
+  refsInFlight = fetchInventoryRefs().finally(() => { refsInFlight = null; });
+  return refsInFlight;
+}
+async function fetchInventoryRefs() {
   const [wh, mat, prod, units, sup, cats, catRows, colors, bp, own] = await Promise.all([
     supabase.from('warehouses').select('*, branch:branches(id, name, status)').order('name'),   // * : receives_production (135) once live
     supabase.from('materials')
@@ -224,7 +231,7 @@ export function stockFactor(refs, materialId, unitId) {
  * each taking from what the one before left. Shared among the products by
  * the cement each takes (pieces ÷ pieces per bag; by pieces when one has none).
  * batches: [{ materials: [{ material_id, quantity, unit_id }], outputs: [{ pieces, perBag, sqm }] }]
- * → [{ cost, complete, outputs: [{ perPiece, perSqm }] }]
+ * → [{ cost, complete, mats: [cost of each material line], outputs: [{ perPiece, perSqm }] }]
  */
 export async function estimateBatchCosts(refs, branchId, batches) {
   const ids = [...new Set(batches.flatMap(b => (b.materials || []).map(m => m.material_id)))];
@@ -233,10 +240,12 @@ export async function estimateBatchCosts(refs, branchId, batches) {
     .map(l => ({ q: Number(l.quantity), c: Number(l.cost) }))]));
   return batches.map(b => {
     let cost = 0; let complete = true;
+    const mats = [];   // each material line's own cost, in the order given (null when not known)
     for (const m of b.materials || []) {
       const f = stockFactor(refs, m.material_id, m.unit_id);
       let need = (Number(m.quantity) || 0) * (f ?? 0);
-      if (need > 0 && f == null) { complete = false; continue; }
+      if (need > 0 && f == null) { complete = false; mats.push(null); continue; }
+      const before = cost; let known = true;
       const ls = layers[m.material_id] || [];
       while (need > 1e-12 && ls.length) {
         const take = Math.min(ls[0].q, need);
@@ -244,13 +253,14 @@ export async function estimateBatchCosts(refs, branchId, batches) {
         if (ls[0].q <= 1e-12) ls.shift();
       }
       const latest = values[m.material_id]?.last_cost;
-      if (need > 1e-12) { if (latest != null) cost += need * Number(latest); else complete = false; }
+      if (need > 1e-12) { if (latest != null) cost += need * Number(latest); else { complete = false; known = false; } }
+      mats.push(known ? cost - before : null);
     }
     const outs = b.outputs || [];
     const byBag = outs.every(o => !(o.pieces > 0) || o.perBag > 0);
     const w = o => (o.pieces > 0 ? (byBag ? o.pieces / o.perBag : o.pieces) : 0);
     const total = outs.reduce((s, o) => s + w(o), 0);
-    return { cost, complete, outputs: outs.map(o => {
+    return { cost, complete, mats, outputs: outs.map(o => {
       const share = total > 0 ? w(o) / total : 0;
       return { perPiece: o.pieces > 0 ? cost * share / o.pieces : null, perSqm: o.sqm > 0 ? cost * share / o.sqm : null };
     }) };

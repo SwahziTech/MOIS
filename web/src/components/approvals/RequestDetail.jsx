@@ -121,7 +121,7 @@ function ProductionDay({ p, refs }) {
         outputs: sortOuts(b).map((o, j) => ({ ...(est?.[i]?.outputs[j] ?? {}),
           name: `${itemName(refs, o)}${colourOf(b, o) ? ` ${colour(refs, colourOf(b, o))}` : ''}`,
           pieces: o.pieces, residual: !o.primary, perBag: perBag[o.product_id] })),
-        materials: breakdownMaterials(b.materials, refs),
+        materials: breakdownMaterials((b.materials || []).map((l, k) => ({ ...l, cost: l.cost ?? est?.[i]?.mats?.[k] ?? null })), refs),
       }))} currency={organization?.currency_code} />
       {batches.some(b => b.notes) && <p className="pl-help">Notes: {batches.filter(b => b.notes).map(b => b.notes).join(' · ')}</p>}
     </section>

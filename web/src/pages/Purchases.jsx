@@ -72,7 +72,8 @@ export default function Purchases({ section = 'purchases' }) {
   const startTab = new URLSearchParams(window.location.search).get('tab');
   const [top, setTop] = useState(section === 'expenses' ? 'expenses' : 'purchases');
   const [supTick, setSupTick] = useState(0);   // the New Supplier button up top → the Suppliers tab opens a new one
-  const [pTab, setPTab] = useState(null);     // Purchases: buy | costs | waiting (null until loaded)
+  // chosen at once from the link (2026-11-27: it waited for all the data, so the page stood blank meanwhile)
+  const [pTab, setPTab] = useState(() => { const w = new URLSearchParams(window.location.search).get('tab'); return ['costs', 'waiting'].includes(w) ? w : 'buy'; });
   const [eTab, setETab] = useState(startTab === 'electricity' ? 'electricity' : 'list');   // Expenses: list | electricity
   const [expFilter, setExpFilter] = useState(startTab === 'wages' ? 'wages' : '');      // '' | wages | salaries | transport | expense
   // one table for all procurement (2026-11-16): search, sort, status and type filters; a click opens the record
@@ -142,7 +143,8 @@ export default function Purchases({ section = 'purchases' }) {
     // With a branch picked, only its records are fetched (before any row limit)
     const byBranch = q => (branchId ? q.eq('branch_id', branchId) : q);
     try {
-      const [r, mat, pu, tot, aw, pr] = await Promise.all([
+      // everything that needs nothing else is asked for at once (2026-11-27: four waits in a row made a slow line crawl)
+      const [r, mat, pu, tot, aw, pr, ds, vr, ec, ex] = await Promise.all([
         loadInventoryRefs(),
         supabase.from('materials').select('id, name, status, branch_id, category:material_categories(display_order)').order('name'),
         byBranch(supabase.from('purchases').select(`id, branch_id, movement_id, warehouse_id, supplier_id, purchase_date, invoice_reference, transport_charge,
@@ -154,6 +156,11 @@ export default function Purchases({ section = 'purchases' }) {
         byBranch(supabase.from('receipts_awaiting_purchase').select('*')).order('movement_date', { ascending: false }),
         byBranch(supabase.from('pending_changes').select('id, branch_id, summary, payload, requested_by, requested_at')
           .eq('kind', 'purchase').eq('status', 'pending')).order('requested_at', { ascending: false }),
+        // how far each purchase has been delivered (120); branch VAT rates and expenses (041) — the page works without them
+        byBranch(supabase.from('purchase_delivery_status').select('*')),
+        supabase.from('branches').select('id, vat_rate'),
+        supabase.from('expense_categories').select('*').order('display_order').order('name'),
+        byBranch(supabase.from('expenses').select('*')).order('expense_date', { ascending: false }).order('created_at', { ascending: false }).limit(500),
       ]);
       // before migration 120 there are no items/deliveries: read the purchases as before
       if (pu.error) {
@@ -166,26 +173,26 @@ export default function Purchases({ section = 'purchases' }) {
       if (err) throw err;
       // a purchase coming later has no receipt yet (120, 129): no movement to look up
       const moveIds = [...new Set([...(pu.data || []).map(p => p.movement_id), ...(aw.data || []).map(a => a.movement_id)])].filter(Boolean);
-      const tx = moveIds.length
-        ? await supabase.from('inventory_transactions')
-            .select('id, movement_id, material_id, product_id, quantity, stock_unit_id, entered_quantity, entered_unit_id, warehouse_id')
-            .in('movement_id', moveIds).eq('transaction_type', 'receipt')
-        : { data: [] };
+      const ids = [...new Set([...(aw.data || []).map(a => a.created_by), ...(pu.data || []).map(p => p.created_by), ...(pr.data || []).map(p => p.requested_by)].filter(Boolean))];
+      // the second (and last) wait: what was received, and who did it — together
+      const [tx, ppl] = await Promise.all([
+        moveIds.length
+          ? supabase.from('inventory_transactions')
+              .select('id, movement_id, material_id, product_id, quantity, stock_unit_id, entered_quantity, entered_unit_id, warehouse_id')
+              .in('movement_id', moveIds).eq('transaction_type', 'receipt')
+          : Promise.resolve({ data: [] }),
+        ids.length ? supabase.from('profiles').select('id, first_name, last_name, email').in('id', ids) : Promise.resolve({ data: [] }),
+      ]);
       if (tx.error) throw tx.error;
       const byMove = {};
       for (const t of tx.data) (byMove[t.movement_id] ||= []).push(t);
-      const ids = [...new Set([...(aw.data || []).map(a => a.created_by), ...(pu.data || []).map(p => p.created_by), ...(pr.data || []).map(p => p.requested_by)].filter(Boolean))];
-      if (ids.length) {
-        const { data: ppl } = await supabase.from('profiles').select('id, first_name, last_name, email').in('id', ids);
-        setPeople(Object.fromEntries((ppl || []).map(p => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email])));
-      }
+      if (ids.length) setPeople(Object.fromEntries((ppl.data || []).map(p => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email])));
       setRefs(r);
       // the agreed material order (category order, then name)
       setMaterials((mat.data || []).map(m => ({ ...m, rank: m.category?.display_order ?? 999 })).sort(byMaterialOrder));
       setPurchases(pu.data || []);
       setTotals(Object.fromEntries((tot.data || []).map(t => [t.purchase_id, t])));
-      // how far each purchase has been delivered (120); without it every purchase counts as delivered, as before
-      const ds = await byBranch(supabase.from('purchase_delivery_status').select('*'));
+      // without delivery status (before 120) every purchase counts as delivered, as before
       setDeliv(ds.error ? {} : Object.fromEntries((ds.data || []).map(d => [d.purchase_id, d])));
       setAwaiting(aw.data || []);
       setPendingReq(pr.data || []);
@@ -195,12 +202,6 @@ export default function Purchases({ section = 'purchases' }) {
       if (want === 'requests') { navigate('/orders', { replace: true }); return; }
       if (section === 'purchases' && ['expenses', 'electricity'].includes(want)) { setTop('expenses'); if (want === 'electricity') setETab('electricity'); }
       setPTab(t => t ?? (['costs', 'waiting'].includes(want) ? want : 'buy'));   // Purchases opens first, even with goods waiting (2026-11-16, the user)
-      // Branch VAT rates and expenses (041): the page still works without them
-      const [vr, ec, ex] = await Promise.all([
-        supabase.from('branches').select('id, vat_rate'),
-        supabase.from('expense_categories').select('*').order('display_order').order('name'),
-        byBranch(supabase.from('expenses').select('*')).order('expense_date', { ascending: false }).order('created_at', { ascending: false }).limit(500),
-      ]);
       setVatRates(vr.error ? {} : Object.fromEntries((vr.data || []).map(b => [b.id, Number(b.vat_rate)])));
       setExpReady(!ec.error && !ex.error);
       setExpCats(ec.data || []);

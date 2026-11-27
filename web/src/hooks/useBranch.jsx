@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
 const BranchContext = createContext(null);
+const EMPTY = [];
+const NONE = {};
 
 const storageKey = userId => `mois.branch.${userId}`;
 function readStored(userId) {
@@ -10,6 +12,12 @@ function readStored(userId) {
 }
 function writeStored(userId, value) {
   try { localStorage.setItem(storageKey(userId), value); } catch { /* private mode etc. */ }
+}
+// the branch list as last read, kept on this device: pages open on the right branch at once instead of loading
+// everything for all branches first and again for the branch a moment later (2026-11-27, the user: "loads forever")
+const listsKey = orgId => `mois.branches.${orgId}`;
+function readLists(orgId) {
+  try { return orgId ? JSON.parse(localStorage.getItem(listsKey(orgId)) || 'null') : null; } catch { return null; }
 }
 
 /*
@@ -23,9 +31,12 @@ function writeStored(userId, value) {
 export function BranchProvider({ children }) {
   const { session, organization, userRoles } = useAuth();
   const userId = session?.user?.id;
-  const [all,       setAll]       = useState([]);     // active branches the user can read
-  const [whBranch,  setWhBranch]  = useState({});     // warehouse id → branch id
+  // { orgId, all: active branches the user can read, whBranch: warehouse id → branch id }
+  const [lists,     setLists]     = useState(() => readLists(organization?.id));
   const [chosen,    setChosen]    = useState(null);   // null = not chosen in this session
+  const ready = !!organization?.id && lists?.orgId === organization.id;
+  const all = ready ? lists.all : EMPTY;
+  const whBranch = ready ? lists.whBranch : NONE;
 
   useEffect(() => {
     if (!organization?.id) return;
@@ -36,8 +47,12 @@ export function BranchProvider({ children }) {
     ]).then(([br, wh]) => {
       if (!live) return;
       if (br.error) console.error('branches load failed', br.error);
-      setAll((br.data || []).filter(b => b.status === 'active'));
-      setWhBranch(Object.fromEntries((wh.data || []).map(w => [w.id, w.branch_id])));
+      const next = { orgId: organization.id, all: (br.data || []).filter(b => b.status === 'active'),
+        whBranch: Object.fromEntries((wh.data || []).map(w => [w.id, w.branch_id])) };
+      // a failed read keeps the list already shown
+      if (br.error || wh.error) { setLists(cur => (cur?.orgId === next.orgId ? cur : next)); return; }
+      setLists(cur => (JSON.stringify(cur) === JSON.stringify(next) ? cur : next));
+      try { localStorage.setItem(listsKey(next.orgId), JSON.stringify(next)); } catch { /* storage off */ }
     });
     return () => { live = false; };
   }, [organization?.id]);
@@ -65,6 +80,7 @@ export function BranchProvider({ children }) {
   }
 
   const value = {
+    ready,   // the branch list is known — pages wait for it, so they load once, for the right branch
     branchId,
     setBranchId,
     branches,

@@ -1,6 +1,8 @@
-import { FileText } from 'lucide-react';
+import { useState } from 'react';
+import { FileText, Receipt } from 'lucide-react';
+import Modal from '../Modal';
 import { qtyText } from '../../lib/inventory';
-import { formatMoney } from '../../lib/format';
+import { formatAmount, formatMoney } from '../../lib/format';
 
 const r2 = n => Math.round(n * 100) / 100;
 
@@ -66,7 +68,8 @@ function sumMaterials(lists) {
  *             materials: [{ id, label, name, qty, unit, rank }] }]
  */
 // a batch as a table (2026-11-20, the user): the main materials across as headers, each cell the quantity used with its cost small below
-function MaterialTable({ mats, rows, costed, money }) {
+// 2026-11-27, the user: under each material that material's total cost, the batch's total cost at the end
+function MaterialTable({ mats, rows, costed, money, costRow = null }) {
   const seen = {};
   for (const m of mats) (seen[m.label] ||= new Set()).add(m.id);
   const labelOf = m => (seen[m.label].size > 1 ? m.name : m.label);
@@ -81,16 +84,44 @@ function MaterialTable({ mats, rows, costed, money }) {
           <td className="num"><strong>{qtyText(r.pieces)}</strong> <span className="pb-mat-unit">pcs</span>{r.passed != null && <div className="pb-passed">{qtyText(r.passed)} passed</div>}</td>
           {r.sameMix ? (mats.length > 0 && <td colSpan={mats.length} className="pl-help">{r.sameMix}</td>)
             : mats.map(m => { const x = r.mats?.find(y => y.id === m.id && y.unit === m.unit); return (
-              <td key={`${m.id}|${m.unit}`} className="num">{x ? <><strong>{qtyText(r2(x.qty))}</strong>{x.cost != null && <div className="pb-cell-cost">{money(x.cost)}</div>}</> : ''}</td>); })}
+              <td key={`${m.id}|${m.unit}`} className="num">{x ? <strong>{qtyText(r2(x.qty))}</strong> : ''}</td>); })}
           <td className="num">{r.perBag != null ? <strong>{qtyText(r2(r.perBag))}</strong> : ''}</td>
           {costed && <td className="num">{r.cost}</td>}
         </tr>
       ))}</tbody>
+      {costRow && mats.some(m => m.cost != null) && (
+        <tfoot><tr className="pb-costrow">
+          <td className="pb-name" title="Materials at cost, oldest stock first, VAT included">Material cost <span className="pb-mat-unit">(TZS)</span></td><td />
+          {mats.map(m => <td key={`${m.id}|${m.unit}`} className="num">{m.cost != null ? formatAmount(Math.round(m.cost)) : '—'}</td>)}
+          <td className="num" colSpan={costed ? 2 : 1}><strong>{costRow.estimate ? '≈ ' : ''}{money(Math.round(costRow.total))}</strong></td>
+        </tr></tfoot>
+      )}
     </table></div>
   );
 }
 
+/** a batch's materials and their cost as a list, with the total (2026-11-27, the user) */
+function CostList({ b, money, onClose }) {
+  const mats = [...b.materials].sort(byRank);
+  const total = mats.reduce((t, m) => t + (Number(m.cost) || 0), 0);
+  return (
+    <Modal title={`Batch ${b.n} · material cost`} onClose={onClose}>
+      <table className="rd-table">
+        <thead><tr><th>Material</th><th className="num">Qty</th><th className="num">Cost (TZS)</th></tr></thead>
+        <tbody>{mats.map(m => (
+          <tr key={`${m.id}|${m.unit}`}><td>{m.name}</td><td className="num">{qtyText(r2(m.qty))} <span className="pb-mat-unit">{m.unit}</span></td>
+            <td className="num">{m.cost != null ? formatAmount(Math.round(m.cost)) : '—'}</td></tr>))}</tbody>
+        <tfoot><tr><td><strong>Total</strong></td><td /><td className="num"><strong>{b.estimate ? '≈ ' : ''}{money(Math.round(b.cost ?? total))}</strong></td></tr></tfoot>
+      </table>
+      {b.consumables > 0 && <p className="pl-help">Consumables (mould oil, soap) {money(Math.round(b.consumables))} — production overhead, not in this list.</p>}
+      {b.estimate && <p className="pl-help">≈ estimate from today's stock costs — fixed when saved.</p>}
+      {mats.some(m => m.cost == null) && <p className="pl-help">— a material with no cost known.</p>}
+    </Modal>
+  );
+}
+
 export default function ProductionBreakdown({ batches, dayTotal = true, stageBadge, currency }) {
+  const [listing, setListing] = useState(null);
   const costed = batches.some(b => b.cost != null);
   const money = v => formatMoney(Number(v), currency);
   const unitCost = (o, est) => (o.perPiece == null ? <span className="pl-help">—</span> : (
@@ -115,11 +146,13 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
                 material cost <strong>{b.estimate ? '≈ ' : ''}{money(b.cost)}</strong>{b.costComplete === false && ' · part not costed'}
                 {b.consumables > 0 && <span className="pl-help" title="Indirect materials (mould oil, soap): production overhead, in the cost a piece"> · consumables {money(b.consumables)}</span>}</span>}
               {b.stage && stageBadge?.(b.stage)}
+              {mats.some(m => m.cost != null) && <button type="button" className="icon-btn pb-icon" aria-label={`Material cost of batch ${b.n}`} title="View material cost — materials, cost and total"
+                onClick={() => setListing(b)}><Receipt size={16} /></button>}
               {/* a saved batch's job card, A4 (2026-11-20, the user): one card a batch */}
-              {b.id && <button type="button" className="icon-btn" aria-label={`Job card for batch ${b.n}`} title="View job card — materials used and their cost, products made"
+              {b.id && <button type="button" className={`icon-btn${mats.some(m => m.cost != null) ? '' : ' pb-icon'}`} aria-label={`Job card for batch ${b.n}`} title="View job card — materials used and their cost, products made"
                 onClick={() => window.open(`/print/job-card/${b.id}`, '_blank', 'noopener')}><FileText size={16} /></button>}
             </div>
-            {main && <MaterialTable mats={mats} costed={costed} money={money} rows={[
+            {main && <MaterialTable mats={mats} costed={costed} money={money} costRow={{ total: b.cost ?? mats.reduce((t, m) => t + (Number(m.cost) || 0), 0), estimate: b.estimate }} rows={[
               { name: main.name, pieces: main.pieces, passed: main.passed, mats, perBag: b.bags > 0 ? (Number(main.pieces) || 0) / b.bags : null, cost: unitCost(main, b.estimate) },
               ...residuals.map(o => ({ name: `+ ${o.name}`, pieces: o.pieces, passed: o.passed, cls: 'pb-res', sameMix: `residual · same mix as ${main.name}`, cost: unitCost(o, b.estimate) })),
             ]} />}
@@ -135,10 +168,12 @@ export default function ProductionBreakdown({ batches, dayTotal = true, stageBad
       {dayTotal && batches.length > 1 && (
         <section className="pb-batch pb-day">
           {(() => { const all = sumMaterials(live.map(b => b.materials)).map(m => ({ ...m, cost: live.every(b => b.materials.every(x => x.cost != null)) ? live.reduce((s, b) => s + b.materials.filter(x => x.id === m.id && x.unit === m.unit).reduce((t, x) => t + x.cost, 0), 0) : null }));
-            return <MaterialTable mats={all} costed={costed} money={money} rows={[{ name: `Day total · ${live.length} batch${live.length === 1 ? '' : 'es'}`, cls: 'pb-total', pieces: live.reduce((s, b) => s + pcs(b), 0), mats: all,
-              perBag: null, cost: <strong>{live.some(b => b.estimate) ? '≈ ' : ''}{money(live.reduce((s, b) => s + (Number(b.cost) || 0), 0))}</strong> }]} />; })()}
+            const dayCost = live.reduce((s, b) => s + (Number(b.cost) || 0), 0); const est = live.some(b => b.estimate);
+            return <MaterialTable mats={all} costed={costed} money={money} costRow={{ total: dayCost, estimate: est }} rows={[{ name: `Day total · ${live.length} batch${live.length === 1 ? '' : 'es'}`, cls: 'pb-total', pieces: live.reduce((s, b) => s + pcs(b), 0), mats: all,
+              perBag: null, cost: <strong>{est ? '≈ ' : ''}{money(dayCost)}</strong> }]} />; })()}
         </section>
       )}
+      {listing && <CostList b={listing} money={money} onClose={() => setListing(null)} />}
     </div>
   );
 }

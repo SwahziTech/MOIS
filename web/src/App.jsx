@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react';
+import PageLoader from './components/PageLoader';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ProtectedLayout, AuthLayout } from './components/Layout';
@@ -6,49 +8,50 @@ import Signup       from './pages/auth/Signup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword  from './pages/auth/ResetPassword';
 import Invitation     from './pages/auth/Invitation';
-import Dashboard    from './pages/Dashboard';
-import Products     from './pages/Products';
-import Materials    from './pages/Materials';
-import Branches     from './pages/Branches';
-import UsersPage    from './pages/Users';
-import Recipes      from './pages/Recipes';
-import Pricing      from './pages/Pricing';
-import Settings     from './pages/Settings';
-import Categories   from './pages/Categories';
-import Colours      from './pages/Colours';
-import ReviewQueue  from './pages/ReviewQueue';
-import Suppliers    from './pages/Suppliers';
-import Stock        from './pages/Stock';
-import Movements    from './pages/Movements';
-import StockImport  from './pages/StockImport';
-import Approvals    from './pages/Approvals';
-import Purchases    from './pages/Purchases';
-import Production   from './pages/Production';
-import ProductionLedger from './pages/ProductionLedger';
-import Costing from './pages/Costing';
-import Sales from './pages/Sales';
-import Customers from './pages/Customers';
-import SaleDocument from './pages/SaleDocument';
-import StatementDocument from './pages/StatementDocument';
-import PurchaseOrderDocument from './pages/PurchaseOrderDocument';
-import WeeklyCash from './pages/WeeklyCash';
-import Staff from './pages/Staff';
-import DailyReport from './pages/DailyReport';
-import Reports from './pages/Reports';
-import Statements from './pages/Statements';
-import Documents from './pages/Documents';
-import PrintLists from './pages/PrintLists';
-import ListDocument from './pages/ListDocument';
-import CashFlow from './pages/CashFlow';
-import PayslipDocument from './pages/PayslipDocument';
-import GoodsReceivedDocument from './pages/GoodsReceivedDocument';
-import JobCardDocument from './pages/JobCardDocument';
-import SupplierStatementDocument from './pages/SupplierStatementDocument';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Products = lazy(() => import('./pages/Products'));
+const Materials = lazy(() => import('./pages/Materials'));
+const Branches = lazy(() => import('./pages/Branches'));
+const UsersPage = lazy(() => import('./pages/Users'));
+const Recipes = lazy(() => import('./pages/Recipes'));
+const Pricing = lazy(() => import('./pages/Pricing'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Categories = lazy(() => import('./pages/Categories'));
+const Colours = lazy(() => import('./pages/Colours'));
+const ReviewQueue = lazy(() => import('./pages/ReviewQueue'));
+const Suppliers = lazy(() => import('./pages/Suppliers'));
+const Stock = lazy(() => import('./pages/Stock'));
+const Movements = lazy(() => import('./pages/Movements'));
+const StockImport = lazy(() => import('./pages/StockImport'));
+const Approvals = lazy(() => import('./pages/Approvals'));
+const Purchases = lazy(() => import('./pages/Purchases'));
+const Production = lazy(() => import('./pages/Production'));
+const ProductionLedger = lazy(() => import('./pages/ProductionLedger'));
+const Costing = lazy(() => import('./pages/Costing'));
+const Sales = lazy(() => import('./pages/Sales'));
+const Customers = lazy(() => import('./pages/Customers'));
+const SaleDocument = lazy(() => import('./pages/SaleDocument'));
+const StatementDocument = lazy(() => import('./pages/StatementDocument'));
+const PurchaseOrderDocument = lazy(() => import('./pages/PurchaseOrderDocument'));
+const WeeklyCash = lazy(() => import('./pages/WeeklyCash'));
+const Staff = lazy(() => import('./pages/Staff'));
+const DailyReport = lazy(() => import('./pages/DailyReport'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Statements = lazy(() => import('./pages/Statements'));
+const Documents = lazy(() => import('./pages/Documents'));
+const PrintLists = lazy(() => import('./pages/PrintLists'));
+const ListDocument = lazy(() => import('./pages/ListDocument'));
+const CashFlow = lazy(() => import('./pages/CashFlow'));
+const PayslipDocument = lazy(() => import('./pages/PayslipDocument'));
+const GoodsReceivedDocument = lazy(() => import('./pages/GoodsReceivedDocument'));
+const JobCardDocument = lazy(() => import('./pages/JobCardDocument'));
+const SupplierStatementDocument = lazy(() => import('./pages/SupplierStatementDocument'));
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Auth routes (redirect to / if already signed in) */}
           <Route element={<AuthLayout />}>
@@ -111,6 +114,7 @@ export default function App() {
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+      </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

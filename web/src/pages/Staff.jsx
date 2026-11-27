@@ -1,3 +1,4 @@
+import { holidayOn } from '../lib/holidays';
 import { useEffect, useMemo, useState } from 'react';
 import { shortRange } from '../lib/periods';
 import { StepBar } from '../components/PeriodBar';
@@ -453,6 +454,9 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMod
 
   const isRest = d => new Date(`${d}T00:00:00Z`).getUTCDay() === restDay;
   const totalOf = id => days.reduce((t, d) => t + (isRest(d) ? 0 : marks?.[`${id}|${d}`] || 0), 0);
+  // days attended out of the workdays so far — the shown days up to today, less the rest day and public
+  // holidays (2026-11-27, the user)
+  const workdays = days.filter(d => d <= today && !isRest(d) && !holidayOn(d)).length;
   return (
     <>
       {wm.bar}
@@ -462,7 +466,7 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMod
       <div className="card"><div className="table-container">
         <table className={`at-table${mode === 'month' ? ' at-month' : ''}`}>
           <thead><tr><th>Name</th>{days.map(d => (
-            <th key={d} className={`at-day${isRest(d) ? ' is-rest-col' : ''}`}>{mode === 'month' ? <>{Number(d.slice(8))}<span className="at-wd">{new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'narrow', timeZone: 'UTC' })}</span></> : dayName(d)}
+            <th key={d} className={`at-day${isRest(d) || holidayOn(d) ? ' is-rest-col' : ''}`} title={holidayOn(d) ?? undefined}>{mode === 'month' ? <>{Number(d.slice(8))}<span className="at-wd">{new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'narrow', timeZone: 'UTC' })}</span></> : dayName(d)}
               {mode === 'week' && isRest(d) && <span className="at-rest">overtime</span>}
               {mode === 'week' && canRecord && d <= today && <button type="button" className="at-fill" title="Tick everyone who worked in that day's production" onClick={() => fillFromProduction(d)}>from production</button>}
             </th>))}<th className="num">Days</th></tr></thead>
@@ -474,13 +478,14 @@ function AttendanceWeek({ staff, branchId, today, canRecord, restDay, defaultMod
                 {days.map(d => {
                   const v = marks?.[`${s.id}|${d}`]; const k = `${s.id}|${d}`;
                   return (
-                    <td key={d} className={`at-cell${isRest(d) ? ' is-rest-col' : ''}`}>
+                    <td key={d} className={`at-cell${isRest(d) || holidayOn(d) ? ' is-rest-col' : ''}`}>
                       <button type="button" className={`at-mark${v === 1 ? ' is-full' : v === 0.5 ? ' is-half' : ''}`} disabled={!canRecord || d > today || busy === k || marks === null}
                         onClick={() => mark(s.id, d, next(v))} aria-label={`${s.full_name} ${d}`}>{v === 1 ? '✓' : v === 0.5 ? '½' : ''}</button>
                     </td>
                   );
                 })}
-                <td className="num"><strong>{totalOf(s.id) || ''}</strong></td>
+                <td className="num at-days" title={`${totalOf(s.id)} of ${workdays} workdays so far (Sundays and public holidays left out)`}>
+                  <strong>{totalOf(s.id)}</strong><span className="pl-help">/{workdays}</span></td>
               </tr>
             ))}
           </tbody>

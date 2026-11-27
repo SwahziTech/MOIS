@@ -3,16 +3,14 @@ import { Building2, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Sidebar from './Sidebar';
 import AuthBrand from './AuthBrand';
-import { BranchProvider } from '../hooks/useBranch';
+import { BranchProvider, useBranch } from '../hooks/useBranch';
+import { Suspense } from 'react';
+import PageLoader from './PageLoader';
 
 // Full-screen spinner shown during auth session resolution
+// says what it is doing, and when the line is slow (2026-11-27)
 function FullscreenLoader() {
-  return (
-    <div className="fullscreen-loader" role="status">
-      <div className="spinner" />
-      <div className="fullscreen-loader-label">Loading…</div>
-    </div>
-  );
+  return <PageLoader full label="Signing you in…" />;
 }
 
 /**
@@ -47,6 +45,12 @@ function NoOrganization({ inactive, deactivated }) {
   );
 }
 
+/** the page, once the branch list is known (first sign-in on a device only — after that it is kept) */
+function BranchGate() {
+  const { ready } = useBranch();
+  return ready ? <Outlet /> : <PageLoader label="Loading branches…" />;
+}
+
 /** Wraps authenticated pages — redirects to /login if not authenticated */
 export function ProtectedLayout() {
   const { isAuthenticated, loading, recovering, profile, organization } = useAuth();
@@ -63,7 +67,10 @@ export function ProtectedLayout() {
     <BranchProvider>
       <Sidebar />
       <div className="main-wrapper">
-        <Outlet />
+        {/* the menu stays while a page's code arrives */}
+        <Suspense fallback={<PageLoader />}>
+          <BranchGate />
+        </Suspense>
       </div>
     </BranchProvider>
   );

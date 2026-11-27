@@ -410,7 +410,7 @@ export default function DayLog({ refs, recipes, branchId, branchName, today, cur
       batches: staged.map((b, i) => ({ n: i + 1, bags: b.bags, factor: b.factor, outOfBand: b.outOfBand, team: b.team, machine: b.machine, people: peopleIn(b)?.length ?? null,
         ...(estimates?.[i] ? { cost: estimates[i].cost, costComplete: estimates[i].complete, estimate: true } : {}),
         outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(estimates?.[i]?.outputs[j] ?? {}) })),
-        materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) })),
+        materials: breakdownMaterials((b.payload?.materials || []).map((m, k) => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id, cost: estimates?.[i]?.mats?.[k] ?? null })), refs) })),
       products: Object.values(products),
       materials: Object.entries(mats).sort((a, b) => a[1].rank - b[1].rank || a[1].name.localeCompare(b[1].name)).map(([id, m]) => ({
         ...m, label: shortName(id), left: (stock[id] ?? 0) - (usedToday[id] ?? 0), leftUnit: stockSym(id), short: (stock[id] ?? 0) - (usedToday[id] ?? 0) < -1e-9,
@@ -859,7 +859,7 @@ function BatchPreview({ b, refs, branchId, currency, costInput }) {
       <ProductionBreakdown dayTotal={false} currency={currency} batches={[{ n: 1, bags: b.bags, team: b.team, machine: b.machine,
         ...(est ? { cost: est.cost, costComplete: est.complete, estimate: true } : {}),
         outputs: b.outputs.map((o, j) => ({ ...o, perBag: o.wastani, ...(est?.outputs[j] ?? {}) })),
-        materials: breakdownMaterials((b.payload?.materials || []).map(m => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id })), refs) }]} />
+        materials: breakdownMaterials((b.payload?.materials || []).map((m, k) => ({ material_id: m.material_id, quantity: m.quantity, unit_id: m.unit_id, cost: est?.mats?.[k] ?? null })), refs) }]} />
       {b.notes && <p className="text-sm"><span className="pl-label">Note</span> {b.notes}</p>}
     </div>
   );

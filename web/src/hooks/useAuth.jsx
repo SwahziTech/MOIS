@@ -29,9 +29,39 @@ export function AuthProvider({ children }) {
   const [recovering,   setRecovering]   = useState(false);
   const loadedFor = useRef(null); // user id whose profile is loaded / loading
 
+  // who the person is, their company and roles, as last read — kept on this device so the app opens at once
+  // (2026-11-27, the user: "the app itself loads forever"); refreshed from the server straight after, and the
+  // database still checks every permission on every read and write
+  const applied = useRef('');
+  const applyAccess = useCallback((profileData, org, roles) => {
+    // the same as already shown (the kept copy matched the server): leave it, so pages do not load again
+    const key = JSON.stringify([profileData, org, roles]);
+    if (key === applied.current) { setProfileReady(true); return; }
+    applied.current = key;
+    const permSet = new Set();
+    const orgWideSet = new Set();
+    for (const ur of roles) {
+      const orgWide = !ur.branch_id && !ur.warehouse_id;
+      for (const rp of ur.role?.role_permissions || []) {
+        if (!rp.permission?.code) continue;
+        permSet.add(rp.permission.code);
+        if (orgWide) orgWideSet.add(rp.permission.code);
+      }
+    }
+    setProfile(profileData || null);
+    setOrganization(org);
+    setUserRoles(roles);
+    setPermissions(permSet);
+    setOrgWidePermissions(orgWideSet);
+    setProfileReady(true);
+  }, []);
+
   const loadProfile = useCallback(async (userId) => {
     loadedFor.current = userId;
-    setProfileReady(false);
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(`mois.access.${userId}`) || 'null'); } catch { /* storage off */ }
+    if (cached?.profile && cached.org) applyAccess(cached.profile, cached.org, cached.roles || []);
+    else setProfileReady(false);
 
     const readProfile = () => patient(() => supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
     let { data: profileData, error: profileErr } = await readProfile();
@@ -73,27 +103,17 @@ export function AuthProvider({ children }) {
       roles = rolesRes.data || [];
     }
     if (loadedFor.current !== userId) return;
+    // a failed read (no connection) keeps what was shown; a good one replaces it and is kept for next time
+    if (profileErr && cached?.profile) return;
 
     // Flatten permissions into Sets: all grants, and org-wide grants only
     // (master-data writes require an org-wide grant — has_permission(), 018)
-    const permSet = new Set();
-    const orgWideSet = new Set();
-    for (const ur of roles) {
-      const orgWide = !ur.branch_id && !ur.warehouse_id;
-      for (const rp of ur.role?.role_permissions || []) {
-        if (!rp.permission?.code) continue;
-        permSet.add(rp.permission.code);
-        if (orgWide) orgWideSet.add(rp.permission.code);
-      }
-    }
-
-    setProfile(profileData || null);
-    setOrganization(org);
-    setUserRoles(roles);
-    setPermissions(permSet);
-    setOrgWidePermissions(orgWideSet);
-    setProfileReady(true);
-  }, []);
+    applyAccess(profileData, org, roles);
+    try {
+      if (profileData && org) localStorage.setItem(`mois.access.${userId}`, JSON.stringify({ profile: profileData, org, roles }));
+      else localStorage.removeItem(`mois.access.${userId}`);
+    } catch { /* storage off */ }
+  }, [applyAccess]);
 
   useEffect(() => {
     // onAuthStateChange fires INITIAL_SESSION on subscribe, so no separate
@@ -105,6 +125,7 @@ export function AuthProvider({ children }) {
       const userId = nextSession?.user?.id ?? null;
       if (!userId) {
         loadedFor.current = null;
+        applied.current = '';
         setProfile(null);
         setOrganization(null);
         setUserRoles([]);
@@ -143,6 +164,8 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    // a shared office PC: the next person must not open on this person's details
+    try { if (session?.user?.id) localStorage.removeItem(`mois.access.${session.user.id}`); } catch { /* storage off */ }
     return supabase.auth.signOut();
   }
 
