@@ -205,7 +205,7 @@ class _ProductionLedgerPageState extends State<ProductionLedgerPage> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
         OfflineNote(_savedAt),
         PlHelp(branchId.isNotEmpty ? (session.branchName ?? '') : 'All branches'),
         const SizedBox(height: 6),

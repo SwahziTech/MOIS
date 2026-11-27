@@ -90,7 +90,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
             ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           OfflineNote(_savedAt),
           if (list.isEmpty)
             const EmptyState(icon: LucideIcons.folderTree, title: 'No categories yet', description: 'Group your products into categories.')

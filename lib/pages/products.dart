@@ -228,7 +228,7 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           OfflineNote(_savedAt),
           ListToolbar(
             placeholder: 'Search products…',

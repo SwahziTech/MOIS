@@ -70,7 +70,7 @@ class _DailyReportPageState extends State<DailyReportPage> {
     final missing = rows.where((r) => (r['report'] == null) != (r['mois'] == null)).length;
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         PageTabs<String>(tabs: tabs, value: _tab, onChange: (v) => setState(() => _tab = v)),
         if (_tab == 'upload')
           ReportUpload(key: ValueKey('upload$branchId'))

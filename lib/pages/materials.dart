@@ -246,7 +246,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
             ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           OfflineNote(_savedAt),
           PageTabs<String>(tabs: const [('materials', 'Materials'), ('categories', 'Material categories'), ('units', 'Units')], value: _tab, onChange: (v) => setState(() => _tab = v)),
           if (_tab == 'materials') ...[

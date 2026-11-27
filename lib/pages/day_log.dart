@@ -657,10 +657,17 @@ class _DayLogState extends State<DayLog> {
           ),
           if (colours.isNotEmpty) ...[
             const SizedBox(width: 8),
+            // the colour as a dropdown (2026-11-27, the user)
             Expanded(
-              child: SlideRow(children: [
-                for (final c in colours) Chip2(refs.colour(c), on: _form.colorId == c, onTap: () => _set(() { _form.colorId = c; _form.leftovers = []; _form.edits = {}; })),
-              ]),
+              child: DropdownButtonFormField<String>(
+                initialValue: colours.contains(_form.colorId) ? _form.colorId : '', isExpanded: true,
+                decoration: const InputDecoration(isDense: true, labelText: 'Colour'),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('Choose…')),
+                  for (final c in colours) DropdownMenuItem(value: c, child: Row(children: [ColourDot(refs.colour(c)), const SizedBox(width: 8), Text(refs.colour(c))])),
+                ],
+                onChanged: (v) => _set(() { _form.colorId = v ?? ''; _form.leftovers = []; _form.edits = {}; }),
+              ),
             ),
           ],
         ]),
@@ -671,10 +678,11 @@ class _DayLogState extends State<DayLog> {
           PlHelp('Baseline: ${recipeItems.where((it) => !isSteel(it['material_id'])).map((it) => '${qtyText(n(it['quantity']))}${sym(it['unit_id']).length <= 3 ? ' ${sym(it['unit_id'])}' : ''} ${materialShortName(refs.items['m:${it['material_id']}'])}').join(' : ')}'),
           const SizedBox(height: 8),
           // recipe tiles (LOCKED): short name on top, the amount big and editable, its unit small
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          // three tiles a row, whatever the screen (2026-11-27, the user)
+          LayoutBuilder(builder: (context, box) => Wrap(spacing: 8, runSpacing: 8, children: [
             for (final l in ls.where((l) => !isSteel(l['material_id'])))
               Container(
-                width: 104,
+                width: ((box.maxWidth - 16) / 3).floorToDouble(),
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                 decoration: BoxDecoration(
                   color: l['short'] == true ? t.bgError : t.soft,
@@ -702,7 +710,7 @@ class _DayLogState extends State<DayLog> {
                     InkWell(onTap: () => _set(() => _form.edits = {..._form.edits}..remove('${l['material_id']}')), child: const Text('↺ recipe', style: TextStyle(fontSize: 10, color: C.khaki))),
                 ]),
               ),
-          ]),
+          ])),
           if (ls.any((l) => isSteel(l['material_id']))) ...[
             const SizedBox(height: 8),
             const PlLabel('Steel'),

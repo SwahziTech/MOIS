@@ -218,7 +218,7 @@ class _StockPageState extends State<StockPage> {
             ),
       body: RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
         OfflineNote(_savedAt),
         Row(children: [
           for (final (k, label) in const [('materials', 'Raw materials'), ('products', 'Finished goods')]) ...[

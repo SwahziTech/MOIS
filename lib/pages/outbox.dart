@@ -41,7 +41,7 @@ class _OutboxPageState extends State<OutboxPage> {
     final jobs = _jobs;
     return RefreshIndicator(
       onRefresh: () async { await offline.sync(); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         Stats([
           Stat('Waiting', '${offline.waiting}', help: offline.online ? 'sending…' : 'sent when online'),
           Stat('Not sent', '${offline.failed}', figureColor: offline.failed > 0 ? C.error : null, help: 'refused by the server'),

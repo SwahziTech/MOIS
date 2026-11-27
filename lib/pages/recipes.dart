@@ -153,7 +153,7 @@ class _RecipesPageState extends State<RecipesPage> {
             ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           OfflineNote(_savedAt),
           if (branchId.isEmpty) const Padding(padding: EdgeInsets.only(bottom: 8), child: PlHelp('Pick a branch in the menu to add a recipe.')),
           ListToolbar(

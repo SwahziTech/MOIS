@@ -146,7 +146,7 @@ class _MovementsPageState extends State<MovementsPage> {
         );
     return RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         PageTabs<String>(tabs: const [('products', 'Products'), ('materials', 'Materials')], value: _kind, onChange: (k) => setState(() { _kind = k; _type = ''; })),
         SlideRow(spacing: 8, children: [

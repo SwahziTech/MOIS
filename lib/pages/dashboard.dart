@@ -151,7 +151,7 @@ class _DirectorViewState extends State<DirectorView> {
     final shell = Shell.of(context);
     return RefreshIndicator(
       onRefresh: () async { setState(() { _loaded = false; _stock = null; }); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         if (_needs != null)
           _needs!.isEmpty ? const Padding(padding: EdgeInsets.only(bottom: 10), child: PlHelp('Nothing needs you right now.')) : _NeedsNow(needs: _needs!, go: shell.go),
@@ -475,7 +475,7 @@ class _OverviewState extends State<_Overview> {
         );
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         Stats([
           Stat('Sales', short(n(sales['total'])), help: '${sales['docs']} orders & invoices', onTap: () => shell.go('/sales')),
@@ -579,7 +579,7 @@ class _SetupState extends State<_Setup> {
     final name = session.branchName ?? '';
     final shell = Shell.of(context);
     String v(String k) => c == null ? '…' : (c[k]! < 0 ? '—' : formatAmount(c[k]));
-    return ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+    return PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
       Stats([
         Stat('Product categories', v('categories'), help: 'Active categories', onTap: () => shell.go('/categories')),
         Stat('Products', v('products'), help: b ? "In $name's list" : 'Active products', onTap: () => shell.go('/products')),

@@ -82,7 +82,7 @@ class _ApprovalsPageState extends State<ApprovalsPage> {
                     ? const Padding(padding: EdgeInsets.all(14), child: Skeleton())
                     : RefreshIndicator(
                         onRefresh: _load,
-                        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+                        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
                           OfflineNote(_savedAt),
                           if (shown.isEmpty)
                             EmptyState(icon: LucideIcons.squareCheck, title: _tab == 'pending' ? 'Nothing waiting' : 'Nothing settled yet',
@@ -351,7 +351,7 @@ class _ReviewsPageState extends State<ReviewsPage> {
     final shown = _filter == 'all' ? flags : flags.where((f) => f['entity_type'] == _filter).toList();
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         if (types.length > 1) ...[
           SlideRow(children: [
             Chip2('All (${flags.length})', on: _filter == 'all', onTap: () => setState(() => _filter = 'all')),

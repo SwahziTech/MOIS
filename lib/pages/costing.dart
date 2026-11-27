@@ -76,9 +76,9 @@ class _CostingPageState extends State<CostingPage> {
     final refs = _refs;
     final tabs = PageTabs<String>(tabs: const [('products', 'Products'), ('standard', 'Standard vs actual'), ('inputs', 'Cost inputs')], value: _view, onChange: (v) => setState(() => _view = v));
     final head = [PlHelp(session.branchName ?? ''), tabs];
-    if (_view == 'standard') return ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [...head, if (refs != null) _StandardVsActual(refs: refs) else const Skeleton(rows: 4)]);
+    if (_view == 'standard') return PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [...head, if (refs != null) _StandardVsActual(refs: refs) else const Skeleton(rows: 4)]);
     if (_view == 'inputs') {
-      return ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
+      return PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
         ...head,
         PageTabs<String>(tabs: const [('materials', 'Materials'), ('labour', 'Labour'), ('electricity', 'Electricity'), ('other', 'Other overheads')], value: _inView, onChange: (v) => setState(() => _inView = v)),
         if (refs == null)
@@ -129,7 +129,7 @@ class _CostingPageState extends State<CostingPage> {
 
     return RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
         ...head,
         Stats([
           Stat('Finished stock at cost', _rows != null ? formatMoneyShort(value, session.currency) : '—', help: '${formatMoneyShort(value - est, session.currency)} made · ${formatMoneyShort(est, session.currency)} estimated'),

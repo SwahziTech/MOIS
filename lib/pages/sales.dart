@@ -262,7 +262,7 @@ class _SalesPageState extends State<SalesPage> {
       floatingActionButton: !canSell ? null : onInvoices ? _invoiceFab() : FloatingActionButton.extended(onPressed: () => _new(book: true), icon: const Icon(LucideIcons.plus), label: const Text('Record sale')),
       body: RefreshIndicator(
         onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           ...header,
           if (view == 'book')
             _SalesBook(

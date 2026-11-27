@@ -167,7 +167,7 @@ class _PricingPageState extends State<PricingPage> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         PageTabs<String>(tabs: const [('prices', 'Product prices'), ('colours', 'Colour pricing')], value: _tab, onChange: (v) => setState(() => _tab = v)),
         if (_tab == 'prices')

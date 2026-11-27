@@ -91,7 +91,7 @@ class _CustomersPageState extends State<CustomersPage> {
       floatingActionButton: canEdit && _tab == 'customers' ? FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(LucideIcons.plus), label: const Text('New customer')) : null,
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           tabs,
           ListToolbar(key: ValueKey('s$_tab'), placeholder: 'Search name, phone or TIN…', onSearch: (v) => setState(() => _search = v)),
           if (rows == null)
@@ -429,7 +429,7 @@ class _LeadsState extends State<_Leads> {
       floatingActionButton: canEdit ? FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(LucideIcons.plus), label: const Text('New lead')) : null,
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+        child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
           if (leads != null)
             Stats([
               Stat('Open leads', '${open.length}', help: 'worth about ${formatMoneyShort(open.fold<double>(0, (t, l) => t + n(l['estimated_value'])), session.currency)}'),

@@ -33,6 +33,8 @@ class ShellState extends State<Shell> {
   List<NavSection>? _menu;
   int _pending = 0;
   Timer? _timer;
+  // the top ribbon hides while the page scrolls down and comes back on the way up (2026-11-27, the user)
+  bool _hideTop = false;
 
   @override
   void initState() {
@@ -59,7 +61,7 @@ class ShellState extends State<Shell> {
   /// Open a page by its web path ('/sales', '/staff?tab=pay' …)
   void go(String p) {
     if (p == path) return;
-    setState(() { _history.add(path); path = p; });
+    setState(() { _history.add(path); path = p; _hideTop = false; });
     _countPending();
   }
 
@@ -82,7 +84,10 @@ class ShellState extends State<Shell> {
         child: Scaffold(
           key: _key,
           drawer: _SideMenu(menu: _menu, path: path, pending: _pending, onOpen: (p) { Navigator.pop(context); go(p); }),
-          appBar: AppBar(
+          body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(height: MediaQuery.paddingOf(context).top),
+            _Collapse(hidden: _hideTop, child: AppBar(
+            primary: false,
             automaticallyImplyLeading: false,
             toolbarHeight: 52,
             titleSpacing: 2,
@@ -96,11 +101,10 @@ class ShellState extends State<Shell> {
               ),
             ),
             title: Text('${session.organization?['name'] ?? 'MOIS'}', overflow: TextOverflow.ellipsis),
-          ),
-          body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          )),
             SyncStrip(onOpen: () => go('/outbox')),
             // .page-top: the path (Home › section › page) and the date
-            Padding(
+            _Collapse(hidden: _hideTop, child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
               child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Expanded(
@@ -118,10 +122,10 @@ class ShellState extends State<Shell> {
                 ),
                 Text('${dateText(session.today)}', style: TextStyle(fontSize: Fs.sm, color: t.textSecondary)),
               ]),
-            ),
+            )),
             // .page-group: a group's pages as round tabs
             if (siblings.length > 1)
-              Padding(
+              _Collapse(hidden: _hideTop, child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                 child: SlideRow(children: [
                   for (final g in siblings)
@@ -139,11 +143,22 @@ class ShellState extends State<Shell> {
                       ),
                     ),
                 ]),
-              ),
+              )),
             Expanded(
-              child: KeyedSubtree(
-                key: ValueKey('$path|${session.branchId}'),
-                child: path == '/outbox' ? const OutboxPage() : pageFor(path, item),
+              child: NotificationListener<ScrollUpdateNotification>(
+                onNotification: (n) {
+                  // a finger or a mouse wheel: the way the list moved decides
+                  if (n.metrics.axis != Axis.vertical || n.scrollDelta == null) return false;
+                  final down = n.scrollDelta! > 2 && n.metrics.pixels > 40;
+                  final up = n.scrollDelta! < -2 || n.metrics.pixels <= 0;
+                  if (down && !_hideTop) setState(() => _hideTop = true);
+                  if (up && _hideTop) setState(() => _hideTop = false);
+                  return false;
+                },
+                child: KeyedSubtree(
+                  key: ValueKey('$path|${session.branchId}'),
+                  child: path == '/outbox' ? const OutboxPage() : pageFor(path, item),
+                ),
               ),
             ),
           ]),
@@ -288,4 +303,19 @@ class _SideMenuState extends State<_SideMenu> {
       ),
     );
   }
+}
+
+/// Slides a piece of the top ribbon away (and back)
+class _Collapse extends StatelessWidget {
+  const _Collapse({required this.hidden, required this.child});
+  final bool hidden;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => ClipRect(
+        child: AnimatedAlign(
+          alignment: Alignment.bottomCenter, heightFactor: hidden ? 0 : 1,
+          duration: const Duration(milliseconds: 180), curve: Curves.easeOut,
+          child: child,
+        ),
+      );
 }

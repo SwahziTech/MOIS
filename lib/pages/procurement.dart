@@ -279,7 +279,7 @@ class _ProcurementPageState extends State<ProcurementPage> {
       floatingActionButton: _fab(),
       body: RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 88), children: [
         OfflineNote(_savedAt),
         if (widget.section != 'orders') ...[
           PageTabs<String>(

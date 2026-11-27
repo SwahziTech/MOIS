@@ -113,7 +113,7 @@ class _PaymentProofsListState extends State<PaymentProofsList> {
       });
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         Stats([
           Stat('Proof to add', '${counts['todo']}', figureColor: counts['todo']! > 0 ? C.warning : null, help: '${here.where((x) => x['state'] == 'late').length} late (over $proofDays days)'),

@@ -217,7 +217,7 @@ class _ProductionPageState extends State<ProductionPage> {
 
     return RefreshIndicator(
       onRefresh: () async { await Refs.load(fresh: true); await _load(); },
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 32), children: [
         OfflineNote(_savedAt),
         Row(children: [
           Expanded(child: PlHelp(branchId.isNotEmpty ? (session.branchName ?? '') : 'All branches')),

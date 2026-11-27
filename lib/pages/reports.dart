@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -229,7 +230,7 @@ class _ReportsPageState extends State<ReportsPage> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         PageTabs<String>(tabs: _tabs, value: _tab, onChange: (v) { setState(() { _tab = v; _nested = 'a'; }); _load(); }),
         PlHelp(where.isEmpty ? '' : '${where[0].toUpperCase()}${where.substring(1)}'),
@@ -266,7 +267,8 @@ class _ReportsPageState extends State<ReportsPage> {
 }
 
 /// The report table on a phone: first column fixed, the figures swipe sideways, total row bold at the bottom
-class ReportSheet extends StatelessWidget {
+/// The column heads stay at the top (under the pinned tabs) while the table scrolls under them (2026-11-27, the user)
+class ReportSheet extends StatefulWidget {
   const ReportSheet({super.key, required this.head, required this.rows, this.total, this.firstWidth = 150, this.colWidth = 112, this.onRowTap});
   final List<String> head;
   /// a tap on a row's first cell (not the total), e.g. a batch's job card
@@ -275,6 +277,47 @@ class ReportSheet extends StatelessWidget {
   final List<Object?>? total;
   final double firstWidth, colWidth;
   static const _rowH = 48.0, _headH = 40.0;
+  @override
+  State<ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<ReportSheet> {
+  ScrollPosition? _pos;
+  ValueListenable<double>? _inset;
+  double _lift = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final p = Scrollable.maybeOf(context, axis: Axis.vertical)?.position;
+    if (p != _pos) { _pos?.removeListener(_update); _pos = p; _pos?.addListener(_update); }
+    final i = PinInset.of(context);
+    if (i != _inset) { _inset?.removeListener(_update); _inset = i; _inset?.addListener(_update); }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  @override
+  void dispose() { _pos?.removeListener(_update); _inset?.removeListener(_update); super.dispose(); }
+
+  /// how far the heads move down: as far as the sheet's top has gone under the pinned area, never past its last row
+  void _update() {
+    if (!mounted) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final vp = Scrollable.maybeOf(context, axis: Axis.vertical)?.context.findRenderObject() as RenderBox?;
+    if (box == null || vp == null || !box.attached || !vp.attached || !box.hasSize) return;
+    final top = box.localToGlobal(Offset.zero, ancestor: vp).dy;
+    final max = box.size.height - ReportSheet._headH - ReportSheet._rowH;
+    final lift = ((_inset?.value ?? 0) - top).clamp(0.0, max < 0 ? 0.0 : max);
+    if ((lift - _lift).abs() > 0.5) setState(() => _lift = lift);
+  }
+
+  List<String> get head => widget.head;
+  List<List<Object?>> get rows => widget.rows;
+  List<Object?>? get total => widget.total;
+  ValueChanged<int>? get onRowTap => widget.onRowTap;
+  double get firstWidth => widget.firstWidth;
+  double get colWidth => widget.colWidth;
+  static const _rowH = ReportSheet._rowH, _headH = ReportSheet._headH;
 
   @override
   Widget build(BuildContext context) {
@@ -312,30 +355,40 @@ class ReportSheet extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
           decoration: BoxDecoration(border: Border(right: BorderSide(color: t.border))),
-          child: Column(children: [
-            Container(decoration: BoxDecoration(color: t.soft, border: Border(bottom: BorderSide(color: t.borderStrong))), child: cell(head.first, first: true, header: true)),
-            for (final (i, r) in all.indexed)
-              Container(
-                decoration: rowDeco(i),
-                child: onRowTap != null && i < rows.length
-                    ? InkWell(onTap: () => onRowTap!(i), child: cell(r.isEmpty ? '' : r.first, first: true))
-                    : cell(r.isEmpty ? '' : r.first, first: true, isTotal: total != null && i == all.length - 1),
-              ),
+          child: Stack(children: [
+            Column(children: [
+              const SizedBox(height: _headH + 1),
+              for (final (i, r) in all.indexed)
+                Container(
+                  decoration: rowDeco(i),
+                  child: onRowTap != null && i < rows.length
+                      ? InkWell(onTap: () => onRowTap!(i), child: cell(r.isEmpty ? '' : r.first, first: true))
+                      : cell(r.isEmpty ? '' : r.first, first: true, isTotal: total != null && i == all.length - 1),
+                ),
+            ]),
+            // the head, painted last so it lies over the rows it slides along
+            Positioned(top: _lift, left: 0, child: Container(decoration: BoxDecoration(color: t.soft, border: Border(bottom: BorderSide(color: t.borderStrong))), child: cell(head.first, first: true, header: true))),
           ]),
         ),
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                decoration: BoxDecoration(color: t.soft, border: Border(bottom: BorderSide(color: t.borderStrong))),
-                child: Row(children: [for (final h in head.skip(1)) cell(h, first: false, header: true)]),
-              ),
-              for (final (i, r) in all.indexed)
-                Container(
-                  decoration: rowDeco(i),
-                  child: Row(children: [for (var j = 1; j < head.length; j++) cell(j < r.length ? r[j] : '', first: false, isTotal: total != null && i == all.length - 1)]),
+            child: Stack(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const SizedBox(height: _headH + 1),
+                for (final (i, r) in all.indexed)
+                  Container(
+                    decoration: rowDeco(i),
+                    child: Row(children: [for (var j = 1; j < head.length; j++) cell(j < r.length ? r[j] : '', first: false, isTotal: total != null && i == all.length - 1)]),
+                  ),
+              ]),
+              Positioned(
+                top: _lift, left: 0,
+                child: Container(
+                  decoration: BoxDecoration(color: t.soft, border: Border(bottom: BorderSide(color: t.borderStrong))),
+                  child: Row(children: [for (final h in head.skip(1)) cell(h, first: false, header: true)]),
                 ),
+              ),
             ]),
           ),
         ),

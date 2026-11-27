@@ -73,7 +73,7 @@ class _DeliveriesPanelState extends State<DeliveriesPanel> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         if (rows != null)
           Stats([
             Stat('To confirm delivered', '$toConfirm', figureColor: toConfirm > 0 ? C.warning : null, help: toConfirm > 0 ? 'collected, not yet confirmed' : 'none waiting'),

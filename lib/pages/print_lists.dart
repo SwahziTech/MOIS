@@ -37,7 +37,7 @@ class _PrintListsPageState extends State<PrintListsPage> {
     final t = context.tk;
     final branchId = session.branchId;
     final lists = _lists.where((l) => session.can(l.perm)).toList();
-    return ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+    return PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
       PlHelp(branchId.isNotEmpty ? (session.branchName ?? '') : 'Pick a branch in the menu'),
       const SizedBox(height: 8),
       const PlLabel('Period for dated lists'),

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderProxyBox;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'format.dart';
@@ -719,4 +721,94 @@ class RangePeriod {
         },
         child: Text(tableDate(value) ?? value),
       );
+}
+
+// ---- PageList: a page's scrolling list whose tabs stay pinned at the top (2026-11-27, the user) ----
+/// Marks a child of [PageList] that stays at the top while the rest scrolls under it
+class Pinned extends StatelessWidget {
+  const Pinned({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+/// A ListView whose [PageTabs] and [Pinned] children freeze at the top as the page scrolls;
+/// the shell hides its top ribbon on the way down, so the tabs keep the whole screen for the list.
+/// The height of what is pinned is shared ([PinInset]) so a table's column heads stop just under it.
+class PageList extends StatefulWidget {
+  const PageList({super.key, this.padding = EdgeInsets.zero, required this.children});
+  final EdgeInsets padding;
+  final List<Widget> children;
+  @override
+  State<PageList> createState() => _PageListState();
+}
+
+class _PageListState extends State<PageList> {
+  final _inset = ValueNotifier<double>(0);
+  final Map<int, double> _heights = {};
+
+  void _setHeight(int i, double h) {
+    if (_heights[i] == h) return;
+    _heights[i] = h;
+    _inset.value = _heights.values.fold(0.0, (t, v) => t + v);
+  }
+
+  @override
+  void dispose() { _inset.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final p = widget.padding;
+    final h = EdgeInsets.only(left: p.left, right: p.right);
+    var pin = 0;
+    return PinInset(
+      notifier: _inset,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          if (p.top > 0) SliverToBoxAdapter(child: SizedBox(height: p.top)),
+          for (final c in widget.children)
+            if (c is PageTabs || c is Pinned)
+              () {
+                final i = pin++;
+                return PinnedHeaderSliver(child: _Measure(onHeight: (v) => _setHeight(i, v), child: ColoredBox(color: bg, child: Padding(padding: h, child: c))));
+              }()
+            else
+              SliverToBoxAdapter(child: Padding(padding: h, child: c)),
+          if (p.bottom > 0) SliverToBoxAdapter(child: SizedBox(height: p.bottom)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The height pinned at the top of the page's list (0 outside a [PageList])
+class PinInset extends InheritedWidget {
+  const PinInset({super.key, required this.notifier, required super.child});
+  final ValueNotifier<double> notifier;
+  static ValueListenable<double>? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PinInset>()?.notifier;
+  @override
+  bool updateShouldNotify(PinInset old) => old.notifier != notifier;
+}
+
+/// Reports its child's height after layout
+class _Measure extends SingleChildRenderObjectWidget {
+  const _Measure({required this.onHeight, super.child});
+  final ValueChanged<double> onHeight;
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderMeasure(onHeight);
+  @override
+  void updateRenderObject(BuildContext context, _RenderMeasure r) => r.onHeight = onHeight;
+}
+
+class _RenderMeasure extends RenderProxyBox {
+  _RenderMeasure(this.onHeight);
+  ValueChanged<double> onHeight;
+  @override
+  void performLayout() {
+    super.performLayout();
+    final v = size.height;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onHeight(v));
+  }
 }

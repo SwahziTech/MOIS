@@ -147,7 +147,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
     final whoWord = _tab == 'payslips' ? 'Pay sheet' : _tab == 'purchasing' ? 'Supplier' : 'Customer';
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
+      child: PageList(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24), children: [
         OfflineNote(_savedAt),
         if (tabs.length > 1) PageTabs<String>(tabs: tabs, value: _tab, onChange: (v) { setState(() { _tab = v; _search = ''; }); _load(); }),
         Stats([
