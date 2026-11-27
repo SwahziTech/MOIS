@@ -1802,8 +1802,9 @@ function CorrectModal({ sale, refs, accounts, money, today, per, direct, onClose
   // one transaction (user, 2026-11-03): a sale with one payment is paid as one — its amount follows the corrected total
   // unless the amount is typed (or this is unticked)
   const [oneTx, setOneTx] = useState(() => (sale.payments || []).length === 1);
-  const newTotal = r2(lines.filter(x => !x.remove).reduce((t, x) => t + (x.l.product_id ? (num(x.quantity) ?? 0) * (num(x.price) ?? 0) : (num(x.price) ?? 0)), 0)
-    + added.reduce((t, a) => t + (num(a.price) ?? 0), 0));
+  // each line in whole shillings (whole amounts: qty × price rounded), as the database saves it
+  const newTotal = lines.filter(x => !x.remove).reduce((t, x) => t + Math.round(x.l.product_id ? (num(x.quantity) ?? 0) * (num(x.price) ?? 0) : (num(x.price) ?? 0)), 0)
+    + added.reduce((t, a) => t + Math.round(num(a.price) ?? 0), 0);
   const payAmount = x => (oneTx && pays.length === 1 && !x.remove ? String(newTotal) : x.amount);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);

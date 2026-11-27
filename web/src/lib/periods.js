@@ -66,10 +66,10 @@ export function shortRange(from, to, today) {
   const yr = d => (d.slice(0, 4) !== String(today).slice(0, 4) ? ` ${d.slice(0, 4)}` : '');
   const day = d => `${MON(d)} ${Number(d.slice(8))}${yr(d)}`;
   if (from === to) return day(from);
+  // a whole month (or this month so far) — before the week rule, so a month that opens on a Sunday still reads "Nov"
+  if (from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && (to === lastOfMonth(to) || to === today)) return `${MON(from)}${yr(from)}`;
   // a week opens on Sunday; its label shows the working days, Monday to Saturday
   if (utc(from).getUTCDay() === 0 && shift(from, 1) <= to) from = shift(from, 1);
   if (from === to) return day(from);
-  // a whole month (or this month so far)
-  if (from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && (to === lastOfMonth(to) || to === today)) return `${MON(from)}${yr(from)}`;
   return `${day(from)} – ${day(to)}`;
 }
