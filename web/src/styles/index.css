@@ -3339,3 +3339,15 @@ a.ih-line { color: inherit; text-decoration: none; }
 .pb-costrow .pb-name { font-weight: 600; white-space: nowrap; }
 .pb-head .pb-icon { margin-left: auto; }
 .pb-head .pb-cost-head ~ .pb-icon { margin-left: 0; }
+
+/* LOCKED one-row sliding chips (2026-11-27, the user): on a phone every row of tabs and filter chips stays on one
+   line and slides sideways — never wraps onto a second line */
+@media (max-width: 760px) {
+  .page-tabs, .page-group, .filter-chips, .ptc-chips, .pp-chips, .bn-strip {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-snap-type: x proximity;
+  }
+  .page-tabs::-webkit-scrollbar, .page-group::-webkit-scrollbar, .filter-chips::-webkit-scrollbar,
+  .ptc-chips::-webkit-scrollbar, .pp-chips::-webkit-scrollbar, .bn-strip::-webkit-scrollbar { display: none; }
+  .page-tabs > *, .page-group > *, .filter-chips > *, .ptc-chips > *, .pp-chips > *, .bn-strip > * { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: start; }
+}
