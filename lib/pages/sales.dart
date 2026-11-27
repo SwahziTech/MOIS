@@ -87,9 +87,24 @@ class _SalesPageState extends State<SalesPage> {
       // opened on one sale (?sale=, from the Director view or Slips)
       final id = widget.query['sale'];
       if (!_openedFromQuery && id != null && sales.any((x) => x['id'] == id)) { _openedFromQuery = true; _openSale(id); }
+      // opened from a lead (Customers › Leads › Make quotation, 095): a new quotation for its customer
+      final cid = widget.query['quote_for'];
+      if (!_openedFromQuery && cid != null && _customers.any((c) => c['id'] == cid)) { _openedFromQuery = true; _quoteForLead(cid, widget.query['lead']); }
     } catch (_) {
       if (mounted) setState(() => _error = "We couldn't load sales. Please try again.");
     }
+  }
+
+  Future<void> _quoteForLead(String cid, String? leadId) async {
+    Json? lead;
+    try { if (leadId != null) lead = await db.from('leads').select('site, interest').eq('id', leadId).maybeSingle(); } catch (_) {}
+    if (!mounted) return;
+    final id = await _edit(prefill: {'customer_id': cid, 'site': lead?['site'] ?? '', 'notes': lead?['interest'] != null ? 'Enquiry: ${lead!['interest']}' : ''});
+    if (id == null || id.isEmpty) return;
+    // the lead points to its quotation and is quoted
+    if (leadId != null) { try { await db.from('leads').update({'sale_id': id, 'stage': 'quoted'}).eq('id', leadId); } catch (_) {} }
+    await _load();
+    _openSale(id);
   }
 
   // ---- sales typed from an uploaded sales book: each opens in Record sale in turn ----
