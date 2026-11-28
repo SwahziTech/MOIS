@@ -33,9 +33,15 @@ export const reqCells = (d, l) => [l.description ?? '', l.qty ?? '', amt(l.amoun
  * wider sheet fills the page and the other is as much narrower as it is on screen. Unit goes with Qty on paper;
  * Category is not printed. → { lw: { table, cols }, req: { table, cols } } as fractions, or null.
  */
-const shownOf = label => { try { return JSON.parse(localStorage.getItem(`xs-shown:${label}`) || 'null'); } catch { return null; } };
+// the widths the user dragged a column to (SheetGrid keeps them per sheet); the rest at their starting size
+const shownOf = label => { try { return JSON.parse(localStorage.getItem(`xs-size:${label}`) || 'null'); } catch { return null; } };
+// a device where the sheets were never sized (or shown): the sheets' own starting sizes, so Description is never
+// stretched across the page (2026-11-28, the user: "the description looks large on pdf of other devices")
+const LW_START = { date: 110, description: 330, qty: 90, cash_in: 125, cash_out: 125, balance: 125 };
+const RQ_START = { description: 330, quantity: 90, unit: 90, amount: 150 };
+const filled = (w, start) => Object.fromEntries(Object.keys(start).map(k => [k, w?.[k] > 0 ? w[k] : start[k]]));
 export function sheetWidths() {
-  const lw = shownOf("Last week's spending"), rq = shownOf("This week's request");
+  const lw = filled(shownOf("Last week's spending"), LW_START), rq = filled(shownOf("This week's request"), RQ_START);
   const lwPx = lw && ['date', 'description', 'qty', 'cash_in', 'cash_out', 'balance'].map(k => lw[k] || 0);
   const rqPx = rq && [rq.description || 0, (rq.quantity || 0) + (rq.unit || 0), rq.amount || 0];
   const ok = a => a && a.every(x => x > 0);
