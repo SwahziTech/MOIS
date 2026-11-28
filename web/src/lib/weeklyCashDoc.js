@@ -45,11 +45,23 @@ export function sheetWidths() {
   const part = a => (ok(a) ? { table: sum(a) / ref, cols: a.map(x => x / sum(a)) } : null);
   return { lw: part(lwPx), req: part(rqPx) };
 }
-const widthStyles = (w, n, full, extra = {}) => {
+// each column at least as wide as its longest header word (+ padding) — "BALANCE (TZS)" never runs into the next
+// column, even on A4 (2026-11-28, the user); the room comes from the columns that have some to spare
+const widthStyles = (w, n, full, extra = {}, pdf = null, head = [], fsz = 12) => {
+  const pad = fsz * 0.16;   // the cell padding (base.styles)
   if (!w || w.cols.length !== n) return { columnStyles: extra };
   const tw = full * w.table;
+  let ws = w.cols.map(f => tw * f);
+  if (pdf) {
+    pdf.setFont('times', 'bold'); pdf.setFontSize(fsz);
+    const min = head.map(h => Math.max(...String(h).split(/s+/).map(x => pdf.getTextWidth(x))) + 2 * pad + 0.5);
+    const short = ws.reduce((t, x, k) => t + Math.max(0, min[k] - x), 0);
+    const spare = ws.reduce((t, x, k) => t + Math.max(0, x - min[k]), 0);
+    if (short > 0 && spare >= short) ws = ws.map((x, k) => (x < min[k] ? min[k] : x - (x - min[k]) * short / spare));
+    pdf.setFont('times', 'normal');
+  }
   const cs = {};
-  w.cols.forEach((f, k) => { cs[k] = { ...(extra[k] || {}), cellWidth: tw * f }; });
+  ws.forEach((x, k) => { cs[k] = { ...(extra[k] || {}), cellWidth: x }; });
   return { tableWidth: tw, columnStyles: cs };
 };
 
@@ -82,7 +94,7 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
     autoTable(pdf, { ...base, startY: y,
       head: [titleRow(doc.lw.title, 6), lwHead],
       body: doc.lw.rows.map(r => lwCells(r).map(c => ({ content: c, styles: r.bold ? { fontStyle: 'bold' } : {} }))),
-      ...(doc.widths?.lw ? widthStyles(doc.widths.lw, 6, W - 2 * m, { 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } })
+      ...(doc.widths?.lw ? widthStyles(doc.widths.lw, 6, W - 2 * m, { 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }, pdf, lwHead, fs)
         : { columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } } }),
     });
     y = pdf.lastAutoTable.finalY + 12;   // a clear gap between the two sheets (2026-11-15, the user)
@@ -92,7 +104,7 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
       body: doc.req.lines.map(l => reqCells(doc, l)),
       foot: [['TOTAL', '', `Tsh ${amt(doc.req.total)}`, ...(doc.req.showApproved ? [`Tsh ${amt(doc.req.approvedTotal)}`] : [])]],
       footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold', halign: 'center' },
-      ...widthStyles(doc.widths?.req, n, W - 2 * m, { 2: { halign: 'center' }, 3: { halign: 'center' } }),
+      ...widthStyles(doc.widths?.req, n, W - 2 * m, { 2: { halign: 'center' }, 3: { halign: 'center' } }, pdf, reqHead(doc), fs),
     });
     y = pdf.lastAutoTable.finalY + 3;
     if (doc.account) {

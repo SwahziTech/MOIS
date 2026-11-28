@@ -60,7 +60,8 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
 // the page, drawn at its real size and shrunk to fit one sheet of the chosen paper
 // fitWidth: the full-screen view — the page fills the screen's width and scrolls down (2026-11-16)
 // a table at the widths the user gave the sheet on screen (sheetWidths)
-const sized = w => (w ? { width: `${w.table * 100}%`, tableLayout: 'fixed' } : undefined);
+// auto layout: the widths are a guide, a column never gets narrower than its longest word (2026-11-28, the user)
+const sized = w => (w ? { width: `${w.table * 100}%` } : undefined);
 const cols = (w, n) => (w && w.cols.length === n ? <colgroup>{w.cols.map((f, k) => <col key={k} style={{ width: `${f * 100}%` }} />)}</colgroup> : null);
 export function PagePreview({ doc, setup, fitWidth = false }) {
   const [pw0, ph0] = PAPERS[setup.paper];
