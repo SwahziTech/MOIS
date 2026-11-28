@@ -1,4 +1,5 @@
 import SheetGrid from '../components/SheetGrid';
+import { sheetWidths } from '../lib/weeklyCashDoc';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Wallet, Plus, Upload, Download, Copy, Pencil, Lock, Save, Undo2, RotateCcw, Trash2, Maximize2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -638,6 +639,7 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     req: { title: reqTitle, showApproved, total, approvedTotal,
       lines: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(l.amount) ?? 0, approved: num(l.approved) ?? num(l.amount) ?? 0 })) },
     account: { bank: payTo.bank, number: payTo.no, holder: payTo.name },   // always on the page (2026-11-15, the user)
+    widths: sheetWidths(),   // the columns as sized on screen (2026-11-28, the user)
     notes: notes.trim(), fileName: `Request ${tableDate(week)}${branchName ? ` - ${branchName}` : ''}`,   // e.g. Request 21 Nov 2026 - Dodoma (2026-11-21, the user)
   });
 

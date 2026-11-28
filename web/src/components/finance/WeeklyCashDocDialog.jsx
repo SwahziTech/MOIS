@@ -59,6 +59,9 @@ export default function WeeklyCashDocDialog({ doc, mode = 'export', defaultForma
 
 // the page, drawn at its real size and shrunk to fit one sheet of the chosen paper
 // fitWidth: the full-screen view — the page fills the screen's width and scrolls down (2026-11-16)
+// a table at the widths the user gave the sheet on screen (sheetWidths)
+const sized = w => (w ? { width: `${w.table * 100}%`, tableLayout: 'fixed' } : undefined);
+const cols = (w, n) => (w && w.cols.length === n ? <colgroup>{w.cols.map((f, k) => <col key={k} style={{ width: `${f * 100}%` }} />)}</colgroup> : null);
 export function PagePreview({ doc, setup, fitWidth = false }) {
   const [pw0, ph0] = PAPERS[setup.paper];
   const [pw, ph] = setup.orientation === 'landscape' ? [ph0, pw0] : [pw0, ph0];
@@ -92,18 +95,20 @@ export function PagePreview({ doc, setup, fitWidth = false }) {
           {doc.company && <div className="wc-doc-company">{doc.company}</div>}
           {doc.branch && <div className="wc-doc-branch">{doc.branch}</div>}
           <div className="wc-doc-title"><strong>{doc.title}</strong>{doc.status && <span>{doc.status}</span>}</div>
-          <table className="wc-doc-table">
+          <table className="wc-doc-table" style={sized(doc.widths?.lw)}>
+            {cols(doc.widths?.lw, 6)}
             <thead><tr><th colSpan={6} className="wc-doc-cap">{doc.lw.title}</th></tr>
               <tr><th>DATE</th><th>DESCRIPTION</th><th>QTY</th><th className="n">CASH IN (TZS)</th><th className="n">CASH OUT (TZS)</th><th className="n">BALANCE (TZS)</th></tr></thead>
             <tbody>{doc.lw.rows.map((r, i) => <tr key={i} className={r.bold ? 'b' : ''}>{lwCells(r).map((c, k) => <td key={k} className={k > 2 ? 'n' : ''}>{c}</td>)}</tr>)}</tbody>
           </table>
-          <table className="wc-doc-table">
+          <table className="wc-doc-table" style={sized(doc.req.showApproved ? null : doc.widths?.req)}>
+            {cols(doc.req.showApproved ? null : doc.widths?.req, 3)}
             <thead><tr><th colSpan={doc.req.showApproved ? 4 : 3} className="wc-doc-cap">{doc.req.title}</th></tr>
               <tr><th>DESCRIPTION</th><th>QTY</th><th className="n">AMOUNT (TZS)</th>{doc.req.showApproved && <th className="n">APPROVED (TZS)</th>}</tr></thead>
             <tbody>{doc.req.lines.map((l, i) => <tr key={i}>{reqCells(doc, l).map((c, k) => <td key={k} className={k > 1 ? 'n' : ''}>{c}</td>)}</tr>)}</tbody>
             <tfoot><tr className="b"><td>TOTAL</td><td /><td className="n">Tsh {Math.round(doc.req.total).toLocaleString('en-US')}</td>{doc.req.showApproved && <td className="n">Tsh {Math.round(doc.req.approvedTotal).toLocaleString('en-US')}</td>}</tr></tfoot>
           </table>
-          {doc.account && <table className="wc-doc-table"><thead><tr><th>BANK</th><th>ACCOUNT NUMBER</th><th>ACCOUNT NAME</th></tr></thead>
+          {doc.account && <table className="wc-doc-table" style={doc.widths?.req ? { width: `${doc.widths.req.table * 100}%` } : undefined}><thead><tr><th>BANK</th><th>ACCOUNT NUMBER</th><th>ACCOUNT NAME</th></tr></thead>
             <tbody><tr><td>{doc.account.bank}</td><td>{doc.account.number}</td><td>{doc.account.holder}</td></tr></tbody></table>}
           {doc.notes && <p className="wc-doc-notes">Notes: {doc.notes}</p>}
         </div>

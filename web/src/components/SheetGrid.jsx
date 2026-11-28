@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import NumberInput from './NumberInput';
 
@@ -74,6 +74,19 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
     const next = { ...colW, [c.key]: Math.ceil(w + 28) };
     setColW(next); keepCols(next);
   }
+  // the widths as shown, kept for the printed copy / PDF (2026-11-28, the user: "should be as edited")
+  useEffect(() => {
+    if (!resizable || !box.current || typeof ResizeObserver === 'undefined') return undefined;
+    const keep = () => {
+      const ths = [...(box.current?.querySelectorAll('tr.xs-labels th[data-col]') || [])];
+      const w = Object.fromEntries(ths.map(th => [th.dataset.col, Math.round(th.getBoundingClientRect().width)]));
+      if (ths.length && Object.values(w).some(Boolean)) try { localStorage.setItem(`xs-shown:${label}`, JSON.stringify(w)); } catch { /* a convenience */ }
+    };
+    const ro = new ResizeObserver(keep);
+    const t = box.current.querySelector('table'); if (t) ro.observe(t);
+    keep();
+    return () => ro.disconnect();
+  }, [resizable, label, colW]);
   const resetSizes = () => { setColW({}); setRowH({}); keepCols({}); };
   const allSized = columns.every(c => widthOf(c));
   const tableWidth = allSized ? 38 + columns.reduce((t, c) => t + widthOf(c), 0) + (readOnly ? 0 : 30) : undefined;
@@ -191,7 +204,7 @@ export default function SheetGrid({ columns, rows, onChange, readOnly = false, i
           <tr className="xs-letters"><th className={resizable ? 'xs-corner' : undefined} title={resizable ? 'Double-click to reset the column widths and row heights' : undefined} onDoubleClick={resizable ? resetSizes : undefined} />{columns.map((c, i) => (
             <th key={c.key}>{LETTERS[i]}{resizable && <span className="xs-col-rs" role="separator" aria-orientation="vertical" aria-label={`Resize column ${LETTERS[i]}`}
               title="Drag to resize · double-click to fit" onPointerDown={e => startCol(e, c)} onDoubleClick={() => fitCol(c)} />}</th>))}{!readOnly && <th />}</tr>
-          <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} className={alignCls(c).trim()}>{c.label}</th>)}{!readOnly && <th />}</tr>
+          <tr className="xs-labels"><th />{columns.map(c => <th key={c.key} data-col={c.key} className={alignCls(c).trim()}>{c.label}</th>)}{!readOnly && <th />}</tr>
         </thead>
         <tbody>
           {shown.map((row, r) => (

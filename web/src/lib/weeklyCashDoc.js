@@ -27,6 +27,32 @@ const reqHead = d => ['DESCRIPTION', 'QTY', 'AMOUNT (TZS)', ...(d.req.showApprov
 export const lwCells = r => [r.date ?? '', r.description ?? '', r.qty ?? '', amt(r.cash_in), amt(r.cash_out), amt(r.balance)];
 export const reqCells = (d, l) => [l.description ?? '', l.qty ?? '', amt(l.amount), ...(d.req.showApproved ? [amt(l.approved ?? l.amount)] : [])];
 
+/**
+ * The columns as the user sized them on screen (2026-11-28, the user: "the preview and printing, pdf should be as
+ * edited — it leaves a lot of empty space from description to amount"). Each sheet keeps the same proportions; the
+ * wider sheet fills the page and the other is as much narrower as it is on screen. Unit goes with Qty on paper;
+ * Category is not printed. → { lw: { table, cols }, req: { table, cols } } as fractions, or null.
+ */
+const shownOf = label => { try { return JSON.parse(localStorage.getItem(`xs-shown:${label}`) || 'null'); } catch { return null; } };
+export function sheetWidths() {
+  const lw = shownOf("Last week's spending"), rq = shownOf("This week's request");
+  const lwPx = lw && ['date', 'description', 'qty', 'cash_in', 'cash_out', 'balance'].map(k => lw[k] || 0);
+  const rqPx = rq && [rq.description || 0, (rq.quantity || 0) + (rq.unit || 0), rq.amount || 0];
+  const ok = a => a && a.every(x => x > 0);
+  const sum = a => a.reduce((t, x) => t + x, 0);
+  const ref = Math.max(ok(lwPx) ? sum(lwPx) : 0, ok(rqPx) ? sum(rqPx) : 0);
+  if (!ref) return null;
+  const part = a => (ok(a) ? { table: sum(a) / ref, cols: a.map(x => x / sum(a)) } : null);
+  return { lw: part(lwPx), req: part(rqPx) };
+}
+const widthStyles = (w, n, full, extra = {}) => {
+  if (!w || w.cols.length !== n) return { columnStyles: extra };
+  const tw = full * w.table;
+  const cs = {};
+  w.cols.forEach((f, k) => { cs[k] = { ...(extra[k] || {}), cellWidth: tw * f }; });
+  return { tableWidth: tw, columnStyles: cs };
+};
+
 /** Build the PDF on one page: the type gets smaller until it all fits */
 export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } = {}) {
   const { jsPDF } = await import('jspdf');
@@ -56,7 +82,8 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
     autoTable(pdf, { ...base, startY: y,
       head: [titleRow(doc.lw.title, 6), lwHead],
       body: doc.lw.rows.map(r => lwCells(r).map(c => ({ content: c, styles: r.bold ? { fontStyle: 'bold' } : {} }))),
-      columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } },
+      ...(doc.widths?.lw ? widthStyles(doc.widths.lw, 6, W - 2 * m, { 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } })
+        : { columnStyles: { 0: { cellWidth: 'wrap' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } } }),
     });
     y = pdf.lastAutoTable.finalY + 12;   // a clear gap between the two sheets (2026-11-15, the user)
     const n = reqHead(doc).length;
@@ -65,11 +92,12 @@ export async function buildPdf(doc, { paper = 'A4', orientation = 'portrait' } =
       body: doc.req.lines.map(l => reqCells(doc, l)),
       foot: [['TOTAL', '', `Tsh ${amt(doc.req.total)}`, ...(doc.req.showApproved ? [`Tsh ${amt(doc.req.approvedTotal)}`] : [])]],
       footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold', halign: 'center' },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' } },
+      ...widthStyles(doc.widths?.req, n, W - 2 * m, { 2: { halign: 'center' }, 3: { halign: 'center' } }),
     });
     y = pdf.lastAutoTable.finalY + 3;
     if (doc.account) {
-      autoTable(pdf, { ...base, startY: y, head: [['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME']], body: [[doc.account.bank || '', doc.account.number || '', doc.account.holder || '']] });
+      autoTable(pdf, { ...base, startY: y, head: [['BANK', 'ACCOUNT NUMBER', 'ACCOUNT NAME']], body: [[doc.account.bank || '', doc.account.number || '', doc.account.holder || '']],
+        ...(doc.widths?.req ? { tableWidth: (W - 2 * m) * doc.widths.req.table } : {}) });   // as wide as the request above it
       y = pdf.lastAutoTable.finalY + 3;
     }
     if (doc.notes) { pdf.setFont('times', 'normal'); pdf.setFontSize(fs); pdf.text(`Notes: ${doc.notes}`, m, y + fs * 0.35, { maxWidth: W - 2 * m }); }
