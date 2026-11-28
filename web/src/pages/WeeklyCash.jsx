@@ -586,6 +586,9 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
       lines: filled().map(l => ({ description: l.description, quantity: num(l.quantity), unit: l.unit, amount: num(l.amount), category_id: l.categoryId || null })) } });
     if (err) { setBusy(false); setError(dbErrorMessage(err)); return null; }
     if (id && !request) setSavedId(id);
+    // the printed layout goes with the report (146); a database without 146 just keeps it on this device
+    const widths = sheetWidths();
+    if (widths && (id ?? request?.id ?? savedId)) await supabase.rpc('set_cash_request_widths', { p_id: id ?? request?.id ?? savedId, p_widths: widths });
     if (send) {
       const { error: e2 } = await supabase.rpc('cash_request_step', { p_id: id ?? request?.id ?? savedId, p_step: 'send', p: {} });
       if (e2) { setBusy(false); setError(dbErrorMessage(e2)); return null; }
@@ -639,7 +642,9 @@ function RequestModal({ viewOnly = false, startView = false, request, newWeek, b
     req: { title: reqTitle, showApproved, total, approvedTotal,
       lines: lines.filter(l => l.description.trim()).map(l => ({ description: l.description, qty: [l.unit, l.quantity].filter(Boolean).join(' '), amount: num(l.amount) ?? 0, approved: num(l.approved) ?? num(l.amount) ?? 0 })) },
     account: { bank: payTo.bank, number: payTo.no, holder: payTo.name },   // always on the page (2026-11-15, the user)
-    widths: sheetWidths(),   // the columns as sized on screen (2026-11-28, the user)
+    // the columns as sized on screen (2026-11-28, the user): a draft follows this screen; a sent report prints
+    // with the widths saved with it (146), so every device prints the same layout
+    widths: editable ? (sheetWidths() ?? request?.print_widths ?? null) : (request?.print_widths ?? sheetWidths()),
     notes: notes.trim(), fileName: `Request ${tableDate(week)}${branchName ? ` - ${branchName}` : ''}`,   // e.g. Request 21 Nov 2026 - Dodoma (2026-11-21, the user)
   });
 
